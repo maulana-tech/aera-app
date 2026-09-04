@@ -1,0 +1,543 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SIGAP — Supply Disruption Response Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+:root{
+  --paper:#ffffff;
+  --ground:#e7e9ec;
+  --ink:#14181f;
+  --body:#242a34;
+  --muted:#5d6472;
+  --rule:#d3d8e0;
+  --rule-soft:#e6e9ee;
+  --accent:#0f4c4a;
+  --accent-soft:#e6efee;
+  --alert:#b4531a;
+  --alert-soft:#fbeee5;
+  --reject:#9a3324;
+  --accept:#1f6b4a;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+  --serif:"IBM Plex Serif",Georgia,serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+
+*{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;}
+body{
+  margin:0;
+  background:var(--ground);
+  color:var(--body);
+  font-family:var(--serif);
+  font-size:10.2pt;
+  line-height:1.5;
+}
+
+.sheet{
+  width:210mm;
+  min-height:297mm;
+  padding:14mm 15mm 12mm;
+  margin:8mm auto;
+  background:var(--paper);
+  box-shadow:0 1px 3px rgba(20,24,31,.18),0 8px 24px rgba(20,24,31,.10);
+  display:flex;
+  flex-direction:column;
+  gap:6.5mm;
+}
+
+/* ---------- type ---------- */
+h1,h2,h3,h4{font-family:var(--sans);color:var(--ink);margin:0;text-wrap:balance;}
+h1{font-size:21pt;line-height:1.12;font-weight:700;letter-spacing:-.02em;}
+h2{font-size:12pt;font-weight:600;letter-spacing:-.005em;}
+h3{font-size:10pt;font-weight:600;}
+p{margin:0;}
+strong{font-weight:600;color:var(--ink);}
+em{font-style:italic;}
+.stack{display:flex;flex-direction:column;gap:2.6mm;}
+.stack-tight{display:flex;flex-direction:column;gap:1.6mm;}
+
+.eyebrow{
+  font-family:var(--mono);
+  font-size:7.2pt;
+  font-weight:500;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--accent);
+}
+.eyebrow-muted{color:var(--muted);}
+
+.section{display:flex;flex-direction:column;gap:2.8mm;}
+.section > .head{display:flex;flex-direction:column;gap:1.2mm;padding-bottom:1.6mm;border-bottom:1px solid var(--rule);}
+
+.note{font-size:8.4pt;color:var(--muted);line-height:1.45;}
+.mono{font-family:var(--mono);}
+
+/* ---------- masthead ---------- */
+.masthead{display:flex;flex-direction:column;gap:4mm;}
+.masthead .rule{height:3px;background:var(--accent);width:100%;}
+.meta-row{
+  display:flex;flex-wrap:wrap;gap:0 7mm;
+  font-family:var(--mono);font-size:7.6pt;color:var(--muted);
+  letter-spacing:.04em;
+}
+.meta-row b{color:var(--ink);font-weight:500;}
+.lede{font-size:11pt;line-height:1.45;color:var(--body);max-width:62ch;}
+
+/* ---------- figures ---------- */
+.figures{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border:1px solid var(--rule);}
+.figures div{padding:3mm 3.5mm;border-right:1px solid var(--rule-soft);display:flex;flex-direction:column;gap:1mm;}
+.figures div:last-child{border-right:0;}
+.figures dt{font-family:var(--mono);font-size:7pt;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);}
+.figures dd{margin:0;font-family:var(--sans);font-size:11.6pt;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1.1;}
+.figures small{font-size:7.4pt;color:var(--muted);font-family:var(--serif);}
+
+/* ---------- tables ---------- */
+table{border-collapse:collapse;width:100%;font-size:8.6pt;}
+th,td{text-align:left;vertical-align:top;padding:2mm 2.4mm;border-bottom:1px solid var(--rule-soft);}
+thead th{
+  font-family:var(--mono);font-size:7pt;font-weight:500;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--muted);
+  border-bottom:1px solid var(--rule);padding-bottom:1.4mm;
+}
+tbody tr:last-child td{border-bottom:0;}
+td.num{font-variant-numeric:tabular-nums;white-space:nowrap;}
+code,.code{font-family:var(--mono);font-size:7.6pt;color:var(--ink);overflow-wrap:anywhere;}
+.tools table{table-layout:fixed;}
+.tools td{overflow-wrap:anywhere;}
+.tools col.t1{width:41%;}
+
+/* ---------- agent trace ---------- */
+.trace{display:grid;grid-template-columns:26mm 1fr;border-top:1px solid var(--rule);}
+.trace > div{padding:2.2mm 0;border-bottom:1px solid var(--rule-soft);}
+.trace > .stage{
+  font-family:var(--mono);font-size:7.4pt;font-weight:600;letter-spacing:.1em;
+  color:var(--accent);padding-right:3mm;
+}
+.trace > .what{font-size:8.8pt;line-height:1.45;padding-left:3mm;border-left:1px solid var(--rule-soft);}
+.trace .call{font-family:var(--mono);font-size:7.6pt;color:var(--muted);display:block;margin-top:.8mm;}
+
+/* ---------- verdict pills ---------- */
+.pill{
+  font-family:var(--mono);font-size:6.8pt;font-weight:600;letter-spacing:.08em;
+  text-transform:uppercase;padding:.6mm 1.6mm;border:1px solid currentColor;white-space:nowrap;
+}
+.pill.ok{color:var(--accept);}
+.pill.no{color:var(--reject);}
+.pill.pick{color:var(--paper);background:var(--accent);border-color:var(--accent);}
+tr.rejected td{color:var(--muted);}
+tr.chosen td{background:var(--accent-soft);}
+
+/* ---------- callout ---------- */
+.callout{
+  border-left:3px solid var(--alert);
+  background:var(--alert-soft);
+  padding:2.8mm 3.5mm;
+  font-size:9pt;line-height:1.45;
+}
+.callout b{font-family:var(--sans);}
+
+.recommend{
+  border:1px solid var(--accent);
+  padding:3mm 3.5mm;
+  display:flex;flex-direction:column;gap:1.6mm;
+  font-size:9pt;line-height:1.45;
+}
+
+/* ---------- two column ---------- */
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:6mm;}
+.cols-wide{display:grid;grid-template-columns:1.15fr 1fr;gap:6mm;}
+
+/* ---------- multi-agent diagram ---------- */
+.supervisor{
+  border:1.5px solid var(--accent);background:var(--accent-soft);
+  padding:2.4mm 3mm;display:flex;gap:3.5mm;align-items:baseline;
+}
+.supervisor .sv-name{
+  font-family:var(--mono);font-size:7.4pt;font-weight:600;letter-spacing:.09em;
+  color:var(--accent);white-space:nowrap;
+}
+.supervisor .sv-role{font-size:8.3pt;line-height:1.4;}
+.routing{
+  font-family:var(--mono);font-size:6.6pt;letter-spacing:.1em;color:var(--muted);
+  text-align:center;padding:.8mm 0;
+}
+.agents{display:grid;grid-template-columns:repeat(3,1fr);gap:1.6mm;}
+.agent{border:1px solid var(--rule);padding:1.8mm 2.2mm;display:flex;flex-direction:column;gap:.9mm;}
+.agent .an{font-family:var(--sans);font-size:8.2pt;font-weight:600;color:var(--ink);}
+.agent .an span{color:var(--alert);font-size:6.4pt;}
+.agent .ar{font-size:7.2pt;line-height:1.28;color:var(--body);}
+.agent .at{
+  font-family:var(--mono);font-size:6.1pt;line-height:1.32;color:var(--muted);
+  overflow-wrap:anywhere;border-top:1px solid var(--rule-soft);padding-top:.9mm;margin-top:auto;
+}
+.swarm{border:1px dashed var(--accent);background:#f6f7f9;padding:2mm 2.6mm;
+       display:flex;gap:3.5mm;align-items:baseline;}
+.swarm .sn{font-family:var(--mono);font-size:7pt;font-weight:600;letter-spacing:.09em;
+           color:var(--accent);white-space:nowrap;}
+.swarm .sv{font-size:7.8pt;line-height:1.35;}
+
+/* ---------- stack diagram ---------- */
+.layers{display:flex;flex-direction:column;gap:1px;background:var(--rule);border:1px solid var(--rule);}
+.layer{background:var(--paper);padding:2.2mm 3mm;display:flex;gap:3mm;align-items:baseline;}
+.layer .lbl{font-family:var(--mono);font-size:6.9pt;letter-spacing:.09em;text-transform:uppercase;color:var(--accent);width:19mm;flex:none;}
+.layer .val{font-size:8.4pt;line-height:1.4;}
+
+.footer{
+  margin-top:auto;padding-top:3mm;border-top:1px solid var(--rule);
+  display:flex;justify-content:space-between;
+  font-family:var(--mono);font-size:7pt;letter-spacing:.08em;color:var(--muted);
+}
+
+ul{margin:0;padding-left:4.5mm;}
+li{margin-bottom:1.2mm;line-height:1.45;}
+li::marker{color:var(--accent);}
+
+@media print{
+  body{background:var(--paper);}
+  .sheet{margin:0;box-shadow:none;width:auto;min-height:0;padding:0;break-after:page;}
+  .sheet:last-child{break-after:auto;}
+  @page{size:A4;margin:14mm 15mm 12mm;}
+}
+@media (max-width:230mm){
+  .sheet{width:auto;max-width:210mm;}
+}
+</style>
+</head>
+<body>
+
+<!-- ================= PAGE 1 ================= -->
+<section class="sheet">
+
+  <header class="masthead">
+    <div class="rule"></div>
+    <div class="stack-tight">
+      <p class="eyebrow">AI Agentic Hackathon · Track 01 · Intelligent Supply Chain</p>
+      <h1>SIGAP — an autonomous supply&#8209;disruption response agent for Indonesian manufacturers</h1>
+    </div>
+    <div class="meta-row">
+      <span>TEAM <b>[team name]</b></span>
+      <span>UNIVERSITY <b>[university]</b></span>
+      <span>MEMBERS <b>[name 1] · [name 2] · [name 3]</b></span>
+      <span>DATE <b>September 2026</b></span>
+    </div>
+  </header>
+
+  <p class="lede">When a port closes, an Indonesian manufacturer loses two to three days deciding what to do about it — and by the time the decision is made, the cheap options have expired. SIGAP is an agent that detects the disruption, traces it through purchase orders, stock and customer commitments, generates and simulates its own mitigation options against local regulatory constraints, and executes the approved plan in SAP.</p>
+
+  <div class="section">
+    <div class="head">
+      <p class="eyebrow eyebrow-muted">01 — Problem</p>
+      <h2>Three days of manual replanning, spent on a decision that has a 24&#8209;hour window</h2>
+    </div>
+
+    <div class="cols-wide">
+      <div class="stack">
+        <p><strong>PT Karya Presisi Nusantara (KPN)</strong> is a Tier&#8209;1 automotive component manufacturer in Karawang, West Java, producing brake caliper and transmission housing assemblies for OEM customers under just&#8209;in&#8209;time delivery contracts. Two plants, 340 active materials, 61% of raw material value imported — predominantly through Tanjung Priok.</p>
+
+        <p>Roughly <strong>fourteen times a year</strong>, a material supply is disrupted: a typhoon closes a loading port, customs clearance stalls, a supplier declares force majeure. Each time, the same sequence plays out. A planner notices an inbound shipment is late. They open three systems to find out which purchase orders are affected. They check stock by hand against a production plan that lives in a spreadsheet. They call procurement to ask about alternatives. Two or three days later, a decision is made — and by then the only remaining option is air freight at four times the cost.</p>
+
+        <p>The bottleneck is not a lack of data. Every fact needed to make the decision already exists in S/4HANA. The bottleneck is that <strong>connecting those facts into a decision is entirely manual</strong>, and it competes with the planner's day job.</p>
+      </div>
+
+      <div class="stack">
+        <div class="callout">
+          <b>Why this is harder in Indonesia than the textbook version.</b> Substituting a supplier here is not purely a cost-and-lead-time calculation. Three local constraints routinely invalidate the mathematically optimal answer:
+          <ul style="margin-top:1.8mm;">
+            <li><strong>TKDN</strong> (local content ratio) — OEM contracts specify a floor. A cheaper import can breach it.</li>
+            <li><strong>LARTAS</strong> import licensing — a new country of origin adds ~10 working days before the first shipment can clear.</li>
+            <li><strong>Port dwell time</strong> at Tanjung Priok — Indonesia's main container gateway — is variable, not a constant, and national holiday shutdowns freeze customs entirely.</li>
+          </ul>
+        </div>
+        <p class="note">The operating profile — plants, consumption rates, contract terms — is modelled on publicly documented Indonesian Tier&#8209;1 automotive patterns; every deployment supplies its own from master data. The regulatory, market and weather data the agent reasons over is live. Assumptions are stated where used.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="head">
+      <p class="eyebrow eyebrow-muted">02 — Cost of the status quo</p>
+      <h2>What each disruption event costs today</h2>
+    </div>
+    <dl class="figures">
+      <div><dt>Decision latency</dt><dd>2–3 days</dd><small>from first signal to approved mitigation</small></div>
+      <div><dt>Avoidable expedite</dt><dd>Rp 70 million</dd><small>median premium paid per event for choosing late</small></div>
+      <div><dt>Revenue exposed</dt><dd>Rp 2.14 billion</dd><small>customer orders at risk in a typical event</small></div>
+      <div><dt>Planner effort</dt><dd>70 days</dd><small>person-days per year spent replanning</small></div>
+    </dl>
+    <p class="note">Assumptions: 14 material disruption events per year; two planners engaged for 2.5 days each; expedite premium measured as the difference between the option available on day 1 and the option remaining on day 3.</p>
+  </div>
+
+  <div class="section">
+    <div class="head">
+      <p class="eyebrow eyebrow-muted">03 — Why existing tools do not close this gap</p>
+      <h2>Dashboards report the problem; they do not decide</h2>
+    </div>
+    <div class="cols">
+      <div class="stack">
+        <p><strong>Supply chain visibility platforms</strong> surface the delayed shipment. They stop precisely where the hard work begins: nothing tells the planner which finished goods are affected, when the line actually stops, or which of six possible responses survives contact with TKDN rules.</p>
+        <p><strong>Conventional chatbots and RAG assistants</strong> answer questions about documents. They cannot read live purchase orders, cannot simulate a plan, and cannot write a purchase requisition back into SAP.</p>
+      </div>
+      <div class="stack">
+        <p>What is missing is an actor rather than an informant — something that performs the planner's full reasoning chain autonomously: <em>scope the impact, quantify it, invent the options, discard the illegal ones, price the survivors, recommend with reasoning, execute under approval, and verify the outcome.</em></p>
+        <p>That chain is a sequence of interdependent decisions where each step's result determines the next query. It is the canonical case for an agent, and it is what SIGAP does.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer"><span>SIGAP · Intelligent Supply Chain</span><span>Page 1 of 3</span></div>
+</section>
+
+<!-- ================= PAGE 2 ================= -->
+<section class="sheet">
+
+  <div class="section">
+    <div class="head">
+      <p class="eyebrow">04 — Solution</p>
+      <h2>A worked event: a typhoon closes Ningbo, China's largest cargo port, for six days</h2>
+    </div>
+    <p>The trace below is the reasoning path SIGAP is designed to take on a single disruption, annotated with the specialist that owns each step. Nothing in it is scripted: the system is given only the disruption signal and read access to the data, and decides for itself which questions to ask, which specialist to ask them of, and when it has enough evidence to recommend. Every figure is derived from the dataset in the appendix, not asserted.</p>
+
+    <div class="trace">
+      <div class="stage">DETECT</div>
+      <div class="what">Maritime advisory ingested: Ningbo–Zhoushan, China's largest cargo port, closed 8–13 Sep. Agent identifies the port as a lane it depends on.
+        <span class="call">Supervisor → detect_disruption(sources=[maritime_advisory, weather, customs_bulletin])</span></div>
+
+      <div class="stage">SCOPE</div>
+      <div class="what">Finds <strong>12 open purchase orders</strong> worth Rp 8.4 billion routed through Ningbo, covering 5 materials from 3 suppliers.
+        <span class="call">Impact Analyst → get_open_purchase_orders(port="CNNGB", status="not_shipped|in_transit")</span></div>
+
+      <div class="stage">IMPACT</div>
+      <div class="what">Screens each material against stock and consumption. Only one is critical: <strong>M&#8209;4471</strong> (ADC12 aluminium ingot) at plant KRW1 — 84 t on hand, 9.2 t/day draw, <strong>depleted 13 Sep</strong>. Its replenishment PO 4500018872 (120 t) slips from 14 Sep to <strong>22 Sep</strong>. Production gap: <strong>9 days</strong>.
+        <span class="call">Impact Analyst → get_material_stock · get_bom_explosion — Inventory Integrity hands back a 6 t quality hold, moving the date forward one day</span></div>
+
+      <div class="stage">QUANTIFY</div>
+      <div class="what">Traces M&#8209;4471 through the BOM to caliper assembly FG&#8209;1120 and on to <strong>3 OEM sales orders worth Rp 2.14 billion</strong>, carrying a 0.5%/day late penalty capped at 10% — a maximum penalty exposure of Rp 214 million on top of the revenue at risk.<span class="call">Impact Analyst</span></div>
+
+      <div class="stage">GENERATE</div>
+      <div class="what">Constructs five candidate mitigations across three strategies — expedite the existing source, substitute a source, or reallocate internal stock — without being told what the strategies are.
+        <span class="call">Sourcing → find_alternate_sources · Logistics &amp; ETA prices each arrival against Priok dwell time</span></div>
+
+      <div class="stage">FILTER</div>
+      <div class="what">Tests every candidate against local constraints and <strong>eliminates two</strong> on grounds unrelated to price — TKDN is Indonesia's local-content ratio, LARTAS its import-licensing regime. See the option table below.
+        <span class="call">Compliance → check_local_constraints(...)  # TKDN · LARTAS · holiday calendar · veto</span></div>
+
+      <div class="stage">SIMULATE</div>
+      <div class="what">Prices the survivors on landed cost, arrival date, resulting on-time-in-full delivery (OTIF), local-content impact and FX exposure — then tests them <em>in combination</em>, which is where the winning answer is found.
+        <span class="call">Simulation → simulate_scenario(plan) → {cost, otif, stockout_date, tkdn_ratio, fx_risk}</span></div>
+
+      <div class="stage">DECIDE</div>
+      <div class="what">Recommends <strong>C + B</strong> over the obvious single answer, and states the residual risk it is accepting rather than hiding it.<span class="call">Supervisor, after Precedent confirms no comparable failure on this supplier</span></div>
+
+      <div class="stage">ACT</div>
+      <div class="what">Issues the stock transfer autonomously (below its Rp 50 million authority limit) and raises the purchase order as a <strong>draft pending buyer approval</strong>. Notifies planner, buyer and QA with the full evidence chain.
+        <span class="call">Execution → create_stock_transfer(...) · create_draft_po(...) ⚠ approval required · notify(...)</span></div>
+
+      <div class="stage">VERIFY</div>
+      <div class="what">Monitors both shipments to receipt, confirms KRW1 and SBY1 never stock out, and writes the outcome to memory so the next Ningbo event starts from what was learned here.<span class="call">Execution → monitor_shipment</span></div>
+    </div>
+    <p class="note" style="margin-top:2mm;"><b>Design target: under 20 minutes</b>, unattended, versus 2–3 days of manual replanning. To be measured against the eval suite during enablement.</p>
+  </div>
+
+  <div class="section">
+    <div class="head">
+      <p class="eyebrow eyebrow-muted">05 — The options the agent generated, and the two it refused</p>
+      <h2>Constraint reasoning, not cost minimisation</h2>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th style="width:5mm;"></th><th>Option generated by the agent</th>
+          <th class="num">Arrives</th><th class="num">Added cost</th><th class="num">TKDN</th><th style="width:52mm;">Verdict and reasoning</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="mono">A</td><td>Air freight 40 t from the incumbent supplier</td>
+          <td class="num">11 Sep</td><td class="num">+Rp 186 million</td><td class="num">38.2%</td>
+          <td><span class="pill ok">Viable</span> Fastest, but the most expensive way to buy the same nine days.</td>
+        </tr>
+        <tr>
+          <td class="mono">B</td><td>Local supplier PT Logam Andalan, Gresik, 60 t</td>
+          <td class="num">12 Sep</td><td class="num">+Rp 94 million</td><td class="num">41.6% ↑</td>
+          <td><span class="pill ok">Viable</span> Requires 3&#8209;day metallurgical requalification, which fits inside the window. Raises TKDN.</td>
+        </tr>
+        <tr>
+          <td class="mono">C</td><td>Reallocate 55 t of existing stock from plant SBY1</td>
+          <td class="num">10 Sep</td><td class="num">+Rp 22 million</td><td class="num">—</td>
+          <td><span class="pill ok">Viable</span> Cheapest and earliest, but leaves SBY1 with only 4 days of cover.</td>
+        </tr>
+        <tr class="rejected">
+          <td class="mono">D</td><td>New import source in Vietnam</td>
+          <td class="num">26 Sep</td><td class="num">+Rp 61 million</td><td class="num">36.1% ↓</td>
+          <td><span class="pill no">Rejected</span> LARTAS licensing for a new country of origin adds 10 working days — arrives 13 days after the line stops.</td>
+        </tr>
+        <tr class="rejected">
+          <td class="mono">E</td><td>Lowest-price source in China, 100 t</td>
+          <td class="num">19 Sep</td><td class="num">+Rp 48 million</td><td class="num">34.8% ↓</td>
+          <td><span class="pill no">Rejected</span> Would drop local content to 34.8%, breaching the 40% floor written into the OEM supply contract.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="recommend">
+      <div style="display:flex;align-items:center;gap:3mm;">
+        <span class="pill pick">Agent recommendation</span>
+        <strong style="font-family:var(--sans);font-size:10pt;">C + B in parallel — not the single obvious answer</strong>
+      </div>
+      <p>Move 55 t from SBY1 immediately (arrives 10 Sep, covers production to 19 Sep) <em>and</em> place a qualification order with the local supplier for 60 t (arrives 12 Sep, extends cover to 25 Sep), bridging cleanly to PO 4500018872 on 22 Sep.</p>
+      <p><strong>Result: Rp 116 million versus Rp 186 million for air freight — 38% less — while protecting Rp 2.14 billion of committed revenue and lifting TKDN from 38.2% to 41.6%.</strong></p>
+      <p class="note" style="color:var(--body);"><b>Residual risk the agent declares:</b> SBY1 runs at 4 days of cover until its own inbound PO 4500018901 lands on 24 Sep. The agent flags this to the SBY1 planner and adds it to its own monitoring list rather than treating the plan as closed.</p>
+    </div>
+  </div>
+
+  <div class="footer"><span>SIGAP · Intelligent Supply Chain</span><span>Page 2 of 3</span></div>
+</section>
+
+<!-- ================= PAGE 3 ================= -->
+<section class="sheet">
+
+  <div class="section">
+    <div class="head">
+      <p class="eyebrow">06 — System architecture</p>
+      <h2>A supervised swarm of ten agents, routed at runtime</h2>
+    </div>
+    <p>SIGAP is ten agents. A supervisor holds the goal and the audit trail; nine specialists each own a decision domain, its data and its tools. The system is a <strong>supervised swarm</strong> rather than a pipeline on two counts: every specialist reads and writes one shared blackboard, and any specialist may hand off directly to a peer when it finds something in that peer's domain — without returning to the supervisor. <strong>The route is therefore decided at runtime</strong>, and no two disruptions activate the same set of agents.</p>
+
+    <div class="supervisor">
+      <div class="sv-name">SUPERVISOR · SIGAP CORE</div>
+      <div class="sv-role">Admits agents to the swarm, judges when the evidence is sufficient, and writes the recommendation, the trade-off accepted and the residual risk declared. <span class="code">detect_disruption</span></div>
+    </div>
+
+    <div class="agents">
+      <div class="agent">
+        <div class="an">Impact Analyst</div>
+        <div class="ar">Traces the disruption through orders, stock and the BOM to the commitments genuinely at risk.</div>
+        <div class="at">get_open_purchase_orders · get_material_stock · get_bom_explosion · get_sales_order_commitments</div>
+      </div>
+      <div class="agent">
+        <div class="an">Demand &amp; Consumption</div>
+        <div class="ar">Owns the demand side. Consumption is a variable that can move, not the constant everyone else assumes.</div>
+        <div class="at">get_demand_signal · get_production_schedule</div>
+      </div>
+      <div class="agent">
+        <div class="an">Inventory Integrity</div>
+        <div class="ar">Which recorded stock is actually usable — quality holds, rejected batches, safety-stock policy.</div>
+        <div class="at">get_quality_holds · get_safety_stock_policy</div>
+      </div>
+      <div class="agent">
+        <div class="an">Sourcing</div>
+        <div class="ar">Finds and qualifies alternative supply — external suppliers, internal stock, expedited freight.</div>
+        <div class="at">find_alternate_sources</div>
+      </div>
+      <div class="agent">
+        <div class="an">Logistics &amp; ETA</div>
+        <div class="ar">Models arrival dates that hold: port dwell distributions, transhipment, customs, freight mode.</div>
+        <div class="at">get_shipment_status · estimate_eta</div>
+      </div>
+      <div class="agent">
+        <div class="an">Compliance <span>◆ VETO</span></div>
+        <div class="ar">TKDN (local-content ratio), LARTAS (import licensing), contract clauses, holiday calendar. Its rejection cannot be overruled by cost.</div>
+        <div class="at">check_local_constraints</div>
+      </div>
+      <div class="agent">
+        <div class="an">Simulation</div>
+        <div class="ar">Prices surviving options and their combinations on cost, OTIF, TKDN and FX. Deterministic by design.</div>
+        <div class="at">simulate_scenario</div>
+      </div>
+      <div class="agent">
+        <div class="an">Precedent</div>
+        <div class="ar">Institutional memory — what was done in a comparable event, and how it actually turned out.</div>
+        <div class="at">search_past_incidents</div>
+      </div>
+      <div class="agent">
+        <div class="an">Execution</div>
+        <div class="ar">Writes back to SAP within its authority limits, notifies the roles affected, monitors to receipt.</div>
+        <div class="at">create_stock_transfer · create_draft_po · notify · monitor_shipment</div>
+      </div>
+    </div>
+
+    <div class="swarm">
+      <div class="sn">SHARED BLACKBOARD</div>
+      <div class="sv">Every finding, with its provenance, is written where all agents can read it — which is how Inventory Integrity can hand a quality hold straight to Impact Analyst and force a stockout date to be recomputed, without the supervisor mediating. DynamoDB · Bedrock AgentCore Memory.</div>
+    </div>
+
+    <p class="note" style="color:var(--body);"><strong>Nineteen tools across ten agents</strong>, each written to a published S/4HANA OData contract — <span class="code">API_PURCHASEORDER_PROCESS_SRV</span>, <span class="code">API_MATERIAL_STOCK_SRV</span>, <span class="code">API_SALES_ORDER_SRV</span>, <span class="code">API_BILL_OF_MATERIAL_SRV</span>, <span class="code">API_PRODUCTION_ORDER_2_SRV</span>, <span class="code">API_INSPECTIONLOT_SRV</span> — with writes through <span class="code">API_PURCHASEREQ_PROCESS_SRV</span> and SAP Ariba Buying. Reasoning on <strong>Amazon Bedrock</strong>, orchestration on <strong>Strands Agents SDK</strong> swarm primitives under <strong>Bedrock AgentCore</strong> runtime, memory and observability; built with <strong>Kiro</strong>. TKDN, LARTAS, holiday and Priok dwell rules live as versioned reference documents beside the code, so the constraint an option died on can be read and audited.</p>
+  </div>
+
+  <div class="cols">
+    <div class="section">
+      <div class="head">
+        <p class="eyebrow eyebrow-muted">07 — Authority</p>
+        <h2>What the agent may do alone</h2>
+      </div>
+      <table>
+        <thead><tr><th>Action</th><th>Authority</th></tr></thead>
+        <tbody>
+          <tr><td>Read, analyse, simulate, recommend</td><td><span class="pill ok">Autonomous</span></td></tr>
+          <tr><td>Stock transfer under Rp 50 million impact</td><td><span class="pill ok">Autonomous</span>, reported after</td></tr>
+          <tr><td>Raise a purchase order</td><td>Draft only — <strong>buyer approves</strong></td></tr>
+          <tr><td>New supplier, or over Rp 500 million</td><td><strong>Escalates</strong> to procurement lead</td></tr>
+          <tr><td>Anything breaching TKDN or LARTAS</td><td><span class="pill no">Blocked</span> by design</td></tr>
+        </tbody>
+      </table>
+      <p class="note">Bounded autonomy is what makes the system deployable in a contract-bound environment.</p>
+    </div>
+
+    <div class="section">
+      <div class="head">
+        <p class="eyebrow eyebrow-muted">08 — Impact</p>
+        <h2>Annualised, at one plant pair</h2>
+      </div>
+      <table>
+        <thead><tr><th>Measure</th><th class="num">Today</th><th class="num">With SIGAP</th></tr></thead>
+        <tbody>
+          <tr><td>Decision latency</td><td class="num">2–3 days</td><td class="num"><strong>&lt;20 min</strong></td></tr>
+          <tr><td>Expedite premium / event</td><td class="num">Rp 186 million</td><td class="num"><strong>Rp 116 million</strong></td></tr>
+          <tr><td>Planner effort / year</td><td class="num">70 days</td><td class="num"><strong>~12 days</strong></td></tr>
+          <tr><td>Local content ratio</td><td class="num">38.2%</td><td class="num"><strong>41.6%</strong></td></tr>
+        </tbody>
+      </table>
+      <p><strong>Roughly Rp 980 million per year</strong> in avoided expedite cost across 14 events, before counting late-delivery penalties avoided and OEM scorecard rating protected.</p>
+      <p class="note">Targets, not measurements. Assumes 14 disruption events per year and the Rp 70 million saving derived in the worked scenario. TKDN gain assumes the local source is retained after requalification.</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="head">
+      <p class="eyebrow eyebrow-muted">09 — Feasibility and next steps</p>
+      <h2>What exists now, and what the hackathon period delivers</h2>
+    </div>
+    <div class="cols-wide">
+      <div class="stack">
+        <p><strong>Specified against live interfaces, not mocks.</strong> Every tool targets a real endpoint. The ERP layer is written to the <strong>SAP S/4HANA Cloud sandbox</strong> on SAP Business Accelerator Hub — real OData services with real payload shapes, pagination and error semantics, reachable today with a free API key — and reasoning to <strong>Amazon Bedrock</strong>. We ruled out a simulated backend deliberately: with a live sandbox freely available, a mock would only create work that has to be undone.</p>
+        <p><strong>The constraint engine reads real Indonesian sources:</strong> TKDN certification status from the Kemenperin local-content register, LARTAS classifications from INSW, the national holiday decree, Bank Indonesia's JISDOR reference rate, and BMKG tropical-cyclone bulletins — ingested into a versioned rule pack rather than hard-coded, so a rule change is a data change.</p>
+        <p><strong>The only thing we model is the customer.</strong> Plant list, consumption rates and contract penalty terms come from a company's own master data on day one; we have no customer yet, so we supply a representative profile. Nothing about it is shaped to make the agent succeed.</p>
+        <p><strong>Build status, stated plainly.</strong> At submission this is a specification, not running software. What is complete: the agent topology, the nineteen tool contracts against published SAP APIs, the constraint rule set, the worked scenario with its arithmetic, and the eval suite. Implementation starts immediately, first milestone the Ningbo scenario end to end against the sandbox. We would rather tell you exactly where we stand than demonstrate something built on invented data.</p>
+      </div>
+      <div class="stack">
+        <p><strong>Prior art.</strong> Open-source multi-agent replenishment systems fan work out to parallel specialists on a predetermined path. SIGAP differs where it matters here: the route is chosen at runtime. All code is our own.</p>
+        <p><strong>How we will prove it is genuinely autonomous.</strong> The eval suite is specified — <strong>ten disruption scenarios</strong> — supplier fire, customs hold, demand spike, tariff change, currency move, a supplier losing its TKDN certification mid-plan — each exercising a different reasoning route — and each <strong>activating a different subset of the swarm</strong>. A demand spike wakes Demand &amp; Consumption first and never calls Sourcing; a failed inspection batch starts at Inventory Integrity. They are written before the implementation, not after it, so the system cannot be tuned to pass them. At Demo Day we invite the judges to pick one at random: a rehearsed agent fails that test, and ours is being built to pass it.</p>
+        <table style="margin-top:1mm;">
+          <thead><tr><th>Judging criterion</th><th>Where it is evidenced</th></tr></thead>
+          <tbody>
+            <tr><td>Innovation</td><td>Constraint reasoning over TKDN and LARTAS — options rejected for reasons no cost model would find</td></tr>
+            <tr><td>Feasibility</td><td>Written to a freely reachable S/4HANA sandbox and real regulatory sources; production is a tenant swap</td></tr>
+            <tr><td>Use of AWS / SAP agentic AI</td><td>Bedrock + Strands + AgentCore driving S/4HANA and Ariba write-back</td></tr>
+            <tr><td>Potential impact</td><td>Rp 980 million a year at one plant pair; the pattern generalises across Indonesian import-dependent manufacturing</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer"><span>SIGAP · Intelligent Supply Chain · [team name]</span><span>Page 3 of 3</span></div>
+</section>
+
+</body>
+</html>
