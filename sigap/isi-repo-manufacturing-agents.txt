@@ -1,0 +1,561 @@
+YUHAO-corn/manufacturing-agents — 415 file
+
+(root)/
+    .env.example                                             2831
+    .gitignore                                                605
+    CHANGELOG.md                                            16561
+    CONTRIBUTING.md                                          7019
+    LICENSE                                                 11357
+    README.md                                               14656
+    VERSION                                                     7
+    docker-compose.yml                                       2591
+    main.py                                                  1078
+    pyproject.toml                                           1351
+    requirements.txt                                          434
+    requirements_db.txt                                       258
+    setup.py                                                 1583
+
+.github/workflows/
+    upstream-sync-check.yml                                  8701
+
+.streamlit/
+    config.toml                                               989
+
+assets/
+    TauricResearch.png                                      63581
+    analyst.png                                            216595
+    researcher.png                                         140473
+    risk.png                                               165683
+    schema.png                                             365329
+    trader.png                                             161842
+    wechat.png                                             221601
+
+assets/cli/
+    cli_init.png                                           245297
+    cli_news.png                                           831209
+    cli_technical.png                                      793084
+    cli_transaction.png                                    810243
+
+cli/
+    __init__.py                                                 0
+    main.py                                                 68843
+    models.py                                                 221
+    utils.py                                                13140
+
+cli/static/
+    welcome.txt                                               427
+
+docs/
+    CNAME                                                      20
+    README.md                                                6850
+    STRUCTURE.md                                             5893
+    database_setup.md                                        4611
+    research-depth-guide.md                                  4773
+
+docs/agents/
+    advisors.md                                             16266
+    analysts.md                                              9863
+    managers.md                                             20483
+    risk-management.md                                      19585
+    trader.md                                               18462
+
+docs/architecture/
+    agent-architecture.md                                   14755
+    configuration-optimization.md                            6114
+    data-flow-architecture.md                               19157
+    database-architecture.md                                 6327
+    graph-structure.md                                       6405
+    system-architecture.md                                  10350
+
+docs/configuration/
+    config-guide.md                                         11731
+    dashscope-config.md                                      6530
+    data-directory-configuration.md                          7162
+    google-ai-setup.md                                       5945
+    llm-config.md                                           14947
+    token-tracking-guide.md                                  6591
+
+docs/data/
+    caching.md                                              20916
+    data-processing.md                                      25310
+    data-sources.md                                         21091
+
+docs/development/
+    branch-strategy.md                                      12508
+    development-workflow.md                                  8392
+    project-structure.md                                     6487
+
+docs/examples/
+    advanced-examples.md                                    20723
+    basic-examples.md                                       13782
+
+docs/faq/
+    faq.md                                                  10201
+
+docs/guides/
+    config-management-guide.md                               7621
+
+docs/overview/
+    installation.md                                          8768
+    project-overview.md                                      6611
+    quick-start.md                                           7216
+
+docs/security/
+    api_keys_security.md                                     3512
+
+docs/troubleshooting/
+    finnhub-news-data-setup.md                               5068
+    streamlit-file-watcher-fix.md                            3697
+
+docs/usage/
+    investment_analysis_guide.md                             5025
+    web-interface-guide.md                                   6620
+
+examples/
+    README.md                                                3732
+    __init__.py                                                33
+    batch_analysis.py                                        5300
+    cli_demo.py                                              2425
+    config_management_demo.py                                8436
+    custom_analysis_demo.py                                  8715
+    data_dir_config_demo.py                                  8055
+    my_stock_analysis.py                                     3465
+    simple_analysis_demo.py                                  6732
+    stock_list_example.py                                    4249
+    stock_query_examples.py                                  8512
+    token_tracking_demo.py                                   9388
+
+examples/dashscope_examples/
+    __init__.py                                                29
+    demo_dashscope.py                                        4892
+    demo_dashscope_chinese.py                                5499
+    demo_dashscope_no_memory.py                              4406
+    demo_dashscope_simple.py                                 3952
+
+examples/openai/
+    __init__.py                                                26
+    demo_openai.py                                           3477
+
+manufacturingagents/
+    default_config.py                                         952
+
+manufacturingagents/agents/
+    __init__.py                                              1427
+
+manufacturingagents/agents/analysts/
+    china_market_analyst.py                                  6177
+    fundamentals_analyst.py                                 22363
+    market_analyst.py                                       15364
+    news_analyst.py                                          4172
+    social_media_analyst.py                                  4110
+
+manufacturingagents/agents/managers/
+    research_manager.py                                      3515
+    risk_manager.py                                          3123
+
+manufacturingagents/agents/researchers/
+    bear_researcher.py                                       3546
+    bull_researcher.py                                       4196
+
+manufacturingagents/agents/risk_mgmt/
+    aggresive_debator.py                                     3279
+    conservative_debator.py                                  3254
+    neutral_debator.py                                       3009
+
+manufacturingagents/agents/trader/
+    trader.py                                                5051
+
+manufacturingagents/agents/utils/
+    agent_states.py                                          3090
+    agent_utils.py                                          31821
+    memory.py                                                6643
+
+manufacturingagents/api/
+    stock_api.py                                             9060
+
+manufacturingagents/config/
+    __init__.py                                               244
+    config_manager.py                                       22109
+    database_config.py                                       3601
+    database_manager.py                                     12581
+    mongodb_storage.py                                       9902
+
+manufacturingagents/dataflows/
+    __init__.py                                              1382
+    adaptive_cache.py                                       14347
+    cache_manager.py                                        21069
+    chinese_finance_utils.py                                12572
+    config.py                                                2307
+    db_cache_manager.py                                     20354
+    finnhub_utils.py                                         1882
+    googlenews_utils.py                                      3430
+    integrated_cache.py                                     10218
+    interface.py                                            59277
+    optimized_china_data.py                                 14365
+    optimized_us_data.py                                    11704
+    realtime_news_utils.py                                  14305
+    reddit_utils.py                                          4275
+    stock_api.py                                             3778
+    stock_data_service.py                                    9876
+    stockstats_utils.py                                      2991
+    tdx_utils.py                                            31188
+    utils.py                                                 1039
+    yfin_utils.py                                            4625
+
+manufacturingagents/dataflows/data_cache/china_fundamentals/
+    000002_fundamentals_49995e59b161.txt                     3120
+    000858_fundamentals_ddcf810248de.txt                     3124
+    601117_fundamentals_ab84bb106742.txt                     3124
+    601238_fundamentals_0e7bb7f4d09b.txt                     3124
+
+manufacturingagents/dataflows/data_cache/china_stocks/
+    000001_stock_data_1dbcd45b4b3b.txt                       1302
+    000001_stock_data_6990f440c63d.txt                       1304
+    000001_stock_data_b3e72587cf68.txt                       1305
+    000001_stock_data_f861dca9fcb3.txt                       1302
+    000002_stock_data_43bb8767776a.txt                       1269
+    000002_stock_data_64b23b1cc8a9.txt                       1269
+    000858_stock_data_47b406e447da.txt                       1330
+    300750_stock_data_6dc1c42f35be.txt                       1329
+    600519_stock_data_4d6956e757b1.txt                       1358
+    601117_stock_data_45d414b60545.txt                       1263
+    601127_stock_data_681a997cb4d0.txt                       1329
+    601127_stock_data_74df371d2be3.txt                       1330
+    601127_stock_data_d0797dc91997.txt                       1329
+    601127_stock_data_d6cfbaf434b0.txt                       1329
+    601238_stock_data_42ed58bf2e02.txt                       1263
+    601238_stock_data_c9ee0f3c8a0d.txt                       1263
+
+manufacturingagents/dataflows/data_cache/us_stocks/
+    BANK_PRODUCT_001_stock_data_1f187faec7f5.txt             1477
+    PROD001_stock_data_2f50f9a1e670.txt                       280
+    PROD001_stock_data_903a907e8e77.txt                       448
+    PROD001_stock_data_e3fd43d87ccb.txt                       248
+    STEEL_001_stock_data_d7eb2199d099.txt                      72
+    TEST_ENV_stock_data_9573a5e1ae3b.txt                       31
+    TEST_FINAL_stock_data_a42c38109a3a.txt                     27
+    TEST_OPTIMIZED_stock_data_e41e6d203669.txt                 30
+
+manufacturingagents/graph/
+    __init__.py                                               417
+    conditional_logic.py                                     2684
+    propagation.py                                           1598
+    reflection.py                                            5918
+    setup.py                                                 9648
+    signal_processing.py                                    12519
+    trading_graph.py                                        14886
+
+manufacturingagents/llm_adapters/
+    __init__.py                                               107
+    dashscope_adapter.py                                    10789
+
+manufacturingagents/manufacturingagents/
+    __init__.py                                              1336
+
+manufacturingagents/manufacturingagents/advisors/
+    cautious_advisor.py                                      4515
+    optimistic_advisor.py                                    4466
+
+manufacturingagents/manufacturingagents/analysts/
+    consumer_insight_analyst_react.py                        9339
+    industry_news_analyst_react.py                           8226
+    market_environment_analyst.py                            6210
+    market_environment_analyst_react.py                      9546
+    news_analyst.py                                          9347
+    sentiment_insight_analyst.py                            13594
+    trend_prediction_analyst.py                              8769
+    trend_prediction_analyst_react.py                        8963
+
+manufacturingagents/manufacturingagents/coordinator/
+    decision_coordinator.py                                  3336
+
+manufacturingagents/manufacturingagents/dataflows/
+    __init__.py                                              1047
+    demand_forecast_data.py                                 11674
+    inventory_data.py                                       15483
+    manufacturing_data_adapter.py                           15648
+    market_price_data.py                                    13221
+    production_data.py                                      17427
+    supply_chain_data.py                                     9093
+    test_data_flow.py                                        7102
+    test_manufacturing_adapter.py                            3898
+
+manufacturingagents/manufacturingagents/graph/
+    __init__.py                                               342
+    manufacturing_graph_react.py                            15215
+
+manufacturingagents/manufacturingagents/prompts/
+    __init__.py                                               295
+    prompt_manager.py                                        3053
+
+manufacturingagents/manufacturingagents/prompts/advisors/
+    cautious_advisor.txt                                     8380
+    optimistic_advisor.txt                                   7821
+
+manufacturingagents/manufacturingagents/prompts/analysts/
+    market_environment_analyst.txt                           5870
+    news_analyst.txt                                         6569
+    sentiment_insight_analyst.txt                            7422
+    trend_prediction_analyst.txt                             5912
+
+manufacturingagents/manufacturingagents/prompts/coordinator/
+    decision_coordinator.txt                                 5902
+
+manufacturingagents/manufacturingagents/prompts/risk_mgmt/
+    risk_assessment.txt                                      9254
+
+manufacturingagents/manufacturingagents/prompts/utils/
+    conclusion_extractor.txt                                 3252
+    preprocessing_assistant.txt                              4527
+
+manufacturingagents/manufacturingagents/risk_mgmt/
+    risk_assessment.py                                       4021
+    risk_assessment_backup.py                                8712
+
+manufacturingagents/manufacturingagents/utils/
+    conclusion_extractor.py                                  4369
+    data_validator.py                                       17624
+    manufacturing_states.py                                  5429
+    parameter_processor.py                                  14068
+    preprocessing_assistant.py                              13119
+    prompt_utils.py                                          3716
+    strict_data_policy.py                                   13412
+    tool_manager.py                                         18134
+
+scripts/
+    README.md                                                2311
+    show_llm_output.py                                       4675
+
+scripts/deployment/
+    README.md                                                 488
+    create_github_release.py                                 6514
+    release_v0.1.2.py                                        6029
+    release_v0.1.3.py                                        7045
+
+scripts/development/
+    adaptive_cache_manager.py                               14307
+    download_finnhub_sample_data.py                          8460
+    fix_streamlit_watcher.py                                 5751
+    organize_scripts.py                                      7315
+    prepare_upstream_contribution.py                        11329
+
+scripts/docker/
+    README.md                                                 533
+    docker-compose-start.bat                                 2996
+    mongo-init.js                                            4156
+    start_docker_services.bat                                2931
+    start_docker_services.sh                                 2876
+    start_services_alt_ports.bat                             2104
+    start_services_simple.bat                                1484
+    stop_docker_services.bat                                 1177
+    stop_docker_services.sh                                  1236
+
+scripts/git/
+    README.md                                                 435
+    setup_fork_environment.sh                                1551
+    upstream_git_workflow.sh                                 6959
+
+scripts/maintenance/
+    analyze_differences.ps1                                  6650
+    branch_manager.py                                       11667
+    create_scripts_structure.ps1                             8274
+    debug_integration.ps1                                   15108
+    finalize_script_organization.py                         10350
+    integrate_cache_improvements.ps1                        11295
+    migrate_first_contribution.ps1                           6910
+    organize_root_scripts.py                                 7915
+    remove_contribution_from_git.ps1                         6211
+    sync_upstream.py                                        10105
+    version_manager.py                                       8215
+
+scripts/setup/
+    configure_pip_source.py                                  6607
+    init_database.py                                        10074
+    initialize_system.py                                     9789
+    install_packages.bat                                     1221
+    install_packages_venv.bat                                2266
+    manual_pip_config.py                                     7652
+    migrate_env_to_config.py                                 6277
+    pip_manager.bat                                           384
+    run_in_venv.bat                                           664
+    setup_databases.py                                       7342
+    setup_fork_environment.ps1                               3152
+    setup_pip_source.ps1                                     3727
+    update_gitignore.bat                                     2050
+
+scripts/validation/
+    README.md                                                1305
+    check_dependencies.py                                    8415
+    check_system_status.py                                   7844
+    smart_config.py                                         11547
+    verify_gitignore.py                                      4993
+
+tests/
+    README.md                                                6326
+    __init__.py                                                30
+    check_gemini_models.py                                   5837
+    debug_imports.py                                         5851
+    demo_fallback_system.py                                  8963
+    diagnose_gemini_25.py                                    6811
+    fast_tdx_test.py                                         9485
+    final_601127_test.py                                     4756
+    final_gemini_test.py                                     6759
+    quick_redis_test.py                                      4029
+    quick_test.py                                            5766
+    simple_env_test.py                                       3171
+    test_601127_final.py                                     3935
+    test_all_apis.py                                         6846
+    test_analysis.py                                         3763
+    test_analysis_with_apis.py                               6790
+    test_api_raw_data.py                                    13703
+    test_api_scheduling.py                                  16613
+    test_basic_tushare.py                                    3238
+    test_cache_optimization.py                               9141
+    test_cache_system.py                                     6784
+    test_chinese_output.py                                   4383
+    test_cli_fix.py                                          6599
+    test_complete_mongodb_migration.py                      10659
+    test_config_management.py                                9853
+    test_copper_daily.py                                     6843
+    test_copper_futures.py                                   6403
+    test_core_functionality.py                               3300
+    test_correct_apis.py                                     7651
+    test_current_601127_status.py                            7488
+    test_dashscope_token_tracking.py                         6354
+    test_data_config_cli.py                                  6522
+    test_data_validator.py                                  10542
+    test_database_fix.py                                     5908
+    test_documentation_consistency.py                        5459
+    test_dynamic_stock_names.py                              6681
+    test_embedding_models.py                                 6570
+    test_end_to_end_data_flow.py                            19749
+    test_enhanced_mapping.py                                 4273
+    test_env_compatibility.py                                5930
+    test_env_config.py                                       5797
+    test_final_config.py                                     5317
+    test_final_validation.py                                 4318
+    test_finnhub_connection.py                               6276
+    test_finnhub_fundamentals.py                             8633
+    test_finnhub_news_fix.py                                 6004
+    test_format_fix.py                                       4098
+    test_fundamentals_cache.py                               7419
+    test_future_copper_contracts.py                          8014
+    test_gemini.py                                           8044
+    test_gemini_25.py                                       11187
+    test_gemini_25_pro.py                                    9755
+    test_gemini_correct.py                                   7943
+    test_gemini_final.py                                     6764
+    test_gemini_simple.py                                    7817
+    test_get_security_list.py                                3296
+    test_google_memory_fix.py                                8261
+    test_integrated_manufacturing_flow.py                    6306
+    test_integration_status.py                               5024
+    test_llm_real_generation.py                              7882
+    test_manufacturing_data.py                              10435
+    test_manufacturing_end_to_end.py                        10478
+    test_mongodb_stock_name.py                               4075
+    test_optimization_effect.py                              8496
+    test_parameter_processor.py                              8656
+    test_pmi_focused.py                                      4092
+    test_preprocessing_assistant.py                          4871
+    test_preprocessing_assistant_validation.py              10154
+    test_preprocessing_simple.py                             8577
+    test_preprocessing_simple_validation.py                 10499
+    test_progress.py                                         2971
+    test_rag_knowledge_base.py                               8993
+    test_real_integration.py                                10024
+    test_real_llm_preprocessing.py                          10230
+    test_real_preprocessing_integration.py                  11056
+    test_redis_performance.py                               13466
+    test_risk_assessment.py                                  9455
+    test_server_config.py                                    1305
+    test_signal_processor_debug.py                           4024
+    test_signal_processor_fix.py                             5314
+    test_smart_system.py                                     9048
+    test_stock_codes.py                                      2487
+    test_stock_data_integration.py                           4234
+    test_stock_data_service.py                              15760
+    test_stock_name_601127.py                               10505
+    test_stock_name_fix.py                                   8307
+    test_strict_data_policy.py                              14161
+    test_system_simple.py                                    5951
+    test_target_price.py                                     5083
+    test_tdx_integration.py                                 19594
+    test_tool_manager.py                                    18761
+    test_toolkit_tools.py                                    6819
+    test_tushare_pmi.py                                      3446
+    test_us_stock_analysis.py                                4948
+    test_web_config_page.py                                  3469
+    test_web_fix.py                                          4228
+    test_web_interface.py                                    5053
+    verify_601127_fix.py                                     6852
+    verify_config.py                                          969
+    verify_mongodb_data.py                                   5942
+
+tests/frontend/
+    test_frontend_terminology.py                             2897
+
+tests/integration/
+    __init__.py                                                28
+    test_dashscope_integration.py                            5588
+
+tests/manufacturing/
+    test_end_to_end_manufacturing.py                        16944
+    test_four_analysts.py                                    5298
+    test_manufacturing_agents.py                            13135
+    test_manufacturing_data_flow.py                          9301
+    test_manufacturing_data_layer.py                        10977
+    test_manufacturing_full_pipeline.py                         1
+    test_manufacturing_graph.py                              6505
+    test_manufacturing_pipeline.py                           6244
+    test_manufacturing_react.py                              6595
+    test_real_manufacturing_flow.py                          8809
+    test_real_manufacturing_with_tools.py                   11994
+    test_specialized_tools.py                                4471
+
+tests/web/
+    test_web_fix.py                                          3038
+    test_web_integration.py                                  2990
+
+utils/
+    clear_688008_cache.py                                    1964
+    clear_all_cache.py                                       8768
+    debug_mapping.py                                          906
+    debug_quotes_fields.py                                   2827
+    debug_security_list.py                                   5121
+    enhance_stock_mapping.py                                10826
+    enhanced_stock_list_fetcher.py                          11080
+    fix_mongodb_duplicate_keys.py                            8823
+    fix_summary.py                                           1550
+
+web/
+    README.md                                                8212
+    app.py                                                  20361
+    run_web.py                                               5506
+
+web/components/
+    __init__.py                                                18
+    analysis_form.py                                         7374
+    header.py                                                2626
+    results_display.py                                      16506
+    sidebar.py                                               4101
+
+web/i18n/
+    __init__.py                                                79
+    manufacturing_texts.py                                   7955
+
+web/pages/
+    cache_management.py                                     12322
+    config_management.py                                    21418
+    database_management.py                                   9736
+    token_statistics.py                                     14095
+
+web/utils/
+    __init__.py                                                18
+    analysis_runner.py                                      44086
+    api_checker.py                                           6199
+    progress_tracker.py                                      6927
+    simple_progress_tracker.py                              10303
+    text_manager.py                                          6471
+    ui_utils.py                                              3619
+
