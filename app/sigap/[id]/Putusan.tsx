@@ -2,23 +2,30 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Button } from "../ui/Twenty";
 
-export default function Putusan({ aksiId }: { aksiId: string }) {
+type Putusan = "disetujui" | "ditolak" | "dinaikkan";
+
+export default function Putusan({ aksiId, nilaiIdr, batasIdr }: {
+  aksiId: string; nilaiIdr: number; batasIdr: number;
+}) {
   const r = useRouter();
-  const [sibuk, setSibuk] = useState<string | null>(null);
+  const [sibuk, setSibuk] = useState<Putusan | null>(null);
   const [galat, setGalat] = useState("");
+  const diluarWewenang = batasIdr <= 0 || nilaiIdr > batasIdr;
 
-  async function kirim(putusan: "disetujui" | "ditolak" | "dinaikkan") {
+  async function kirim(putusan: Putusan) {
     setSibuk(putusan);
     setGalat("");
     try {
+      // Identitas TIDAK dikirim dari sini — server mengambilnya dari token sesi.
       const res = await fetch(`/api/sigap/aksi/${aksiId}/putusan`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        // TODO: ganti dengan identitas dari sesi login begitu auth dipasang
-        body: JSON.stringify({ oleh: "planner", peran: "buyer", putusan }),
+        body: JSON.stringify({ putusan }),
       });
-      if (!res.ok) throw new Error((await res.json()).galat ?? "gagal");
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.galat ?? "gagal");
       r.refresh();
     } catch (e) {
       setGalat(e instanceof Error ? e.message : "gagal");
@@ -30,19 +37,35 @@ export default function Putusan({ aksiId }: { aksiId: string }) {
   return (
     <div className="mt-3">
       <div className="flex flex-wrap gap-2">
-        <button onClick={() => kirim("disetujui")} disabled={!!sibuk}
-          className="rounded-full bg-foreground px-4 py-1.5 text-sm font-medium text-background disabled:opacity-50">
-          {sibuk === "disetujui" ? "Mengirim…" : "Setujui"}
-        </button>
-        <button onClick={() => kirim("dinaikkan")} disabled={!!sibuk}
-          className="rounded-full border border-line px-4 py-1.5 text-sm disabled:opacity-50">
+        <Button
+          variant="solid" color="accent" size="sm"
+          loading={sibuk === "disetujui"}
+          disabled={!!sibuk || diluarWewenang}
+          onClick={() => kirim("disetujui")}
+        >
+          Setujui
+        </Button>
+        <Button
+          variant="outline" color="neutral" size="sm"
+          loading={sibuk === "dinaikkan"} disabled={!!sibuk}
+          onClick={() => kirim("dinaikkan")}
+        >
           Naikkan
-        </button>
-        <button onClick={() => kirim("ditolak")} disabled={!!sibuk}
-          className="rounded-full border border-line px-4 py-1.5 text-sm text-rose-300 disabled:opacity-50">
+        </Button>
+        <Button
+          variant="ghost" color="danger" size="sm"
+          loading={sibuk === "ditolak"} disabled={!!sibuk}
+          onClick={() => kirim("ditolak")}
+        >
           Tolak
-        </button>
+        </Button>
       </div>
+      {diluarWewenang && (
+        <p className="mt-2 text-[11px] leading-relaxed text-amber-300">
+          Di luar wewenangmu{batasIdr > 0 && ` (batas Rp ${batasIdr.toLocaleString("id-ID")})`}.
+          Gunakan Naikkan.
+        </p>
+      )}
       {galat && <p className="mt-2 font-mono text-xs text-rose-300">{galat}</p>}
     </div>
   );

@@ -1,11 +1,13 @@
 import Link from "next/link";
-import { ambil, rupiah, STATUS, type Jalan } from "./lib";
+import { ambil, rupiah, saya, STATUS, type Jalan } from "./lib";
+import { Status, Tag } from "./ui/Twenty";
 
 export const dynamic = "force-dynamic";
 
 export default async function Antrean() {
   const data = await ambil<{ jalan: Jalan[] }>("jalan");
   const sehat = await ambil<Record<string, any>>("sehat");
+  const aku = await saya();
 
   if (!data) {
     return (
@@ -34,7 +36,16 @@ export default async function Antrean() {
           </p>
         </div>
         {sehat && (
-          <div className="flex flex-wrap gap-2 font-mono text-[11px]">
+          <div className="flex flex-wrap items-center gap-2 font-mono text-[11px]">
+            {aku ? (
+              <span className="rounded-full border border-line px-3 py-1 text-muted">
+                {aku.nama} · {aku.peran}
+              </span>
+            ) : (
+              <Link href="/sigap/masuk" className="rounded-full border border-accent/60 px-3 py-1 text-accent">
+                masuk
+              </Link>
+            )}
             <span className="rounded-full border border-line px-3 py-1 text-muted">
               {sehat.lingkungan}
             </span>
@@ -72,14 +83,10 @@ export default async function Antrean() {
                     <p className="mt-1 text-sm text-muted">{j.pemicu}</p>
                   </div>
                   <div className="flex shrink-0 flex-wrap items-center gap-2 font-mono text-[11px]">
-                    {j.mode === "runut" && (
-                      <span className="rounded border border-amber-500/50 bg-amber-500/10 px-2 py-0.5 text-amber-300">
-                        runut
-                      </span>
-                    )}
-                    <span className={`rounded border px-2 py-0.5 ${STATUS[j.status] ?? "border-line text-muted"}`}>
-                      {j.status}
-                    </span>
+                    {j.mode === "runut" && <Tag color="orange">runut</Tag>}
+                    <Status color={
+                      j.status === "gagal" ? "red" : j.status === "selesai" ? "green" : "yellow"
+                    }>{j.status}</Status>
                   </div>
                 </div>
 

@@ -1,6 +1,8 @@
 """Alat sisanya. Yang datanya ada diimplementasikan; sisanya jujur mengembalikan TIDAK_ADA."""
 from __future__ import annotations
 
+import hashlib
+
 from datetime import date, datetime, timedelta
 from typing import List, Optional
 
@@ -100,12 +102,38 @@ def aksi_tercatat() -> List[dict]:
     return list(_CATATAN_AKSI)
 
 
+def kunci_idempoten(jenis: str, **rinci) -> str:
+    """Kunci stabil dari isi aksi. Aksi yang sama tidak pernah dikirim dua kali."""
+    sidik = "|".join(f"{k}={rinci[k]}" for k in sorted(rinci))
+    return f"{jenis}:{hashlib.sha256(sidik.encode()).hexdigest()[:16]}"
+
+
 def _catat(jenis: str, otonom: bool, **rinci) -> Hasil:
-    entri = {"jenis": jenis, "otonom": otonom,
-             "status": "dijalankan" if otonom else "menunggu persetujuan",
-             "waktu": datetime.utcnow().isoformat(timespec="seconds"), **rinci}
-    _CATATAN_AKSI.append(entri)
-    return Hasil(entri, Asal.HITUNGAN, "catatan aksi (belum menulis ke SAP)")
+    from clients import sap_s4
+    from core import simpan
+    from core.konfigurasi import KONF
+
+    kunci = kunci_idempoten(jenis, **rinci)
+    jalan_id = rinci.pop("_jalan_id", None) or "run_lepas"
+    aksi = simpan.catat_aksi(jalan_id, kunci, jenis, otonom, rinci)
+
+    if aksi.get("diulang"):
+        return Hasil(aksi, Asal.HITUNGAN, "catatan aksi",
+                     catatan="aksi identik sudah pernah diajukan — tidak dikirim ulang")
+
+    # Hanya aksi otonom yang langsung menyentuh SAP. Sisanya menunggu persetujuan.
+    if otonom and sap_s4.tersedia() and jenis == "stock_transfer":
+        try:
+            r = sap_s4.kirim("API_STOCK_TRANSFER_SRV", "A_StockTransfer",
+                             rinci, kunci_idempoten=kunci)
+            return Hasil(aksi | {"referensi_sap": r.get("d", {}).get("MaterialDocument")},
+                         Asal.LANGSUNG, "API_STOCK_TRANSFER_SRV")
+        except Exception as e:                                       # noqa: BLE001
+            return Hasil(aksi, Asal.TIDAK_ADA, "API_STOCK_TRANSFER_SRV",
+                         catatan=f"gagal menulis ke SAP: {type(e).__name__}: {e}")
+
+    sumber = "catatan aksi" if sap_s4.tersedia() else "catatan aksi (SAP belum tersambung)"
+    return Hasil(aksi, Asal.HITUNGAN, sumber)
 
 
 BATAS_OTONOM_IDR = 50_000_000

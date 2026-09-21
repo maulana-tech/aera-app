@@ -12,7 +12,7 @@ import json
 import os
 import urllib.parse
 import urllib.request
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 BASE_URL = os.environ.get("SAP_BASE_URL", "https://sandbox.api.sap.com")
 API_KEY = os.environ.get("SAP_API_KEY", "")
@@ -62,3 +62,60 @@ def baris(respons: dict) -> list:
         d = respons["d"]
         return d.get("results", [d]) if isinstance(d, dict) else d
     return respons.get("value", [])                     # OData v4
+
+
+# --------------------------------------------------------------------- menulis
+class CsrfGagal(SapError):
+    pass
+
+
+def _token_csrf(layanan: str) -> Tuple[str, str]:
+    """SAP OData v2 menolak tulisan tanpa token CSRF. Ambil dulu, bawa cookie-nya."""
+    url = f"{BASE_URL}/s4hanacloud/sap/opu/odata/sap/{layanan}/"
+    req = urllib.request.Request(url, headers={
+        "APIKey": API_KEY, "X-CSRF-Token": "Fetch", "Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+            token = r.headers.get("X-CSRF-Token", "")
+            cookie = "; ".join(v.split(";", 1)[0] for v in r.headers.get_all("Set-Cookie") or [])
+        if not token:
+            raise CsrfGagal(f"{layanan} tidak mengembalikan X-CSRF-Token")
+        return token, cookie
+    except urllib.error.HTTPError as e:
+        raise CsrfGagal(f"gagal ambil token CSRF dari {layanan}: HTTP {e.code}") from e
+
+
+def kirim(layanan: str, entitas: str, muatan: dict,
+          kunci_idempoten: Optional[str] = None) -> dict:
+    """Tulis satu entitas ke SAP.
+
+    kunci_idempoten dikirim sebagai header supaya sisi SAP bisa menolak
+    pengulangan. Sisi kita juga menjaganya di tabel aksi — dua lapis,
+    karena pesanan pembelian ganda itu mahal.
+    """
+    if not API_KEY:
+        raise KunciBelumAda("SAP_API_KEY belum diisi — penulisan ke SAP ditolak")
+
+    token, cookie = _token_csrf(layanan)
+    url = f"{BASE_URL}/s4hanacloud/sap/opu/odata/sap/{layanan}/{entitas}"
+    kepala = {
+        "APIKey": API_KEY,
+        "X-CSRF-Token": token,
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    if cookie:
+        kepala["Cookie"] = cookie
+    if kunci_idempoten:
+        kepala["Idempotency-Key"] = kunci_idempoten
+
+    req = urllib.request.Request(
+        url, data=json.dumps(muatan).encode(), headers=kepala, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+            return json.loads(r.read().decode() or "{}")
+    except urllib.error.HTTPError as e:
+        raise SapError(
+            f"HTTP {e.code} saat menulis ke {layanan}/{entitas}: "
+            f"{e.read()[:300].decode(errors='replace')}"
+        ) from e

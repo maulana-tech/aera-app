@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ambil, ASAL, rupiah, STATUS, type Jalan } from "../lib";
+import { ambil, ASAL, rupiah, saya, STATUS, type Jalan } from "../lib";
+import { Status, Tag } from "../ui/Twenty";
 import Putusan from "./Putusan";
 
 export const dynamic = "force-dynamic";
@@ -8,6 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function Detail({ params }: { params: Promise<{ id: string }> }) {
   const j = await ambil<Jalan>(`jalan/${(await params).id}`);
   if (!j) notFound();
+  const aku = await saya();
 
   const langkah = j.langkah ?? [];
   const aksi = j.aksi ?? [];
@@ -29,7 +31,9 @@ export default async function Detail({ params }: { params: Promise<{ id: string 
               mode runut — bukan penalaran agent
             </span>
           )}
-          <span className={`rounded-full border px-3 py-1 ${STATUS[j.status] ?? "border-line"}`}>{j.status}</span>
+          <Status color={j.status === "gagal" ? "red" : j.status === "selesai" ? "green" : "yellow"}>
+            {j.status}
+          </Status>
           {j.biaya_token_idr > 0 && (
             <span className="rounded-full border border-line px-3 py-1 text-muted">{rupiah(j.biaya_token_idr)}</span>
           )}
@@ -109,9 +113,11 @@ export default async function Detail({ params }: { params: Promise<{ id: string 
                     <li key={a.id} className="px-5 py-4">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className="font-mono text-sm">{a.jenis}</span>
-                        <span className={`rounded border px-2 py-0.5 font-mono text-[10px] uppercase ${STATUS[a.status] ?? "border-line"}`}>
-                          {a.status}
-                        </span>
+                        <Tag color={
+                          a.status === "ditolak" ? "red"
+                          : a.status === "disetujui" || a.status === "terkirim" ? "green"
+                          : "yellow"
+                        }>{a.status}</Tag>
                       </div>
                       <p className="mt-1.5 break-words font-mono text-[11px] text-muted">
                         {Object.entries(a.muatan).map(([k, v]) => `${k}=${v}`).join(" · ")}
@@ -124,7 +130,19 @@ export default async function Detail({ params }: { params: Promise<{ id: string 
                           {s.putusan} oleh {s.oleh} ({s.peran}) · {new Date(s.waktu).toLocaleString("id-ID")}
                         </p>
                       ))}
-                      {a.status === "menunggu" && <Putusan aksiId={a.id} />}
+                      {a.status === "menunggu" && (
+                        aku ? (
+                          <Putusan
+                            aksiId={a.id}
+                            nilaiIdr={Number(a.muatan.biaya_idr ?? 0)}
+                            batasIdr={aku.batas_idr}
+                          />
+                        ) : (
+                          <p className="mt-2 text-[11px] text-amber-300">
+                            Masuk dulu untuk menyetujui.
+                          </p>
+                        )
+                      )}
                     </li>
                   );
                 })}

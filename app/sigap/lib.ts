@@ -41,11 +41,23 @@ export const STATUS: Record<string, string> = {
 
 export const rupiah = (n: number) => "Rp " + (n ?? 0).toLocaleString("id-ID");
 
+export type Saya = { nama: string; email: string; peran: string; batas_idr: number };
+
+/** Ambil dari layanan agent dengan token sesi dari cookie httpOnly. */
 export async function ambil<T>(jalur: string): Promise<T | null> {
+  const { cookies } = await import("next/headers");
+  const token = (await cookies()).get("sigap_sesi")?.value;
   try {
-    const r = await fetch(`${HULU}/${jalur}`, { cache: "no-store" });
+    const r = await fetch(`${HULU}/${jalur}`, {
+      cache: "no-store",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
     return r.ok ? ((await r.json()) as T) : null;
   } catch {
     return null;
   }
+}
+
+export async function saya(): Promise<Saya | null> {
+  return ambil<Saya>("saya");
 }

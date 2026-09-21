@@ -23,7 +23,8 @@ from typing import Any, Callable, Dict, Optional, Tuple
 from urllib.parse import urlparse
 
 import tools.impact, tools.sourcing, tools.compliance, tools.lainnya  # noqa: F401  (daftarkan alat)
-from core import simpan
+from core import identitas, simpan
+from core.identitas import Pengguna, TidakBerwenang
 from core.konfigurasi import KONF
 
 PORT = 8787
@@ -62,6 +63,14 @@ def _tangani(jalan_id: str, peristiwa: dict) -> None:
 RUTE: list = []
 
 
+def _pengguna(headers) -> Pengguna:
+    """Identitas HANYA dari token. Tidak pernah dari badan permintaan."""
+    auth = headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        raise TidakBerwenang("perlu token sesi")
+    return identitas.dari_token(auth[7:])
+
+
 def rute(metode: str, pola: str) -> Callable:
     r = re.compile("^" + pola + "$")
 
@@ -72,7 +81,7 @@ def rute(metode: str, pola: str) -> Callable:
 
 
 @rute("GET", r"/sehat")
-def sehat(_m, _b) -> Tuple[int, dict]:
+def sehat(_m, _b, _h) -> Tuple[int, dict]:
     return 200, {
         "lingkungan": KONF.lingkungan,
         "sap_siap": KONF.sap_siap,
@@ -83,7 +92,7 @@ def sehat(_m, _b) -> Tuple[int, dict]:
 
 
 @rute("POST", r"/peristiwa")
-def terima_peristiwa(_m, b: dict) -> Tuple[int, dict]:
+def terima_peristiwa(_m, b: dict, _h) -> Tuple[int, dict]:
     for w in ("jenis", "judul", "pemicu"):
         if not b.get(w):
             return 400, {"galat": f"'{w}' wajib diisi"}
@@ -111,27 +120,56 @@ def terima_peristiwa(_m, b: dict) -> Tuple[int, dict]:
     return 202, {"peristiwa_id": pid, "jalan_id": jid, "mode": mode}
 
 
+@rute("POST", r"/masuk")
+def login(_m, b: dict, _h) -> Tuple[int, dict]:
+    try:
+        p = identitas.masuk(b.get("email", ""), b.get("sandi", ""))
+    except TidakBerwenang as e:
+        return 401, {"galat": str(e)}
+    return 200, {"token": identitas.terbitkan_token(p),
+                 "pengguna": {"nama": p.nama, "email": p.email,
+                              "peran": p.peran, "batas_idr": p.batas_idr}}
+
+
+@rute("GET", r"/saya")
+def saya(_m, _b, h) -> Tuple[int, dict]:
+    p = _pengguna(h)
+    return 200, {"nama": p.nama, "email": p.email, "peran": p.peran,
+                 "batas_idr": p.batas_idr}
+
+
 @rute("GET", r"/jalan")
-def daftar(_m, _b) -> Tuple[int, dict]:
+def daftar(_m, _b, _h) -> Tuple[int, dict]:
     return 200, {"jalan": simpan.daftar_jalan()}
 
 
 @rute("GET", r"/jalan/([A-Za-z0-9_]+)")
-def satu(m, _b) -> Tuple[int, dict]:
+def satu(m, _b, _h) -> Tuple[int, dict]:
     d = simpan.ambil_jalan(m.group(1))
     return (200, d) if d else (404, {"galat": "tidak ditemukan"})
 
 
 @rute("POST", r"/aksi/([A-Za-z0-9_]+)/putusan")
-def putuskan(m, b: dict) -> Tuple[int, dict]:
-    for w in ("oleh", "peran", "putusan"):
-        if not b.get(w):
-            return 400, {"galat": f"'{w}' wajib diisi"}
-    try:
-        return 200, simpan.putuskan_aksi(m.group(1), b["oleh"], b["peran"],
-                                         b["putusan"], b.get("catatan", ""))
-    except KeyError:
+def putuskan(m, b: dict, h) -> Tuple[int, dict]:
+    p = _pengguna(h)                       # identitas dari token, bukan dari badan
+    if not b.get("putusan"):
+        return 400, {"galat": "'putusan' wajib diisi"}
+
+    aksi_id = m.group(1)
+    d = simpan.ambil_aksi(aksi_id)
+    if not d:
         return 404, {"galat": "aksi tidak ditemukan"}
+
+    nilai = int(d["muatan"].get("biaya_idr", 0))
+    if b["putusan"] == "disetujui" and not p.boleh_menyetujui(nilai):
+        return 403, {
+            "galat": f"peran '{p.peran}' tidak berwenang menyetujui Rp {nilai:,}",
+            "batas_idr": p.batas_idr,
+            "saran": "naikkan ke procurement_lead",
+        }
+    try:
+        return 200, simpan.putuskan_aksi(aksi_id, p.email, p.peran,
+                                         b["putusan"], b.get("catatan", ""))
     except ValueError as e:
         return 400, {"galat": str(e)}
 
@@ -170,7 +208,9 @@ class Penangan(BaseHTTPRequestHandler):
             cocok = pola.match(jalur)
             if cocok:
                 try:
-                    kode, data = fn(cocok, badan)
+                    kode, data = fn(cocok, badan, self.headers)
+                except TidakBerwenang as e:
+                    return self._kirim(401, {"galat": str(e)})
                 except Exception as e:                               # noqa: BLE001
                     traceback.print_exc()
                     return self._kirim(500, {"galat": f"{type(e).__name__}: {e}"})

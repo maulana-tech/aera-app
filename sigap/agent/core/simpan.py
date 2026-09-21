@@ -221,3 +221,16 @@ def ambil_jalan(jalan_id: str) -> Optional[dict]:
         "aksi": [dict(a) | {"muatan": json.loads(a["muatan"])} for a in aksi],
         "persetujuan": [dict(s) for s in setuju],
     }
+
+
+def ambil_aksi(aksi_id: str) -> Optional[dict]:
+    with buka() as c:
+        r = c.execute("SELECT * FROM aksi WHERE id=?", (aksi_id,)).fetchone()
+    return dict(r) | {"muatan": json.loads(r["muatan"])} if r else None
+
+
+def tandai_terkirim(aksi_id: str, referensi_sap: str) -> None:
+    """Dipanggil setelah aksi yang disetujui benar-benar mendarat di SAP."""
+    with buka() as c:
+        c.execute("UPDATE aksi SET status='terkirim', referensi_sap=? WHERE id=? AND status='disetujui'",
+                  (referensi_sap, aksi_id))

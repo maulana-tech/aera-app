@@ -1,13 +1,18 @@
-// Jembatan ke layanan agent Python. Browser tidak pernah memanggilnya langsung —
-// supaya layanan agent bisa tetap tertutup di jaringan internal.
+import { cookies } from "next/headers";
+
+// Jembatan ke layanan agent. Browser tidak pernah memanggilnya langsung, dan
+// token sesi ditempelkan di sini — tidak pernah dikirim dari sisi halaman.
 const HULU = process.env.SIGAP_API ?? "http://127.0.0.1:8787";
 
 async function teruskan(req: Request, jalur: string[], metode: "GET" | "POST") {
-  const url = `${HULU}/${jalur.join("/")}`;
+  const token = (await cookies()).get("sigap_sesi")?.value;
+  const kepala: Record<string, string> = { "content-type": "application/json" };
+  if (token) kepala.Authorization = `Bearer ${token}`;
+
   try {
-    const r = await fetch(url, {
+    const r = await fetch(`${HULU}/${jalur.join("/")}`, {
       method: metode,
-      headers: { "content-type": "application/json" },
+      headers: kepala,
       body: metode === "POST" ? await req.text() : undefined,
       cache: "no-store",
     });
@@ -26,7 +31,6 @@ async function teruskan(req: Request, jalur: string[], metode: "GET" | "POST") {
 export async function GET(req: Request, { params }: { params: Promise<{ jalur: string[] }> }) {
   return teruskan(req, (await params).jalur, "GET");
 }
-
 export async function POST(req: Request, { params }: { params: Promise<{ jalur: string[] }> }) {
   return teruskan(req, (await params).jalur, "POST");
 }
