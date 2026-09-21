@@ -2,7 +2,24 @@
 from __future__ import annotations
 
 import os
+import pathlib
 from dataclasses import dataclass
+
+
+def _muat_env() -> None:
+    """Baca .env kalau ada. Memudahkan pengembangan; produksi pakai env asli."""
+    f = pathlib.Path(__file__).resolve().parent.parent / ".env"
+    if not f.exists():
+        return
+    for baris in f.read_text().splitlines():
+        baris = baris.strip()
+        if not baris or baris.startswith("#") or "=" not in baris:
+            continue
+        k, v = baris.split("=", 1)
+        os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+
+
+_muat_env()
 
 
 class KonfigurasiTidakSah(RuntimeError):

@@ -43,14 +43,16 @@ export default function Masuk() {
         <label className="block">
           <span className="font-mono text-[11px] uppercase tracking-wider text-muted">Email</span>
           <input
-            type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
+            type="email" name="sigap-email" autoComplete="username" required
+            value={email} onChange={(e) => setEmail(e.target.value)}
             className="mt-1.5 w-full rounded-lg border border-line bg-card px-3 py-2 text-sm outline-none focus:border-accent"
           />
         </label>
         <label className="block">
           <span className="font-mono text-[11px] uppercase tracking-wider text-muted">Kata sandi</span>
           <input
-            type="password" required value={sandi} onChange={(e) => setSandi(e.target.value)}
+            type="password" name="sigap-sandi" autoComplete="current-password" required
+            value={sandi} onChange={(e) => setSandi(e.target.value)}
             className="mt-1.5 w-full rounded-lg border border-line bg-card px-3 py-2 text-sm outline-none focus:border-accent"
           />
         </label>
