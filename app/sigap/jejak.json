@@ -1,0 +1,265 @@
+{
+  "judul": "Topan menutup Pelabuhan Ningbo",
+  "pemicu": "Advisory maritim: Ningbo–Zhoushan tutup 8–13 Sep 2026",
+  "mode": "runut",
+  "mulai": "2026-09-21T10:49:20+00:00",
+  "agent_terpakai": [
+    "supervisor",
+    "impact",
+    "sourcing",
+    "compliance",
+    "simulation",
+    "execution"
+  ],
+  "jumlah_langkah": 9,
+  "langkah": [
+    {
+      "urutan": 1,
+      "tahap": "DETECT",
+      "agent": "supervisor",
+      "agent_nama": "SIGAP Core",
+      "ringkas": "Mengenali Ningbo sebagai jalur yang dipakai perusahaan",
+      "alat": [
+        "detect_disruption"
+      ],
+      "asal": null,
+      "sumber": null,
+      "detail": {},
+      "waktu": "2026-09-21T10:49:20+00:00"
+    },
+    {
+      "urutan": 2,
+      "tahap": "SCOPE",
+      "agent": "impact",
+      "agent_nama": "Ahli Dampak",
+      "ringkas": "4 pesanan pembelian lewat Ningbo terdampak",
+      "alat": [
+        "get_open_purchase_orders"
+      ],
+      "asal": "modelled",
+      "sumber": "fixture:PurchaseOrder",
+      "detail": {
+        "pesanan": [
+          "4500018872",
+          "4500018901",
+          "4500018903",
+          "4500018910"
+        ]
+      },
+      "waktu": "2026-09-21T10:49:20+00:00"
+    },
+    {
+      "urutan": 3,
+      "tahap": "IMPACT",
+      "agent": "impact",
+      "agent_nama": "Ahli Dampak",
+      "ringkas": "M-4471 di KRW1: 84.0 ton, pemakaian 9.2 ton/hari",
+      "alat": [
+        "get_material_stock",
+        "get_bom_explosion"
+      ],
+      "asal": "modelled",
+      "sumber": "fixture:MaterialStock",
+      "detail": {
+        "material": "M-4471",
+        "stok_ton": 84.0,
+        "pemakaian_harian": 9.2
+      },
+      "waktu": "2026-09-21T10:49:20+00:00"
+    },
+    {
+      "urutan": 4,
+      "tahap": "QUANTIFY",
+      "agent": "impact",
+      "agent_nama": "Ahli Dampak",
+      "ringkas": "3 pesanan pelanggan senilai Rp 2,140,000,000 terancam",
+      "alat": [
+        "get_sales_order_commitments"
+      ],
+      "asal": "modelled",
+      "sumber": "fixture:SalesOrder",
+      "detail": {
+        "nilai_idr": 2140000000,
+        "produk": [
+          "FG-1120"
+        ]
+      },
+      "waktu": "2026-09-21T10:49:20+00:00"
+    },
+    {
+      "urutan": 5,
+      "tahap": "GENERATE",
+      "agent": "sourcing",
+      "agent_nama": "Ahli Pencari Sumber",
+      "ringkas": "5 pilihan pasokan disusun",
+      "alat": [
+        "find_alternate_sources"
+      ],
+      "asal": "modelled",
+      "sumber": "fixture:AlternateSource",
+      "detail": {
+        "pilihan": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E"
+        ]
+      },
+      "waktu": "2026-09-21T10:49:20+00:00"
+    },
+    {
+      "urutan": 6,
+      "tahap": "FILTER",
+      "agent": "compliance",
+      "agent_nama": "Ahli Aturan",
+      "ringkas": "2 pilihan dicoret karena aturan, bukan karena harga",
+      "alat": [
+        "check_local_constraints"
+      ],
+      "asal": "modelled",
+      "sumber": "references/ (rule pack)",
+      "detail": {
+        "ditolak": [
+          "D",
+          "E"
+        ],
+        "alasan": {
+          "D": "LARTAS: negara asal baru menambah 10 hari kerja — tiba setelah lini berhenti",
+          "E": "TKDN turun ke 34,8%; ambang kontrak 40.0%"
+        }
+      },
+      "waktu": "2026-09-21T10:49:20+00:00"
+    },
+    {
+      "urutan": 7,
+      "tahap": "SIMULATE",
+      "agent": "simulation",
+      "agent_nama": "Ahli Hitungan",
+      "ringkas": "Kombinasi termurah yang aman: B+C — Rp 116,000,000",
+      "alat": [
+        "simulate_scenario"
+      ],
+      "asal": "derived",
+      "sumber": "engine/simulate.py",
+      "detail": {
+        "kombinasi": [
+          {
+            "kombinasi": "C",
+            "anggota": [
+              "C"
+            ],
+            "biaya": 22000000,
+            "aman": false,
+            "habis": "2026-09-19",
+            "tkdn_sesudah": 38.2
+          },
+          {
+            "kombinasi": "B",
+            "anggota": [
+              "B"
+            ],
+            "biaya": 94000000,
+            "aman": false,
+            "habis": "2026-09-19",
+            "tkdn_sesudah": 41.6
+          },
+          {
+            "kombinasi": "B+C",
+            "anggota": [
+              "B",
+              "C"
+            ],
+            "biaya": 116000000,
+            "aman": true,
+            "habis": "2026-10-08",
+            "tkdn_sesudah": 41.6
+          },
+          {
+            "kombinasi": "A",
+            "anggota": [
+              "A"
+            ],
+            "biaya": 186000000,
+            "aman": true,
+            "habis": "2026-10-05",
+            "tkdn_sesudah": 38.2
+          },
+          {
+            "kombinasi": "A+C",
+            "anggota": [
+              "A",
+              "C"
+            ],
+            "biaya": 208000000,
+            "aman": true,
+            "habis": "2026-10-11",
+            "tkdn_sesudah": 38.2
+          },
+          {
+            "kombinasi": "A+B",
+            "anggota": [
+              "A",
+              "B"
+            ],
+            "biaya": 280000000,
+            "aman": true,
+            "habis": "2026-10-11",
+            "tkdn_sesudah": 41.6
+          }
+        ],
+        "habis_tanpa_tindakan": "2026-09-13"
+      },
+      "waktu": "2026-09-21T10:49:20+00:00"
+    },
+    {
+      "urutan": 8,
+      "tahap": "DECIDE",
+      "agent": "supervisor",
+      "agent_nama": "SIGAP Core",
+      "ringkas": "Rekomendasi B+C, bukan A — hemat Rp 70,000,000",
+      "alat": [],
+      "asal": null,
+      "sumber": null,
+      "detail": {
+        "risiko_sisa": "SBY1 tersisa 4 hari cover sampai PO 4500018901 mendarat 24 Sep"
+      },
+      "waktu": "2026-09-21T10:49:20+00:00"
+    },
+    {
+      "urutan": 9,
+      "tahap": "ACT",
+      "agent": "execution",
+      "agent_nama": "Ahli Eksekusi",
+      "ringkas": "Pemindahan stok dijalankan sendiri; pesanan pembelian berhenti sebagai draf",
+      "alat": [
+        "create_stock_transfer",
+        "create_draft_po",
+        "notify"
+      ],
+      "asal": null,
+      "sumber": null,
+      "detail": {
+        "otonom": "create_stock_transfer (< Rp 50 juta)",
+        "butuh_persetujuan": "create_draft_po"
+      },
+      "waktu": "2026-09-21T10:49:20+00:00"
+    }
+  ],
+  "keputusan": {
+    "status": "menunggu persetujuan",
+    "kombinasi": "B+C",
+    "biaya_idr": 116000000,
+    "pembanding": "A",
+    "pembanding_biaya_idr": 186000000,
+    "hemat_idr": 70000000,
+    "hemat_pct": 38,
+    "tkdn_sebelum": 38.2,
+    "tkdn_sesudah": 41.6,
+    "nilai_terlindungi_idr": 2140000000,
+    "ditolak": [
+      "D",
+      "E"
+    ]
+  }
+}
