@@ -1,214 +1,113 @@
-import fs from "node:fs/promises";
-import path from "node:path";
+import Link from "next/link";
+import { ambil, rupiah, STATUS, type Jalan } from "./lib";
 
-type Langkah = {
-  urutan: number; tahap: string; agent: string; agent_nama: string;
-  ringkas: string; alat: string[]; asal: string | null; sumber: string | null;
-  detail: Record<string, unknown>; waktu: string;
-};
-type Jejak = {
-  judul: string; pemicu: string; mode: "otonom" | "runut"; mulai: string;
-  agent_terpakai: string[]; jumlah_langkah: number; langkah: Langkah[];
-  keputusan: Record<string, any>;
-};
+export const dynamic = "force-dynamic";
 
-const ASAL: Record<string, { label: string; cls: string }> = {
-  live:     { label: "langsung", cls: "border-emerald-500/40 text-emerald-300 bg-emerald-500/10" },
-  cached:   { label: "simpanan", cls: "border-sky-500/40 text-sky-300 bg-sky-500/10" },
-  derived:  { label: "hitungan", cls: "border-violet-500/40 text-violet-300 bg-violet-500/10" },
-  modelled: { label: "contoh",   cls: "border-amber-500/50 text-amber-300 bg-amber-500/10" },
-  missing:  { label: "tidak ada", cls: "border-rose-500/50 text-rose-300 bg-rose-500/10" },
-};
+export default async function Antrean() {
+  const data = await ambil<{ jalan: Jalan[] }>("jalan");
+  const sehat = await ambil<Record<string, any>>("sehat");
 
-const rupiah = (n: number) => "Rp " + n.toLocaleString("id-ID");
-
-async function baca(): Promise<Jejak | null> {
-  try {
-    const f = path.join(process.cwd(), "app", "sigap", "jejak.json");
-    return JSON.parse(await fs.readFile(f, "utf8"));
-  } catch {
-    return null;
-  }
-}
-
-export default async function Page() {
-  const j = await baca();
-
-  if (!j) {
+  if (!data) {
     return (
       <main className="mx-auto max-w-3xl px-6 py-24">
-        <h1 className="text-2xl font-semibold">Belum ada jejak</h1>
-        <p className="mt-4 text-muted">Jalankan dulu:</p>
-        <pre className="mt-3 rounded-lg border border-line bg-card p-4 font-mono text-sm">
-          cd sigap/agent{"\n"}python3 main.py --anggap-langsung
+        <h1 className="text-xl font-semibold">Layanan agent tidak merespons</h1>
+        <pre className="mt-4 rounded-lg border border-line bg-card p-4 font-mono text-sm">
+          cd sigap/agent{"\n"}python3 api.py
         </pre>
       </main>
     );
   }
 
-  const k = j.keputusan;
-  const ditahan = k.status === "ditahan";
+  const jalan = data.jalan;
+  const menunggu = jalan.filter((j) => j.status === "berjalan" || j.status === "ditahan");
 
   return (
-    <main className="mx-auto max-w-[1400px] px-6 py-8">
+    <main className="mx-auto max-w-5xl px-6 py-10">
       <header className="flex flex-wrap items-end justify-between gap-4 border-b border-line pb-5">
         <div>
           <p className="font-mono text-xs uppercase tracking-[0.18em] text-accent">
             SIGAP · Antrean keputusan
           </p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight">{j.judul}</h1>
-          <p className="mt-1 text-sm text-muted">{j.pemicu}</p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight">Gangguan pasokan</h1>
+          <p className="mt-1 text-sm text-muted">
+            {jalan.length} penanganan · {menunggu.length} perlu perhatian
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          {j.mode === "runut" && (
-            <span className="rounded-full border border-amber-500/50 bg-amber-500/10 px-3 py-1 font-mono text-[11px] uppercase tracking-wider text-amber-300">
-              mode runut — bukan penalaran agent
+        {sehat && (
+          <div className="flex flex-wrap gap-2 font-mono text-[11px]">
+            <span className="rounded-full border border-line px-3 py-1 text-muted">
+              {sehat.lingkungan}
             </span>
-          )}
-          <span className="rounded-full border border-line px-3 py-1 font-mono text-[11px] text-muted">
-            {j.jumlah_langkah} langkah · {j.agent_terpakai.length} agent
-          </span>
-        </div>
+            <span className={`rounded-full border px-3 py-1 ${sehat.sap_siap ? STATUS.selesai : STATUS.ditahan}`}>
+              SAP {sehat.sap_siap ? "tersambung" : "belum"}
+            </span>
+            <span className={`rounded-full border px-3 py-1 ${sehat.model_siap ? STATUS.selesai : STATUS.ditahan}`}>
+              model {sehat.model_siap ? "siap" : "belum"}
+            </span>
+          </div>
+        )}
       </header>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[320px_1fr]">
-        {/* ---------- kiri: antrean ---------- */}
-        <aside className="space-y-3">
-          <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted">
-            Perlu diputuskan
-          </p>
+      {jalan.length === 0 ? (
+        <div className="mt-10 rounded-xl border border-dashed border-line p-8">
+          <p className="text-sm text-muted">Belum ada peristiwa. Kirim satu:</p>
+          <pre className="mt-3 overflow-x-auto rounded-lg border border-line bg-card p-4 font-mono text-xs">
+{`curl -X POST localhost:8787/peristiwa \\
+  -H 'content-type: application/json' \\
+  -d '{"jenis":"port_closure","judul":"Ningbo tutup 6 hari",
+       "pemicu":"advisory maritim","muatan":{"pelabuhan":"CNNGB"}}'`}
+          </pre>
+        </div>
+      ) : (
+        <ul className="mt-6 space-y-3">
+          {jalan.map((j) => (
+            <li key={j.id}>
+              <Link
+                href={`/sigap/${j.id}`}
+                className="block rounded-xl border border-line bg-card p-5 transition-colors hover:border-accent/50"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="font-medium">{j.judul}</h2>
+                    <p className="mt-1 text-sm text-muted">{j.pemicu}</p>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap items-center gap-2 font-mono text-[11px]">
+                    {j.mode === "runut" && (
+                      <span className="rounded border border-amber-500/50 bg-amber-500/10 px-2 py-0.5 text-amber-300">
+                        runut
+                      </span>
+                    )}
+                    <span className={`rounded border px-2 py-0.5 ${STATUS[j.status] ?? "border-line text-muted"}`}>
+                      {j.status}
+                    </span>
+                  </div>
+                </div>
 
-          <article className="rounded-xl border border-accent/60 bg-accent/5 p-4">
-            <div className="flex items-start justify-between gap-3">
-              <span className="text-sm font-medium">{j.judul}</span>
-              <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-accent" />
-            </div>
-            <p className="mt-2 font-mono text-lg font-semibold tabular-nums">
-              {ditahan ? "—" : rupiah(k.hemat_idr)}
-            </p>
-            <p className="mt-0.5 text-xs text-muted">
-              {ditahan ? "angka ditahan" : `hemat vs ${k.pembanding} · ${k.hemat_pct}%`}
-            </p>
-          </article>
+                {j.keputusan?.rekomendasi && (
+                  <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-muted">
+                    {j.keputusan.rekomendasi}
+                  </p>
+                )}
+                {j.status === "ditahan" && j.keputusan?.alasan && (
+                  <p className="mt-3 text-sm leading-relaxed text-amber-300/90">
+                    {j.keputusan.alasan}
+                  </p>
+                )}
+                {j.galat && (
+                  <p className="mt-3 font-mono text-xs text-rose-300">{j.galat}</p>
+                )}
 
-          {["Sertifikat TKDN supplier mau habis", "Antrean bongkar Priok memanjang"].map((t) => (
-            <article key={t} className="rounded-xl border border-line bg-card p-4 opacity-50">
-              <span className="text-sm">{t}</span>
-              <p className="mt-2 font-mono text-sm text-muted">belum diselidiki</p>
-            </article>
+                <p className="mt-3 font-mono text-[11px] text-muted">
+                  {new Date(j.mulai).toLocaleString("id-ID")}
+                  {j.biaya_token_idr > 0 && ` · biaya ${rupiah(j.biaya_token_idr)}`}
+                  {Array.isArray(j.keputusan?.agent_dipanggil) &&
+                    ` · ${j.keputusan.agent_dipanggil.length} ahli dipanggil`}
+                </p>
+              </Link>
+            </li>
           ))}
-
-          <p className="pt-2 text-[11px] leading-relaxed text-muted">
-            Dua kartu terakhir adalah tempat kosong untuk mode Cegah (Tahap 8).
-          </p>
-        </aside>
-
-        {/* ---------- kanan: jejak + keputusan ---------- */}
-        <section className="space-y-6">
-          <div className="rounded-xl border border-line">
-            <div className="border-b border-line px-5 py-3">
-              <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted">
-                Jalan pikiran sistem
-              </p>
-            </div>
-            <ol className="divide-y divide-line">
-              {j.langkah.map((l) => {
-                const a = l.asal ? ASAL[l.asal] : null;
-                return (
-                  <li key={l.urutan} className="grid grid-cols-[92px_1fr] gap-4 px-5 py-4">
-                    <div>
-                      <p className="font-mono text-[11px] font-semibold tracking-wider text-accent">
-                        {l.tahap}
-                      </p>
-                      <p className="mt-1 text-[11px] text-muted">{l.agent_nama}</p>
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm leading-relaxed">{l.ringkas}</p>
-                      {l.alat.length > 0 && (
-                        <p className="mt-1.5 break-words font-mono text-[11px] text-muted">
-                          {l.alat.join(" · ")}
-                        </p>
-                      )}
-                      {a && (
-                        <span
-                          className={`mt-2 inline-block rounded border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider ${a.cls}`}
-                        >
-                          {a.label}
-                          {l.sumber ? ` · ${l.sumber}` : ""}
-                        </span>
-                      )}
-                      {Array.isArray(l.detail.ditolak) && l.detail.ditolak.length > 0 && (
-                        <ul className="mt-2 space-y-1">
-                          {(l.detail.ditolak as string[]).map((id) => (
-                            <li key={id} className="text-xs leading-relaxed text-rose-300">
-                              <span className="font-mono">⛔ {id}</span>{" "}
-                              {(l.detail.alasan as Record<string, string>)?.[id]}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
-            </ol>
-          </div>
-
-          <div
-            className={`rounded-xl border p-5 ${
-              ditahan ? "border-amber-500/50 bg-amber-500/5" : "border-accent/60 bg-accent/5"
-            }`}
-          >
-            {ditahan ? (
-              <>
-                <p className="font-mono text-[11px] uppercase tracking-wider text-amber-300">
-                  Angka ditahan
-                </p>
-                <p className="mt-2 text-sm leading-relaxed">{k.alasan}</p>
-              </>
-            ) : (
-              <>
-                <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-                  <p className="font-mono text-[11px] uppercase tracking-wider text-accent">
-                    Rekomendasi
-                  </p>
-                  <p className="font-mono text-lg font-semibold">{k.kombinasi}</p>
-                  <p className="text-sm text-muted">
-                    bukan {k.pembanding} yang {rupiah(k.pembanding_biaya_idr)}
-                  </p>
-                </div>
-                <dl className="mt-4 grid gap-px overflow-hidden rounded-lg border border-line bg-line sm:grid-cols-4">
-                  {[
-                    ["Biaya", rupiah(k.biaya_idr)],
-                    ["Hemat", `${rupiah(k.hemat_idr)} · ${k.hemat_pct}%`],
-                    ["Terlindungi", rupiah(k.nilai_terlindungi_idr)],
-                    ["TKDN", `${k.tkdn_sebelum}% → ${k.tkdn_sesudah}%`],
-                  ].map(([t, v]) => (
-                    <div key={t} className="bg-background px-4 py-3">
-                      <dt className="font-mono text-[10px] uppercase tracking-wider text-muted">
-                        {t}
-                      </dt>
-                      <dd className="mt-1 font-mono text-sm font-semibold tabular-nums">{v}</dd>
-                    </div>
-                  ))}
-                </dl>
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <button className="rounded-full bg-foreground px-5 py-2 text-sm font-medium text-background">
-                    Setujui draf pesanan
-                  </button>
-                  <button className="rounded-full border border-line px-5 py-2 text-sm">
-                    Naikkan ke procurement
-                  </button>
-                </div>
-                <p className="mt-3 text-xs text-muted">
-                  Pemindahan stok sudah dijalankan sendiri (di bawah Rp 50 juta). Yang menunggu
-                  persetujuan hanya pesanan pembeliannya.
-                </p>
-              </>
-            )}
-          </div>
-        </section>
-      </div>
+        </ul>
+      )}
     </main>
   );
 }
