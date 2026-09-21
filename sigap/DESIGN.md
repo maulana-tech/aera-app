@@ -75,7 +75,7 @@ Gap produksi yang harus ditutup: **13 Sep → 22 Sep = 9 hari**.
 
 | | Opsi | Tiba | Biaya tambahan | TKDN | Putusan |
 |---|---|---|---|---|---|
-| A | Air freight 40 t dari SUP-2201 | 11 Sep | +Rp 186 jt | 38,2% | Layak, termahal |
+| A | Air freight **85 t** dari SUP-2201 | 11 Sep | +Rp 186 jt | 38,2% | Layak, termahal. 85 t = jumlah minimum yang benar-benar menutup celah 82,8 t |
 | B | Supplier lokal PT Logam Andalan (SUP-4417), Gresik, 60 t | 12 Sep | +Rp 94 jt | **41,6% ↑** | Layak, perlu requalifikasi metalurgi 3 hari |
 | C | Realokasi 55 t dari SBY1 | 10 Sep | +Rp 22 jt | — | Layak, SBY1 jadi tipis |
 | D | Supplier baru SUP-3390 (Vietnam) | 26 Sep | +Rp 61 jt | 36,1% ↓ | **DITOLAK** — LARTAS negara asal baru butuh 10 hari kerja; tiba 13 hari setelah lini berhenti |
@@ -97,6 +97,42 @@ PO 4500018872 mendarat 22 Sep                    → tersambung, tidak ada stock
 
 Waktu tempuh agent: **18 menit**, tanpa pendampingan.
 
+### 2.7b Besaran celah — dan kenapa opsi A 85 ton
+
+```
+habis tanpa tindakan   13 Sep
+pasokan terjadwal tiba 22 Sep  (PO 4500018872, 120 t)
+celah                   9 hari × 9,2 t/hari = 82,8 ton
+```
+
+Opsi apa pun yang berdiri sendiri harus menyediakan **minimal 82,8 ton** untuk menutup celah.
+Itu sebabnya air freight disetel 85 ton, bukan 40.
+
+> **Catatan koreksi (21 Sep 2026).** Versi awal dokumen menulis 40 ton. Kalkulator
+> `engine/simulate.py` menangkapnya: 40 ton hanya menggeser kehabisan dari 13 Sep ke 17 Sep —
+> masih bolong. Ini persis alasan kalkulator wajib deterministik: model bahasa akan menerima
+> "40 ton menutup 9 hari" tanpa curiga.
+
+### 2.9b Angka ini diverifikasi mesin, bukan diketik
+
+Seluruh angka §2 direproduksi `engine/simulate.py`. Jalankan:
+
+```bash
+cd sigap/agent && python3 -m engine.simulate
+```
+
+Keluarannya:
+
+```
+tanpa tindakan  → habis 2026-09-13
+data contoh     → kalkulator menolak memberi angka ✓
+ditolak aturan  → ['D', 'E']
+terpilih        → B+C Rp 116,000,000 · TKDN 41.6%
+pembanding A    → Rp 186,000,000 · hemat Rp 70,000,000 (38%)
+```
+
+Kalau ada angka di dokumen yang tidak bisa direproduksi perintah ini, **dokumennya yang salah.**
+
 ### 2.8 Sumber data — semuanya nyata, tidak ada mock
 
 Ini perubahan penting: **tidak ada satu pun komponen yang di-mock.**
@@ -109,8 +145,11 @@ Ini perubahan penting: **tidak ada satu pun komponen yang di-mock.**
 | **LARTAS** | Klasifikasi larangan/pembatasan INSW | ⚠️ verifikasi | Publik. Ingest ke rule pack |
 | **Kalender libur** | SKB 3 Menteri libur nasional & cuti bersama | ✅ | Publik, terbit tahunan |
 | **Kurs** | JISDOR Bank Indonesia | ✅ | Terbit harian |
-| **Cuaca / siklon** | Buletin TCWC BMKG | ⚠️ verifikasi bentuk feed | Publik. Belum tentu JSON API bersih |
+| **Cuaca & gempa** | BMKG `data.bmkg.go.id` | ✅ terkonfirmasi | JSON & XML, gratis, tanpa daftar |
+| **Topan luar negeri** | JTWC / JMA — **bukan BMKG** | ⚠️ verifikasi | BMKG hanya memantau perairan Indonesia |
 | **Posisi kapal** | AIS (mis. aisstream.io free tier) | ⚠️ verifikasi | Perlu daftar |
+
+Rincian lengkap: `SUMBER-DATA.md`.
 
 **Aturan penulisan:** yang ✅ boleh diklaim tegas di proposal. Yang ⚠️ ditulis sebagai
 *"ingested into a versioned rule pack"* — jujur, dan tetap bukan mock, karena datanya nyata
@@ -231,6 +270,92 @@ Impact Analyst membacanya dan menghitung ulang tanggal stockout sendiri, tanpa s
 
 Titik masuk beda, panjang beda, keanggotaan beda. **Pipeline tetap tidak bisa menghasilkan
 lima baris ini.** Ini bukti terkuat untuk kriteria *autonomous multi-step reasoning*.
+
+## 3.7 Dua mode, satu swarm — Respond & Plan
+
+Ditambahkan 21 September 2026. Bukan modul baru: **mode kedua di atas swarm yang sama.**
+
+| | **Respond** | **Plan** |
+|---|---|---|
+| Pemicu | Kejadian disrupsi (EventBridge) | Siklus mingguan · atau ambang eksposur terlampaui |
+| Horizon | Hari | Minggu–bulan |
+| Pertanyaan | Rencana rusak, apa yang kita lakukan? | Apa yang akan rusak, dan apa yang bisa dicegah sekarang? |
+| Output | Mitigasi untuk satu kejadian | Daftar tindakan pencegahan berperingkat |
+| Urgensi | Jam | Hari–minggu |
+
+**Kenapa satu swarm, bukan dua sistem.** Pertanyaan planning adalah pertanyaan respons yang
+diajukan lebih awal. Agent yang sama menjawabnya: Impact menelusuri eksposur, Demand membaca
+permintaan, Inventory Integrity menilai stok yang layak pakai, Logistics memodelkan ETA,
+**Compliance tetap memveto**, Simulation menghitung, Execution mengeksekusi dalam batas wewenang.
+
+Ini juga yang memisahkan SIGAP dari sistem replenishment open-source: mereka punya pipeline
+planning terpisah; SIGAP mewarisi constraint reasoning ke mode planning tanpa menulis ulang apa pun.
+
+### Agent baru: Exposure Scanner
+
+Satu-satunya agent yang benar-benar ditambahkan. Domainnya: **risiko yang belum terjadi.**
+
+Lolos uji kelayakan §3.4 — ia bisa tidak setuju: Sourcing bilang supplier A memadai; Exposure
+Scanner bilang A adalah satu-satunya sumber untuk tiga material sekaligus, dan itu titik gagal
+tunggal yang belum terlihat siapa pun.
+
+Yang dipindai:
+
+| Pola | Kenapa penting |
+|---|---|
+| Material bersumber tunggal | Titik gagal tunggal, tidak terlihat sampai gagal |
+| Jalur terkonsentrasi satu pelabuhan | Satu topan melumpuhkan banyak material sekaligus |
+| Sertifikat TKDN supplier mendekati kedaluwarsa | Rasio TKDN bisa jatuh tanpa ada kejadian fisik |
+| Cover jatuh di bawah policy dalam N minggu | Stockout yang bisa dicegah |
+| Material dengan biaya stockout tertinggi | Menentukan peringkat, bukan sekadar daftar |
+| Libur nasional di depan | Pembekuan bea cukai yang bisa diantisipasi |
+
+### Tools tambahan — 4, total jadi 23
+
+```python
+# Exposure Scanner
+scan_supply_exposure(horizon_weeks: int) -> list[Exposure]
+get_supplier_certifications(supplier: str) -> Certifications   # masa berlaku TKDN
+
+# Execution — aksi bercorak planning
+create_sourcing_event(material, rationale) -> SourcingEvent     # ⚠ approval
+propose_safety_stock_change(material, plant, new_level) -> ChangeRequest  # ⚠ approval
+```
+
+`create_stock_transfer` dipakai ulang untuk pre-positioning sebelum pembekuan kalender —
+cukup beri tanggal di masa depan, tidak perlu tool baru.
+
+### Wewenang di mode Plan
+
+Lebih ketat, karena tidak ada urgensi yang membenarkan otonomi:
+
+| Aksi | Wewenang |
+|---|---|
+| Memindai, menilai, memberi peringkat, merekomendasikan | Otonom |
+| Pre-position stok < Rp 50 juta | Otonom, lapor sesudahnya |
+| Memulai sourcing event / kualifikasi | **Draft — procurement approve** |
+| Mengubah kebijakan safety stock | **Selalu** eskalasi — ini perubahan kebijakan |
+
+### Permukaan produk baru
+
+| Permukaan | Isi |
+|---|---|
+| **Recommendation queue** | Rekomendasi yang belum ditindaklanjuti, berperingkat menurut risiko yang dicegah (rupiah). Tidak hilang kalau tidak segera dibuka — inilah bedanya dengan notifikasi |
+| **Action log** | Apa yang dieksekusi, atas persetujuan siapa, dan hasilnya. Wajib untuk audit, dan jadi masukan agent Precedent |
+| **Exposure board** | Peta risiko laten terkini: sumber tunggal, konsentrasi jalur, sertifikat mendekati kedaluwarsa |
+
+Mode Respond dan Plan menulis ke **queue yang sama**. Planner melihat satu daftar, bukan dua aplikasi.
+
+### Eval suite bertambah — skenario 11–14
+
+| # | Skenario | Menguji |
+|---|---|---|
+| 11 | Material X hanya punya satu supplier, tidak ada kejadian apa pun | Deteksi risiko tanpa pemicu |
+| 12 | Sertifikat TKDN supplier habis 6 minggu lagi | Antisipasi constraint sebelum jatuh tempo |
+| 13 | Cuti bersama 9 hari dalam 5 minggu | Perencanaan berbasis kalender |
+| 14 | Tujuh material lewat satu pelabuhan yang sama | Konsentrasi jalur |
+
+Empat ini tidak punya pemicu disrupsi sama sekali — **hanya mode Plan yang bisa menjawabnya.**
 
 ## 4. Constraint engine
 

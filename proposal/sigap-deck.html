@@ -247,7 +247,7 @@ tr.rejected td{color:var(--muted);background:var(--alert-soft);}
     <table>
       <thead><tr><th style="width:6mm;"></th><th>Option</th><th class="num">Arrives</th><th class="num">Added cost</th><th class="num">TKDN</th><th style="width:78mm;">Verdict and reasoning</th></tr></thead>
       <tbody>
-        <tr><td class="mono">A</td><td>Air freight 40 t from incumbent SUP-2201</td><td class="num">11 Sep</td><td class="num">+Rp 186 million</td><td class="num">38.2%</td><td><span class="pill ok">Viable</span> The most expensive way to buy the same nine days.</td></tr>
+        <tr><td class="mono">A</td><td>Air freight 85 t from the incumbent supplier</td><td class="num">11 Sep</td><td class="num">+Rp 186 million</td><td class="num">38.2%</td><td><span class="pill ok">Viable</span> The most expensive way to buy the same nine days.</td></tr>
         <tr><td class="mono">B</td><td>Local supplier PT Logam Andalan, Gresik, 60 t</td><td class="num">12 Sep</td><td class="num">+Rp 94 million</td><td class="num">41.6% ↑</td><td><span class="pill ok">Viable</span> 3-day requalification fits the window. Raises TKDN.</td></tr>
         <tr><td class="mono">C</td><td>Reallocate 55 t of stock from plant SBY1</td><td class="num">10 Sep</td><td class="num">+Rp 22 million</td><td class="num">—</td><td><span class="pill ok">Viable</span> Cheapest and earliest, leaves SBY1 thin.</td></tr>
         <tr class="rejected"><td class="mono">D</td><td>New import source SUP-3390 (Vietnam)</td><td class="num">26 Sep</td><td class="num">+Rp 61 million</td><td class="num">36.1% ↓</td><td><span class="pill no">Rejected</span> LARTAS licensing for a new origin adds 10 working days — arrives 13 days after the line stops.</td></tr>
@@ -415,7 +415,7 @@ tr.rejected td{color:var(--muted);background:var(--alert-soft);}
   <div class="body cols">
     <div class="stack">
       <p><strong>Every tool targets a real endpoint.</strong> The ERP layer is written to the <strong>SAP S/4HANA Cloud sandbox</strong> on SAP Business Accelerator Hub — real OData services with real payload shapes, pagination and error semantics, reachable today with a free API key — and reasoning to <strong>Amazon Bedrock</strong>. We ruled out a simulated backend deliberately: with a live sandbox freely available, a mock only creates work that has to be undone.</p>
-      <p><strong>The constraint engine reads real Indonesian sources</strong> — Kemenperin's local-content register, INSW LARTAS classifications, the national holiday decree, Bank Indonesia's JISDOR rate, BMKG cyclone bulletins — ingested into a versioned rule pack, so a rule change is a data change.</p>
+      <p><strong>The constraint engine reads real Indonesian sources</strong> — Kemenperin's local-content register, INSW LARTAS classifications, the national holiday decree, Bank Indonesia's JISDOR rate, and live BMKG weather and seismic feeds — regulatory sources ingested into a versioned rule pack, so a rule change is a data change.</p>
       <p><strong>Path to production is a tenant swap, not a rewrite:</strong> same OData client, different base URL and credentials.</p>
     </div>
     <div class="stack">

@@ -358,7 +358,7 @@ li::marker{color:var(--accent);}
       </thead>
       <tbody>
         <tr>
-          <td class="mono">A</td><td>Air freight 40 t from the incumbent supplier</td>
+          <td class="mono">A</td><td>Air freight 85 t from the incumbent supplier</td>
           <td class="num">11 Sep</td><td class="num">+Rp 186 million</td><td class="num">38.2%</td>
           <td><span class="pill ok">Viable</span> Fastest, but the most expensive way to buy the same nine days.</td>
         </tr>
@@ -516,7 +516,7 @@ li::marker{color:var(--accent);}
     <div class="cols-wide">
       <div class="stack">
         <p><strong>Specified against live interfaces, not mocks.</strong> Every tool targets a real endpoint. The ERP layer is written to the <strong>SAP S/4HANA Cloud sandbox</strong> on SAP Business Accelerator Hub — real OData services with real payload shapes, pagination and error semantics, reachable today with a free API key — and reasoning to <strong>Amazon Bedrock</strong>. We ruled out a simulated backend deliberately: with a live sandbox freely available, a mock would only create work that has to be undone.</p>
-        <p><strong>The constraint engine reads real Indonesian sources:</strong> TKDN certification status from the Kemenperin local-content register, LARTAS classifications from INSW, the national holiday decree, Bank Indonesia's JISDOR reference rate, and BMKG tropical-cyclone bulletins — ingested into a versioned rule pack rather than hard-coded, so a rule change is a data change.</p>
+        <p><strong>The constraint engine reads real Indonesian sources:</strong> TKDN certification status from the Kemenperin local-content register, LARTAS classifications from INSW, the national holiday decree, Bank Indonesia's JISDOR reference rate, and live BMKG weather and seismic feeds — the regulatory sources ingested into a versioned rule pack rather than hard-coded, so a rule change is a data change.</p>
         <p><strong>The only thing we model is the customer.</strong> Plant list, consumption rates and contract penalty terms come from a company's own master data on day one; we have no customer yet, so we supply a representative profile. Nothing about it is shaped to make the agent succeed.</p>
         <p><strong>Build status, stated plainly.</strong> At submission this is a specification, not running software. What is complete: the agent topology, the nineteen tool contracts against published SAP APIs, the constraint rule set, the worked scenario with its arithmetic, and the eval suite. Implementation starts immediately, first milestone the Ningbo scenario end to end against the sandbox. We would rather tell you exactly where we stand than demonstrate something built on invented data.</p>
       </div>

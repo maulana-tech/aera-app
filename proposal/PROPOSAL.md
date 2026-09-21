@@ -139,7 +139,7 @@ Akan diukur terhadap eval suite saat enablement.
 
 | | Opsi | Tiba | Biaya tambahan | TKDN | Putusan & alasan |
 |---|---|---|---|---|---|
-| **A** | Air freight 40 t dari incumbent SUP-2201 | 11 Sep | +Rp 186 jt | 38,2% | ✅ **Viable** — tercepat, tapi cara termahal untuk membeli sembilan hari yang sama |
+| **A** | Air freight **85 t** dari supplier lama | 11 Sep | +Rp 186 jt | 38,2% | ✅ **Viable** — tercepat, tapi cara termahal untuk membeli sembilan hari yang sama |
 | **B** | Supplier lokal PT Logam Andalan (SUP-4417), Gresik, 60 t | 12 Sep | +Rp 94 jt | **41,6% ↑** | ✅ **Viable** — butuh requalifikasi metalurgi 3 hari, masih muat di window. Menaikkan TKDN |
 | **C** | Realokasi 55 t stok dari plant SBY1 | 10 Sep | +Rp 22 jt | — | ✅ **Viable** — termurah dan tercepat, tapi menyisakan SBY1 hanya 4 hari cover |
 | **D** | Sumber impor baru SUP-3390 (Vietnam) | 26 Sep | +Rp 61 jt | 36,1% ↓ | ❌ **Rejected** — LARTAS untuk negara asal baru menambah 10 hari kerja; tiba 13 hari setelah lini berhenti |
@@ -148,6 +148,10 @@ Akan diukur terhadap eval suite saat enablement.
 > **Ini bagian terpenting seluruh proposal.** Dua baris Rejected adalah bukti *constraint
 > reasoning*: opsi E justru yang paling murah. Model biaya murni akan memilihnya dan membuat
 > perusahaan melanggar kontrak.
+
+> **Besaran celah:** habis 13 Sep → pasokan terjadwal tiba 22 Sep = 9 hari × 9,2 t/hari =
+> **82,8 ton**. Opsi yang berdiri sendiri harus menyediakan minimal itu — karena itu air
+> freight 85 ton, bukan 40. Seluruh angka di bagian ini direproduksi `engine/simulate.py`.
 
 ### Rekomendasi agent: C + B paralel
 
@@ -294,7 +298,7 @@ mock hanya menciptakan pekerjaan yang nanti harus dibongkar.
 
 ### The constraint engine reads real Indonesian sources
 Status sertifikasi TKDN dari register konten lokal Kemenperin, klasifikasi LARTAS dari INSW,
-keputusan libur nasional, kurs referensi JISDOR Bank Indonesia, dan buletin siklon tropis BMKG —
+keputusan libur nasional, kurs referensi JISDOR Bank Indonesia, dan data cuaca serta gempa BMKG —
 diserap ke dalam rule pack berversi alih-alih di-hardcode, sehingga perubahan aturan adalah
 perubahan data.
 
@@ -361,7 +365,8 @@ Skenario **8, 9, 10** khusus menguji constraint reasoning — bagian paling memb
 | Kurs | JISDOR Bank Indonesia | ✅ | Boleh tegas |
 | TKDN | Register Kemenperin (P3DN) | ⚠️ belum diverifikasi | *"ingested into a versioned rule pack"* |
 | LARTAS | Klasifikasi INSW | ⚠️ belum diverifikasi | *"ingested into a versioned rule pack"* |
-| Cuaca / siklon | Buletin TCWC BMKG | ⚠️ bentuk feed belum pasti | *"ingested into a versioned rule pack"* |
+| Cuaca & gempa Indonesia | BMKG `data.bmkg.go.id` | ✅ terkonfirmasi | Boleh tegas — ada API JSON |
+| Topan luar negeri | JTWC / JMA — **bukan BMKG** | ⚠️ belum diverifikasi | Jangan sebut BMKG untuk ini |
 | Posisi kapal | AIS (mis. aisstream.io) | ⚠️ belum diverifikasi | Sebut sebagai sumber sinyal, bukan API |
 
 **Jangan naikkan yang ⚠️ jadi klaim API sebelum diverifikasi sendiri.**
