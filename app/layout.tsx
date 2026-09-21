@@ -16,16 +16,17 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AI Agentic Hackathon — Build the Future of Intelligent Innovation",
+  title: "SIGAP — Antrean keputusan",
   description:
-    "A hands-on AI innovation program hosted by SOKRATES at BINUS Alam Sutera. Build agentic AI solutions with AWS and SAP across Supply Chain and Manufacturing. Prize pool over IDR 130,000,000.",
+    "Asisten otomatis respons gangguan pasokan. Menyelidiki dampak, menyusun pilihan, "
+    + "mencoret yang melanggar aturan, lalu mengeksekusi ke SAP setelah disetujui.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`dark ${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>

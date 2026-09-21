@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Button } from "../ui/Twenty";
+import { Button } from "@/app/ui/Twenty";
 
 export default function Masuk() {
   const r = useRouter();
@@ -22,7 +22,7 @@ export default function Masuk() {
         body: JSON.stringify({ email, sandi }),
       });
       if (!res.ok) throw new Error((await res.json()).galat ?? "gagal masuk");
-      r.push("/sigap");
+      r.push("/");
       r.refresh();
     } catch (err) {
       setGalat(err instanceof Error ? err.message : "gagal masuk");

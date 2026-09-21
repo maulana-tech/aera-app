@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ambil, ASAL, rupiah, saya, STATUS, type Jalan } from "../lib";
-import { Status, Tag } from "../ui/Twenty";
+import { ambil, ASAL, rupiah, saya, STATUS, type Jalan } from "@/app/lib";
+import Sesi from "@/app/ui/Sesi";
+import { Status, Tag } from "@/app/ui/Twenty";
 import Putusan from "./Putusan";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +18,10 @@ export default async function Detail({ params }: { params: Promise<{ id: string 
 
   return (
     <main className="mx-auto max-w-[1180px] px-6 py-8">
-      <Link href="/sigap" className="font-mono text-xs text-muted hover:text-foreground">← antrean</Link>
+      <div className="flex items-center justify-between gap-4">
+        <Link href="/" className="font-mono text-xs text-muted hover:text-foreground">← antrean</Link>
+        <Sesi nama={aku?.nama} peran={aku?.peran} />
+      </div>
 
       <header className="mt-4 flex flex-wrap items-end justify-between gap-4 border-b border-line pb-5">
         <div>

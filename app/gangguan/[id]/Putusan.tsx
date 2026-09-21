@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Button } from "../ui/Twenty";
+import { Button } from "@/app/ui/Twenty";
 
 type Putusan = "disetujui" | "ditolak" | "dinaikkan";
 
