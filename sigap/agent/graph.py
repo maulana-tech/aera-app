@@ -140,7 +140,7 @@ def _alat_ahli() -> List[dict]:
     """Tiap ahli tampil sebagai satu alat milik ketua."""
     return [{
         "name": f"panggil_{a.kode}",
-        "description": f"{a.nama} — {a.peran}" + (" PUNYA VETO." if a.veto else ""),
+        "description": f"{a.panggilan} ({a.nama}) — {a.peran}" + (" PUNYA VETO." if a.veto else ""),
         "input_schema": {
             "type": "object",
             "properties": {"tugas": {
@@ -205,7 +205,7 @@ def jalankan(peristiwa: dict, lapor: Callable[[str, dict], None]) -> dict:
                 kode = b.name[len("panggil_"):]
                 ahli = SEMUA[kode]
                 dipanggil.append(kode)
-                lapor("ahli_mulai", {"agent": kode, "nama": ahli.nama,
+                lapor("ahli_mulai", {"agent": kode, "nama": ahli.panggilan,
                                      "tugas": b.input.get("tugas", "")})
                 ringkas = _putaran_alat(cl, ahli, b.input["tugas"], papan, biaya, lapor)
                 hasil_blok.append({"type": "tool_result", "tool_use_id": b.id, "content": ringkas})
@@ -247,7 +247,8 @@ def tanya_ahli(kode: str, pertanyaan: str,
     jawab = _putaran_alat(cl, agent, pertanyaan, papan, biaya, rekam)
     return {
         "agent": kode,
-        "nama": agent.nama,
+        "nama": agent.panggilan,
+        "peran": agent.nama,
         "jawab": jawab,
         "alat_dipakai": [j["nama"] for j in jejak if j["jenis"] == "alat"],
         "papan": {k: {"asal": papan.asal[k], "sumber": papan.sumber[k]} for k in papan.temuan},

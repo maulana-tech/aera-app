@@ -138,7 +138,7 @@ def daftar_agent(_m, _b, _h) -> Tuple[int, dict]:
                 "deskripsi": terdaftar[nama].deskripsi if ada else None,
             })
         keluar.append({
-            "kode": kode, "nama": a.nama, "peran": a.peran,
+            "kode": kode, "panggilan": a.panggilan, "nama": a.nama, "peran": a.peran,
             "effort": a.effort, "veto": a.veto,
             "ketua": kode == "supervisor",
             "alat": alat,

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { ambil, saya, type Agent, type RingkasAgent } from "@/app/lib";
 import Percakapan from "./Percakapan";
+import { Lencana } from "@/components/kartu-agent";
 import { StatusBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
 
@@ -43,9 +44,11 @@ export default async function HalamanAgent({ params }: { params: Promise<{ kode:
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_340px]">
         <section>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <Lencana panggilan={a.panggilan} besar />
+            <h1 className="text-2xl font-semibold tracking-tight">{a.panggilan}</h1>
+            <span className="text-muted-foreground text-sm">{a.nama}</span>
             {a.ketua && <Crown className="size-4" />}
-            <h1 className="text-2xl font-semibold tracking-tight">{a.nama}</h1>
             {a.veto && (
               <Badge variant="outline" className="gap-1 font-mono text-[10px]">
                 <ShieldBan className="size-3" />
@@ -56,7 +59,7 @@ export default async function HalamanAgent({ params }: { params: Promise<{ kode:
           <p className="text-muted-foreground mt-1 max-w-2xl text-sm leading-relaxed">{a.peran}</p>
 
           <div className="mt-5">
-            <Percakapan kode={a.kode} nama={a.nama} contoh={CONTOH[a.kode] ?? []} masuk={!!aku} />
+            <Percakapan kode={a.kode} nama={a.panggilan} contoh={CONTOH[a.kode] ?? []} masuk={!!aku} />
           </div>
         </section>
 

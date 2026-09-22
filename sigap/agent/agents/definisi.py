@@ -11,7 +11,8 @@ PROMPTS = pathlib.Path(__file__).resolve().parent.parent / "prompts"
 @dataclass
 class Agent:
     kode: str
-    nama: str
+    panggilan: str          # nama pendek yang dipakai orang: "Elsa", "Kira"
+    nama: str               # peran fungsionalnya: "Dampak", "Aturan"
     peran: str
     alat: List[str] = field(default_factory=list)
     effort: str = "medium"       # supervisor & kepatuhan "high" — lihat TEKNIS.md
@@ -24,43 +25,43 @@ class Agent:
 
 
 SUPERVISOR = Agent(
-    "supervisor", "SIGAP Core",
+    "supervisor", "Arya", "Ketua tim",
     "Memasukkan ahli ke dalam tim sesuai temuan terakhir, menilai kapan bukti cukup, "
     "menulis rekomendasi beserta trade-off dan risiko sisa.",
     ["detect_disruption"], effort="high",
 )
 
 AHLI = [
-    Agent("impact", "Ahli Dampak",
+    Agent("impact", "Elsa", "Dampak",
           "Menelusuri gangguan lewat pesanan, stok, dan struktur produk ke komitmen pelanggan yang benar-benar terancam.",
           ["get_open_purchase_orders", "get_material_stock", "get_bom_explosion", "get_sales_order_commitments"]),
-    Agent("demand", "Ahli Permintaan",
+    Agent("demand", "Dara", "Permintaan",
           "Memiliki sisi permintaan. Pemakaian harian adalah variabel yang bisa bergerak, bukan angka tetap.",
           ["get_demand_signal", "get_production_schedule"]),
-    Agent("inventory", "Ahli Keabsahan Stok",
+    Agent("inventory", "Iris", "Keabsahan Stok",
           "Stok mana yang benar-benar bisa dipakai — tahanan mutu, batch ditolak, cadangan minimum.",
           ["get_quality_holds", "get_safety_stock_policy"]),
-    Agent("sourcing", "Ahli Pencari Sumber",
+    Agent("sourcing", "Clint", "Pencari Sumber",
           "Mencari dan mengkualifikasi pasokan pengganti: supplier lain, stok internal, kirim cepat.",
           ["find_alternate_sources"]),
-    Agent("logistics", "Ahli Logistik",
+    Agent("logistics", "Milo", "Logistik",
           "Memodelkan tanggal tiba yang tahan uji: waktu bongkar pelabuhan, pindah kapal, bea cukai, moda angkut.",
           ["get_shipment_status", "estimate_eta"]),
-    Agent("compliance", "Ahli Aturan",
+    Agent("compliance", "Kira", "Aturan",
           "Menguji tiap kandidat terhadap TKDN, LARTAS, klausul kontrak, dan kalender libur. "
           "Penolakannya tidak bisa dikalahkan biaya.",
           ["check_local_constraints"], effort="high", veto=True),
-    Agent("simulation", "Ahli Hitungan",
+    Agent("simulation", "Tara", "Hitungan",
           "Menghitung opsi yang lolos beserta kombinasinya. Deterministik — memanggil engine/simulate.py, bukan menalar sendiri.",
           ["simulate_scenario"]),
-    Agent("precedent", "Ahli Preseden",
+    Agent("precedent", "Otto", "Preseden",
           "Memori institusional: apa yang pernah dilakukan pada kejadian serupa, dan bagaimana hasilnya.",
           ["search_past_incidents"]),
-    Agent("execution", "Ahli Eksekusi",
+    Agent("execution", "Bram", "Eksekusi",
           "Menulis balik ke SAP dalam batas wewenang, memberi tahu peran terkait, memantau sampai barang diterima.",
           ["create_stock_transfer", "create_draft_po", "notify", "monitor_shipment",
            "create_sourcing_event", "propose_safety_stock_change"]),   # dua terakhir: mode Cegah
-    Agent("exposure", "Ahli Pemindai Risiko",
+    Agent("exposure", "Vega", "Pemindai Risiko",
           "Mode Cegah: mencari risiko yang belum terjadi — sumber tunggal, jalur terkonsentrasi, sertifikat mau habis.",
           ["scan_supply_exposure", "get_supplier_certifications"]),
 ]
@@ -75,7 +76,11 @@ def demo() -> None:
     assert len(alat) == 23, len(alat)
     veto = [a.kode for a in SEMUA.values() if a.veto]
     assert veto == ["compliance"], veto
+    panggilan = [a.panggilan for a in SEMUA.values()]
+    assert len(panggilan) == len(set(panggilan)), "nama panggilan harus unik"
+    assert len({p[0] for p in panggilan}) == len(panggilan), "huruf awal harus beda semua"
     print(f"definisi ok — {len(SEMUA)} agent, {len(alat)} alat, veto: {veto[0]}")
+    print("  " + " · ".join(f"{a.panggilan} ({a.nama})" for a in SEMUA.values()))
 
 
 if __name__ == "__main__":

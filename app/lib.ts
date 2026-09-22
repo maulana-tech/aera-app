@@ -64,7 +64,7 @@ export async function saya(): Promise<Saya | null> {
 
 export type Alat = { nama: string; terpasang: boolean; deskripsi: string | null };
 export type Agent = {
-  kode: string; nama: string; peran: string; effort: string;
+  kode: string; panggilan: string; nama: string; peran: string; effort: string;
   veto: boolean; ketua: boolean; alat: Alat[];
   terpasang: number; total_alat: number; dipakai_di: number;
 };
