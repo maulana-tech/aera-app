@@ -1,0 +1,152 @@
+{
+  "judul": "Topan menutup Pelabuhan Ningbo",
+  "pemicu": "Advisory maritim: Ningbo–Zhoushan tutup 8–13 Sep 2026",
+  "mode": "runut",
+  "mulai": "2026-09-22T07:32:57+00:00",
+  "agent_terpakai": [
+    "supervisor",
+    "impact",
+    "sourcing",
+    "compliance",
+    "simulation"
+  ],
+  "jumlah_langkah": 7,
+  "langkah": [
+    {
+      "urutan": 1,
+      "tahap": "DETECT",
+      "agent": "supervisor",
+      "agent_nama": "Ketua tim",
+      "ringkas": "Mengenali Ningbo sebagai jalur yang dipakai perusahaan",
+      "alat": [
+        "detect_disruption"
+      ],
+      "asal": null,
+      "sumber": null,
+      "detail": {},
+      "waktu": "2026-09-22T07:32:57+00:00"
+    },
+    {
+      "urutan": 2,
+      "tahap": "SCOPE",
+      "agent": "impact",
+      "agent_nama": "Dampak",
+      "ringkas": "4 pesanan pembelian lewat Ningbo terdampak",
+      "alat": [
+        "get_open_purchase_orders"
+      ],
+      "asal": "modelled",
+      "sumber": "fixture:PurchaseOrder",
+      "detail": {
+        "pesanan": [
+          "4500018872",
+          "4500018901",
+          "4500018903",
+          "4500018910"
+        ]
+      },
+      "waktu": "2026-09-22T07:32:57+00:00"
+    },
+    {
+      "urutan": 3,
+      "tahap": "IMPACT",
+      "agent": "impact",
+      "agent_nama": "Dampak",
+      "ringkas": "M-4471 di KRW1: 84.0 ton, pemakaian 9.2 ton/hari",
+      "alat": [
+        "get_material_stock",
+        "get_bom_explosion"
+      ],
+      "asal": "modelled",
+      "sumber": "fixture:MaterialStock",
+      "detail": {
+        "material": "M-4471",
+        "stok_ton": 84.0,
+        "pemakaian_harian": 9.2
+      },
+      "waktu": "2026-09-22T07:32:57+00:00"
+    },
+    {
+      "urutan": 4,
+      "tahap": "QUANTIFY",
+      "agent": "impact",
+      "agent_nama": "Dampak",
+      "ringkas": "3 pesanan pelanggan senilai Rp 2,140,000,000 terancam",
+      "alat": [
+        "get_sales_order_commitments"
+      ],
+      "asal": "modelled",
+      "sumber": "fixture:SalesOrder",
+      "detail": {
+        "nilai_idr": 2140000000,
+        "produk": [
+          "FG-1120"
+        ]
+      },
+      "waktu": "2026-09-22T07:32:57+00:00"
+    },
+    {
+      "urutan": 5,
+      "tahap": "GENERATE",
+      "agent": "sourcing",
+      "agent_nama": "Pencari Sumber",
+      "ringkas": "5 pilihan pasokan disusun",
+      "alat": [
+        "find_alternate_sources"
+      ],
+      "asal": "modelled",
+      "sumber": "fixture:AlternateSource",
+      "detail": {
+        "pilihan": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E"
+        ]
+      },
+      "waktu": "2026-09-22T07:32:57+00:00"
+    },
+    {
+      "urutan": 6,
+      "tahap": "FILTER",
+      "agent": "compliance",
+      "agent_nama": "Aturan",
+      "ringkas": "2 pilihan dicoret karena aturan, bukan karena harga",
+      "alat": [
+        "check_local_constraints"
+      ],
+      "asal": "modelled",
+      "sumber": "references/ (rule pack)",
+      "detail": {
+        "ditolak": [
+          "D",
+          "E"
+        ],
+        "alasan": {
+          "D": "LARTAS: negara asal baru menambah 10 hari kerja — tiba setelah lini berhenti",
+          "E": "TKDN turun ke 34,8%; ambang kontrak 40.0%"
+        }
+      },
+      "waktu": "2026-09-22T07:32:57+00:00"
+    },
+    {
+      "urutan": 7,
+      "tahap": "SIMULATE",
+      "agent": "simulation",
+      "agent_nama": "Hitungan",
+      "ringkas": "Masukan 'stok' berasal dari modelled (fixture:MaterialStock). Angka penghematan tidak dikeluarkan sampai datanya langsung.",
+      "alat": [
+        "simulate_scenario"
+      ],
+      "asal": "missing",
+      "sumber": "engine/simulate.py",
+      "detail": {},
+      "waktu": "2026-09-22T07:32:57+00:00"
+    }
+  ],
+  "keputusan": {
+    "status": "ditahan",
+    "alasan": "Masukan 'stok' berasal dari modelled (fixture:MaterialStock). Angka penghematan tidak dikeluarkan sampai datanya langsung."
+  }
+}

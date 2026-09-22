@@ -1,96 +1,63 @@
-"""Penanda asal data.
+"""Data origin labelling.
 
-Aturan main: setiap alat mengembalikan Hasil, bukan nilai telanjang.
-Kalau masukan di jalur penting bukan LANGSUNG/SIMPANAN/HITUNGAN,
-kalkulator tidak boleh mengeluarkan angka penghematan (lihat engine/simulate.py).
+The house rule: every tool returns a Result, never a bare value. If an input
+on a critical path is not LIVE/CACHED/DERIVED, the calculator must not emit a
+rupiah figure at all (see engine/simulate.py).
 """
 from __future__ import annotations
 
-import functools
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Callable
+from typing import Any
 
 
-class Asal(str, Enum):
-    LANGSUNG = "live"       # dari SAP / API resmi
-    SIMPANAN = "cached"     # pernah langsung, ada waktunya
-    HITUNGAN = "derived"    # dihitung dari yang langsung
-    CONTOH = "modelled"     # profil perusahaan / fixture — ditandai terbuka
-    TIDAK_ADA = "missing"   # ketua berhenti, tidak menebak
+class Origin(str, Enum):
+    LIVE = "live"          # straight from SAP / an official API
+    CACHED = "cached"      # was live once, carries its timestamp
+    DERIVED = "derived"    # computed from something live
+    MODELLED = "modelled"  # company profile / fixture — labelled in the open
+    MISSING = "missing"    # the lead stops here rather than guessing
 
 
-#: Asal yang boleh dipakai untuk mengeluarkan angka rupiah ke pengguna.
-TEPERCAYA = frozenset({Asal.LANGSUNG, Asal.SIMPANAN, Asal.HITUNGAN})
+#: Origins that may back a rupiah figure shown to a user.
+TRUSTED = frozenset({Origin.LIVE, Origin.CACHED, Origin.DERIVED})
 
 
 @dataclass
-class Hasil:
-    nilai: Any
-    asal: Asal
-    sumber: str                      # "API_MATERIAL_STOCK_SRV" / "register TKDN"
-    diambil: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    catatan: str = ""
+class Result:
+    value: Any
+    origin: Origin
+    source: str                      # "API_MATERIAL_STOCK_SRV" / "TKDN register"
+    fetched_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    note: str = ""
 
     @property
-    def tepercaya(self) -> bool:
-        return self.asal in TEPERCAYA
+    def trusted(self) -> bool:
+        return self.origin in TRUSTED
 
-    def ringkas(self) -> dict:
+    def brief(self) -> dict:
         return {
-            "asal": self.asal.value,
-            "sumber": self.sumber,
-            "diambil": self.diambil.isoformat(timespec="seconds"),
-            "catatan": self.catatan,
+            "origin": self.origin.value,
+            "source": self.source,
+            "fetched_at": self.fetched_at.isoformat(timespec="seconds"),
+            "note": self.note,
         }
 
 
-def alat(sumber: str, asal_default: Asal = Asal.LANGSUNG) -> Callable:
-    """Bungkus fungsi alat supaya nilainya selalu berlabel asal.
-
-    Fungsi yang dibungkus boleh mengembalikan Hasil sendiri (kalau ia tahu
-    asalnya berbeda, misalnya jatuh ke fixture), atau nilai biasa yang akan
-    dilabeli asal_default. Kegagalan jadi TIDAK_ADA, bukan lemparan error —
-    ketua yang memutuskan apakah itu menghentikan investigasi.
-    """
-    def bungkus(fn: Callable) -> Callable:
-        @functools.wraps(fn)
-        def jalan(*args, **kwargs) -> Hasil:
-            try:
-                keluaran = fn(*args, **kwargs)
-            except Exception as e:                       # noqa: BLE001
-                return Hasil(None, Asal.TIDAK_ADA, sumber, catatan=f"{type(e).__name__}: {e}")
-            if isinstance(keluaran, Hasil):
-                return keluaran
-            if keluaran is None:
-                return Hasil(None, Asal.TIDAK_ADA, sumber, catatan="tidak ada data")
-            return Hasil(keluaran, asal_default, sumber)
-        jalan._sumber = sumber                           # type: ignore[attr-defined]
-        return jalan
-    return bungkus
-
-
 def demo() -> None:
-    @alat("API_MATERIAL_STOCK_SRV")
-    def ambil_stok(kode: str) -> dict:
-        return {"material": kode, "jumlah": 84.0}
+    live = Result({"material": "M-4471", "qty": 84.0}, Origin.LIVE, "API_MATERIAL_STOCK_SRV")
+    assert live.trusted and live.value["qty"] == 84.0
 
-    @alat("API_MATERIAL_STOCK_SRV")
-    def gagal(kode: str) -> dict:
-        raise ConnectionError("tidak ada kunci API")
+    failed = Result(None, Origin.MISSING, "API_MATERIAL_STOCK_SRV",
+                    note="ConnectionError: no API key")
+    assert not failed.trusted
+    assert failed.value is None, "a failure must never invent a value"
 
-    baik = ambil_stok("M-4471")
-    assert baik.asal is Asal.LANGSUNG and baik.tepercaya
-    assert baik.nilai["jumlah"] == 84.0
+    modelled = Result({"qty": 84.0}, Origin.MODELLED, "fixture")
+    assert not modelled.trusted, "modelled data must never count as trusted"
 
-    buruk = gagal("M-4471")
-    assert buruk.asal is Asal.TIDAK_ADA and not buruk.tepercaya
-    assert buruk.nilai is None, "kegagalan tidak boleh mengarang nilai"
-    assert "ConnectionError" in buruk.catatan
-
-    contoh = Hasil({"jumlah": 84.0}, Asal.CONTOH, "fixture")
-    assert not contoh.tepercaya, "data contoh tidak boleh dianggap tepercaya"
+    assert {o.value for o in Origin} == {"live", "cached", "derived", "modelled", "missing"}
     print("provenance ok")
 
 

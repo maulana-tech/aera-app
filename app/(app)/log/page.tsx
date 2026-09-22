@@ -1,75 +1,73 @@
 import Link from "next/link";
 
-import { ambil, rupiah } from "@/app/lib";
-import { AsalBadge, StatusBadge } from "@/components/status-badge";
+import { api, idr } from "@/app/lib";
+import { OriginBadge, StatusBadge } from "@/components/status-badge";
 
 export const dynamic = "force-dynamic";
 
-type Langkah = {
-  id: number; jalan_id: string; judul: string; urutan: number; tahap: string;
-  agent: string; agent_nama: string; ringkas: string; alat: string[];
-  asal: string | null; sumber: string | null; waktu: string;
+type Step = {
+  id: number; run_id: string; title: string; seq: number; stage: string;
+  agent: string; agent_name: string; summary: string; tools: string[];
+  origin: string | null; source: string | null; at: string;
 };
-type Aksi = {
-  id: string; jalan_id: string; judul: string; jenis: string; status: string;
-  otonom: number; muatan: Record<string, any>; dibuat: string;
+type Action = {
+  id: string; run_id: string; title: string; kind: string; status: string;
+  autonomous: number; payload: Record<string, any>; created_at: string;
 };
-type Setuju = {
-  id: number; aksi_id: string; jalan_id: string; jenis_aksi: string;
-  oleh: string; peran: string; putusan: string; waktu: string;
+type Approval = {
+  id: number; action_id: string; run_id: string; action_kind: string;
+  decided_by: string; role: string; decision: string; at: string;
 };
 
-const waktu = (t: string) =>
-  new Date(t).toLocaleString("id-ID", { dateStyle: "short", timeStyle: "medium" });
+const when = (t: string) =>
+  new Date(t).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "medium" });
 
 export default async function Log() {
-  const d = await ambil<{ langkah: Langkah[]; aksi: Aksi[]; persetujuan: Setuju[] }>("log");
+  const d = await api<{ steps: Step[]; actions: Action[]; approvals: Approval[] }>("log");
 
   if (!d) {
     return (
       <main className="w-full px-6 py-16">
-        <h1 className="text-xl font-semibold">Layanan agent tidak merespons</h1>
+        <h1 className="text-xl font-semibold">The agent service is not responding</h1>
       </main>
     );
   }
 
-  const kosong = !d.langkah.length && !d.aksi.length && !d.persetujuan.length;
+  const empty = !d.steps.length && !d.actions.length && !d.approvals.length;
 
   return (
     <main className="w-full px-6 py-8">
       <header className="border-b pb-5">
         <p className="text-muted-foreground font-mono text-xs uppercase tracking-[0.18em]">
-          SIGAP · Catatan
+          SIGAP · Records
         </p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">Log</h1>
         <p className="text-muted-foreground mt-1 max-w-2xl text-sm leading-relaxed">
-          Apa yang dikerjakan sistem, apa yang diajukan, dan siapa yang memutuskan.
-          Baris di sini tidak pernah diubah — koreksi ditulis sebagai baris baru.
+          What the system did, what it proposed, and who decided. Rows here are never
+          edited — a correction is written as a new row.
         </p>
       </header>
 
-      {kosong && (
-        <p className="text-muted-foreground mt-8 text-sm">Belum ada catatan.</p>
-      )}
+      {empty && <p className="text-muted-foreground mt-8 text-sm">Nothing recorded yet.</p>}
 
-      {d.persetujuan.length > 0 && (
+      {d.approvals.length > 0 && (
         <section className="mt-8">
           <h2 className="text-muted-foreground font-mono text-[11px] uppercase tracking-[0.15em]">
-            Persetujuan · {d.persetujuan.length}
+            Approvals · {d.approvals.length}
           </h2>
           <ul className="mt-3 divide-y rounded-xl border">
-            {d.persetujuan.map((s) => (
-              <li key={s.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-sm">
-                <StatusBadge status={s.putusan === "dinaikkan" ? "menunggu" : s.putusan} />
-                <span className="font-mono text-xs">{s.jenis_aksi}</span>
-                <span className="text-muted-foreground">oleh</span>
-                <span>{s.oleh}</span>
-                <span className="text-muted-foreground font-mono text-xs">({s.peran})</span>
+            {d.approvals.map((a) => (
+              <li key={a.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-sm">
+                <StatusBadge status={a.decision === "escalated" ? "pending" : a.decision} />
+                <span className="font-mono text-xs">{a.action_kind}</span>
+                <span className="text-muted-foreground">by</span>
+                <span>{a.decided_by}</span>
+                <span className="text-muted-foreground font-mono text-xs">({a.role})</span>
                 <Link
-                  href={`/gangguan/${s.jalan_id}`}
+                  href={`/disruptions/${a.run_id}`}
                   className="text-muted-foreground hover:text-foreground ml-auto font-mono text-[11px]"
                 >
-                  {waktu(s.waktu)} →
+                  {when(a.at)} →
                 </Link>
               </li>
             ))}
@@ -77,34 +75,34 @@ export default async function Log() {
         </section>
       )}
 
-      {d.aksi.length > 0 && (
+      {d.actions.length > 0 && (
         <section className="mt-8">
           <h2 className="text-muted-foreground font-mono text-[11px] uppercase tracking-[0.15em]">
-            Aksi · {d.aksi.length}
+            Actions · {d.actions.length}
           </h2>
           <ul className="mt-3 divide-y rounded-xl border">
-            {d.aksi.map((a) => (
+            {d.actions.map((a) => (
               <li key={a.id} className="px-4 py-3">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                   <StatusBadge status={a.status} />
-                  <span className="font-mono text-sm">{a.jenis}</span>
-                  {a.otonom === 1 && (
-                    <span className="text-muted-foreground text-xs">dijalankan sendiri</span>
+                  <span className="font-mono text-sm">{a.kind}</span>
+                  {a.autonomous === 1 && (
+                    <span className="text-muted-foreground text-xs">ran autonomously</span>
                   )}
-                  {typeof a.muatan.biaya_idr === "number" && (
+                  {typeof a.payload.cost_idr === "number" && (
                     <span className="font-mono text-xs tabular-nums">
-                      {rupiah(a.muatan.biaya_idr)}
+                      {idr(a.payload.cost_idr)}
                     </span>
                   )}
                   <Link
-                    href={`/gangguan/${a.jalan_id}`}
+                    href={`/disruptions/${a.run_id}`}
                     className="text-muted-foreground hover:text-foreground ml-auto font-mono text-[11px]"
                   >
-                    {waktu(a.dibuat)} →
+                    {when(a.created_at)} →
                   </Link>
                 </div>
                 <p className="text-muted-foreground mt-1 break-words font-mono text-[11px]">
-                  {a.judul}
+                  {a.title}
                 </p>
               </li>
             ))}
@@ -112,34 +110,34 @@ export default async function Log() {
         </section>
       )}
 
-      {d.langkah.length > 0 && (
+      {d.steps.length > 0 && (
         <section className="mt-8">
           <h2 className="text-muted-foreground font-mono text-[11px] uppercase tracking-[0.15em]">
-            Langkah agent · {d.langkah.length}
+            Agent steps · {d.steps.length}
           </h2>
           <ul className="mt-3 divide-y rounded-xl border">
-            {d.langkah.map((l) => (
-              <li key={l.id} className="grid grid-cols-[84px_1fr] gap-4 px-4 py-3">
+            {d.steps.map((s) => (
+              <li key={s.id} className="grid grid-cols-[84px_1fr] gap-4 px-4 py-3">
                 <div>
                   <p className="text-primary font-mono text-[11px] font-semibold tracking-wider">
-                    {l.tahap}
+                    {s.stage}
                   </p>
-                  <p className="text-muted-foreground mt-0.5 text-[11px]">{l.agent_nama}</p>
+                  <p className="text-muted-foreground mt-0.5 text-[11px]">{s.agent_name}</p>
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm leading-relaxed">{l.ringkas}</p>
-                  {l.alat.length > 0 && (
+                  <p className="text-sm leading-relaxed">{s.summary}</p>
+                  {s.tools.length > 0 && (
                     <p className="text-muted-foreground mt-1 break-words font-mono text-[11px]">
-                      {l.alat.join(" · ")}
+                      {s.tools.join(" · ")}
                     </p>
                   )}
                   <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                    {l.asal && <AsalBadge asal={l.asal} sumber={l.sumber} />}
+                    {s.origin && <OriginBadge origin={s.origin} source={s.source} />}
                     <Link
-                      href={`/gangguan/${l.jalan_id}`}
+                      href={`/disruptions/${s.run_id}`}
                       className="text-muted-foreground hover:text-foreground font-mono text-[11px]"
                     >
-                      {waktu(l.waktu)} →
+                      {when(s.at)} →
                     </Link>
                   </div>
                 </div>

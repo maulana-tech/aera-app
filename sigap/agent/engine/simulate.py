@@ -1,8 +1,7 @@
-"""Kalkulator. Tidak ada AI di sini, dan tidak boleh ada.
+"""The calculator. No AI in here, and none allowed.
 
-Kalau angka rupiah keluar dari model bahasa, satu pertanyaan juri
-merobohkan seluruh klaim penghematan. Model yang memutuskan,
-berkas ini yang menghitung.
+If a rupiah figure comes out of a language model, one sceptical question brings
+the whole savings claim down. The model decides; this file does the arithmetic.
 """
 from __future__ import annotations
 
@@ -10,200 +9,204 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Dict, List, Optional, Sequence
 
-from core.provenance import Asal, Hasil
+from core.provenance import Origin, Result
 
 
 @dataclass
-class Kedatangan:
+class Arrival:
     id: str
-    tanggal: date
-    jumlah: float
+    on: date
+    qty: float
 
 
 @dataclass
 class Cover:
-    habis: Optional[date]          # hari pertama pemakaian tidak tercukupi
-    tercakup_sampai: Optional[date]
-    sisa_akhir: float
+    depleted_on: Optional[date]       # first day consumption cannot be met
+    covered_through: Optional[date]
+    closing_qty: float
 
 
-def hitung_cover(
-    stok_awal: float,
-    pemakaian_harian: float,
-    mulai: date,
-    kedatangan: Sequence[Kedatangan] = (),
-    horizon_hari: int = 120,
+def project_cover(
+    opening_qty: float,
+    daily_consumption: float,
+    start: date,
+    arrivals: Sequence[Arrival] = (),
+    horizon_days: int = 120,
 ) -> Cover:
-    """Jalankan saldo harian ke depan. Kedatangan masuk di awal harinya."""
-    if pemakaian_harian <= 0:
-        return Cover(None, None, stok_awal)
+    """Roll the daily balance forward. Arrivals land at the start of their day."""
+    if daily_consumption <= 0:
+        return Cover(None, None, opening_qty)
 
-    masuk: Dict[date, float] = {}
-    for k in kedatangan:
-        masuk[k.tanggal] = masuk.get(k.tanggal, 0.0) + k.jumlah
+    incoming: Dict[date, float] = {}
+    for a in arrivals:
+        incoming[a.on] = incoming.get(a.on, 0.0) + a.qty
 
-    saldo = stok_awal
-    hari = mulai
-    for _ in range(horizon_hari):
-        saldo += masuk.get(hari, 0.0)
-        if saldo < pemakaian_harian:
-            return Cover(hari, hari - timedelta(days=1), round(saldo, 2))
-        saldo -= pemakaian_harian
-        hari += timedelta(days=1)
-    return Cover(None, hari - timedelta(days=1), round(saldo, 2))
+    balance = opening_qty
+    day = start
+    for _ in range(horizon_days):
+        balance += incoming.get(day, 0.0)
+        if balance < daily_consumption:
+            return Cover(day, day - timedelta(days=1), round(balance, 2))
+        balance -= daily_consumption
+        day += timedelta(days=1)
+    return Cover(None, day - timedelta(days=1), round(balance, 2))
 
 
 @dataclass
-class Putusan:
+class Ruling:
     id: str
     label: str
-    layak: bool
-    alasan: str = ""
+    allowed: bool
+    reason: str = ""
 
 
 @dataclass
-class HasilSimulasi:
-    ditolak: bool
-    alasan_tolak: str = ""
-    habis_tanpa_tindakan: Optional[date] = None
-    opsi: List[dict] = field(default_factory=list)
-    kombinasi: List[dict] = field(default_factory=list)
-    terpilih: Optional[dict] = None
+class Simulation:
+    refused: bool
+    refusal_reason: str = ""
+    depleted_without_action: Optional[date] = None
+    options: List[dict] = field(default_factory=list)
+    combinations: List[dict] = field(default_factory=list)
+    chosen: Optional[dict] = None
 
 
 def simulate_scenario(
-    stok: Hasil,
-    opsi: Hasil,
-    putusan_kepatuhan: Dict[str, Putusan],
-    profil: dict,
-    mulai: date,
-    pemakaian_harian: float,
-    stok_awal: float,
-    kedatangan_terjadwal: Sequence[Kedatangan] = (),
-) -> HasilSimulasi:
-    """Hitung biaya tiap opsi yang lolos aturan, plus kombinasinya.
+    stock: Result,
+    options: Result,
+    compliance_rulings: Dict[str, Ruling],
+    profile: dict,
+    start: date,
+    daily_consumption: float,
+    opening_qty: float,
+    scheduled_arrivals: Sequence[Arrival] = (),
+) -> Simulation:
+    """Cost every option that cleared the rules, plus their combinations.
 
-    Sebuah rencana disebut AMAN kalau tidak ada kekurangan stok sampai
-    pasokan terjadwal terakhir mendarat — bukan sampai selamanya. Tugasnya
-    menambal celah, bukan memasok pabrik tanpa batas waktu.
+    A plan counts as SAFE when there is no shortfall before the last scheduled
+    delivery lands — not forever. The job is to bridge the gap, not to supply
+    the plant indefinitely.
 
-    Menolak mengeluarkan angka kalau masukan penting tidak tepercaya.
+    Refuses to emit figures when a critical input is not trustworthy.
     """
-    for nama, h in (("stok", stok), ("opsi pasokan", opsi)):
-        if not h.tepercaya:
-            return HasilSimulasi(
-                ditolak=True,
-                alasan_tolak=(
-                    f"Masukan '{nama}' berasal dari {h.asal.value} ({h.sumber}). "
-                    "Angka penghematan tidak dikeluarkan sampai datanya langsung."
+    for label, r in (("stock", stock), ("supply options", options)):
+        if not r.trusted:
+            return Simulation(
+                refused=True,
+                refusal_reason=(
+                    f"Input '{label}' came from {r.origin.value} ({r.source}). "
+                    "No savings figure is emitted until that data is live."
                 ),
             )
 
-    dasar = hitung_cover(stok_awal, pemakaian_harian, mulai, kedatangan_terjadwal)
+    baseline = project_cover(opening_qty, daily_consumption, start, scheduled_arrivals)
 
-    # celah yang harus ditambal berakhir saat pasokan terjadwal terakhir tiba
-    tambal_sampai = max((k.tanggal for k in kedatangan_terjadwal), default=None)
+    # the gap to bridge ends when the last scheduled delivery arrives
+    bridge_until = max((a.on for a in scheduled_arrivals), default=None)
 
-    hidup: List[dict] = []
-    keluar: List[dict] = []
-    for o in opsi.nilai:
-        p = putusan_kepatuhan.get(o["id"])
-        baris = {
+    viable: List[dict] = []
+    blocked: List[dict] = []
+    for o in options.value:
+        ruling = compliance_rulings.get(o["id"])
+        row = {
             "id": o["id"], "label": o["label"], "supplier": o["Supplier"],
-            "jumlah": o["Quantity"], "tiba": o["ArrivalDate"],
-            "biaya_tambahan": o["ExtraCostIDR"], "tkdn_sesudah": o["TkdnAfterPct"],
-            "layak": bool(p and p.layak), "alasan": p.alasan if p else "belum dinilai",
+            "qty": o["Quantity"], "arrives": o["ArrivalDate"],
+            "extra_cost_idr": o["ExtraCostIDR"], "tkdn_after": o["TkdnAfterPct"],
+            "allowed": bool(ruling and ruling.allowed),
+            "reason": ruling.reason if ruling else "not yet assessed",
         }
-        (hidup if baris["layak"] else keluar).append(baris)
+        (viable if row["allowed"] else blocked).append(row)
 
-    # kombinasi: setiap opsi sendiri, lalu tiap pasangan
-    kandidat: List[dict] = []
-    for i, a in enumerate(hidup):
-        kandidat.append({"anggota": [a], "biaya": a["biaya_tambahan"]})
-        for b in hidup[i + 1:]:
-            kandidat.append({"anggota": [a, b], "biaya": a["biaya_tambahan"] + b["biaya_tambahan"]})
+    # combinations: each option alone, then every pair
+    candidates: List[dict] = []
+    for i, a in enumerate(viable):
+        candidates.append({"members": [a], "cost": a["extra_cost_idr"]})
+        for b in viable[i + 1:]:
+            candidates.append({"members": [a, b],
+                               "cost": a["extra_cost_idr"] + b["extra_cost_idr"]})
 
-    dinilai: List[dict] = []
-    for k in kandidat:
-        tiba = [Kedatangan(x["id"], date.fromisoformat(x["tiba"]), x["jumlah"]) for x in k["anggota"]]
-        c = hitung_cover(stok_awal, pemakaian_harian, mulai, list(kedatangan_terjadwal) + tiba)
-        tkdn = [x["tkdn_sesudah"] for x in k["anggota"] if x["tkdn_sesudah"] is not None]
-        aman_sampai_tambal = (
-            c.habis is None or (tambal_sampai is not None and c.habis > tambal_sampai)
-        )
-        dinilai.append({
-            "kombinasi": "+".join(x["id"] for x in k["anggota"]),
-            "anggota": [x["id"] for x in k["anggota"]],
-            "biaya": k["biaya"],
-            "aman": aman_sampai_tambal,
-            "habis": c.habis.isoformat() if c.habis else None,
-            "tkdn_sesudah": max(tkdn) if tkdn else profil["TkdnSaatIni"],
+    scored: List[dict] = []
+    for c in candidates:
+        arrivals = [Arrival(m["id"], date.fromisoformat(m["arrives"]), m["qty"])
+                    for m in c["members"]]
+        cover = project_cover(opening_qty, daily_consumption, start,
+                              list(scheduled_arrivals) + arrivals)
+        tkdn = [m["tkdn_after"] for m in c["members"] if m["tkdn_after"] is not None]
+        safe = (cover.depleted_on is None
+                or (bridge_until is not None and cover.depleted_on > bridge_until))
+        scored.append({
+            "combination": "+".join(m["id"] for m in c["members"]),
+            "members": [m["id"] for m in c["members"]],
+            "cost_idr": c["cost"],
+            "safe": safe,
+            "depleted_on": cover.depleted_on.isoformat() if cover.depleted_on else None,
+            "tkdn_after": max(tkdn) if tkdn else profile["TkdnCurrentPct"],
         })
 
-    aman = [d for d in dinilai if d["aman"]]
-    terpilih = min(aman, key=lambda d: d["biaya"]) if aman else None
+    safe_plans = [s for s in scored if s["safe"]]
+    chosen = min(safe_plans, key=lambda s: s["cost_idr"]) if safe_plans else None
 
-    return HasilSimulasi(
-        ditolak=False,
-        habis_tanpa_tindakan=dasar.habis,
-        opsi=hidup + keluar,
-        kombinasi=sorted(dinilai, key=lambda d: d["biaya"]),
-        terpilih=terpilih,
+    return Simulation(
+        refused=False,
+        depleted_without_action=baseline.depleted_on,
+        options=viable + blocked,
+        combinations=sorted(scored, key=lambda s: s["cost_idr"]),
+        chosen=chosen,
     )
 
 
 # --------------------------------------------------------------------------- #
 def demo() -> None:
-    import json, pathlib
-    from tools._sumber import fixture, profil
+    import json
+    import pathlib
 
     fx = json.loads((pathlib.Path(__file__).resolve().parent.parent
-                     / "fixtures" / "skenario_ningbo.json").read_text())
-    mulai = date.fromisoformat(fx["Profil"]["TanggalAcuan"])
+                     / "fixtures" / "ningbo_scenario.json").read_text())
+    start = date.fromisoformat(fx["Profile"]["AsOfDate"])
 
-    # 1. tanpa tindakan apa pun
-    dasar = hitung_cover(84.0, 9.2, mulai)
-    assert dasar.habis == date(2026, 9, 13), dasar.habis
-    print(f"  tanpa tindakan  → habis {dasar.habis}")
+    # 1. do nothing at all
+    baseline = project_cover(84.0, 9.2, start)
+    assert baseline.depleted_on == date(2026, 9, 13), baseline.depleted_on
+    print(f"  no action        → depleted {baseline.depleted_on}")
 
-    # 2. penolakan saat data tidak tepercaya
-    tolak = simulate_scenario(
-        Hasil([], Asal.CONTOH, "fixture"), Hasil([], Asal.CONTOH, "fixture"),
-        {}, fx["Profil"], mulai, 9.2, 84.0,
+    # 2. refusal when the data is not trustworthy
+    refused = simulate_scenario(
+        Result([], Origin.MODELLED, "fixture"), Result([], Origin.MODELLED, "fixture"),
+        {}, fx["Profile"], start, 9.2, 84.0,
     )
-    assert tolak.ditolak and "tidak dikeluarkan" in tolak.alasan_tolak
-    print("  data contoh     → kalkulator menolak memberi angka ✓")
+    assert refused.refused
+    assert "until that data is live" in refused.refusal_reason
+    print("  modelled data    → calculator refuses to give a figure ✓")
 
-    # 3. jalur penuh, anggap datanya langsung
-    stok = Hasil(fx["MaterialStock"], Asal.LANGSUNG, "API_MATERIAL_STOCK_SRV")
-    opsi = Hasil(fx["AlternateSource"], Asal.LANGSUNG, "A_PurchasingInfoRecord")
-    putusan = {
-        "A": Putusan("A", "air freight", True),
-        "B": Putusan("B", "supplier lokal", True),
-        "C": Putusan("C", "realokasi SBY1", True),
-        "D": Putusan("D", "Vietnam", False, "LARTAS asal baru +10 hari kerja"),
-        "E": Putusan("E", "termurah", False, "TKDN jatuh ke 34,8% — ambang kontrak 40%"),
+    # 3. full path, treating the data as live
+    stock = Result(fx["MaterialStock"], Origin.LIVE, "API_MATERIAL_STOCK_SRV")
+    options = Result(fx["AlternateSource"], Origin.LIVE, "A_PurchasingInfoRecord")
+    rulings = {
+        "A": Ruling("A", "air freight", True),
+        "B": Ruling("B", "local supplier", True),
+        "C": Ruling("C", "SBY1 reallocation", True),
+        "D": Ruling("D", "Vietnam", False, "LARTAS new origin +10 working days"),
+        "E": Ruling("E", "cheapest", False, "TKDN drops to 34.8% — contract floor 40%"),
     }
-    po = [Kedatangan("4500018872", date(2026, 9, 22), 120.0)]
-    h = simulate_scenario(stok, opsi, putusan, fx["Profil"], mulai, 9.2, 84.0, po)
+    po = [Arrival("4500018872", date(2026, 9, 22), 120.0)]
+    sim = simulate_scenario(stock, options, rulings, fx["Profile"], start, 9.2, 84.0, po)
 
-    assert not h.ditolak
-    assert h.terpilih is not None, "harus ada kombinasi yang aman"
-    ditolak = sorted(o["id"] for o in h.opsi if not o["layak"])
-    assert ditolak == ["D", "E"], ditolak
-    print(f"  ditolak aturan  → {ditolak}")
-    print(f"  terpilih        → {h.terpilih['kombinasi']} "
-          f"Rp {h.terpilih['biaya']:,} · TKDN {h.terpilih['tkdn_sesudah']}%")
+    assert not sim.refused
+    assert sim.chosen is not None, "there must be a safe combination"
+    blocked = sorted(o["id"] for o in sim.options if not o["allowed"])
+    assert blocked == ["D", "E"], blocked
+    print(f"  blocked by rules → {blocked}")
+    print(f"  chosen           → {sim.chosen['combination']} "
+          f"Rp {sim.chosen['cost_idr']:,} · TKDN {sim.chosen['tkdn_after']}%")
 
-    # yang termurah dan aman harus C+B, bukan air freight
-    assert h.terpilih["kombinasi"] == "B+C", h.terpilih["kombinasi"]
-    assert h.terpilih["biaya"] == 116_000_000
-    a = next(d for d in h.kombinasi if d["kombinasi"] == "A")
-    assert a["aman"], "air freight sendiri seharusnya menutup gap"
-    assert a["biaya"] > h.terpilih["biaya"], "kombinasi harus lebih murah dari air freight"
-    hemat = a["biaya"] - h.terpilih["biaya"]
-    print(f"  pembanding A    → Rp {a['biaya']:,} · hemat Rp {hemat:,} "
-          f"({hemat / a['biaya'] * 100:.0f}%)")
+    # the cheapest safe plan must be C+B, not air freight
+    assert sim.chosen["combination"] == "B+C", sim.chosen["combination"]
+    assert sim.chosen["cost_idr"] == 116_000_000
+    a = next(s for s in sim.combinations if s["combination"] == "A")
+    assert a["safe"], "air freight alone should bridge the gap"
+    assert a["cost_idr"] > sim.chosen["cost_idr"], "the pair must beat air freight"
+    saved = a["cost_idr"] - sim.chosen["cost_idr"]
+    print(f"  vs option A      → Rp {a['cost_idr']:,} · saves Rp {saved:,} "
+          f"({saved / a['cost_idr'] * 100:.0f}%)")
     print("simulate ok")
 
 

@@ -1,58 +1,58 @@
 import { notFound } from "next/navigation";
 
-import { ambil, saya, type Agent, type Pandangan, type RingkasAgent } from "@/app/lib";
-import Percakapan from "@/app/(app)/agent/[kode]/Percakapan";
-import { Lencana } from "@/components/kartu-agent";
-import { TabelData } from "@/components/tabel-data";
+import { api, me, type Agent, type AgentSummary, type View } from "@/app/lib";
+import Conversation from "@/app/(app)/agents/[code]/Conversation";
+import { AgentBadge } from "@/components/agent-card";
+import { DataTable } from "@/components/data-table";
 
 export const dynamic = "force-dynamic";
 
-const JUDUL: Record<string, { judul: string; jelas: string; contoh: string[] }> = {
-  permintaan: {
-    judul: "Permintaan",
-    jelas: "Seberapa cepat bahan dipakai, dan apakah permintaan sedang bergerak.",
-    contoh: ["Pemakaian M-4471 di KRW1 naik nggak?", "Material mana yang paling cepat habis?"],
+const PAGES: Record<string, { title: string; blurb: string; examples: string[] }> = {
+  demand: {
+    title: "Demand",
+    blurb: "How fast material is consumed, and whether demand is moving.",
+    examples: ["Is M-4471 consumption at KRW1 rising?", "Which material depletes soonest?"],
   },
-  stok: {
-    judul: "Stok",
-    jelas: "Berapa yang tercatat, berapa yang benar-benar bisa dipakai, dan kapan habis.",
-    contoh: ["Ada stok yang ditahan mutu?", "Material mana yang paling kritis?"],
+  inventory: {
+    title: "Stock",
+    blurb: "What is on the books, what may actually be used, and when it runs out.",
+    examples: ["Is any stock on quality hold?", "Which material is most critical?"],
   },
-  sumber: {
-    judul: "Sumber pasokan",
-    jelas: "Pilihan pengganti, beserta yang gugur karena aturan — bukan karena harga.",
-    contoh: ["Kenapa opsi E ditolak?", "Mana yang paling cepat tiba?"],
+  sourcing: {
+    title: "Supply options",
+    blurb: "Replacement options, including the ones struck out on rules rather than price.",
+    examples: ["Why was option E rejected?", "Which arrives soonest?"],
   },
-  logistik: {
-    judul: "Logistik",
-    jelas: "Tanggal tiba yang tahan uji: bongkar pelabuhan, pindah kapal, bea cukai.",
-    contoh: ["Kiriman mana yang paling mundur?", "Realistisnya opsi B tiba kapan?"],
+  logistics: {
+    title: "Logistics",
+    blurb: "Arrival dates that survive contact with reality: port dwell, transhipment, customs.",
+    examples: ["Which shipment slipped the most?", "Realistically, when does option B land?"],
   },
-  perhitungan: {
-    judul: "Perhitungan",
-    jelas: "Biaya tiap pilihan dan kombinasinya. Deterministik — bukan tebakan model.",
-    contoh: ["Kombinasi mana yang paling murah dan tetap aman?", "Berapa hematnya?"],
+  simulation: {
+    title: "Costing",
+    blurb: "Cost of each option and combination. Deterministic — not a model's guess.",
+    examples: ["Which combination is cheapest and still safe?", "How much does that save?"],
   },
-  eksekusi: {
-    judul: "Eksekusi",
-    jelas: "Apa yang sudah dijalankan, apa yang menunggu persetujuan.",
-    contoh: ["Aksi apa yang menunggu?", "Sudah ada yang mendarat di SAP?"],
+  execution: {
+    title: "Execution",
+    blurb: "What has already run, and what is waiting on approval.",
+    examples: ["Which actions are waiting?", "Has anything landed in SAP yet?"],
   },
 };
 
-export default async function HalamanDomain({ params }: { params: Promise<{ domain: string }> }) {
+export default async function DomainPage({ params }: { params: Promise<{ domain: string }> }) {
   const { domain } = await params;
-  const meta = JUDUL[domain];
+  const meta = PAGES[domain];
   if (!meta) notFound();
 
-  const [d, tim, aku] = await Promise.all([
-    ambil<Pandangan>(`data/${domain}`),
-    ambil<{ agent: Agent[]; ringkas: RingkasAgent }>("agent"),
-    saya(),
+  const [view, team, user] = await Promise.all([
+    api<View>(`data/${domain}`),
+    api<{ agents: Agent[]; summary: AgentSummary }>("agents"),
+    me(),
   ]);
-  if (!d) notFound();
+  if (!view) notFound();
 
-  const a = tim?.agent.find((x) => x.kode === d.agent);
+  const agent = team?.agents.find((x) => x.code === view.agent);
 
   return (
     <main className="w-full px-6 py-8">
@@ -60,41 +60,41 @@ export default async function HalamanDomain({ params }: { params: Promise<{ doma
         <p className="text-muted-foreground font-mono text-xs uppercase tracking-[0.18em]">
           SIGAP · Data
         </p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">{meta.judul}</h1>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight">{meta.title}</h1>
         <p className="text-muted-foreground mt-1 max-w-3xl text-sm leading-relaxed">
-          {meta.jelas}
+          {meta.blurb}
         </p>
       </header>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
         <section>
-          <TabelData
-            kolom={d.kolom}
-            baris={d.baris}
-            asal={d.asal}
-            sumber={d.sumber}
-            catatan={d.catatan}
-            sorot={(b) => b.terpilih === true || b.layak === false}
+          <DataTable
+            columns={view.columns}
+            rows={view.rows}
+            origin={view.origin}
+            source={view.source}
+            note={view.note}
+            highlight={(row) => row.chosen === true || row.allowed === false}
           />
         </section>
 
         <aside>
-          {a && (
+          {agent && (
             <>
               <div className="mb-3 flex items-center gap-2.5">
-                <Lencana panggilan={a.panggilan} />
+                <AgentBadge nickname={agent.nickname} />
                 <div>
-                  <p className="text-sm font-medium leading-none">{a.panggilan}</p>
+                  <p className="text-sm font-medium leading-none">{agent.nickname}</p>
                   <p className="text-muted-foreground mt-1 text-xs">
-                    yang memegang {meta.judul.toLowerCase()}
+                    owns {meta.title.toLowerCase()}
                   </p>
                 </div>
               </div>
-              <Percakapan
-                kode={a.kode}
-                nama={a.panggilan}
-                contoh={meta.contoh}
-                masuk={!!aku}
+              <Conversation
+                code={agent.code}
+                name={agent.nickname}
+                examples={meta.examples}
+                signedIn={!!user}
               />
             </>
           )}

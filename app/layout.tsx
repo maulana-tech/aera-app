@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { PenyediaTema } from "@/components/tema";
+import { ThemeProvider } from "@/components/theme";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -14,10 +14,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SIGAP — Antrean keputusan",
+  title: "SIGAP — Decision queue",
   description:
-    "Asisten otomatis respons gangguan pasokan. Menyelidiki dampak, menyusun pilihan, "
-    + "mencoret yang melanggar aturan, lalu mengeksekusi ke SAP setelah disetujui.",
+    "Autonomous supply-disruption response. Investigates the impact, assembles the "
+    + "options, strikes out the ones that break the rules, then executes into SAP "
+    + "once approved.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -28,7 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col">
-        <PenyediaTema>{children}</PenyediaTema>
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );

@@ -1,79 +1,78 @@
 "use client";
 
 import {
-  Boxes, Calculator, Database, FileText, Inbox, LayoutDashboard, Mail,
-  MessagesSquare, PackageSearch, ScrollText, Settings2, Ship, TrendingUp,
-  Upload, Users, Zap,
+  Database, FileText, Inbox, LayoutDashboard, MessagesSquare,
+  ScrollText, Settings2, Users,
 } from "lucide-react";
 
-import { NavPengguna } from "@/components/nav-pengguna";
-import { NavUtama, type Butir } from "@/components/nav-utama";
-import { StatusSambungan, type Sambungan } from "@/components/status-sambungan";
+import { NavMain, type NavItem } from "@/components/nav-main";
+import { NavUser } from "@/components/nav-user";
+import { ConnectionStatus, type Connection } from "@/components/connection-status";
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarRail,
 } from "@/components/ui/sidebar";
 
-const KERJA: Butir[] = [
-  { judul: "Dasbor", href: "/dasbor", icon: LayoutDashboard },
-  { judul: "Antrean keputusan", href: "/", icon: Inbox },
-  { judul: "Percakapan", href: "/chat", icon: MessagesSquare },
+const WORK: NavItem[] = [
+  { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { title: "Decision queue", href: "/", icon: Inbox },
+  { title: "Conversation", href: "/chat", icon: MessagesSquare },
 ];
 
-const DATA: Butir[] = [
+const DATA: NavItem[] = [
   {
-    judul: "Data pasokan",
+    title: "Supply data",
     href: "/data",
     icon: Database,
-    anak: [
-      { judul: "Permintaan", href: "/data/permintaan", oleh: "Dara" },
-      { judul: "Stok", href: "/data/stok", oleh: "Iris" },
-      { judul: "Sumber pasokan", href: "/data/sumber", oleh: "Clint" },
-      { judul: "Logistik", href: "/data/logistik", oleh: "Milo" },
-      { judul: "Perhitungan", href: "/data/perhitungan", oleh: "Tara" },
-      { judul: "Eksekusi", href: "/data/eksekusi", oleh: "Bram" },
+    children: [
+      { title: "Demand", href: "/data/demand", owner: "Dara" },
+      { title: "Stock", href: "/data/inventory", owner: "Iris" },
+      { title: "Supply options", href: "/data/sourcing", owner: "Clint" },
+      { title: "Logistics", href: "/data/logistics", owner: "Milo" },
+      { title: "Costing", href: "/data/simulation", owner: "Tara" },
+      { title: "Execution", href: "/data/execution", owner: "Bram" },
     ],
   },
-  { judul: "Tim agent", href: "/agent", icon: Users },
+  { title: "Agent team", href: "/agents", icon: Users },
 ];
 
-const CATATAN: Butir[] = [
-  { judul: "Log", href: "/log", icon: ScrollText },
-  { judul: "Laporan", href: "/laporan", icon: FileText },
+const RECORDS: NavItem[] = [
+  { title: "Log", href: "/log", icon: ScrollText },
+  { title: "Reports", href: "/reports", icon: FileText },
 ];
 
-const ATUR: Butir[] = [
+const SETTINGS: NavItem[] = [
   {
-    judul: "Pengaturan",
-    href: "/atur",
+    title: "Settings",
+    href: "/settings",
     icon: Settings2,
-    anak: [
-      { judul: "Unggah data", href: "/unggah" },
-      { judul: "Kontak", href: "/kontak" },
+    children: [
+      { title: "Upload data", href: "/uploads" },
+      { title: "Contacts", href: "/contacts" },
     ],
   },
 ];
 
 export function AppSidebar({
-  pengguna, sambungan, ...props
+  user, connection, ...props
 }: {
-  pengguna?: { nama: string; peran: string; email: string };
-  sambungan?: Sambungan;
+  user?: { name: string; role: string; email: string };
+  connection?: Connection;
 } & React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <StatusSambungan s={sambungan} />
+        <ConnectionStatus c={connection} />
       </SidebarHeader>
 
       <SidebarContent>
-        <NavUtama butir={KERJA} />
-        <NavUtama label="Data" butir={DATA} />
-        <NavUtama label="Catatan" butir={CATATAN} />
-        <NavUtama butir={ATUR} />
+        <NavMain items={WORK} />
+        <NavMain label="Data" items={DATA} />
+        <NavMain label="Records" items={RECORDS} />
+        <NavMain items={SETTINGS} />
       </SidebarContent>
 
       <SidebarFooter>
-        <NavPengguna pengguna={pengguna} />
+        <NavUser user={user} />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

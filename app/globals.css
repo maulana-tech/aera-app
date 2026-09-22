@@ -137,16 +137,16 @@ body {
     @apply font-sans;
   }
 }
-/* ---------------------------------------------------------------- grafik
-   Satu rona seri saja. Kritis/aman disampaikan lewat garis ambang, urutan,
-   dan label langsung — bukan lewat merah/hijau, yang gagal uji keterbacaan
-   buta warna (ΔE 4,1 deutan pada validator palet).                        */
+/* ------------------------------------------------------------------ charts
+   One series hue only. Critical vs safe is carried by the threshold line,
+   row order, and direct labels — not by red/green, which fails the
+   colour-blind legibility check (deutan ΔE 4.1 on the palette validator). */
 .viz {
-  --viz-seri: #2a78d6;
-  --viz-alur: color-mix(in oklab, var(--viz-seri) 14%, transparent);
-  --viz-garis: var(--border);
+  --viz-series: #2a78d6;
+  --viz-track: color-mix(in oklab, var(--viz-series) 14%, transparent);
+  --viz-rule: var(--border);
 }
 .dark .viz {
-  --viz-seri: #3987e5;
-  --viz-alur: color-mix(in oklab, var(--viz-seri) 20%, transparent);
+  --viz-series: #3987e5;
+  --viz-track: color-mix(in oklab, var(--viz-series) 20%, transparent);
 }

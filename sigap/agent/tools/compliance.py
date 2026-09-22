@@ -1,109 +1,135 @@
-"""Alat Ahli Aturan. Membaca rule pack di references/, bukan dari ingatan model."""
+"""Kira's tools (Rules).
+
+Reads the rule pack in references/ rather than from the model's memory. A
+rejection from this file is final: cost arguments cannot overturn it.
+"""
 from __future__ import annotations
 
 import pathlib
-import re
 from datetime import date, timedelta
 from typing import Dict, List
 
-from core.provenance import Asal, Hasil
-from core.registry import daftarkan
-from tools._sumber import fixture, profil
+from core.provenance import Origin, Result
+from core.registry import register
+from tools.fetcher import fixture, profile
 
 REFERENCES = pathlib.Path(__file__).resolve().parent.parent.parent / "references"
 
-# Hari kerja tambahan untuk izin impor dari negara asal yang baru bagi perusahaan.
-LARTAS_HARI_KERJA_ASAL_BARU = 10
+# Extra working days an import licence takes when the origin country is new to us.
+LARTAS_WORKING_DAYS_NEW_ORIGIN = 10
 
 
 def _rule_pack() -> Dict[str, str]:
-    """Baca dokumen aturan. Kalau belum ditulis, katakan — jangan menebak."""
-    isi: Dict[str, str] = {}
-    for nama in ("tkdn-rules", "lartas-procedure", "holiday-calendar", "priok-dwell-time"):
-        f = REFERENCES / f"{nama}.md"
+    """Read the rule documents. If one isn't written yet, say so — don't guess."""
+    out: Dict[str, str] = {}
+    for name in ("tkdn-rules", "lartas-procedure", "holiday-calendar", "priok-dwell-time"):
+        f = REFERENCES / f"{name}.md"
         if f.exists():
-            isi[nama] = f.read_text()
-    return isi
+            out[name] = f.read_text()
+    return out
 
 
-def _tambah_hari_kerja(mulai: date, hari: int) -> date:
-    d, sisa = mulai, hari
-    while sisa > 0:
+def _add_working_days(start: date, days: int) -> date:
+    d, left = start, days
+    while left > 0:
         d += timedelta(days=1)
         if d.weekday() < 5:
-            sisa -= 1
+            left -= 1
     return d
 
 
-@daftarkan(
+@register(
     "check_local_constraints", "compliance",
-    "Uji satu pilihan pasokan terhadap TKDN, LARTAS, klausul kontrak, dan kalender libur. "
-    "Kembalikan layak/tidak beserta alasan yang menyebut aturan dan angkanya. "
-    "Penolakan dari alat ini bersifat final dan tidak boleh dikalahkan pertimbangan biaya.",
-    {"opsi_id": {"type": "string", "description": "id pilihan, mis. 'A'"}},
-    ["opsi_id"],
+    "Test one supply option against TKDN, LARTAS, contract clauses, and the holiday "
+    "calendar. Returns allowed/blocked with a reason that names the rule and the "
+    "numbers. A rejection here is final and must not be overridden on cost.",
+    {"option_id": {"type": "string", "description": "option id, e.g. 'A'"}},
+    ["option_id"],
 )
-def check_local_constraints(opsi_id: str) -> Hasil:
+def check_local_constraints(option_id: str) -> Result:
     pack = _rule_pack()
-    p = profil()
-    opsi = next((o for o in fixture("AlternateSource") if o["id"] == opsi_id), None)
-    if opsi is None:
-        return Hasil(None, Asal.TIDAK_ADA, "references/", catatan=f"opsi '{opsi_id}' tidak dikenal")
+    p = profile()
+    option = next((o for o in fixture("AlternateSource") if o["id"] == option_id), None)
+    if option is None:
+        return Result(None, Origin.MISSING, "references/",
+                      note=f"unknown option '{option_id}'")
 
-    alasan: List[str] = []
-    layak = True
-    ambang = p["TkdnAmbangKontrak"]
+    reasons: List[str] = []
+    allowed = True
+    floor = p["TkdnContractFloorPct"]
 
     # --- TKDN ---
-    # Aturannya: pilihan tidak boleh MEMPERBURUK posisi konten lokal, dan tidak
-    # boleh menjatuhkannya ke bawah ambang kalau sekarang masih di atas.
-    # Perusahaan yang sudah di bawah ambang tidak otomatis kehilangan semua
-    # pilihan — yang dilarang adalah memperparahnya.
-    tkdn = opsi.get("TkdnAfterPct")
-    sekarang = p["TkdnSaatIni"]
+    # The rule: an option must not WORSEN the local-content position, and must
+    # not push it below the contract floor when we are currently above it. A
+    # company already below the floor does not thereby lose every option — what
+    # is forbidden is making it worse.
+    tkdn = option.get("TkdnAfterPct")
+    current = p["TkdnCurrentPct"]
     if tkdn is not None:
-        if tkdn < sekarang - 0.05:                       # toleransi pembulatan
-            layak = False
-            alasan.append(
-                f"TKDN turun dari {sekarang}% ke {tkdn}%"
-                + (f", makin jauh di bawah ambang kontrak {ambang}%" if tkdn < ambang
-                   else f", melanggar ambang kontrak {ambang}%")
+        if tkdn < current - 0.05:                       # rounding tolerance
+            allowed = False
+            reasons.append(
+                f"TKDN falls from {current}% to {tkdn}%"
+                + (f", further below the {floor}% contract floor" if tkdn < floor
+                   else f", breaching the {floor}% contract floor")
             )
-        elif tkdn < ambang and sekarang >= ambang:
-            layak = False
-            alasan.append(f"TKDN jatuh ke {tkdn}%, ambang kontrak {ambang}%")
-        elif tkdn >= ambang > sekarang:
-            alasan.append(f"TKDN naik ke {tkdn}%, kembali di atas ambang {ambang}%")
+        elif tkdn < floor <= current:
+            allowed = False
+            reasons.append(f"TKDN drops to {tkdn}%, contract floor {floor}%")
+        elif tkdn >= floor > current:
+            reasons.append(f"TKDN rises to {tkdn}%, back above the {floor}% floor")
 
     # --- LARTAS ---
-    tiba = date.fromisoformat(opsi["ArrivalDate"])
-    if opsi.get("NewOrigin"):
-        tiba_izin = _tambah_hari_kerja(tiba, LARTAS_HARI_KERJA_ASAL_BARU)
-        alasan.append(
-            f"LARTAS: negara asal baru ({opsi['Origin']}) menambah "
-            f"{LARTAS_HARI_KERJA_ASAL_BARU} hari kerja, tiba efektif {tiba_izin}"
+    arrives = date.fromisoformat(option["ArrivalDate"])
+    if option.get("NewOrigin"):
+        licensed = _add_working_days(arrives, LARTAS_WORKING_DAYS_NEW_ORIGIN)
+        reasons.append(
+            f"LARTAS: a new origin country ({option['Origin']}) adds "
+            f"{LARTAS_WORKING_DAYS_NEW_ORIGIN} working days, effective arrival {licensed}"
         )
-        tiba = tiba_izin
+        arrives = licensed
 
-    # --- kalender libur (kalau dokumennya sudah ada) ---
-    libur = pack.get("holiday-calendar", "")
-    for tgl in re.findall(r"\d{4}-\d{2}-\d{2}", libur):
-        if date.fromisoformat(tgl) <= tiba:
-            continue
-
-    catatan = "" if pack else (
-        "references/ belum ditulis — TKDN & LARTAS dinilai dari parameter fixture, "
-        "bukan dari dokumen aturan"
+    note = "" if pack else (
+        "references/ is not written yet — TKDN & LARTAS were judged from fixture "
+        "parameters rather than from the rule documents"
     )
-    return Hasil(
+    return Result(
         {
-            "opsi_id": opsi_id,
-            "layak": layak,
-            "alasan": "; ".join(alasan) if alasan else "tidak ada aturan yang dilanggar",
-            "tiba_efektif": tiba.isoformat(),
-            "tkdn_sesudah": tkdn,
+            "option_id": option_id,
+            "allowed": allowed,
+            "reason": "; ".join(reasons) if reasons else "no rule breached",
+            "arrival_effective": arrives.isoformat(),
+            "tkdn_after": tkdn,
         },
-        Asal.HITUNGAN if pack else Asal.CONTOH,
-        "references/ (rule pack)" if pack else "fixture + aturan bawaan",
-        catatan=catatan,
+        Origin.DERIVED if pack else Origin.MODELLED,
+        "references/ (rule pack)" if pack else "fixture + built-in rules",
+        note=note,
     )
+
+
+def demo() -> None:
+    p = profile()
+    assert p["TkdnCurrentPct"] < p["TkdnContractFloorPct"], \
+        "the scenario assumes the company already sits below the floor"
+
+    # An option that keeps TKDN where it is must NOT be rejected just for
+    # being under the floor — that was the bug this check exists to catch.
+    a = check_local_constraints("A").value
+    assert a["allowed"] is True, a["reason"]
+
+    # An option that actively worsens TKDN must be rejected.
+    e = check_local_constraints("E").value
+    assert e["allowed"] is False and "TKDN" in e["reason"], e
+
+    # A new origin country delays arrival past its booked date.
+    d = check_local_constraints("D").value
+    booked = next(o for o in fixture("AlternateSource") if o["id"] == "D")["ArrivalDate"]
+    assert d["arrival_effective"] > booked, d
+    assert "LARTAS" in d["reason"]
+
+    assert check_local_constraints("ZZ").origin is Origin.MISSING
+    print("compliance ok — keeps TKDN ✓ · worsens TKDN → blocked ✓ · LARTAS delay ✓")
+
+
+if __name__ == "__main__":
+    demo()

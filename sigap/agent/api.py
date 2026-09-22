@@ -1,484 +1,497 @@
-"""Layanan HTTP SIGAP.
+"""SIGAP HTTP service.
 
-# ponytail: http.server stdlib — cukup untuk belasan peristiwa/hari, nol dependensi.
-#           Pindah ke FastAPI + uvicorn kalau butuh async, websocket, atau >10 rps.
+# ponytail: stdlib http.server — fine for a dozen events/day, zero dependencies.
+#           Move to FastAPI + uvicorn if you need async, websockets, or >10 rps.
 
-    python3 api.py                 # dengarkan di :8787
+    python3 api.py                 # listen on :8787
 
-Endpoint
-    GET  /sehat
-    POST /peristiwa                {jenis, judul, pemicu, muatan, sumber}  → jalankan
-    GET  /jalan                    daftar penanganan terakhir
-    GET  /jalan/{id}               satu penanganan: langkah, aksi, persetujuan
-    POST /aksi/{id}/putusan        {oleh, peran, putusan, catatan}
+Endpoints
+    GET  /health
+    POST /events                   {kind, title, trigger, payload, source} → run
+    GET  /runs                     recent handlings
+    GET  /runs/{id}                one handling: steps, actions, approvals
+    POST /actions/{id}/decision    {decision, note}
+    POST /login                    {email, password}
+    GET  /me
+    GET  /agents                   team anatomy
+    POST /agents/{code}/ask        {question}
+    GET  /summary                  dashboard figures
+    GET  /data/{domain}            per-domain table
+    GET  /log                      every step, newest first
+    GET  /uploads · POST /uploads
+    GET  /reports/{run_id}
+    GET  /contacts · POST /contacts
 """
 from __future__ import annotations
 
+import csv
+import io
 import json
 import re
 import threading
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, List, Tuple
 from urllib.parse import urlparse
 
-import csv
-import io
-
-import tools.impact, tools.sourcing, tools.compliance, tools.lainnya, tools.simulasi  # noqa: F401  (daftarkan alat)
-from tools.pandangan import DOMAIN, PANDANGAN
-from core import identitas, simpan
-from core.identitas import Pengguna, TidakBerwenang
-from core.konfigurasi import KONF
+# Importing a tool module registers its tools. One file per agent.
+import tools.impact, tools.demand, tools.inventory, tools.sourcing, tools.logistics   # noqa: F401
+import tools.compliance, tools.simulation, tools.precedent, tools.execution, tools.supervisor  # noqa: F401
+from core import identity, store
+from core.config import CFG
+from core.identity import NotAuthorised, User
+from tools.views import VIEWS
 
 PORT = 8787
 
 
-# --------------------------------------------------------------- penanganan
-def _tangani(jalan_id: str, peristiwa: dict) -> None:
-    """Jalankan tim agent di latar. Kegagalan ditulis, bukan ditelan."""
-    urut = {"n": 0}
+# ------------------------------------------------------------------- handling
+def _handle(run_id: str, event: dict) -> None:
+    """Run the agent team in the background. Failures are written down, not swallowed."""
+    seq = {"n": 0}
 
-    def lapor(jenis: str, d: dict) -> None:
-        urut["n"] += 1
-        nama = d.get("nama") or d.get("agent", "-")
-        simpan.simpan_langkah(jalan_id, {
-            "urutan": urut["n"],
-            "tahap": {"ahli_mulai": "DELEGASI", "ahli_selesai": "TEMUAN",
-                      "alat": "ALAT"}.get(jenis, jenis.upper()),
+    def report(kind: str, d: dict) -> None:
+        seq["n"] += 1
+        name = d.get("name") or d.get("agent", "-")
+        store.save_step(run_id, {
+            "seq": seq["n"],
+            "stage": {"specialist_start": "DELEGATE", "specialist_done": "FINDING",
+                      "tool": "TOOL"}.get(kind, kind.upper()),
             "agent": d.get("agent", "supervisor"),
-            "agent_nama": nama,
-            "ringkas": d.get("ringkas") or d.get("tugas") or d.get("nama", ""),
-            "alat": [d["nama"]] if jenis == "alat" else [],
+            "agent_name": name,
+            "summary": d.get("summary") or d.get("task") or d.get("name", ""),
+            "tools": [d["name"]] if kind == "tool" else [],
             "detail": d,
-            "waktu": simpan._sekarang(),
+            "at": store._now(),
         })
 
     try:
         import graph
-        hasil = graph.jalankan(peristiwa, lapor)
-        simpan.tutup_jalan(jalan_id, "selesai", hasil, biaya_idr=hasil.get("biaya_idr", 0))
+        result = graph.run(event, report)
+        store.close_run(run_id, "done", result, cost_idr=result.get("cost_idr", 0))
     except Exception as e:                                           # noqa: BLE001
-        simpan.tutup_jalan(jalan_id, "gagal", galat=f"{type(e).__name__}: {e}")
+        store.close_run(run_id, "failed", error=f"{type(e).__name__}: {e}")
         traceback.print_exc()
 
 
-# ------------------------------------------------------------------- routing
-RUTE: list = []
+# -------------------------------------------------------------------- routing
+ROUTES: list = []
 
 
-def _pengguna(headers) -> Pengguna:
-    """Identitas HANYA dari token. Tidak pernah dari badan permintaan."""
+def _user(headers) -> User:
+    """Identity comes ONLY from the token. Never from the request body."""
     auth = headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
-        raise TidakBerwenang("perlu token sesi")
-    return identitas.dari_token(auth[7:])
+        raise NotAuthorised("a session token is required")
+    return identity.from_token(auth[7:])
 
 
-def rute(metode: str, pola: str) -> Callable:
-    r = re.compile("^" + pola + "$")
+def route(method: str, pattern: str) -> Callable:
+    r = re.compile("^" + pattern + "$")
 
-    def bungkus(fn: Callable) -> Callable:
-        RUTE.append((metode, r, fn))
+    def wrap(fn: Callable) -> Callable:
+        ROUTES.append((method, r, fn))
         return fn
-    return bungkus
+    return wrap
 
 
-@rute("GET", r"/sehat")
-def sehat(_m, _b, _h) -> Tuple[int, dict]:
+@route("GET", r"/health")
+def health(_m, _b, _h) -> Tuple[int, dict]:
     return 200, {
-        "lingkungan": KONF.lingkungan,
-        "sap_siap": KONF.sap_siap,
-        "model_siap": KONF.model_siap,
-        "boleh_pakai_contoh": KONF.boleh_pakai_contoh,
-        "model": KONF.model,
+        "env": CFG.env,
+        "sap_ready": CFG.sap_ready,
+        "model_ready": CFG.model_ready,
+        "may_use_modelled": CFG.may_use_modelled,
+        "model": CFG.model,
     }
 
 
-@rute("POST", r"/peristiwa")
-def terima_peristiwa(_m, b: dict, _h) -> Tuple[int, dict]:
-    for w in ("jenis", "judul", "pemicu"):
-        if not b.get(w):
-            return 400, {"galat": f"'{w}' wajib diisi"}
+@route("POST", r"/events")
+def receive_event(_m, b: dict, _h) -> Tuple[int, dict]:
+    for field in ("kind", "title", "trigger"):
+        if not b.get(field):
+            return 400, {"error": f"'{field}' is required"}
 
-    if KONF.produksi and not (KONF.sap_siap and KONF.model_siap):
-        return 503, {"galat": "produksi belum siap: SAP atau model belum tersambung"}
+    if CFG.production and not (CFG.sap_ready and CFG.model_ready):
+        return 503, {"error": "production is not ready: SAP or the model is not connected"}
 
-    pid = simpan.catat_peristiwa(b["jenis"], b["judul"], b["pemicu"],
-                                 b.get("muatan", {}), b.get("sumber", "api"))
-    mode = "otonom" if KONF.model_siap else "runut"
-    jid = simpan.mulai_jalan(pid, mode)
+    eid = store.record_event(b["kind"], b["title"], b["trigger"],
+                             b.get("payload", {}), b.get("source", "api"))
+    mode = "autonomous" if CFG.model_ready else "guided"
+    rid = store.start_run(eid, mode)
 
-    peristiwa = {"id": pid, "jenis": b["jenis"], "judul": b["judul"],
-                 "pemicu": b["pemicu"], **b.get("muatan", {})}
+    event = {"id": eid, "kind": b["kind"], "title": b["title"],
+             "trigger": b["trigger"], **b.get("payload", {})}
 
-    if KONF.model_siap:
-        threading.Thread(target=_tangani, args=(jid, peristiwa), daemon=True).start()
+    if CFG.model_ready:
+        threading.Thread(target=_handle, args=(rid, event), daemon=True).start()
     else:
-        simpan.tutup_jalan(jalan_id=jid, status="ditahan", keputusan={
-            "status": "ditahan",
-            "alasan": "AWS_REGION belum diisi — tim agent tidak bisa menalar. "
-                      "Tidak ada keputusan yang dibuat.",
+        store.close_run(rid, "held", decision={
+            "status": "held",
+            "reason": "AWS_REGION is not set — the agent team cannot reason. "
+                      "No decision was made.",
         })
 
-    return 202, {"peristiwa_id": pid, "jalan_id": jid, "mode": mode}
+    return 202, {"event_id": eid, "run_id": rid, "mode": mode}
 
 
-@rute("GET", r"/ringkasan")
-def ringkasan(_m, _b, _h) -> Tuple[int, dict]:
-    """Angka untuk dashboard."""
-    with simpan.buka() as c:
-        jalan = c.execute(
-            "SELECT status, COUNT(*) n FROM jalan GROUP BY status").fetchall()
-        aksi = c.execute(
-            "SELECT status, COUNT(*) n FROM aksi GROUP BY status").fetchall()
-        nilai = c.execute(
-            "SELECT COALESCE(SUM(json_extract(muatan,'$.biaya_idr')),0) FROM aksi"
-            " WHERE status IN ('disetujui','terkirim')").fetchone()[0]
-        menunggu = c.execute(
-            "SELECT COALESCE(SUM(json_extract(muatan,'$.biaya_idr')),0) FROM aksi"
-            " WHERE status='menunggu'").fetchone()[0]
-        biaya = c.execute("SELECT COALESCE(SUM(biaya_token_idr),0) FROM jalan").fetchone()[0]
-        terakhir = c.execute(
-            "SELECT p.judul, j.status, j.mulai FROM jalan j"
-            " JOIN peristiwa p ON p.id=j.peristiwa_id ORDER BY j.mulai DESC LIMIT 5").fetchall()
+@route("GET", r"/summary")
+def summary(_m, _b, _h) -> Tuple[int, dict]:
+    """The dashboard figures."""
+    with store.connect() as c:
+        runs = c.execute("SELECT status, COUNT(*) n FROM runs GROUP BY status").fetchall()
+        actions = c.execute("SELECT status, COUNT(*) n FROM actions GROUP BY status").fetchall()
+        approved = c.execute(
+            "SELECT COALESCE(SUM(json_extract(payload,'$.cost_idr')),0) FROM actions"
+            " WHERE status IN ('approved','sent')").fetchone()[0]
+        pending = c.execute(
+            "SELECT COALESCE(SUM(json_extract(payload,'$.cost_idr')),0) FROM actions"
+            " WHERE status='pending'").fetchone()[0]
+        model_cost = c.execute("SELECT COALESCE(SUM(token_cost_idr),0) FROM runs").fetchone()[0]
+        recent = c.execute(
+            "SELECT e.title, r.status, r.started_at FROM runs r"
+            " JOIN events e ON e.id=r.event_id ORDER BY r.started_at DESC LIMIT 5").fetchall()
 
-    stok = PANDANGAN["stok"]()
-    kritis = [b for b in stok["baris"] if (b.get("hari_tersisa") or 999) < 14]
+    stock = VIEWS["inventory"]()
+    critical = [x for x in stock["rows"] if (x.get("days_left") or 999) < 14]
 
     return 200, {
-        "jalan": {r["status"]: r["n"] for r in jalan},
-        "aksi": {r["status"]: r["n"] for r in aksi},
-        "nilai_disetujui_idr": nilai,
-        "nilai_menunggu_idr": menunggu,
-        "biaya_model_idr": biaya,
-        "stok_kritis": kritis[:5],
-        "terakhir": [dict(r) for r in terakhir],
-        "sap_siap": KONF.sap_siap,
-        "model_siap": KONF.model_siap,
+        "runs": {r["status"]: r["n"] for r in runs},
+        "actions": {r["status"]: r["n"] for r in actions},
+        "approved_value_idr": approved,
+        "pending_value_idr": pending,
+        "model_cost_idr": model_cost,
+        "critical_stock": critical[:5],
+        "recent": [dict(r) for r in recent],
+        "sap_ready": CFG.sap_ready,
+        "model_ready": CFG.model_ready,
     }
 
 
-@rute("GET", r"/data/([a-z]+)")
-def pandangan_domain(m, _b, _h) -> Tuple[int, dict]:
-    nama = m.group(1)
-    if nama not in PANDANGAN:
-        return 404, {"galat": f"domain '{nama}' tidak dikenal",
-                     "tersedia": list(PANDANGAN)}
-    return 200, {"domain": nama, "agent": DOMAIN[nama], **PANDANGAN[nama]()}
+@route("GET", r"/data/([a-z]+)")
+def domain_view(m, _b, _h) -> Tuple[int, dict]:
+    name = m.group(1)
+    if name not in VIEWS:
+        return 404, {"error": f"unknown domain '{name}'", "available": list(VIEWS)}
+    # the domain name is the code of the agent that owns it
+    return 200, {"domain": name, "agent": name, **VIEWS[name]()}
 
 
-@rute("GET", r"/unggahan")
-def lihat_unggahan(_m, _b, _h) -> Tuple[int, dict]:
-    return 200, {"unggahan": simpan.daftar_unggahan()}
+@route("GET", r"/uploads")
+def list_uploads(_m, _b, _h) -> Tuple[int, dict]:
+    return 200, {"uploads": store.list_uploads()}
 
 
-@rute("POST", r"/unggahan")
-def unggah(_m, b: dict, h) -> Tuple[int, dict]:
-    """Terima data perusahaan dalam bentuk CSV.
+@route("POST", r"/uploads")
+def upload(_m, b: dict, h) -> Tuple[int, dict]:
+    """Accept the company's own data as CSV.
 
-    Dipakai sebagai lapisan di atas data contoh: begitu diunggah, alat
-    memakainya dan label asalnya jadi 'simpanan', bukan 'contoh'.
+    This layers over the modelled data: once uploaded, the tools use it and the
+    origin label becomes 'cached' rather than 'modelled'.
     """
-    p = _pengguna(h)
-    entitas, berkas, isi = b.get("entitas"), b.get("berkas", "tanpa-nama.csv"), b.get("csv", "")
-    sah = {"MaterialStock", "PurchaseOrder", "SalesOrder", "BillOfMaterial", "AlternateSource"}
-    if entitas not in sah:
-        return 400, {"galat": f"entitas harus salah satu dari {sorted(sah)}"}
-    if not isi.strip():
-        return 400, {"galat": "isi CSV kosong"}
+    u = _user(h)
+    entity = b.get("entity")
+    filename = b.get("filename", "untitled.csv")
+    body = b.get("csv", "")
+    allowed = {"MaterialStock", "PurchaseOrder", "SalesOrder",
+               "BillOfMaterial", "AlternateSource"}
+    if entity not in allowed:
+        return 400, {"error": f"entity must be one of {sorted(allowed)}"}
+    if not body.strip():
+        return 400, {"error": "the CSV body is empty"}
     try:
-        baris = [dict(r) for r in csv.DictReader(io.StringIO(isi))]
+        rows = [dict(r) for r in csv.DictReader(io.StringIO(body))]
     except Exception as e:                                          # noqa: BLE001
-        return 400, {"galat": f"CSV tidak terbaca: {e}"}
-    if not baris:
-        return 400, {"galat": "CSV tidak punya baris data"}
+        return 400, {"error": f"could not read the CSV: {e}"}
+    if not rows:
+        return 400, {"error": "the CSV has no data rows"}
 
-    # angka dikembalikan jadi angka; CSV mengirim semuanya sebagai teks
-    for r in baris:
+    # numbers come back as numbers; CSV sends everything as text
+    for r in rows:
         for k, v in list(r.items()):
             if isinstance(v, str) and v.strip():
                 try:
                     r[k] = float(v) if "." in v else int(v)
                 except ValueError:
                     pass
-    return 201, simpan.simpan_unggahan(entitas, berkas, baris, p.email)
+    return 201, store.save_upload(entity, filename, rows, u.email)
 
 
-@rute("POST", r"/unggahan/([A-Za-z0-9_]+)/hapus")
-def hapus_unggahan(m, _b, h) -> Tuple[int, dict]:
-    _pengguna(h)
-    return (200, {"dihapus": True}) if simpan.hapus_unggahan(m.group(1)) \
-        else (404, {"galat": "tidak ditemukan"})
+@route("POST", r"/uploads/([A-Za-z0-9_]+)/delete")
+def remove_upload(m, _b, h) -> Tuple[int, dict]:
+    _user(h)
+    return (200, {"deleted": True}) if store.delete_upload(m.group(1)) \
+        else (404, {"error": "not found"})
 
 
-@rute("GET", r"/laporan/([A-Za-z0-9_]+)")
-def laporan(m, _b, _h) -> Tuple[int, dict]:
-    """Susun laporan satu penanganan, siap disalin atau dikirim."""
-    d = simpan.ambil_jalan(m.group(1))
+@route("GET", r"/reports/([A-Za-z0-9_]+)")
+def report_for_run(m, _b, _h) -> Tuple[int, dict]:
+    """Assemble one handling into a report, ready to copy or send."""
+    d = store.get_run(m.group(1))
     if not d:
-        return 404, {"galat": "tidak ditemukan"}
+        return 404, {"error": "not found"}
 
-    baris: List[str] = [
-        f"# {d['judul']}", "",
-        f"Jenis      : {d['jenis']}",
-        f"Pemicu     : {d['pemicu']}",
-        f"Mulai      : {d['mulai']}",
-        f"Status     : {d['status']}" + (f" ({d['mode']})" if d["mode"] == "runut" else ""),
+    lines: List[str] = [
+        f"# {d['title']}", "",
+        f"Kind     : {d['kind']}",
+        f"Trigger  : {d['trigger']}",
+        f"Started  : {d['started_at']}",
+        f"Status   : {d['status']}" + (f" ({d['mode']})" if d["mode"] == "guided" else ""),
         "",
     ]
-    if d["keputusan"]:
-        k = d["keputusan"]
-        baris += ["## Keputusan", "",
-                  k.get("rekomendasi") or k.get("alasan") or "—", ""]
-    if d["langkah"]:
-        baris += ["## Jalan pikiran", ""]
-        for l in d["langkah"]:
-            asal = f" [{l['asal']}]" if l.get("asal") else ""
-            baris.append(f"{l['urutan']}. **{l['tahap']}** · {l['agent_nama']} — {l['ringkas']}{asal}")
-        baris.append("")
-    if d["aksi"]:
-        baris += ["## Aksi", "", "| Aksi | Nilai | Status |", "|---|---|---|"]
-        for a in d["aksi"]:
-            n = a["muatan"].get("biaya_idr")
-            baris.append(f"| {a['jenis']} | {('Rp ' + format(n, ',')) if n else '—'} | {a['status']} |")
-        baris.append("")
-    if d["persetujuan"]:
-        baris += ["## Persetujuan", ""]
-        for s_ in d["persetujuan"]:
-            baris.append(f"- {s_['putusan']} oleh {s_['oleh']} ({s_['peran']}) · {s_['waktu']}")
-        baris.append("")
-    baris += ["---", f"Disusun otomatis oleh SIGAP · {simpan._sekarang()}"]
+    if d["decision"]:
+        k = d["decision"]
+        lines += ["## Decision", "", k.get("recommendation") or k.get("reason") or "—", ""]
+    if d["steps"]:
+        lines += ["## Reasoning", ""]
+        for s in d["steps"]:
+            origin = f" [{s['origin']}]" if s.get("origin") else ""
+            lines.append(f"{s['seq']}. **{s['stage']}** · {s['agent_name']} — "
+                         f"{s['summary']}{origin}")
+        lines.append("")
+    if d["actions"]:
+        lines += ["## Actions", "", "| Action | Value | Status |", "|---|---|---|"]
+        for a in d["actions"]:
+            n = a["payload"].get("cost_idr")
+            lines.append(f"| {a['kind']} | {('Rp ' + format(n, ',')) if n else '—'} "
+                         f"| {a['status']} |")
+        lines.append("")
+    if d["approvals"]:
+        lines += ["## Approvals", ""]
+        for p in d["approvals"]:
+            lines.append(f"- {p['decision']} by {p['decided_by']} ({p['role']}) · {p['at']}")
+        lines.append("")
+    lines += ["---", f"Generated by SIGAP · {store._now()}"]
 
-    return 200, {"jalan_id": d["id"], "judul": d["judul"], "markdown": "\n".join(baris)}
-
-
-@rute("GET", r"/kontak")
-def lihat_kontak(_m, _b, _h) -> Tuple[int, dict]:
-    return 200, {"kontak": simpan.daftar_kontak()}
+    return 200, {"run_id": d["id"], "title": d["title"], "markdown": "\n".join(lines)}
 
 
-@rute("POST", r"/kontak")
-def buat_kontak(_m, b: dict, h) -> Tuple[int, dict]:
-    _pengguna(h)
-    for w in ("nama", "peran", "email"):
-        if not b.get(w):
-            return 400, {"galat": f"'{w}' wajib diisi"}
-    return 201, simpan.tambah_kontak(b["nama"], b["peran"], b["email"], b.get("untuk", "*"))
+@route("GET", r"/contacts")
+def list_contacts(_m, _b, _h) -> Tuple[int, dict]:
+    return 200, {"contacts": store.list_contacts()}
 
 
-@rute("POST", r"/kontak/([A-Za-z0-9_]+)/hapus")
-def buang_kontak(m, _b, h) -> Tuple[int, dict]:
-    _pengguna(h)
-    return (200, {"dihapus": True}) if simpan.hapus_kontak(m.group(1)) \
-        else (404, {"galat": "tidak ditemukan"})
+@route("POST", r"/contacts")
+def create_contact(_m, b: dict, h) -> Tuple[int, dict]:
+    _user(h)
+    for field in ("name", "role", "email"):
+        if not b.get(field):
+            return 400, {"error": f"'{field}' is required"}
+    return 201, store.add_contact(b["name"], b["role"], b["email"],
+                                  b.get("notify_for", "*"))
 
 
-@rute("GET", r"/agent")
-def daftar_agent(_m, _b, _h) -> Tuple[int, dict]:
-    """Anatomi tim: siapa saja, punya alat apa, mana yang sudah tersambung."""
-    from agents.definisi import SEMUA
+@route("POST", r"/contacts/([A-Za-z0-9_]+)/delete")
+def remove_contact(m, _b, h) -> Tuple[int, dict]:
+    _user(h)
+    return (200, {"deleted": True}) if store.delete_contact(m.group(1)) \
+        else (404, {"error": "not found"})
+
+
+@route("GET", r"/agents")
+def list_agents(_m, _b, _h) -> Tuple[int, dict]:
+    """Team anatomy: who exists, what tools they hold, what is actually wired up."""
+    from agents.definitions import ALL
     from core import registry
 
-    terdaftar = registry.semua()
-    keluar = []
-    for kode, a in SEMUA.items():
-        alat = []
-        for nama in a.alat:
-            ada = nama in terdaftar
-            alat.append({
-                "nama": nama,
-                "terpasang": ada,
-                "deskripsi": terdaftar[nama].deskripsi if ada else None,
-            })
-        keluar.append({
-            "kode": kode, "panggilan": a.panggilan, "nama": a.nama, "peran": a.peran,
+    registered = registry.all_tools()
+    out = []
+    for code, a in ALL.items():
+        tools = [{
+            "name": name,
+            "installed": name in registered,
+            "description": registered[name].description if name in registered else None,
+        } for name in a.tools]
+        out.append({
+            "code": code, "nickname": a.nickname, "title": a.title, "brief": a.brief,
             "effort": a.effort, "veto": a.veto,
-            "ketua": kode == "supervisor",
-            "alat": alat,
-            "terpasang": sum(1 for x in alat if x["terpasang"]),
-            "total_alat": len(alat),
+            "lead": code == "supervisor",
+            "ready": a.ready,
+            "tools": tools,
+            "installed": sum(1 for t in tools if t["installed"]),
+            "tool_count": len(tools),
         })
 
-    # hitung berapa peristiwa yang benar-benar memanggil tiap agent
-    with simpan.buka() as c:
-        pakai = dict(c.execute(
-            "SELECT agent, COUNT(DISTINCT jalan_id) FROM langkah GROUP BY agent").fetchall())
-    for a in keluar:
-        a["dipakai_di"] = pakai.get(a["kode"], 0)
+    # how many events actually invoked each agent
+    with store.connect() as c:
+        used = dict(c.execute(
+            "SELECT agent, COUNT(DISTINCT run_id) FROM steps GROUP BY agent").fetchall())
+    for a in out:
+        a["used_in"] = used.get(a["code"], 0)
 
     return 200, {
-        "agent": keluar,
-        "ringkas": {
-            "jumlah_agent": len(keluar),
-            "alat_terpasang": sum(a["terpasang"] for a in keluar),
-            "alat_total": sum(a["total_alat"] for a in keluar),
-            "model_siap": KONF.model_siap,
-            "sap_siap": KONF.sap_siap,
+        "agents": out,
+        "summary": {
+            "agent_count": len(out),
+            "tools_installed": sum(a["installed"] for a in out),
+            "tools_total": sum(a["tool_count"] for a in out),
+            "prompts_written": sum(1 for a in out if a["ready"]),
+            "model_ready": CFG.model_ready,
+            "sap_ready": CFG.sap_ready,
         },
     }
 
 
-@rute("POST", r"/agent/([a-z_]+)/tanya")
-def tanya_agent(m, b: dict, h) -> Tuple[int, dict]:
-    """Percakapan langsung dengan satu ahli."""
-    _pengguna(h)                                    # harus masuk dulu
-    kode, tanya = m.group(1), (b.get("tanya") or "").strip()
-    if not tanya:
-        return 400, {"galat": "'tanya' wajib diisi"}
+@route("POST", r"/agents/([a-z_]+)/ask")
+def ask_agent(m, b: dict, h) -> Tuple[int, dict]:
+    """A direct conversation with one specialist."""
+    _user(h)                                       # must be signed in
+    code, question = m.group(1), (b.get("question") or "").strip()
+    if not question:
+        return 400, {"error": "'question' is required"}
 
-    from agents.definisi import SEMUA
-    if kode not in SEMUA:
-        return 404, {"galat": f"agent '{kode}' tidak dikenal"}
+    from agents.definitions import ALL
+    if code not in ALL:
+        return 404, {"error": f"unknown agent '{code}'"}
 
-    if not KONF.model_siap:
+    if not CFG.model_ready:
         return 503, {
-            "galat": "AWS_REGION belum diisi — agent tidak bisa menalar.",
-            "petunjuk": "Isi AWS_REGION di sigap/agent/.env dengan wilayah "
-                        "yang menyediakan Claude di Bedrock, lalu jalankan ulang layanan.",
+            "error": "AWS_REGION is not set — the agent cannot reason.",
+            "hint": "Set AWS_REGION in sigap/agent/.env to a region that offers Claude "
+                    "on Bedrock, then restart the service.",
         }
     try:
         import graph
-        return 200, graph.tanya_ahli(kode, tanya)
+        return 200, graph.ask_specialist(code, question)
     except Exception as e:                                          # noqa: BLE001
         traceback.print_exc()
-        return 500, {"galat": f"{type(e).__name__}: {e}"}
+        return 500, {"error": f"{type(e).__name__}: {e}"}
 
 
-@rute("GET", r"/log")
-def log_mentah(_m, b: dict, _h) -> Tuple[int, dict]:
-    """Seluruh langkah dari semua penanganan, terbaru dulu."""
-    with simpan.buka() as c:
-        rows = c.execute(
-            "SELECT l.*, p.judul, p.jenis AS jenis_peristiwa FROM langkah l"
-            " JOIN jalan j ON j.id = l.jalan_id"
-            " JOIN peristiwa p ON p.id = j.peristiwa_id"
-            " ORDER BY l.id DESC LIMIT 300").fetchall()
-        aksi = c.execute(
-            "SELECT a.*, p.judul FROM aksi a"
-            " JOIN jalan j ON j.id = a.jalan_id"
-            " JOIN peristiwa p ON p.id = j.peristiwa_id"
-            " ORDER BY a.dibuat DESC LIMIT 100").fetchall()
-        setuju = c.execute(
-            "SELECT s.*, a.jenis AS jenis_aksi, a.jalan_id FROM persetujuan s"
-            " JOIN aksi a ON a.id = s.aksi_id ORDER BY s.id DESC LIMIT 100").fetchall()
+@route("GET", r"/log")
+def raw_log(_m, _b, _h) -> Tuple[int, dict]:
+    """Every step from every handling, newest first."""
+    with store.connect() as c:
+        steps = c.execute(
+            "SELECT s.*, e.title, e.kind AS event_kind FROM steps s"
+            " JOIN runs r ON r.id = s.run_id"
+            " JOIN events e ON e.id = r.event_id"
+            " ORDER BY s.id DESC LIMIT 300").fetchall()
+        actions = c.execute(
+            "SELECT a.*, e.title FROM actions a"
+            " JOIN runs r ON r.id = a.run_id"
+            " JOIN events e ON e.id = r.event_id"
+            " ORDER BY a.created_at DESC LIMIT 100").fetchall()
+        approvals = c.execute(
+            "SELECT p.*, a.kind AS action_kind, a.run_id FROM approvals p"
+            " JOIN actions a ON a.id = p.action_id ORDER BY p.id DESC LIMIT 100").fetchall()
     return 200, {
-        "langkah": [dict(r) | {"alat": json.loads(r["alat"]),
-                               "detail": json.loads(r["detail"])} for r in rows],
-        "aksi": [dict(r) | {"muatan": json.loads(r["muatan"])} for r in aksi],
-        "persetujuan": [dict(r) for r in setuju],
+        "steps": [dict(r) | {"tools": json.loads(r["tools"]),
+                             "detail": json.loads(r["detail"])} for r in steps],
+        "actions": [dict(r) | {"payload": json.loads(r["payload"])} for r in actions],
+        "approvals": [dict(r) for r in approvals],
     }
 
 
-@rute("POST", r"/masuk")
+@route("POST", r"/login")
 def login(_m, b: dict, _h) -> Tuple[int, dict]:
     try:
-        p = identitas.masuk(b.get("email", ""), b.get("sandi", ""))
-    except TidakBerwenang as e:
-        return 401, {"galat": str(e)}
-    return 200, {"token": identitas.terbitkan_token(p),
-                 "pengguna": {"nama": p.nama, "email": p.email,
-                              "peran": p.peran, "batas_idr": p.batas_idr}}
+        u = identity.log_in(b.get("email", ""), b.get("password", ""))
+    except NotAuthorised as e:
+        return 401, {"error": str(e)}
+    return 200, {"token": identity.issue_token(u),
+                 "user": {"name": u.name, "email": u.email,
+                          "role": u.role, "limit_idr": u.limit_idr}}
 
 
-@rute("GET", r"/saya")
-def saya(_m, _b, h) -> Tuple[int, dict]:
-    p = _pengguna(h)
-    return 200, {"nama": p.nama, "email": p.email, "peran": p.peran,
-                 "batas_idr": p.batas_idr}
+@route("GET", r"/me")
+def me(_m, _b, h) -> Tuple[int, dict]:
+    u = _user(h)
+    return 200, {"name": u.name, "email": u.email, "role": u.role,
+                 "limit_idr": u.limit_idr}
 
 
-@rute("GET", r"/jalan")
-def daftar(_m, _b, _h) -> Tuple[int, dict]:
-    return 200, {"jalan": simpan.daftar_jalan()}
+@route("GET", r"/runs")
+def list_runs(_m, _b, _h) -> Tuple[int, dict]:
+    return 200, {"runs": store.list_runs()}
 
 
-@rute("GET", r"/jalan/([A-Za-z0-9_]+)")
-def satu(m, _b, _h) -> Tuple[int, dict]:
-    d = simpan.ambil_jalan(m.group(1))
-    return (200, d) if d else (404, {"galat": "tidak ditemukan"})
+@route("GET", r"/runs/([A-Za-z0-9_]+)")
+def one_run(m, _b, _h) -> Tuple[int, dict]:
+    d = store.get_run(m.group(1))
+    return (200, d) if d else (404, {"error": "not found"})
 
 
-@rute("POST", r"/aksi/([A-Za-z0-9_]+)/putusan")
-def putuskan(m, b: dict, h) -> Tuple[int, dict]:
-    p = _pengguna(h)                       # identitas dari token, bukan dari badan
-    if not b.get("putusan"):
-        return 400, {"galat": "'putusan' wajib diisi"}
+@route("POST", r"/actions/([A-Za-z0-9_]+)/decision")
+def decide(m, b: dict, h) -> Tuple[int, dict]:
+    u = _user(h)                       # identity from the token, not the body
+    if not b.get("decision"):
+        return 400, {"error": "'decision' is required"}
 
-    aksi_id = m.group(1)
-    d = simpan.ambil_aksi(aksi_id)
+    action_id = m.group(1)
+    d = store.get_action(action_id)
     if not d:
-        return 404, {"galat": "aksi tidak ditemukan"}
+        return 404, {"error": "action not found"}
 
-    nilai = int(d["muatan"].get("biaya_idr", 0))
-    if b["putusan"] == "disetujui" and not p.boleh_menyetujui(nilai):
+    value = int(d["payload"].get("cost_idr", 0))
+    if b["decision"] == "approved" and not u.may_approve(value):
         return 403, {
-            "galat": f"peran '{p.peran}' tidak berwenang menyetujui Rp {nilai:,}",
-            "batas_idr": p.batas_idr,
-            "saran": "naikkan ke procurement_lead",
+            "error": f"role '{u.role}' may not approve Rp {value:,}",
+            "limit_idr": u.limit_idr,
+            "hint": "escalate to procurement_lead",
         }
     try:
-        return 200, simpan.putuskan_aksi(aksi_id, p.email, p.peran,
-                                         b["putusan"], b.get("catatan", ""))
+        return 200, store.decide_action(action_id, u.email, u.role,
+                                        b["decision"], b.get("note", ""))
     except ValueError as e:
-        return 400, {"galat": str(e)}
+        return 400, {"error": str(e)}
 
 
-# -------------------------------------------------------------------- server
-class Penangan(BaseHTTPRequestHandler):
+# --------------------------------------------------------------------- server
+class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
-    def _kirim(self, kode: int, data: Any) -> None:
-        isi = json.dumps(data, ensure_ascii=False, default=str).encode()
-        self.send_response(kode)
+    def _send(self, code: int, data: Any) -> None:
+        body = json.dumps(data, ensure_ascii=False, default=str).encode()
+        self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(isi)))
+        self.send_header("Content-Length", str(len(body)))
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Headers", "content-type")
+        self.send_header("Access-Control-Allow-Headers", "content-type,authorization")
         self.send_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
         self.end_headers()
-        self.wfile.write(isi)
+        self.wfile.write(body)
 
     def do_OPTIONS(self) -> None:          # noqa: N802
-        self._kirim(204, {})
+        self._send(204, {})
 
-    def _jalankan(self, metode: str) -> None:
-        jalur = urlparse(self.path).path.rstrip("/") or "/sehat"
-        badan: Dict[str, Any] = {}
-        if metode == "POST":
+    def _dispatch(self, method: str) -> None:
+        path = urlparse(self.path).path.rstrip("/") or "/health"
+        body: Dict[str, Any] = {}
+        if method == "POST":
             n = int(self.headers.get("Content-Length") or 0)
             if n:
                 try:
-                    badan = json.loads(self.rfile.read(n))
+                    body = json.loads(self.rfile.read(n))
                 except json.JSONDecodeError:
-                    return self._kirim(400, {"galat": "badan bukan JSON yang sah"})
-        for m, pola, fn in RUTE:
-            if m != metode:
+                    return self._send(400, {"error": "the body is not valid JSON"})
+        for m, pattern, fn in ROUTES:
+            if m != method:
                 continue
-            cocok = pola.match(jalur)
-            if cocok:
+            found = pattern.match(path)
+            if found:
                 try:
-                    kode, data = fn(cocok, badan, self.headers)
-                except TidakBerwenang as e:
-                    return self._kirim(401, {"galat": str(e)})
+                    code, data = fn(found, body, self.headers)
+                except NotAuthorised as e:
+                    return self._send(401, {"error": str(e)})
                 except Exception as e:                               # noqa: BLE001
                     traceback.print_exc()
-                    return self._kirim(500, {"galat": f"{type(e).__name__}: {e}"})
-                return self._kirim(kode, data)
-        self._kirim(404, {"galat": f"rute tidak dikenal: {metode} {jalur}"})
+                    return self._send(500, {"error": f"{type(e).__name__}: {e}"})
+                return self._send(code, data)
+        self._send(404, {"error": f"unknown route: {method} {path}"})
 
     def do_GET(self) -> None:              # noqa: N802
-        self._jalankan("GET")
+        self._dispatch("GET")
 
     def do_POST(self) -> None:             # noqa: N802
-        self._jalankan("POST")
+        self._dispatch("POST")
 
     def log_message(self, fmt: str, *a) -> None:
         print(f"  {self.command} {self.path} → {a[1] if len(a) > 1 else ''}")
 
 
 if __name__ == "__main__":
-    print(f"SIGAP API · lingkungan={KONF.lingkungan} · sap={'siap' if KONF.sap_siap else 'belum'} "
-          f"· model={'siap' if KONF.model_siap else 'belum'}")
-    print(f"dengarkan http://127.0.0.1:{PORT}")
-    ThreadingHTTPServer(("127.0.0.1", PORT), Penangan).serve_forever()
+    print(f"SIGAP API · env={CFG.env} · sap={'ready' if CFG.sap_ready else 'no'} "
+          f"· model={'ready' if CFG.model_ready else 'no'}")
+    print(f"listening on http://127.0.0.1:{PORT}")
+    ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()

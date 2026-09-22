@@ -1,9 +1,9 @@
-"""Tim agent. Ketua memanggil ahli; tiap ahli punya putaran alatnya sendiri.
+"""The agent team. The lead calls specialists; each runs its own tool loop.
 
-Pola: ahli dijadikan alat milik ketua. Ketua memutuskan siapa dipanggil
-berdasarkan hasil terakhir — tidak ada urutan baku. Tiap ahli menjalankan
-putaran tool-use sendiri sampai selesai, lalu menyerahkan ringkasannya
-beserta label asal data ke papan bersama.
+The pattern: specialists are exposed as tools belonging to the lead. The lead
+decides who to call based on the last finding — there is no fixed sequence.
+Each specialist runs its own tool-use loop to completion, then hands back a
+summary along with the origin labels of the data behind it.
 """
 from __future__ import annotations
 
@@ -11,247 +11,251 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
-from agents.definisi import AHLI, SEMUA, SUPERVISOR, Agent
+from agents.definitions import ALL, SPECIALISTS, SUPERVISOR, Agent
 from core import registry
-from core.konfigurasi import KONF
-from core.provenance import Asal, Hasil
+from core.config import CFG
+from core.provenance import Result
 
-# Tarif acuan untuk pembatas biaya. Bedrock punya tarif sendiri —
-# ganti dari aws.amazon.com/bedrock/pricing sebelum dipakai produksi.
-TARIF_MASUK_IDR_PER_JUTA = 82_000
-TARIF_KELUAR_IDR_PER_JUTA = 410_000
-MAKS_PUTARAN_AHLI = 8
-MAKS_PUTARAN_KETUA = 14
+# Reference rates for the cost cap. Bedrock has its own pricing — replace these
+# from aws.amazon.com/bedrock/pricing before going to production.
+INPUT_IDR_PER_MILLION = 82_000
+OUTPUT_IDR_PER_MILLION = 410_000
+MAX_SPECIALIST_ROUNDS = 8
+MAX_LEAD_ROUNDS = 14
 
 
-class AnggaranHabis(RuntimeError):
+class BudgetExhausted(RuntimeError):
     pass
 
 
-class ModelTidakSiap(RuntimeError):
+class ModelNotReady(RuntimeError):
     pass
 
 
 @dataclass
-class Papan:
-    """Papan bersama. Semua ahli menulis dan membaca di sini."""
-    temuan: Dict[str, Any] = field(default_factory=dict)
-    asal: Dict[str, str] = field(default_factory=dict)
-    sumber: Dict[str, str] = field(default_factory=dict)
+class Board:
+    """The shared blackboard. Every specialist reads and writes here."""
+    findings: Dict[str, Any] = field(default_factory=dict)
+    origin: Dict[str, str] = field(default_factory=dict)
+    source: Dict[str, str] = field(default_factory=dict)
 
-    def tulis(self, kunci: str, h: Hasil) -> None:
-        self.temuan[kunci] = h.nilai
-        self.asal[kunci] = h.asal.value
-        self.sumber[kunci] = h.sumber
+    def write(self, key: str, r: Result) -> None:
+        self.findings[key] = r.value
+        self.origin[key] = r.origin.value
+        self.source[key] = r.source
 
-    def ada_yang_tidak_tepercaya(self) -> List[str]:
-        return [k for k, v in self.asal.items()
+    def untrusted_keys(self) -> List[str]:
+        return [k for k, v in self.origin.items()
                 if v not in ("live", "cached", "derived")]
 
-    def ringkas(self) -> str:
-        baris = [f"- {k}: {self.asal[k]} ({self.sumber[k]})" for k in self.temuan]
-        return "\n".join(baris) or "(papan masih kosong)"
+    def summary(self) -> str:
+        lines = [f"- {k}: {self.origin[k]} ({self.source[k]})" for k in self.findings]
+        return "\n".join(lines) or "(the board is still empty)"
 
 
 @dataclass
-class Biaya:
-    masuk: int = 0
-    keluar: int = 0
+class Cost:
+    input_tokens: int = 0
+    output_tokens: int = 0
 
     @property
     def idr(self) -> int:
-        return round(self.masuk / 1e6 * TARIF_MASUK_IDR_PER_JUTA
-                     + self.keluar / 1e6 * TARIF_KELUAR_IDR_PER_JUTA)
+        return round(self.input_tokens / 1e6 * INPUT_IDR_PER_MILLION
+                     + self.output_tokens / 1e6 * OUTPUT_IDR_PER_MILLION)
 
-    def tambah(self, usage) -> None:
-        self.masuk += getattr(usage, "input_tokens", 0) or 0
-        self.masuk += getattr(usage, "cache_read_input_tokens", 0) or 0
-        self.keluar += getattr(usage, "output_tokens", 0) or 0
+    def add(self, usage) -> None:
+        self.input_tokens += getattr(usage, "input_tokens", 0) or 0
+        self.input_tokens += getattr(usage, "cache_read_input_tokens", 0) or 0
+        self.output_tokens += getattr(usage, "output_tokens", 0) or 0
 
 
-def klien():
-    if not KONF.model_siap:
-        raise ModelTidakSiap(
-            "AWS_REGION belum diisi. Tim agent tidak bisa jalan tanpa akses model. "
-            "Pastikan wilayahnya menyediakan Claude di konsol Bedrock."
+def client():
+    if not CFG.model_ready:
+        raise ModelNotReady(
+            "AWS_REGION is not set. The agent team cannot run without model access. "
+            "Check that the region offers Claude in the Bedrock console."
         )
-    from anthropic import AnthropicBedrockMantle       # impor di sini supaya dev tanpa SDK tetap jalan
-    return AnthropicBedrockMantle(aws_region=KONF.aws_region)
+    # imported here so a dev machine without the SDK can still run the rest
+    from anthropic import AnthropicBedrockMantle
+    return AnthropicBedrockMantle(aws_region=CFG.aws_region)
 
 
 # --------------------------------------------------------------------------- #
-def _putaran_alat(cl, agent: Agent, tugas: str, papan: Papan,
-                  biaya: Biaya, lapor: Callable[[str, dict], None]) -> str:
-    """Satu ahli bekerja sampai selesai. Mengembalikan ringkasan tertulisnya."""
-    alat = registry.definisi_untuk_model(agent.kode)
-    pesan: List[dict] = [{
+def _tool_loop(cl, agent: Agent, task: str, board: Board,
+               cost: Cost, report: Callable[[str, dict], None]) -> str:
+    """One specialist works to completion. Returns the summary it wrote."""
+    tools = registry.schemas_for_model(agent.code)
+    messages: List[dict] = [{
         "role": "user",
         "content": (
-            f"{tugas}\n\n"
-            f"Isi papan bersama saat ini:\n{papan.ringkas()}\n\n"
-            "Pakai alatmu seperlunya, lalu tulis ringkasan temuanmu. "
-            "Kalau data yang kamu butuhkan tidak tersedia, katakan apa yang kurang — "
-            "jangan menebak."
+            f"{task}\n\n"
+            f"What is on the shared board right now:\n{board.summary()}\n\n"
+            "Use your tools as needed, then write up what you found. If data you "
+            "need is unavailable, say what is missing — do not guess."
         ),
     }]
 
-    for _ in range(MAKS_PUTARAN_AHLI):
-        if biaya.idr > KONF.batas_biaya_per_peristiwa_idr:
-            raise AnggaranHabis(f"melewati Rp {KONF.batas_biaya_per_peristiwa_idr:,} per peristiwa")
+    for _ in range(MAX_SPECIALIST_ROUNDS):
+        if cost.idr > CFG.cost_cap_per_event_idr:
+            raise BudgetExhausted(f"over Rp {CFG.cost_cap_per_event_idr:,} per event")
 
         r = cl.messages.create(
-            model=KONF.model,
+            model=CFG.model,
             max_tokens=8000,
-            system=agent.instruksi,
+            system=agent.instructions,
             thinking={"type": "adaptive"},
             output_config={"effort": agent.effort},
-            tools=alat,
-            messages=pesan,
+            tools=tools,
+            messages=messages,
         )
-        biaya.tambah(r.usage)
-        pesan.append({"role": "assistant", "content": r.content})
+        cost.add(r.usage)
+        messages.append({"role": "assistant", "content": r.content})
 
         if r.stop_reason != "tool_use":
-            teks = "".join(b.text for b in r.content if b.type == "text")
-            lapor("ahli_selesai", {"agent": agent.kode, "ringkas": teks[:400]})
-            return teks
+            text = "".join(b.text for b in r.content if b.type == "text")
+            report("specialist_done", {"agent": agent.code, "summary": text[:400]})
+            return text
 
-        # semua tool_result WAJIB dikirim dalam SATU pesan user
-        hasil_blok: List[dict] = []
+        # every tool_result MUST go back in ONE user message
+        results: List[dict] = []
         for b in r.content:
             if b.type != "tool_use":
                 continue
-            lapor("alat", {"agent": agent.kode, "nama": b.name, "argumen": b.input})
+            report("tool", {"agent": agent.code, "name": b.name, "arguments": b.input})
             try:
-                h = registry.jalankan(b.name, dict(b.input))
-                papan.tulis(f"{agent.kode}.{b.name}", h)
-                isi = json.dumps({"nilai": h.nilai, **h.ringkas()},
-                                 ensure_ascii=False, default=str)
-                hasil_blok.append({"type": "tool_result", "tool_use_id": b.id, "content": isi})
+                res = registry.run(b.name, dict(b.input))
+                board.write(f"{agent.code}.{b.name}", res)
+                body = json.dumps({"value": res.value, **res.brief()},
+                                  ensure_ascii=False, default=str)
+                results.append({"type": "tool_result", "tool_use_id": b.id, "content": body})
             except Exception as e:                                   # noqa: BLE001
-                hasil_blok.append({"type": "tool_result", "tool_use_id": b.id,
-                                   "content": f"{type(e).__name__}: {e}", "is_error": True})
-        pesan.append({"role": "user", "content": hasil_blok})
+                results.append({"type": "tool_result", "tool_use_id": b.id,
+                                "content": f"{type(e).__name__}: {e}", "is_error": True})
+        messages.append({"role": "user", "content": results})
 
-    return f"[{agent.nama} berhenti: melewati {MAKS_PUTARAN_AHLI} putaran alat]"
+    return f"[{agent.title} stopped: exceeded {MAX_SPECIALIST_ROUNDS} tool rounds]"
 
 
-def _alat_ahli() -> List[dict]:
-    """Tiap ahli tampil sebagai satu alat milik ketua."""
+def _specialist_tools() -> List[dict]:
+    """Each specialist appears as one tool belonging to the lead."""
     return [{
-        "name": f"panggil_{a.kode}",
-        "description": f"{a.panggilan} ({a.nama}) — {a.peran}" + (" PUNYA VETO." if a.veto else ""),
+        "name": f"ask_{a.code}",
+        "description": (f"{a.nickname} ({a.title}) — {a.brief}"
+                        + (" HAS VETO." if a.veto else "")),
         "input_schema": {
             "type": "object",
-            "properties": {"tugas": {
+            "properties": {"task": {
                 "type": "string",
-                "description": "pertanyaan spesifik untuk ahli ini, sertakan konteks yang perlu",
+                "description": "the specific question for this specialist, with the context they need",
             }},
-            "required": ["tugas"],
+            "required": ["task"],
             "additionalProperties": False,
         },
         "strict": True,
-    } for a in AHLI]
+    } for a in SPECIALISTS]
 
 
-def jalankan(peristiwa: dict, lapor: Callable[[str, dict], None]) -> dict:
-    """Tangani satu peristiwa. `lapor` dipanggil tiap ada kemajuan."""
-    cl = klien()
-    papan = Papan()
-    biaya = Biaya()
-    dipanggil: List[str] = []
+def run(event: dict, report: Callable[[str, dict], None]) -> dict:
+    """Handle one event. `report` is called on every piece of progress."""
+    cl = client()
+    board = Board()
+    cost = Cost()
+    called: List[str] = []
 
-    alat_ketua = _alat_ahli() + registry.definisi_untuk_model("supervisor")
-    pesan: List[dict] = [{
+    lead_tools = _specialist_tools() + registry.schemas_for_model("supervisor")
+    messages: List[dict] = [{
         "role": "user",
         "content": (
-            f"Peristiwa masuk:\n{json.dumps(peristiwa, ensure_ascii=False, indent=2)}\n\n"
-            "Tangani. Panggil ahli yang relevan saja, satu per satu, berdasarkan temuan "
-            "sebelumnya. Berhenti begitu buktimu cukup untuk memutuskan."
+            f"Incoming event:\n{json.dumps(event, ensure_ascii=False, indent=2)}\n\n"
+            "Handle it. Call only the specialists that are relevant, one at a time, "
+            "based on what the previous one found. Stop as soon as your evidence is "
+            "enough to decide."
         ),
     }]
 
-    for _ in range(MAKS_PUTARAN_KETUA):
-        if biaya.idr > KONF.batas_biaya_per_peristiwa_idr:
-            raise AnggaranHabis(f"melewati Rp {KONF.batas_biaya_per_peristiwa_idr:,}")
+    for _ in range(MAX_LEAD_ROUNDS):
+        if cost.idr > CFG.cost_cap_per_event_idr:
+            raise BudgetExhausted(f"over Rp {CFG.cost_cap_per_event_idr:,}")
 
         r = cl.messages.create(
-            model=KONF.model,
+            model=CFG.model,
             max_tokens=16000,
-            system=SUPERVISOR.instruksi,
+            system=SUPERVISOR.instructions,
             thinking={"type": "adaptive"},
             output_config={"effort": SUPERVISOR.effort},
-            tools=alat_ketua,
-            messages=pesan,
+            tools=lead_tools,
+            messages=messages,
         )
-        biaya.tambah(r.usage)
-        pesan.append({"role": "assistant", "content": r.content})
+        cost.add(r.usage)
+        messages.append({"role": "assistant", "content": r.content})
 
         if r.stop_reason != "tool_use":
-            teks = "".join(b.text for b in r.content if b.type == "text")
+            text = "".join(b.text for b in r.content if b.type == "text")
             return {
-                "status": "selesai",
-                "rekomendasi": teks,
-                "agent_dipanggil": dipanggil,
-                "biaya_idr": biaya.idr,
-                "papan_tidak_tepercaya": papan.ada_yang_tidak_tepercaya(),
+                "status": "done",
+                "recommendation": text,
+                "agents_called": called,
+                "cost_idr": cost.idr,
+                "untrusted_on_board": board.untrusted_keys(),
             }
 
-        hasil_blok: List[dict] = []
+        results: List[dict] = []
         for b in r.content:
             if b.type != "tool_use":
                 continue
-            if b.name.startswith("panggil_"):
-                kode = b.name[len("panggil_"):]
-                ahli = SEMUA[kode]
-                dipanggil.append(kode)
-                lapor("ahli_mulai", {"agent": kode, "nama": ahli.panggilan,
-                                     "tugas": b.input.get("tugas", "")})
-                ringkas = _putaran_alat(cl, ahli, b.input["tugas"], papan, biaya, lapor)
-                hasil_blok.append({"type": "tool_result", "tool_use_id": b.id, "content": ringkas})
+            if b.name.startswith("ask_"):
+                code = b.name[len("ask_"):]
+                specialist = ALL[code]
+                called.append(code)
+                report("specialist_start", {"agent": code, "name": specialist.nickname,
+                                            "task": b.input.get("task", "")})
+                summary = _tool_loop(cl, specialist, b.input["task"], board, cost, report)
+                results.append({"type": "tool_result", "tool_use_id": b.id,
+                                "content": summary})
             else:
                 try:
-                    h = registry.jalankan(b.name, dict(b.input))
-                    papan.tulis(f"supervisor.{b.name}", h)
-                    hasil_blok.append({"type": "tool_result", "tool_use_id": b.id,
-                                       "content": json.dumps({"nilai": h.nilai, **h.ringkas()},
-                                                             ensure_ascii=False, default=str)})
+                    res = registry.run(b.name, dict(b.input))
+                    board.write(f"supervisor.{b.name}", res)
+                    results.append({"type": "tool_result", "tool_use_id": b.id,
+                                    "content": json.dumps({"value": res.value, **res.brief()},
+                                                          ensure_ascii=False, default=str)})
                 except Exception as e:                               # noqa: BLE001
-                    hasil_blok.append({"type": "tool_result", "tool_use_id": b.id,
-                                       "content": f"{type(e).__name__}: {e}", "is_error": True})
-        pesan.append({"role": "user", "content": hasil_blok})
+                    results.append({"type": "tool_result", "tool_use_id": b.id,
+                                    "content": f"{type(e).__name__}: {e}", "is_error": True})
+        messages.append({"role": "user", "content": results})
 
-    return {"status": "berhenti", "alasan": f"melewati {MAKS_PUTARAN_KETUA} putaran ketua",
-            "agent_dipanggil": dipanggil, "biaya_idr": biaya.idr}
+    return {"status": "stopped", "reason": f"exceeded {MAX_LEAD_ROUNDS} lead rounds",
+            "agents_called": called, "cost_idr": cost.idr}
 
 
-def tanya_ahli(kode: str, pertanyaan: str,
-               lapor: Optional[Callable[[str, dict], None]] = None) -> dict:
-    """Tanya satu ahli secara langsung, di luar penanganan gangguan.
+def ask_specialist(code: str, question: str,
+                   report: Optional[Callable[[str, dict], None]] = None) -> dict:
+    """Ask one specialist directly, outside of disruption handling.
 
-    Dipakai halaman percakapan per agent. Ahli yang sama, alat yang sama —
-    bedanya cuma tidak ada ketua yang mengatur giliran.
+    This is what the per-agent conversation page uses. Same specialist, same
+    tools — the only difference is that no lead is deciding the turn order.
     """
-    if kode not in SEMUA:
-        raise KeyError(kode)
-    agent = SEMUA[kode]
-    papan, biaya = Papan(), Biaya()
-    jejak: List[dict] = []
+    if code not in ALL:
+        raise KeyError(code)
+    agent = ALL[code]
+    board, cost = Board(), Cost()
+    trail: List[dict] = []
 
-    def rekam(jenis: str, d: dict) -> None:
-        jejak.append({"jenis": jenis, **d})
-        if lapor:
-            lapor(jenis, d)
+    def capture(kind: str, d: dict) -> None:
+        trail.append({"kind": kind, **d})
+        if report:
+            report(kind, d)
 
-    cl = klien()
-    jawab = _putaran_alat(cl, agent, pertanyaan, papan, biaya, rekam)
+    cl = client()
+    answer = _tool_loop(cl, agent, question, board, cost, capture)
     return {
-        "agent": kode,
-        "nama": agent.panggilan,
-        "peran": agent.nama,
-        "jawab": jawab,
-        "alat_dipakai": [j["nama"] for j in jejak if j["jenis"] == "alat"],
-        "papan": {k: {"asal": papan.asal[k], "sumber": papan.sumber[k]} for k in papan.temuan},
-        "tidak_tepercaya": papan.ada_yang_tidak_tepercaya(),
-        "biaya_idr": biaya.idr,
+        "agent": code,
+        "name": agent.nickname,
+        "role": agent.title,
+        "answer": answer,
+        "tools_used": [t["name"] for t in trail if t["kind"] == "tool"],
+        "board": {k: {"origin": board.origin[k], "source": board.source[k]}
+                  for k in board.findings},
+        "untrusted": board.untrusted_keys(),
+        "cost_idr": cost.idr,
     }

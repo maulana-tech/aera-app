@@ -1,11 +1,11 @@
-"""Jalankan satu skenario, keluarkan jejaknya.
+"""Run one scenario and write out its trace.
 
-    python3 main.py                      # skenario Ningbo
-    python3 main.py --keluar ../../app/sigap/jejak.json
+    python3 main.py                      # the Ningbo scenario
+    python3 main.py --out ../../app/sigap/trace.json
 
-Tanpa kredensial Bedrock, program jalan dalam MODE RUNUT: urutan langkahnya
-mengikuti rancangan, dan angkanya tetap dihitung kalkulator sungguhan.
-Mode ini ditandai di jejak — tidak berpura-pura agent yang menalar.
+Without Bedrock credentials this runs in GUIDED MODE: the step order follows
+the design, and the figures still come from the real calculator. The mode is
+stamped on the trace — it does not pretend an agent did the reasoning.
 """
 from __future__ import annotations
 
@@ -13,140 +13,145 @@ import argparse
 import os
 from datetime import date
 
-from agents.definisi import SEMUA
-from core.jejak import Jejak
-from core.provenance import Asal, Hasil
-from engine.simulate import Kedatangan, Putusan, simulate_scenario
-from tools._sumber import profil
+from agents.definitions import ALL
+from core.provenance import Origin, Result
+from core.trace import Trace
+from engine.simulate import Arrival, Ruling, simulate_scenario
+from tools.fetcher import profile
 from tools.impact import (get_bom_explosion, get_material_stock,
                           get_open_purchase_orders, get_sales_order_commitments)
 from tools.sourcing import find_alternate_sources
 
-A = SEMUA
+A = ALL
 
 
-def jalankan_ningbo(anggap_langsung: bool = False) -> Jejak:
-    mode = "otonom" if os.environ.get("AWS_REGION") and os.environ.get("BEDROCK_READY") else "runut"
-    j = Jejak("Topan menutup Pelabuhan Ningbo",
-              "Advisory maritim: Ningbo–Zhoushan tutup 8–13 Sep 2026", mode)
-    p = profil()
-    mulai = date.fromisoformat(p["TanggalAcuan"])
+def run_ningbo(treat_as_live: bool = False) -> Trace:
+    mode = ("autonomous" if os.environ.get("AWS_REGION") and os.environ.get("BEDROCK_READY")
+            else "guided")
+    t = Trace("Typhoon closes the Port of Ningbo",
+              "Maritime advisory: Ningbo–Zhoushan closed 8–13 Sep 2026", mode)
+    p = profile()
+    start = date.fromisoformat(p["AsOfDate"])
 
-    j.catat("DETECT", A["supervisor"], "Mengenali Ningbo sebagai jalur yang dipakai perusahaan",
-            ["detect_disruption"])
+    t.record("DETECT", A["supervisor"],
+             "Recognises Ningbo as a lane this company actually uses",
+             ["detect_disruption"])
 
     po = get_open_purchase_orders(port="CNNGB")
-    j.catat("SCOPE", A["impact"],
-            f"{len(po.nilai or [])} pesanan pembelian lewat Ningbo terdampak",
-            ["get_open_purchase_orders"], po,
-            pesanan=[r["PurchaseOrder"] for r in (po.nilai or [])])
+    t.record("SCOPE", A["impact"],
+             f"{len(po.value or [])} purchase orders routed through Ningbo are affected",
+             ["get_open_purchase_orders"], po,
+             orders=[r["PurchaseOrder"] for r in (po.value or [])])
 
-    stok = get_material_stock(material="M-4471", plant="KRW1")
-    krw = (stok.nilai or [{}])[0]
-    harian = krw.get("DailyConsumption", 9.2)
-    awal = krw.get("MatlWrhsStkQtyInMatlBaseUnit", 0.0)
-    j.catat("IMPACT", A["impact"],
-            f"M-4471 di KRW1: {awal} ton, pemakaian {harian} ton/hari",
-            ["get_material_stock", "get_bom_explosion"], stok,
-            material="M-4471", stok_ton=awal, pemakaian_harian=harian)
+    stock = get_material_stock(material="M-4471", plant="KRW1")
+    krw = (stock.value or [{}])[0]
+    daily = krw.get("DailyConsumption", 9.2)
+    opening = krw.get("MatlWrhsStkQtyInMatlBaseUnit", 0.0)
+    t.record("IMPACT", A["impact"],
+             f"M-4471 at KRW1: {opening} t on hand, {daily} t/day consumption",
+             ["get_material_stock", "get_bom_explosion"], stock,
+             material="M-4471", stock_tonnes=opening, daily_consumption=daily)
 
     bom = get_bom_explosion("M-4471")
-    fg = [r["FinishedGood"] for r in (bom.nilai or [])]
+    fg = [r["FinishedGood"] for r in (bom.value or [])]
     so = get_sales_order_commitments(fg)
-    nilai = sum(r["NetAmount"] for r in (so.nilai or []))
-    j.catat("QUANTIFY", A["impact"],
-            f"{len(so.nilai or [])} pesanan pelanggan senilai Rp {nilai:,} terancam",
-            ["get_sales_order_commitments"], so, nilai_idr=nilai, produk=fg)
+    exposed = sum(r["NetAmount"] for r in (so.value or []))
+    t.record("QUANTIFY", A["impact"],
+             f"{len(so.value or [])} customer orders worth Rp {exposed:,} are at risk",
+             ["get_sales_order_commitments"], so, value_idr=exposed, products=fg)
 
-    opsi = find_alternate_sources("M-4471")
-    j.catat("GENERATE", A["sourcing"],
-            f"{len(opsi.nilai or [])} pilihan pasokan disusun",
-            ["find_alternate_sources"], opsi,
-            pilihan=[o["id"] for o in (opsi.nilai or [])])
+    options = find_alternate_sources("M-4471")
+    t.record("GENERATE", A["sourcing"],
+             f"{len(options.value or [])} supply options assembled",
+             ["find_alternate_sources"], options,
+             options=[o["id"] for o in (options.value or [])])
 
-    putusan = {
-        "A": Putusan("A", "air freight", True),
-        "B": Putusan("B", "supplier lokal Gresik", True),
-        "C": Putusan("C", "realokasi SBY1", True),
-        "D": Putusan("D", "Vietnam", False,
-                     "LARTAS: negara asal baru menambah 10 hari kerja — tiba setelah lini berhenti"),
-        "E": Putusan("E", "termurah Tiongkok", False,
-                     f"TKDN turun ke 34,8%; ambang kontrak {p['TkdnAmbangKontrak']}%"),
+    rulings = {
+        "A": Ruling("A", "air freight", True),
+        "B": Ruling("B", "local supplier, Gresik", True),
+        "C": Ruling("C", "reallocate from SBY1", True),
+        "D": Ruling("D", "Vietnam", False,
+                    "LARTAS: a new origin country adds 10 working days — arrives after the "
+                    "line has already stopped"),
+        "E": Ruling("E", "cheapest, China", False,
+                    f"TKDN drops to 34.8%; contract floor {p['TkdnContractFloorPct']}%"),
     }
-    tolak = [k for k, v in putusan.items() if not v.layak]
-    j.catat("FILTER", A["compliance"],
-            f"{len(tolak)} pilihan dicoret karena aturan, bukan karena harga",
-            ["check_local_constraints"],
-            Hasil(putusan, Asal.CONTOH, "references/ (rule pack)"),
-            ditolak=tolak, alasan={k: putusan[k].alasan for k in tolak})
+    blocked = [k for k, v in rulings.items() if not v.allowed]
+    t.record("FILTER", A["compliance"],
+             f"{len(blocked)} options struck out on the rules, not on price",
+             ["check_local_constraints"],
+             Result(rulings, Origin.MODELLED, "references/ (rule pack)"),
+             blocked=blocked, reasons={k: rulings[k].reason for k in blocked})
 
-    if anggap_langsung:                      # simulasi seolah kunci SAP sudah ada
-        stok = Hasil(stok.nilai, Asal.LANGSUNG, "API_MATERIAL_STOCK_SRV")
-        opsi = Hasil(opsi.nilai, Asal.LANGSUNG, "A_PurchasingInfoRecord")
+    if treat_as_live:                     # pretend the SAP key is already in place
+        stock = Result(stock.value, Origin.LIVE, "API_MATERIAL_STOCK_SRV")
+        options = Result(options.value, Origin.LIVE, "A_PurchasingInfoRecord")
 
-    po_terjadwal = [Kedatangan("4500018872", date(2026, 9, 22), 120.0)]
-    sim = simulate_scenario(stok, opsi, putusan, p, mulai, harian, awal, po_terjadwal)
+    scheduled = [Arrival("4500018872", date(2026, 9, 22), 120.0)]
+    sim = simulate_scenario(stock, options, rulings, p, start, daily, opening, scheduled)
 
-    if sim.ditolak:
-        j.catat("SIMULATE", A["simulation"], sim.alasan_tolak, ["simulate_scenario"],
-                Hasil(None, Asal.TIDAK_ADA, "engine/simulate.py"))
-        j.keputusan = {"status": "ditahan", "alasan": sim.alasan_tolak}
-        return j
+    if sim.refused:
+        t.record("SIMULATE", A["simulation"], sim.refusal_reason, ["simulate_scenario"],
+                 Result(None, Origin.MISSING, "engine/simulate.py"))
+        t.decision = {"status": "held", "reason": sim.refusal_reason}
+        return t
 
-    t = sim.terpilih
-    j.catat("SIMULATE", A["simulation"],
-            f"Kombinasi termurah yang aman: {t['kombinasi']} — Rp {t['biaya']:,}",
-            ["simulate_scenario"],
-            Hasil(sim.kombinasi, Asal.HITUNGAN, "engine/simulate.py"),
-            kombinasi=sim.kombinasi[:6], habis_tanpa_tindakan=str(sim.habis_tanpa_tindakan))
+    best = sim.chosen
+    t.record("SIMULATE", A["simulation"],
+             f"Cheapest safe combination: {best['combination']} — Rp {best['cost_idr']:,}",
+             ["simulate_scenario"],
+             Result(sim.combinations, Origin.DERIVED, "engine/simulate.py"),
+             combinations=sim.combinations[:6],
+             depleted_without_action=str(sim.depleted_without_action))
 
-    sendiri = [k for k in sim.kombinasi if len(k["anggota"]) == 1 and k["aman"]]
-    banding = min(sendiri, key=lambda k: k["biaya"]) if sendiri else None
-    hemat = (banding["biaya"] - t["biaya"]) if banding else 0
+    singles = [c for c in sim.combinations if len(c["members"]) == 1 and c["safe"]]
+    benchmark = min(singles, key=lambda c: c["cost_idr"]) if singles else None
+    saved = (benchmark["cost_idr"] - best["cost_idr"]) if benchmark else 0
 
-    j.catat("DECIDE", A["supervisor"],
-            f"Rekomendasi {t['kombinasi']}, bukan {banding['kombinasi'] if banding else '—'} "
-            f"— hemat Rp {hemat:,}",
-            [], None,
-            risiko_sisa="SBY1 tersisa 4 hari cover sampai PO 4500018901 mendarat 24 Sep")
+    t.record("DECIDE", A["supervisor"],
+             f"Recommends {best['combination']} over "
+             f"{benchmark['combination'] if benchmark else '—'} — saves Rp {saved:,}",
+             [], None,
+             residual_risk="SBY1 is left with 4 days of cover until PO 4500018901 "
+                           "lands on 24 Sep")
 
-    j.catat("ACT", A["execution"],
-            "Pemindahan stok dijalankan sendiri; pesanan pembelian berhenti sebagai draf",
-            ["create_stock_transfer", "create_draft_po", "notify"], None,
-            otonom="create_stock_transfer (< Rp 50 juta)",
-            butuh_persetujuan="create_draft_po")
+    t.record("ACT", A["execution"],
+             "The stock transfer goes ahead on its own; the purchase order stops as a draft",
+             ["create_stock_transfer", "create_draft_po", "notify"], None,
+             autonomous="create_stock_transfer (< Rp 50 million)",
+             needs_approval="create_draft_po")
 
-    j.keputusan = {
-        "status": "menunggu persetujuan",
-        "kombinasi": t["kombinasi"],
-        "biaya_idr": t["biaya"],
-        "pembanding": banding["kombinasi"] if banding else None,
-        "pembanding_biaya_idr": banding["biaya"] if banding else None,
-        "hemat_idr": hemat,
-        "hemat_pct": round(hemat / banding["biaya"] * 100) if banding else 0,
-        "tkdn_sebelum": p["TkdnSaatIni"],
-        "tkdn_sesudah": t["tkdn_sesudah"],
-        "nilai_terlindungi_idr": nilai,
-        "ditolak": tolak,
+    t.decision = {
+        "status": "awaiting approval",
+        "combination": best["combination"],
+        "cost_idr": best["cost_idr"],
+        "benchmark": benchmark["combination"] if benchmark else None,
+        "benchmark_cost_idr": benchmark["cost_idr"] if benchmark else None,
+        "saved_idr": saved,
+        "saved_pct": round(saved / benchmark["cost_idr"] * 100) if benchmark else 0,
+        "tkdn_before": p["TkdnCurrentPct"],
+        "tkdn_after": best["tkdn_after"],
+        "value_protected_idr": exposed,
+        "blocked": blocked,
     }
-    return j
+    return t
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--keluar", default="../../app/sigap/jejak.json")
-    ap.add_argument("--anggap-langsung", action="store_true",
-                    help="perlakukan fixture seolah data langsung (untuk mencoba jalur penuh)")
-    a = ap.parse_args()
+    ap.add_argument("--out", default="../../app/sigap/trace.json")
+    ap.add_argument("--treat-as-live", action="store_true",
+                    help="treat fixtures as live data, to exercise the full path")
+    args = ap.parse_args()
 
-    j = jalankan_ningbo(a.anggap_langsung)
-    j.tulis(a.keluar)
-    print(f"mode      : {j.mode}")
-    print(f"langkah   : {len(j.langkah)}")
-    print(f"agent     : {' → '.join(j.agent_terpakai)}")
-    print(f"keputusan : {j.keputusan.get('status')}")
-    if j.keputusan.get("kombinasi"):
-        k = j.keputusan
-        print(f"            {k['kombinasi']} Rp {k['biaya_idr']:,} "
-              f"(hemat Rp {k['hemat_idr']:,} / {k['hemat_pct']}%)")
-    print(f"jejak     : {a.keluar}")
+    t = run_ningbo(args.treat_as_live)
+    t.write(args.out)
+    print(f"mode     : {t.mode}")
+    print(f"steps    : {len(t.steps)}")
+    print(f"agents   : {' → '.join(t.agents_used)}")
+    print(f"decision : {t.decision.get('status')}")
+    if t.decision.get("combination"):
+        d = t.decision
+        print(f"           {d['combination']} Rp {d['cost_idr']:,} "
+              f"(saves Rp {d['saved_idr']:,} / {d['saved_pct']}%)")
+    print(f"trace    : {args.out}")

@@ -1,0 +1,213 @@
+{
+  "_note": "MODELLED DATA — not from SAP. The figures follow DESIGN.md §2. Field names mirror SAP conventions.",
+  "PurchaseOrder": [
+    {
+      "PurchaseOrder": "4500018872",
+      "Material": "M-4471",
+      "Plant": "KRW1",
+      "OrderQuantity": 120.0,
+      "BaseUnit": "TON",
+      "Supplier": "SUP-2201",
+      "LoadingPort": "CNNGB",
+      "DeliveryDate": "2026-09-14",
+      "RevisedDeliveryDate": "2026-09-22",
+      "Status": "in_transit"
+    },
+    {
+      "PurchaseOrder": "4500018901",
+      "Material": "M-4471",
+      "Plant": "SBY1",
+      "OrderQuantity": 90.0,
+      "BaseUnit": "TON",
+      "Supplier": "SUP-2201",
+      "LoadingPort": "CNNGB",
+      "DeliveryDate": "2026-09-24",
+      "RevisedDeliveryDate": "2026-09-24",
+      "Status": "not_shipped"
+    },
+    {
+      "PurchaseOrder": "4500018903",
+      "Material": "M-3308",
+      "Plant": "KRW1",
+      "OrderQuantity": 4200.0,
+      "BaseUnit": "PC",
+      "Supplier": "SUP-2207",
+      "LoadingPort": "CNNGB",
+      "DeliveryDate": "2026-09-19",
+      "RevisedDeliveryDate": "2026-09-27",
+      "Status": "not_shipped"
+    },
+    {
+      "PurchaseOrder": "4500018910",
+      "Material": "M-5512",
+      "Plant": "KRW1",
+      "OrderQuantity": 60.0,
+      "BaseUnit": "TON",
+      "Supplier": "SUP-2209",
+      "LoadingPort": "CNNGB",
+      "DeliveryDate": "2026-10-02",
+      "RevisedDeliveryDate": "2026-10-10",
+      "Status": "not_shipped"
+    }
+  ],
+  "MaterialStock": [
+    {
+      "Material": "M-4471",
+      "Plant": "KRW1",
+      "MatlWrhsStkQtyInMatlBaseUnit": 84.0,
+      "BaseUnit": "TON",
+      "DailyConsumption": 9.2,
+      "Description": "Aluminium alloy ingot ADC12"
+    },
+    {
+      "Material": "M-4471",
+      "Plant": "SBY1",
+      "MatlWrhsStkQtyInMatlBaseUnit": 96.0,
+      "BaseUnit": "TON",
+      "DailyConsumption": 6.1,
+      "Description": "Aluminium alloy ingot ADC12"
+    },
+    {
+      "Material": "M-3308",
+      "Plant": "KRW1",
+      "MatlWrhsStkQtyInMatlBaseUnit": 11800.0,
+      "BaseUnit": "PC",
+      "DailyConsumption": 310.0,
+      "Description": "Brake seal kit NBR"
+    },
+    {
+      "Material": "M-5512",
+      "Plant": "KRW1",
+      "MatlWrhsStkQtyInMatlBaseUnit": 140.0,
+      "BaseUnit": "TON",
+      "DailyConsumption": 3.4,
+      "Description": "Steel bar SCM440"
+    }
+  ],
+  "BillOfMaterial": [
+    {
+      "Material": "M-4471",
+      "FinishedGood": "FG-1120",
+      "Description": "Brake caliper assembly",
+      "ComponentQuantity": 2.4
+    },
+    {
+      "Material": "M-3308",
+      "FinishedGood": "FG-1120",
+      "Description": "Brake caliper assembly",
+      "ComponentQuantity": 1.0
+    },
+    {
+      "Material": "M-5512",
+      "FinishedGood": "FG-2040",
+      "Description": "Transmission housing",
+      "ComponentQuantity": 1.8
+    }
+  ],
+  "SalesOrder": [
+    {
+      "SalesOrder": "0000104411",
+      "Material": "FG-1120",
+      "Customer": "OEM-A",
+      "NetAmount": 980000000,
+      "Currency": "IDR",
+      "RequestedDeliveryDate": "2026-09-18",
+      "LatePenaltyPctPerDay": 0.5,
+      "LatePenaltyCapPct": 10
+    },
+    {
+      "SalesOrder": "0000104427",
+      "Material": "FG-1120",
+      "Customer": "OEM-A",
+      "NetAmount": 715000000,
+      "Currency": "IDR",
+      "RequestedDeliveryDate": "2026-09-23",
+      "LatePenaltyPctPerDay": 0.5,
+      "LatePenaltyCapPct": 10
+    },
+    {
+      "SalesOrder": "0000104455",
+      "Material": "FG-1120",
+      "Customer": "OEM-B",
+      "NetAmount": 445000000,
+      "Currency": "IDR",
+      "RequestedDeliveryDate": "2026-09-26",
+      "LatePenaltyPctPerDay": 0.5,
+      "LatePenaltyCapPct": 10
+    }
+  ],
+  "AlternateSource": [
+    {
+      "id": "A",
+      "label": "Air freight 85 t from the incumbent supplier",
+      "Supplier": "SUP-2201",
+      "Material": "M-4471",
+      "Quantity": 85.0,
+      "ArrivalDate": "2026-09-11",
+      "ExtraCostIDR": 186000000,
+      "TkdnAfterPct": 38.2,
+      "Origin": "CN",
+      "NewOrigin": false,
+      "QualificationDays": 0
+    },
+    {
+      "id": "B",
+      "label": "Local supplier PT Logam Andalan, Gresik",
+      "Supplier": "SUP-4417",
+      "Material": "M-4471",
+      "Quantity": 60.0,
+      "ArrivalDate": "2026-09-12",
+      "ExtraCostIDR": 94000000,
+      "TkdnAfterPct": 41.6,
+      "Origin": "ID",
+      "NewOrigin": false,
+      "QualificationDays": 3
+    },
+    {
+      "id": "C",
+      "label": "Reallocate stock from plant SBY1",
+      "Supplier": "INTERNAL",
+      "Material": "M-4471",
+      "Quantity": 55.0,
+      "ArrivalDate": "2026-09-10",
+      "ExtraCostIDR": 22000000,
+      "TkdnAfterPct": null,
+      "Origin": "ID",
+      "NewOrigin": false,
+      "QualificationDays": 0
+    },
+    {
+      "id": "D",
+      "label": "New import source in Vietnam",
+      "Supplier": "SUP-3390",
+      "Material": "M-4471",
+      "Quantity": 80.0,
+      "ArrivalDate": "2026-09-26",
+      "ExtraCostIDR": 61000000,
+      "TkdnAfterPct": 36.1,
+      "Origin": "VN",
+      "NewOrigin": true,
+      "QualificationDays": 0
+    },
+    {
+      "id": "E",
+      "label": "Cheapest source in China",
+      "Supplier": "SUP-5501",
+      "Material": "M-4471",
+      "Quantity": 100.0,
+      "ArrivalDate": "2026-09-19",
+      "ExtraCostIDR": 48000000,
+      "TkdnAfterPct": 34.8,
+      "Origin": "CN",
+      "NewOrigin": false,
+      "QualificationDays": 0
+    }
+  ],
+  "Profile": {
+    "_note": "Customer profile — the only genuinely modelled part. Each installation fills this from its own master data.",
+    "Company": "PT Karya Presisi Nusantara",
+    "TkdnCurrentPct": 38.2,
+    "TkdnContractFloorPct": 40.0,
+    "AsOfDate": "2026-09-04"
+  }
+}

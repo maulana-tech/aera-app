@@ -1,10 +1,10 @@
-"""Penghubung ke SAP S/4HANA Cloud.
+"""Connector to SAP S/4HANA Cloud.
 
-Satu klien, dua tujuan: sandbox hari ini, tenant pelanggan besok.
-Yang berubah cuma SAP_BASE_URL dan SAP_API_KEY — kodenya tidak.
+One client, two destinations: the sandbox today, a customer tenant tomorrow.
+Only SAP_BASE_URL and SAP_API_KEY change — the code does not.
 
-Kalau kunci API belum ada, klien ini TIDAK mengarang data. Ia melempar
-KunciBelumAda, dan pembungkus @alat mengubahnya jadi Asal.TIDAK_ADA.
+When there is no API key this client does NOT invent data. It raises
+MissingApiKey, and the caller turns that into Origin.MISSING.
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ API_KEY = os.environ.get("SAP_API_KEY", "")
 TIMEOUT = int(os.environ.get("SAP_TIMEOUT", "30"))
 
 
-class KunciBelumAda(RuntimeError):
+class MissingApiKey(RuntimeError):
     pass
 
 
@@ -27,95 +27,99 @@ class SapError(RuntimeError):
     pass
 
 
-def tersedia() -> bool:
+def available() -> bool:
     return bool(API_KEY)
 
 
-def ambil(layanan: str, entitas: str, params: Optional[Dict[str, Any]] = None) -> dict:
-    """Panggil satu entitas OData.
+def get(service: str, entity: str, params: Optional[Dict[str, Any]] = None) -> dict:
+    """Call one OData entity.
 
-    layanan  — mis. "API_PURCHASEORDER_PROCESS_SRV"
-    entitas  — mis. "A_PurchaseOrder"
-    params   — parameter OData: $filter, $top, $select, $expand
+    service  — e.g. "API_PURCHASEORDER_PROCESS_SRV"
+    entity   — e.g. "A_PurchaseOrder"
+    params   — OData parameters: $filter, $top, $select, $expand
     """
     if not API_KEY:
-        raise KunciBelumAda(
-            "SAP_API_KEY belum diisi. Ambil gratis di https://api.sap.com "
-            "(login akun SAP ID, buka halaman API, klik Show API Key)."
+        raise MissingApiKey(
+            "SAP_API_KEY is not set. Get one free at https://api.sap.com "
+            "(sign in with an SAP ID, open the API page, click Show API Key)."
         )
 
     q = dict(params or {})
     q.setdefault("$format", "json")
-    url = f"{BASE_URL}/s4hanacloud/sap/opu/odata/sap/{layanan}/{entitas}?{urllib.parse.urlencode(q)}"
+    url = (f"{BASE_URL}/s4hanacloud/sap/opu/odata/sap/{service}/{entity}"
+           f"?{urllib.parse.urlencode(q)}")
 
-    req = urllib.request.Request(url, headers={"APIKey": API_KEY, "Accept": "application/json"})
+    req = urllib.request.Request(url, headers={"APIKey": API_KEY,
+                                               "Accept": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
             return json.loads(r.read().decode())
     except urllib.error.HTTPError as e:
-        raise SapError(f"HTTP {e.code} dari {layanan}/{entitas}: {e.read()[:200].decode(errors='replace')}") from e
+        raise SapError(f"HTTP {e.code} from {service}/{entity}: "
+                       f"{e.read()[:200].decode(errors='replace')}") from e
 
 
-def baris(respons: dict) -> list:
-    """Ambil daftar record dari bentuk respons OData v2 maupun v4."""
-    if "d" in respons:                                  # OData v2
-        d = respons["d"]
+def rows(response: dict) -> list:
+    """Pull the record list out of either an OData v2 or v4 response shape."""
+    if "d" in response:                                 # OData v2
+        d = response["d"]
         return d.get("results", [d]) if isinstance(d, dict) else d
-    return respons.get("value", [])                     # OData v4
+    return response.get("value", [])                    # OData v4
 
 
-# --------------------------------------------------------------------- menulis
-class CsrfGagal(SapError):
+# --------------------------------------------------------------------- writes
+class CsrfFailed(SapError):
     pass
 
 
-def _token_csrf(layanan: str) -> Tuple[str, str]:
-    """SAP OData v2 menolak tulisan tanpa token CSRF. Ambil dulu, bawa cookie-nya."""
-    url = f"{BASE_URL}/s4hanacloud/sap/opu/odata/sap/{layanan}/"
+def _csrf_token(service: str) -> Tuple[str, str]:
+    """SAP OData v2 refuses writes without a CSRF token. Fetch it, keep the cookie."""
+    url = f"{BASE_URL}/s4hanacloud/sap/opu/odata/sap/{service}/"
     req = urllib.request.Request(url, headers={
         "APIKey": API_KEY, "X-CSRF-Token": "Fetch", "Accept": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
             token = r.headers.get("X-CSRF-Token", "")
-            cookie = "; ".join(v.split(";", 1)[0] for v in r.headers.get_all("Set-Cookie") or [])
+            cookie = "; ".join(v.split(";", 1)[0]
+                               for v in r.headers.get_all("Set-Cookie") or [])
         if not token:
-            raise CsrfGagal(f"{layanan} tidak mengembalikan X-CSRF-Token")
+            raise CsrfFailed(f"{service} returned no X-CSRF-Token")
         return token, cookie
     except urllib.error.HTTPError as e:
-        raise CsrfGagal(f"gagal ambil token CSRF dari {layanan}: HTTP {e.code}") from e
+        raise CsrfFailed(f"could not fetch a CSRF token from {service}: HTTP {e.code}") from e
 
 
-def kirim(layanan: str, entitas: str, muatan: dict,
-          kunci_idempoten: Optional[str] = None) -> dict:
-    """Tulis satu entitas ke SAP.
+def post(service: str, entity: str, payload: dict,
+         idempotency_key: Optional[str] = None) -> dict:
+    """Write one entity to SAP.
 
-    kunci_idempoten dikirim sebagai header supaya sisi SAP bisa menolak
-    pengulangan. Sisi kita juga menjaganya di tabel aksi — dua lapis,
-    karena pesanan pembelian ganda itu mahal.
+    idempotency_key goes out as a header so the SAP side can reject a repeat.
+    Our side also guards it in the actions table — two layers, because a
+    duplicate purchase order is expensive.
     """
     if not API_KEY:
-        raise KunciBelumAda("SAP_API_KEY belum diisi — penulisan ke SAP ditolak")
+        raise MissingApiKey("SAP_API_KEY is not set — the write to SAP is refused")
 
-    token, cookie = _token_csrf(layanan)
-    url = f"{BASE_URL}/s4hanacloud/sap/opu/odata/sap/{layanan}/{entitas}"
-    kepala = {
+    token, cookie = _csrf_token(service)
+    url = f"{BASE_URL}/s4hanacloud/sap/opu/odata/sap/{service}/{entity}"
+    headers = {
         "APIKey": API_KEY,
         "X-CSRF-Token": token,
         "Content-Type": "application/json",
         "Accept": "application/json",
     }
     if cookie:
-        kepala["Cookie"] = cookie
-    if kunci_idempoten:
-        kepala["Idempotency-Key"] = kunci_idempoten
+        headers["Cookie"] = cookie
+    if idempotency_key:
+        headers["Idempotency-Key"] = idempotency_key
 
     req = urllib.request.Request(
-        url, data=json.dumps(muatan).encode(), headers=kepala, method="POST")
+        url, data=json.dumps(payload).encode(), headers=headers, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
             return json.loads(r.read().decode() or "{}")
     except urllib.error.HTTPError as e:
         raise SapError(
-            f"HTTP {e.code} saat menulis ke {layanan}/{entitas}: "
+            f"HTTP {e.code} writing to {service}/{entity}: "
             f"{e.read()[:300].decode(errors='replace')}"
         ) from e
