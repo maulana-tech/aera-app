@@ -22,7 +22,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Callable, Dict, Optional, Tuple
 from urllib.parse import urlparse
 
-import tools.impact, tools.sourcing, tools.compliance, tools.lainnya  # noqa: F401  (daftarkan alat)
+import tools.impact, tools.sourcing, tools.compliance, tools.lainnya, tools.simulasi  # noqa: F401  (daftarkan alat)
 from core import identitas, simpan
 from core.identitas import Pengguna, TidakBerwenang
 from core.konfigurasi import KONF
