@@ -8,6 +8,10 @@ from typing import List
 PROMPTS = pathlib.Path(__file__).resolve().parent.parent / "prompts"
 
 
+class PromptBelumAda(RuntimeError):
+    """Agent dipanggil padahal instruksinya belum ditulis."""
+
+
 @dataclass
 class Agent:
     kode: str
@@ -21,7 +25,19 @@ class Agent:
     @property
     def instruksi(self) -> str:
         f = PROMPTS / f"{self.kode}.txt"
-        return f.read_text() if f.exists() else f"[belum ditulis: prompts/{self.kode}.txt]"
+        if not f.exists():
+            # Dulu ini mengembalikan teks penanda, yang artinya agent tetap
+            # dipanggil ke model dengan placeholder sebagai system prompt —
+            # gagal diam-diam. Lebih baik berhenti di sini.
+            raise PromptBelumAda(
+                f"{self.panggilan} ({self.kode}) belum punya instruksi. "
+                f"Tulis dulu prompts/{self.kode}.txt sebelum agent ini dijalankan."
+            )
+        return f.read_text()
+
+    @property
+    def siap(self) -> bool:
+        return (PROMPTS / f"{self.kode}.txt").exists()
 
 
 SUPERVISOR = Agent(
@@ -81,6 +97,13 @@ def demo() -> None:
     assert len({p[0] for p in panggilan}) == len(panggilan), "huruf awal harus beda semua"
     print(f"definisi ok — {len(SEMUA)} agent, {len(alat)} alat, veto: {veto[0]}")
     print("  " + " · ".join(f"{a.panggilan} ({a.nama})" for a in SEMUA.values()))
+
+    belum = [f"{a.panggilan} ({a.kode})" for a in SEMUA.values() if not a.siap]
+    if belum:
+        print(f"\n  {len(belum)} agent belum punya instruksi — memanggilnya akan"
+              f" melempar PromptBelumAda, bukan jalan dengan prompt kosong:")
+        for b in belum:
+            print(f"    · {b}")
 
 
 if __name__ == "__main__":

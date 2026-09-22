@@ -137,3 +137,16 @@ body {
     @apply font-sans;
   }
 }
+/* ---------------------------------------------------------------- grafik
+   Satu rona seri saja. Kritis/aman disampaikan lewat garis ambang, urutan,
+   dan label langsung — bukan lewat merah/hijau, yang gagal uji keterbacaan
+   buta warna (ΔE 4,1 deutan pada validator palet).                        */
+.viz {
+  --viz-seri: #2a78d6;
+  --viz-alur: color-mix(in oklab, var(--viz-seri) 14%, transparent);
+  --viz-garis: var(--border);
+}
+.dark .viz {
+  --viz-seri: #3987e5;
+  --viz-alur: color-mix(in oklab, var(--viz-seri) 20%, transparent);
+}
