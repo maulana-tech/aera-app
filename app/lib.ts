@@ -72,3 +72,23 @@ export type RingkasAgent = {
   jumlah_agent: number; alat_terpasang: number; alat_total: number;
   model_siap: boolean; sap_siap: boolean;
 };
+
+export type Kolom = { k: string; l: string; n?: boolean; rp?: boolean };
+export type Pandangan = {
+  domain: string; agent: string; kolom: Kolom[]; baris: Record<string, any>[];
+  asal: string; sumber: string; catatan: string;
+};
+export type Ringkasan = {
+  jalan: Record<string, number>; aksi: Record<string, number>;
+  nilai_disetujui_idr: number; nilai_menunggu_idr: number; biaya_model_idr: number;
+  stok_kritis: { material: string; deskripsi: string; plant: string;
+                 hari_tersisa: number | null; habis: string | null }[];
+  terakhir: { judul: string; status: string; mulai: string }[];
+  sap_siap: boolean; model_siap: boolean;
+};
+export type Unggahan = {
+  id: string; entitas: string; berkas: string; baris: number; oleh: string; diunggah: string;
+};
+export type Kontak = {
+  id: string; nama: string; peran: string; email: string; untuk: string;
+};

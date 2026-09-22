@@ -4,9 +4,15 @@ import { usePathname } from "next/navigation";
 
 const JUDUL: [RegExp, string][] = [
   [/^\/$/, "Antrean keputusan"],
+  [/^\/dasbor$/, "Dasbor"],
+  [/^\/chat$/, "Percakapan"],
+  [/^\/data\/(\w+)/, "Data"],
   [/^\/agent$/, "Tim agent"],
   [/^\/agent\/.+/, "Percakapan agent"],
   [/^\/log$/, "Log"],
+  [/^\/laporan/, "Laporan"],
+  [/^\/unggah$/, "Unggah data"],
+  [/^\/kontak$/, "Kontak"],
   [/^\/gangguan\/.+/, "Detail penanganan"],
 ];
 

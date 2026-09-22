@@ -234,3 +234,87 @@ def tandai_terkirim(aksi_id: str, referensi_sap: str) -> None:
     with buka() as c:
         c.execute("UPDATE aksi SET status='terkirim', referensi_sap=? WHERE id=? AND status='disetujui'",
                   (referensi_sap, aksi_id))
+
+
+SKEMA_UNGGAH = """
+CREATE TABLE IF NOT EXISTS unggahan (
+  id        TEXT PRIMARY KEY,
+  entitas   TEXT NOT NULL,          -- MaterialStock | PurchaseOrder | SalesOrder | ...
+  berkas    TEXT NOT NULL,
+  baris     INTEGER NOT NULL,
+  muatan    TEXT NOT NULL,          -- JSON array
+  oleh      TEXT NOT NULL,
+  diunggah  TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS kontak (
+  id     TEXT PRIMARY KEY,
+  nama   TEXT NOT NULL,
+  peran  TEXT NOT NULL,             -- planner | buyer | procurement_lead | qa | oem
+  email  TEXT NOT NULL,
+  untuk  TEXT NOT NULL,             -- jenis peristiwa, pisah koma; * = semua
+  aktif  INTEGER NOT NULL DEFAULT 1,
+  dibuat TEXT NOT NULL
+);
+"""
+
+
+def _siap_unggah(c) -> None:
+    c.executescript(SKEMA_UNGGAH)
+
+
+def simpan_unggahan(entitas: str, berkas: str, muatan: list, oleh: str) -> dict:
+    uid = id_baru("upl")
+    with buka() as c:
+        _siap_unggah(c)
+        c.execute("INSERT INTO unggahan (id,entitas,berkas,baris,muatan,oleh,diunggah)"
+                  " VALUES (?,?,?,?,?,?,?)",
+                  (uid, entitas, berkas, len(muatan),
+                   json.dumps(muatan, ensure_ascii=False), oleh, _sekarang()))
+    return {"id": uid, "entitas": entitas, "baris": len(muatan)}
+
+
+def unggahan_terbaru(entitas: str) -> Optional[dict]:
+    """Unggahan terakhir untuk satu entitas, kalau ada."""
+    with buka() as c:
+        _siap_unggah(c)
+        r = c.execute("SELECT * FROM unggahan WHERE entitas=? ORDER BY diunggah DESC LIMIT 1",
+                      (entitas,)).fetchone()
+    return dict(r) | {"muatan": json.loads(r["muatan"])} if r else None
+
+
+def daftar_unggahan() -> List[dict]:
+    with buka() as c:
+        _siap_unggah(c)
+        rows = c.execute("SELECT id,entitas,berkas,baris,oleh,diunggah FROM unggahan"
+                         " ORDER BY diunggah DESC LIMIT 50").fetchall()
+    return [dict(r) for r in rows]
+
+
+def hapus_unggahan(uid: str) -> bool:
+    with buka() as c:
+        _siap_unggah(c)
+        n = c.execute("DELETE FROM unggahan WHERE id=?", (uid,)).rowcount
+    return n > 0
+
+
+def daftar_kontak() -> List[dict]:
+    with buka() as c:
+        _siap_unggah(c)
+        rows = c.execute("SELECT * FROM kontak WHERE aktif=1 ORDER BY peran, nama").fetchall()
+    return [dict(r) for r in rows]
+
+
+def tambah_kontak(nama: str, peran: str, email: str, untuk: str = "*") -> dict:
+    kid = id_baru("knt")
+    with buka() as c:
+        _siap_unggah(c)
+        c.execute("INSERT INTO kontak (id,nama,peran,email,untuk,dibuat) VALUES (?,?,?,?,?,?)",
+                  (kid, nama, peran, email.lower(), untuk, _sekarang()))
+        return dict(c.execute("SELECT * FROM kontak WHERE id=?", (kid,)).fetchone())
+
+
+def hapus_kontak(kid: str) -> bool:
+    with buka() as c:
+        _siap_unggah(c)
+        n = c.execute("UPDATE kontak SET aktif=0 WHERE id=?", (kid,)).rowcount
+    return n > 0

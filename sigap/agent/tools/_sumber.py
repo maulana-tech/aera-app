@@ -44,6 +44,20 @@ def tarik(
         except Exception as e:                                   # noqa: BLE001
             return Hasil(None, Asal.TIDAK_ADA, layanan_sap, catatan=f"{type(e).__name__}: {e}")
 
+    # Data yang diunggah pengguna lebih dipercaya daripada contoh: itu data
+    # perusahaan sungguhan, cuma tidak ditarik langsung. Karena itu CACHED.
+    try:
+        from core import simpan
+        u = simpan.unggahan_terbaru(entitas_fixture)
+    except Exception:                                            # noqa: BLE001
+        u = None
+    if u:
+        data = u["muatan"]
+        if saring:
+            data = [r for r in data if saring(r)]
+        return Hasil(data, Asal.SIMPANAN, f"unggahan:{u['berkas']}",
+                     catatan=f"diunggah {u['diunggah']}")
+
     data = fixture(entitas_fixture)
     if saring:
         data = [r for r in data if saring(r)]

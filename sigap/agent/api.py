@@ -22,7 +22,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Callable, Dict, Optional, Tuple
 from urllib.parse import urlparse
 
+import csv
+import io
+
 import tools.impact, tools.sourcing, tools.compliance, tools.lainnya, tools.simulasi  # noqa: F401  (daftarkan alat)
+from tools.pandangan import DOMAIN, PANDANGAN
 from core import identitas, simpan
 from core.identitas import Pengguna, TidakBerwenang
 from core.konfigurasi import KONF
@@ -118,6 +122,156 @@ def terima_peristiwa(_m, b: dict, _h) -> Tuple[int, dict]:
         })
 
     return 202, {"peristiwa_id": pid, "jalan_id": jid, "mode": mode}
+
+
+@rute("GET", r"/ringkasan")
+def ringkasan(_m, _b, _h) -> Tuple[int, dict]:
+    """Angka untuk dashboard."""
+    with simpan.buka() as c:
+        jalan = c.execute(
+            "SELECT status, COUNT(*) n FROM jalan GROUP BY status").fetchall()
+        aksi = c.execute(
+            "SELECT status, COUNT(*) n FROM aksi GROUP BY status").fetchall()
+        nilai = c.execute(
+            "SELECT COALESCE(SUM(json_extract(muatan,'$.biaya_idr')),0) FROM aksi"
+            " WHERE status IN ('disetujui','terkirim')").fetchone()[0]
+        menunggu = c.execute(
+            "SELECT COALESCE(SUM(json_extract(muatan,'$.biaya_idr')),0) FROM aksi"
+            " WHERE status='menunggu'").fetchone()[0]
+        biaya = c.execute("SELECT COALESCE(SUM(biaya_token_idr),0) FROM jalan").fetchone()[0]
+        terakhir = c.execute(
+            "SELECT p.judul, j.status, j.mulai FROM jalan j"
+            " JOIN peristiwa p ON p.id=j.peristiwa_id ORDER BY j.mulai DESC LIMIT 5").fetchall()
+
+    stok = PANDANGAN["stok"]()
+    kritis = [b for b in stok["baris"] if (b.get("hari_tersisa") or 999) < 14]
+
+    return 200, {
+        "jalan": {r["status"]: r["n"] for r in jalan},
+        "aksi": {r["status"]: r["n"] for r in aksi},
+        "nilai_disetujui_idr": nilai,
+        "nilai_menunggu_idr": menunggu,
+        "biaya_model_idr": biaya,
+        "stok_kritis": kritis[:5],
+        "terakhir": [dict(r) for r in terakhir],
+        "sap_siap": KONF.sap_siap,
+        "model_siap": KONF.model_siap,
+    }
+
+
+@rute("GET", r"/data/([a-z]+)")
+def pandangan_domain(m, _b, _h) -> Tuple[int, dict]:
+    nama = m.group(1)
+    if nama not in PANDANGAN:
+        return 404, {"galat": f"domain '{nama}' tidak dikenal",
+                     "tersedia": list(PANDANGAN)}
+    return 200, {"domain": nama, "agent": DOMAIN[nama], **PANDANGAN[nama]()}
+
+
+@rute("GET", r"/unggahan")
+def lihat_unggahan(_m, _b, _h) -> Tuple[int, dict]:
+    return 200, {"unggahan": simpan.daftar_unggahan()}
+
+
+@rute("POST", r"/unggahan")
+def unggah(_m, b: dict, h) -> Tuple[int, dict]:
+    """Terima data perusahaan dalam bentuk CSV.
+
+    Dipakai sebagai lapisan di atas data contoh: begitu diunggah, alat
+    memakainya dan label asalnya jadi 'simpanan', bukan 'contoh'.
+    """
+    p = _pengguna(h)
+    entitas, berkas, isi = b.get("entitas"), b.get("berkas", "tanpa-nama.csv"), b.get("csv", "")
+    sah = {"MaterialStock", "PurchaseOrder", "SalesOrder", "BillOfMaterial", "AlternateSource"}
+    if entitas not in sah:
+        return 400, {"galat": f"entitas harus salah satu dari {sorted(sah)}"}
+    if not isi.strip():
+        return 400, {"galat": "isi CSV kosong"}
+    try:
+        baris = [dict(r) for r in csv.DictReader(io.StringIO(isi))]
+    except Exception as e:                                          # noqa: BLE001
+        return 400, {"galat": f"CSV tidak terbaca: {e}"}
+    if not baris:
+        return 400, {"galat": "CSV tidak punya baris data"}
+
+    # angka dikembalikan jadi angka; CSV mengirim semuanya sebagai teks
+    for r in baris:
+        for k, v in list(r.items()):
+            if isinstance(v, str) and v.strip():
+                try:
+                    r[k] = float(v) if "." in v else int(v)
+                except ValueError:
+                    pass
+    return 201, simpan.simpan_unggahan(entitas, berkas, baris, p.email)
+
+
+@rute("POST", r"/unggahan/([A-Za-z0-9_]+)/hapus")
+def hapus_unggahan(m, _b, h) -> Tuple[int, dict]:
+    _pengguna(h)
+    return (200, {"dihapus": True}) if simpan.hapus_unggahan(m.group(1)) \
+        else (404, {"galat": "tidak ditemukan"})
+
+
+@rute("GET", r"/laporan/([A-Za-z0-9_]+)")
+def laporan(m, _b, _h) -> Tuple[int, dict]:
+    """Susun laporan satu penanganan, siap disalin atau dikirim."""
+    d = simpan.ambil_jalan(m.group(1))
+    if not d:
+        return 404, {"galat": "tidak ditemukan"}
+
+    baris: List[str] = [
+        f"# {d['judul']}", "",
+        f"Jenis      : {d['jenis']}",
+        f"Pemicu     : {d['pemicu']}",
+        f"Mulai      : {d['mulai']}",
+        f"Status     : {d['status']}" + (f" ({d['mode']})" if d["mode"] == "runut" else ""),
+        "",
+    ]
+    if d["keputusan"]:
+        k = d["keputusan"]
+        baris += ["## Keputusan", "",
+                  k.get("rekomendasi") or k.get("alasan") or "—", ""]
+    if d["langkah"]:
+        baris += ["## Jalan pikiran", ""]
+        for l in d["langkah"]:
+            asal = f" [{l['asal']}]" if l.get("asal") else ""
+            baris.append(f"{l['urutan']}. **{l['tahap']}** · {l['agent_nama']} — {l['ringkas']}{asal}")
+        baris.append("")
+    if d["aksi"]:
+        baris += ["## Aksi", "", "| Aksi | Nilai | Status |", "|---|---|---|"]
+        for a in d["aksi"]:
+            n = a["muatan"].get("biaya_idr")
+            baris.append(f"| {a['jenis']} | {('Rp ' + format(n, ',')) if n else '—'} | {a['status']} |")
+        baris.append("")
+    if d["persetujuan"]:
+        baris += ["## Persetujuan", ""]
+        for s_ in d["persetujuan"]:
+            baris.append(f"- {s_['putusan']} oleh {s_['oleh']} ({s_['peran']}) · {s_['waktu']}")
+        baris.append("")
+    baris += ["---", f"Disusun otomatis oleh SIGAP · {simpan._sekarang()}"]
+
+    return 200, {"jalan_id": d["id"], "judul": d["judul"], "markdown": "\n".join(baris)}
+
+
+@rute("GET", r"/kontak")
+def lihat_kontak(_m, _b, _h) -> Tuple[int, dict]:
+    return 200, {"kontak": simpan.daftar_kontak()}
+
+
+@rute("POST", r"/kontak")
+def buat_kontak(_m, b: dict, h) -> Tuple[int, dict]:
+    _pengguna(h)
+    for w in ("nama", "peran", "email"):
+        if not b.get(w):
+            return 400, {"galat": f"'{w}' wajib diisi"}
+    return 201, simpan.tambah_kontak(b["nama"], b["peran"], b["email"], b.get("untuk", "*"))
+
+
+@rute("POST", r"/kontak/([A-Za-z0-9_]+)/hapus")
+def buang_kontak(m, _b, h) -> Tuple[int, dict]:
+    _pengguna(h)
+    return (200, {"dihapus": True}) if simpan.hapus_kontak(m.group(1)) \
+        else (404, {"galat": "tidak ditemukan"})
 
 
 @rute("GET", r"/agent")

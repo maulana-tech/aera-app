@@ -55,10 +55,25 @@ def check_local_constraints(opsi_id: str) -> Hasil:
     ambang = p["TkdnAmbangKontrak"]
 
     # --- TKDN ---
+    # Aturannya: pilihan tidak boleh MEMPERBURUK posisi konten lokal, dan tidak
+    # boleh menjatuhkannya ke bawah ambang kalau sekarang masih di atas.
+    # Perusahaan yang sudah di bawah ambang tidak otomatis kehilangan semua
+    # pilihan — yang dilarang adalah memperparahnya.
     tkdn = opsi.get("TkdnAfterPct")
-    if tkdn is not None and tkdn < ambang:
-        layak = False
-        alasan.append(f"TKDN turun ke {tkdn}%, ambang kontrak {ambang}%")
+    sekarang = p["TkdnSaatIni"]
+    if tkdn is not None:
+        if tkdn < sekarang - 0.05:                       # toleransi pembulatan
+            layak = False
+            alasan.append(
+                f"TKDN turun dari {sekarang}% ke {tkdn}%"
+                + (f", makin jauh di bawah ambang kontrak {ambang}%" if tkdn < ambang
+                   else f", melanggar ambang kontrak {ambang}%")
+            )
+        elif tkdn < ambang and sekarang >= ambang:
+            layak = False
+            alasan.append(f"TKDN jatuh ke {tkdn}%, ambang kontrak {ambang}%")
+        elif tkdn >= ambang > sekarang:
+            alasan.append(f"TKDN naik ke {tkdn}%, kembali di atas ambang {ambang}%")
 
     # --- LARTAS ---
     tiba = date.fromisoformat(opsi["ArrivalDate"])
