@@ -29,6 +29,7 @@ open http://localhost:3000/sigap
 | Paham produknya | `PLAN.md` §1 dan §3 |
 | Lihat sudah sampai mana | `PLAN.md` §2 |
 | Mulai ngoding | `agent/README.md`, lalu `TEKNIS.md` |
+| Kenal agent-nya satu per satu | `AGENT.md` |
 | Butuh angka atau skenario | `DESIGN.md` §2 |
 | Bingung ambil data dari mana | `SUMBER-DATA.md` |
 
@@ -37,7 +38,8 @@ open http://localhost:3000/sigap
 | Berkas | Isinya |
 |---|---|
 | **`PLAN.md`** ⭐ | Rencana, status tiap bagian, urutan kerja. Bahasa sehari-hari |
-| `DESIGN.md` | Angka skenario, 23 alat, 11 agent, aturan lokal, batas wewenang |
+| **`AGENT.md`** | Rujukan lengkap 11 agent: fungsi, alat, parameter, batas wewenang |
+| `DESIGN.md` | Angka skenario, aturan lokal, eval suite |
 | `TEKNIS.md` | Nama fungsi dan parameter persis |
 | `SUMBER-DATA.md` | Hasil pengecekan tiap sumber data |
 | `agent/` | Kode — lihat `agent/README.md` |

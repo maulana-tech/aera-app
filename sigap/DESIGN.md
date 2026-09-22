@@ -166,110 +166,14 @@ daripada klaim yang tidak bisa dipertanggungjawabkan — dan ini menghapus satu-
 
 ## 3. Multi-agent system — supervised swarm
 
-### 3.1 Kenapa "supervised swarm", bukan "swarm" saja
+> **Pindah ke `AGENT.md`.** Rincian tiap agent — nama, peran, alat, parameter, batas
+> wewenang, dan apa yang tidak boleh dikerjakannya — ada di sana, diambil langsung dari
+> registry yang berjalan. Bagian ini sengaja tidak mengulangnya supaya tidak ada dua
+> sumber yang bisa berbeda.
 
-Dua istilah ini sering dicampur. Pisahkan dengan tegas supaya siap kalau juri bertanya:
-
-| | Orchestrator runtime | Supervisor agent |
-|---|---|---|
-| Apa | Yang menjalankan loop, berbagi konteks, membatasi handoff & timeout | Agent yang memutuskan siapa jalan berikutnya dan kapan berhenti |
-| Swarm murni | **Ada** — Strands `Swarm`, OpenAI Swarm, semua punya ini | **Tidak ada** — agent saling oper sendiri |
-| SIGAP | Ada | **Ada** |
-
-Jadi benar bahwa swarm tetap punya orchestrator — tapi itu **plumbing**, bukan pengambil
-keputusan. Yang tidak dimiliki swarm murni adalah supervisor yang menilai.
-
-**SIGAP memakai keduanya** karena lingkungan terikat kontrak menuntut audit trail: harus ada
-yang bertanggung jawab atas rekomendasi akhir dan bisa ditanya "kenapa". Swarm murni jalurnya
-emergent — sulit diaudit dan sulit dibatasi. Itu sebabnya `max_handoffs` dan timeout ada di
-setiap implementasi swarm.
-
-**Kalimat siap pakai untuk juri:** *"Swarm primitives for context sharing and peer handoff,
-under a supervisor for auditability — because a purchase order that breaches a contract needs
-an accountable decision path, not an emergent one."*
-
-### 3.2 Peta agent — 1 supervisor + 9 spesialis
-
-```
-                    ┌──────────────────────────────────────────┐
-                    │  SUPERVISOR · SIGAP Core                  │
-                    │  detect_disruption                        │
-                    │  • memasukkan agent ke swarm              │
-                    │  • menilai kapan bukti cukup              │
-                    │  • menulis rekomendasi + risiko sisa      │
-                    └───────────────────┬──────────────────────┘
-                                        │ admits ↓   evidence ↑
-   ┌──────────┬──────────┬──────────┬───┴──────┬──────────┐
-   ▼          ▼          ▼          ▼          ▼
- Impact    Demand &   Inventory  Sourcing   Logistics
- Analyst   Consumpt.  Integrity             & ETA
-   ▲          ▲          ▲          ▲          ▲
-   └──────────┴──────────┴──────────┴──────────┘   ← handoff peer-to-peer
-   ┌──────────┬──────────┬──────────┐                 (tanpa lewat supervisor)
-   ▼          ▼          ▼          ▼
- Compliance  Simulation Precedent  Execution
-  ◆ veto                            ⚠ gate
-   └──────────┴──────────┴──────────┘
-                    │
-          SHARED BLACKBOARD
-     (DynamoDB · AgentCore Memory)
-      semua tulis & baca di sini
-```
-
-### 3.3 Peran & tools — 19 tools, 10 agent
-
-| Agent | Peran | Tools | Interface |
-|---|---|---|---|
-| **Supervisor** | Memasukkan agent ke swarm, menilai kecukupan bukti, menulis rekomendasi & risiko sisa | `detect_disruption` | EventBridge |
-| **Impact Analyst** | Menelusuri disrupsi ke komitmen yang benar-benar terancam | `get_open_purchase_orders` `get_material_stock` `get_bom_explosion` `get_sales_order_commitments` | `API_PURCHASEORDER_PROCESS_SRV` `API_MATERIAL_STOCK_SRV` `API_BILL_OF_MATERIAL_SRV` `API_SALES_ORDER_SRV` |
-| **Demand & Consumption** | Memiliki sisi permintaan. Konsumsi adalah variabel, bukan konstanta | `get_demand_signal` `get_production_schedule` | SAP IBP demand plan · `API_PRODUCTION_ORDER_2_SRV` |
-| **Inventory Integrity** | Stok tercatat mana yang benar-benar bisa dipakai — quality hold, batch ditolak, safety stock | `get_quality_holds` `get_safety_stock_policy` | `API_INSPECTIONLOT_SRV` · `API_PRODUCT_SRV` (MARC) |
-| **Sourcing** | Mencari & mengkualifikasi pasokan alternatif | `find_alternate_sources` | EINA/EINE · SAP Ariba Sourcing |
-| **Logistics & ETA** | Memodelkan tanggal tiba yang tahan uji: dwell Priok, transhipment, clearance, moda | `get_shipment_status` `estimate_eta` | SAP Business Network · model deterministik |
-| **Compliance** ◆ veto | TKDN, LARTAS, klausul kontrak, kalender. **Penolakannya tidak bisa dikalahkan biaya** | `check_local_constraints` | Register TKDN · INSW · kalender |
-| **Simulation** | Menghitung opsi yang lolos + kombinasinya, termasuk eksposur kurs. **Deterministik** | `simulate_scenario` | Mesin internal |
-| **Precedent** | Memori institusional — apa yang pernah dilakukan pada kasus serupa, hasilnya bagaimana | `search_past_incidents` | Bedrock Knowledge Bases |
-| **Execution** | Menulis balik ke SAP dalam batas wewenang, memberi tahu, memantau sampai diterima | `create_stock_transfer` `create_draft_po` `notify` `monitor_shipment` | `API_PURCHASEREQ_PROCESS_SRV` · SAP Ariba Buying |
-
-### 3.4 Uji kelayakan agent
-
-Sebuah agent layak berdiri sendiri **kalau ia bisa tidak setuju dengan agent lain.**
-Kalau hanya menghitung dan tidak pernah punya pandangan yang bertabrakan, itu tool.
-
-| Agent | Contoh pertentangan nyata |
-|---|---|
-| Demand vs Impact | Impact: habis 13 Sep. Demand: order OEM naik 40%, jadi habis 9 Sep |
-| Inventory Integrity vs Impact | Impact: ada 84 t. Integrity: 23 t kena quality hold, safety stock menuntut 15 t → tersedia 46 t |
-| Logistics vs Sourcing | Sourcing: supplier sanggup 12 Sep. Logistics: dwell Priok + clearance → 15 Sep, opsi gugur |
-| Precedent vs Simulation | Simulation: opsi B termurah. Precedent: supplier itu gagal requalifikasi 14 bulan lalu |
-| Compliance vs semua | Veto — opsi termurah melanggar ambang TKDN kontrak |
-
-**Ditolak sebagai agent terpisah:** FX/Finance (aritmetika, tidak pernah bisa tidak setuju →
-masuk Simulation) · Negotiation (butuh berhari-hari, window disrupsi hitungan jam).
-
-### 3.5 Shared blackboard
-
-Semua agent menulis dan membaca satu papan bersama. Tiap temuan membawa **provenance**:
-`LIVE` · `CACHED` · `DERIVED` · `MODELLED` · `MISSING`.
-
-Aturan: kalau input di jalur kritis bernilai `MISSING` atau `MODELLED`, Simulation tidak boleh
-mengeluarkan angka penghematan — supervisor melaporkan apa yang kurang.
-
-Ini yang memungkinkan handoff peer-to-peer: Inventory Integrity menulis quality hold ke papan,
-Impact Analyst membacanya dan menghitung ulang tanggal stockout sendiri, tanpa supervisor.
-
-### 3.6 Bukti routing runtime — aktivasi subset
-
-| Skenario | Agent yang dipanggil |
-|---|---|
-| 1 · Ningbo tutup | Impact → Inventory Integrity → Sourcing → Logistics → Compliance → Simulation → **Compliance lagi** → Execution |
-| 4 · Permintaan naik 40% | **Demand** → Impact → Inventory Integrity → Simulation → Execution *(Sourcing tidak dipanggil)* |
-| 6 · Batch gagal inspeksi | **Inventory Integrity** → Impact → Sourcing → Compliance → Simulation → Execution |
-| 3 · Tertahan bea cukai | **Logistics** → Impact → Precedent → Sourcing → Compliance → Execution |
-| 10 · Supplier hilang TKDN | **Compliance** → Sourcing → Precedent → Simulation → Execution *(tidak ada disrupsi fisik)* |
-
-Titik masuk beda, panjang beda, keanggotaan beda. **Pipeline tetap tidak bisa menghasilkan
-lima baris ini.** Ini bukti terkuat untuk kriteria *autonomous multi-step reasoning*.
+Ringkas: satu ketua (**Arya**) dan sepuluh ahli — Elsa, Dara, Iris, Clint, Milo,
+Kira ⛔, Tara, Otto, Bram, Vega. **23 alat, 19 terpasang.** Kira punya veto yang tidak
+bisa dikalahkan biaya; Tara memanggil kalkulator deterministik, bukan menalar sendiri.
 
 ## 3.7 Dua mode, satu swarm — Respond & Plan
 
