@@ -1,9 +1,11 @@
-# Data contoh
+# Modelled data
 
-Isi folder ini **bukan data nyata**. Dipakai supaya scaffold bisa dijalankan
-sebelum kunci API SAP didapat.
+Nothing in this folder is real. It exists so the system can be run before an SAP
+API key is available.
 
-Setiap alat yang jatuh ke fixture menandai hasilnya `Asal.CONTOH`, bukan
-`Asal.LANGSUNG` — jadi di UI badge-nya berbeda dan tidak mungkin tertukar.
+Any tool that falls back to a fixture labels its result `Origin.MODELLED`, never
+`Origin.LIVE` — so the badge in the UI differs and the two can never be confused.
+The calculator refuses to emit rupiah figures from data labelled this way.
 
-Begitu `SAP_API_KEY` diisi, alat otomatis memakai data sungguhan.
+Once `SAP_API_KEY` is set, the tools use real data automatically. Uploaded company
+CSV ranks above a fixture and is labelled `Origin.CACHED`.

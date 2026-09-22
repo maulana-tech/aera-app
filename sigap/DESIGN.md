@@ -1,438 +1,287 @@
-# SIGAP — Dokumen Desain Kerja
+# SIGAP — Design
 
-> Sistem Intelijen Gangguan & Antisipasi Pasokan
-> AI Agentic Hackathon 2026 · Track 01 Intelligent Supply Chain
-> Status: pra-submit · Deadline proposal **10 September 2026**
-
-Dokumen ini adalah sumber kebenaran tunggal untuk tim. Proposal (`proposal/sigap-proposal.html`)
-adalah ringkasan 3 halaman dari isi dokumen ini.
+> The scenario, its figures, and the rules the system reasons over.
+> Every number in §2 is reproduced by `engine/simulate.py`. If a figure here cannot be
+> reproduced by that command, **this document is wrong**, not the code.
 
 ---
 
-## 1. Keputusan yang sudah dikunci
+## 1. The master scenario
 
-| Keputusan | Pilihan | Alasan |
-|---|---|---|
-| Track | Intelligent Supply Chain | Dampak rupiah paling jelas, cerita paling mudah dijual |
-| Nama | **SIGAP** | Akronim yang berarti "tanggap" — mudah diingat juri lokal |
-| Vertikal | Manufaktur komponen otomotif Tier-1, Karawang | Impor tinggi + JIT + kontrak OEM berpenalti = disrupsi terasa nyata |
-| Pembeda utama | Constraint reasoning atas **TKDN & LARTAS** | Tidak ada model biaya yang menemukan alasan penolakan ini |
-| Bentuk agent | **Multi-agent: 1 supervisor + 5 spesialis, 12 tools** | Lihat §3. Kuncinya: routing ditentukan saat runtime, bukan pipeline tetap |
-| Orkestrasi | **Strands Agents SDK** (supervisor pattern) | Memenuhi kriteria "Use of AWS Agentic AI" dan mendukung delegasi dinamis |
-| Model | **Claude di Amazon Bedrock** | Wajib AWS sebagai inti |
-| UI | Streamlit | Agent trace jadi dalam sehari |
-| Data | **SAP S/4HANA Cloud sandbox** (`sandbox.api.sap.com`) | Sistem nyata, semantik OData nyata — tidak ada mock yang bisa dipatahkan juri |
+All the figures below are consistent with one another. Do not change one without
+checking what it derives.
 
----
+### 1.1 The company
 
-## 2. Skenario induk — dataset lengkap
+**PT Karya Presisi Nusantara (KPN)** — a Tier-1 automotive component maker.
 
-Semua angka di bawah ini konsisten satu sama lain. Jangan ubah satu tanpa mengecek turunannya.
+- Plant **KRW1** Karawang (main), plant **SBY1** Surabaya
+- 340 active materials, **61% of raw-material value imported**, mostly via Tanjung Priok
+- Products: brake caliper assembly, transmission housing — for an OEM on a JIT contract
+- The OEM contract requires **TKDN of at least 40%**; the portfolio sits at **38.2%**
 
-### 2.1 Perusahaan
+This company profile is the **only** genuinely modelled thing in the system, because
+there is no customer yet. Each deployment fills it from its own master data on day one.
+Everything else comes from SAP, or is labelled `modelled` in the open.
 
-**PT Karya Presisi Nusantara (KPN)** — Tier-1 komponen otomotif.
+### 1.2 The critical material
 
-- Plant **KRW1** Karawang (utama), plant **SBY1** Surabaya
-- 340 material aktif, **61% nilai raw material diimpor**, mayoritas via Tanjung Priok
-- Produk: brake caliper assembly, transmission housing — untuk OEM dengan kontrak JIT
-- Kontrak OEM mensyaratkan **TKDN minimal 40%**; TKDN portfolio saat ini **38,2%**
-
-### 2.2 Material kritis
-
-| Field | Nilai |
+| Field | Value |
 |---|---|
-| Kode | **M-4471** |
-| Nama | Aluminium alloy ingot ADC12 |
+| Code | **M-4471** |
+| Name | Aluminium alloy ingot ADC12 |
 | Plant | KRW1 |
-| Stok awal (4 Sep) | **84 ton** |
-| Konsumsi harian | **9,2 ton/hari** |
-| Cover | 84 ÷ 9,2 = **9,1 hari → habis 13 Sep** |
-| Dipakai untuk | FG-1120 (brake caliper assembly) |
+| Opening stock (4 Sep) | **84 t** |
+| Daily consumption | **9.2 t/day** |
+| Cover | 84 ÷ 9.2 = **9.1 days → depleted 13 Sep** |
+| Feeds | FG-1120 (brake caliper assembly) |
 
-### 2.3 PO terdampak
+### 1.3 Affected purchase orders
 
-| PO | Material | Qty | ETA awal | ETA revisi | Supplier |
+| PO | Material | Qty | Original ETA | Revised ETA | Supplier |
 |---|---|---|---|---|---|
 | **4500018872** | M-4471 | 120 t | 14 Sep | **22 Sep** | SUP-2201 (Ningbo) |
 | 4500018901 | M-4471 | 90 t | 24 Sep | 24 Sep | SUP-2201 → plant SBY1 |
-| + 10 PO lain | 4 material | — | — | tergeser | 3 supplier |
+| + 10 more | 4 materials | — | — | slipped | 3 suppliers |
 
-Total 12 PO lewat Ningbo, nilai **Rp 8,4 miliar**. Hanya M-4471 yang kritis.
+Twelve POs route through Ningbo, worth **Rp 8.4 billion**. Only M-4471 is critical.
 
-### 2.4 Komitmen hilir
+### 1.4 Downstream commitment
 
-3 sales order OEM untuk FG-1120, total **Rp 2,14 miliar**.
-Penalti keterlambatan **0,5%/hari, cap 10%** → eksposur penalti maksimum **Rp 214 juta**.
+Three OEM sales orders for FG-1120, **Rp 2.14 billion** in total.
+Late penalty **0.5%/day, capped at 10%** → maximum penalty exposure **Rp 214 million**.
 
-### 2.5 Pemicu disrupsi
+### 1.5 The trigger
 
-> Topan menutup Pelabuhan Ningbo–Zhoushan **8–13 September** (6 hari).
+> A typhoon closes Ningbo–Zhoushan port **8–13 September** (6 days).
 
-Gap produksi yang harus ditutup: **13 Sep → 22 Sep = 9 hari**.
+The production gap to bridge: **13 Sep → 22 Sep = 9 days**.
 
-### 2.6 Lima opsi dan hasilnya
+### 1.6 How big the gap actually is
 
-| | Opsi | Tiba | Biaya tambahan | TKDN | Putusan |
+```
+depleted with no action    13 Sep
+scheduled supply arrives   22 Sep  (PO 4500018872, 120 t)
+the gap                     9 days × 9.2 t/day = 82.8 tonnes
+```
+
+Any option standing on its own must supply **at least 82.8 tonnes** to bridge it. That is
+why the air-freight option is set at 85 tonnes.
+
+> **Correction, 21 Sep 2026.** An early draft said 40 tonnes. `engine/simulate.py` caught
+> it: 40 tonnes only moves the stockout from 13 Sep to 17 Sep — still a hole. This is
+> precisely why the calculator has to be deterministic. A language model will accept
+> "40 tonnes covers 9 days" without blinking.
+
+### 1.7 The five options
+
+| | Option | Arrives | Extra cost | TKDN | Ruling |
 |---|---|---|---|---|---|
-| A | Air freight **85 t** dari SUP-2201 | 11 Sep | +Rp 186 jt | 38,2% | Layak, termahal. 85 t = jumlah minimum yang benar-benar menutup celah 82,8 t |
-| B | Supplier lokal PT Logam Andalan (SUP-4417), Gresik, 60 t | 12 Sep | +Rp 94 jt | **41,6% ↑** | Layak, perlu requalifikasi metalurgi 3 hari |
-| C | Realokasi 55 t dari SBY1 | 10 Sep | +Rp 22 jt | — | Layak, SBY1 jadi tipis |
-| D | Supplier baru SUP-3390 (Vietnam) | 26 Sep | +Rp 61 jt | 36,1% ↓ | **DITOLAK** — LARTAS negara asal baru butuh 10 hari kerja; tiba 13 hari setelah lini berhenti |
-| E | Supplier termurah SUP-5501 (Tiongkok), 100 t | 19 Sep | +Rp 48 jt | 34,8% ↓ | **DITOLAK** — TKDN jatuh ke 34,8%, melanggar ambang kontrak OEM 40% |
+| A | Air freight **85 t** from SUP-2201 | 11 Sep | +Rp 186m | 38.2% | Allowed, most expensive. 85 t is the minimum that genuinely bridges 82.8 t |
+| B | Local supplier PT Logam Andalan (SUP-4417), Gresik, 60 t | 12 Sep | +Rp 94m | **41.6% ↑** | Allowed; needs 3 days of metallurgical requalification |
+| C | Reallocate 55 t from SBY1 | 10 Sep | +Rp 22m | — | Allowed; leaves SBY1 thin |
+| D | New supplier SUP-3390 (Vietnam) | 26 Sep | +Rp 61m | 36.1% ↓ | **BLOCKED** — LARTAS for a new origin country needs 10 working days; arrives 13 days after the line stops |
+| E | Cheapest supplier SUP-5501 (China), 100 t | 19 Sep | +Rp 48m | 34.8% ↓ | **BLOCKED** — TKDN drops to 34.8%, breaching the 40% OEM contract floor |
 
-### 2.7 Rekomendasi agent: C + B
+D and E are struck out **on the rules, not on price** — and E is the cheapest of all five.
+That is the whole point: no pure cost model finds this reason to say no.
 
-```
-stok awal 4 Sep            84 t              habis 13 Sep
-+ C: 55 t tiba 10 Sep      55 ÷ 9,2 = 6,0 hari   → cover s/d 19 Sep
-+ B: 60 t tiba 12 Sep      60 ÷ 9,2 = 6,5 hari   → cover s/d 25 Sep
-PO 4500018872 mendarat 22 Sep                    → tersambung, tidak ada stockout
-```
-
-- **Biaya: Rp 116 juta** vs Rp 186 juta air freight → **hemat Rp 70 juta (38%)**
-- Melindungi **Rp 2,14 miliar** pendapatan terikat
-- TKDN naik **38,2% → 41,6%**
-- **Risiko sisa yang diakui agent:** SBY1 tinggal 4 hari cover sampai PO 4500018901 mendarat 24 Sep. Agent memberi tahu planner SBY1 dan memasukkannya ke daftar pantau — tidak menganggap kasus selesai.
-
-Waktu tempuh agent: **18 menit**, tanpa pendampingan.
-
-### 2.7b Besaran celah — dan kenapa opsi A 85 ton
+### 1.8 What the system recommends: C + B
 
 ```
-habis tanpa tindakan   13 Sep
-pasokan terjadwal tiba 22 Sep  (PO 4500018872, 120 t)
-celah                   9 hari × 9,2 t/hari = 82,8 ton
+opening stock 4 Sep         84 t              depleted 13 Sep
++ C: 55 t arrives 10 Sep    55 ÷ 9.2 = 6.0 days   → covered to 19 Sep
++ B: 60 t arrives 12 Sep    60 ÷ 9.2 = 6.5 days   → covered to 25 Sep
+PO 4500018872 lands 22 Sep                        → joined up, no stockout
 ```
 
-Opsi apa pun yang berdiri sendiri harus menyediakan **minimal 82,8 ton** untuk menutup celah.
-Itu sebabnya air freight disetel 85 ton, bukan 40.
+- **Cost: Rp 116 million** vs Rp 186 million for air freight → **saves Rp 70 million (38%)**
+- Protects **Rp 2.14 billion** of committed revenue
+- TKDN rises **38.2% → 41.6%**
+- **Residual risk the system states outright:** SBY1 is left with 4 days of cover until
+  PO 4500018901 lands on 24 Sep. It tells the SBY1 planner and adds it to the watch list
+  rather than declaring the case closed.
 
-> **Catatan koreksi (21 Sep 2026).** Versi awal dokumen menulis 40 ton. Kalkulator
-> `engine/simulate.py` menangkapnya: 40 ton hanya menggeser kehabisan dari 13 Sep ke 17 Sep —
-> masih bolong. Ini persis alasan kalkulator wajib deterministik: model bahasa akan menerima
-> "40 ton menutup 9 hari" tanpa curiga.
-
-### 2.9b Angka ini diverifikasi mesin, bukan diketik
-
-Seluruh angka §2 direproduksi `engine/simulate.py`. Jalankan:
+### 1.9 These figures are machine-verified, not typed
 
 ```bash
-cd sigap/agent && python3 -m engine.simulate
+cd agent && PYTHONPATH=. python3 engine/simulate.py
 ```
 
-Keluarannya:
+Output:
 
 ```
-tanpa tindakan  → habis 2026-09-13
-data contoh     → kalkulator menolak memberi angka ✓
-ditolak aturan  → ['D', 'E']
-terpilih        → B+C Rp 116,000,000 · TKDN 41.6%
-pembanding A    → Rp 186,000,000 · hemat Rp 70,000,000 (38%)
+no action        → depleted 2026-09-13
+modelled data    → calculator refuses to give a figure ✓
+blocked by rules → ['D', 'E']
+chosen           → B+C Rp 116,000,000 · TKDN 41.6%
+vs option A      → Rp 186,000,000 · saves Rp 70,000,000 (38%)
 ```
 
-Kalau ada angka di dokumen yang tidak bisa direproduksi perintah ini, **dokumennya yang salah.**
+---
 
-### 2.8 Sumber data — semuanya nyata, tidak ada mock
+## 2. The constraint engine
 
-Ini perubahan penting: **tidak ada satu pun komponen yang di-mock.**
+Four rules, run by `check_local_constraints`. These are what `references/` contains.
 
-| Lapisan | Sumber nyata | Status | Cara akses |
-|---|---|---|---|
-| **ERP** | SAP S/4HANA Cloud **sandbox** di SAP Business Accelerator Hub | ✅ terkonfirmasi | `https://sandbox.api.sap.com/` · API key gratis dari akun SAP ID di `api.sap.com` |
-| **Reasoning** | Claude di Amazon Bedrock | ✅ | Akun AWS, pay-as-you-go |
-| **TKDN** | Register TKDN Kemenperin (P3DN) | ⚠️ verifikasi | Publik. Kemungkinan perlu ingest manual → rule pack berversi |
-| **LARTAS** | Klasifikasi larangan/pembatasan INSW | ⚠️ verifikasi | Publik. Ingest ke rule pack |
-| **Kalender libur** | SKB 3 Menteri libur nasional & cuti bersama | ✅ | Publik, terbit tahunan |
-| **Kurs** | JISDOR Bank Indonesia | ✅ | Terbit harian |
-| **Cuaca & gempa** | BMKG `data.bmkg.go.id` | ✅ terkonfirmasi | JSON & XML, gratis, tanpa daftar |
-| **Topan luar negeri** | JTWC / JMA — **bukan BMKG** | ⚠️ verifikasi | BMKG hanya memantau perairan Indonesia |
-| **Posisi kapal** | AIS (mis. aisstream.io free tier) | ⚠️ verifikasi | Perlu daftar |
-
-Rincian lengkap: `SUMBER-DATA.md`.
-
-**Aturan penulisan:** yang ✅ boleh diklaim tegas di proposal. Yang ⚠️ ditulis sebagai
-*"ingested into a versioned rule pack"* — jujur, dan tetap bukan mock, karena datanya nyata
-walau cara masuknya bisa manual.
-
-### 2.9 Satu-satunya yang dimodelkan: profil pelanggan
-
-Daftar plant, laju konsumsi, dan klausul penalti kontrak. Alasannya sederhana: **kita belum punya
-pelanggan.** Setiap deployment mengisi ini dari master data miliknya sendiri di hari pertama.
-
-Tulis ini terang-terangan di proposal. Juri jauh lebih menghargai batas yang dinyatakan jelas
-daripada klaim yang tidak bisa dipertanggungjawabkan — dan ini menghapus satu-satunya celah
-"tapi datanya bohongan" yang bisa dipakai untuk menjatuhkan skor feasibility.
-
-## 3. Multi-agent system — supervised swarm
-
-> **Pindah ke `AGENT.md`.** Rincian tiap agent — nama, peran, alat, parameter, batas
-> wewenang, dan apa yang tidak boleh dikerjakannya — ada di sana, diambil langsung dari
-> registry yang berjalan. Bagian ini sengaja tidak mengulangnya supaya tidak ada dua
-> sumber yang bisa berbeda.
-
-Ringkas: satu ketua (**Arya**) dan sepuluh ahli — Elsa, Dara, Iris, Clint, Milo,
-Kira ⛔, Tara, Otto, Bram, Vega. **23 alat, 19 terpasang.** Kira punya veto yang tidak
-bisa dikalahkan biaya; Tara memanggil kalkulator deterministik, bukan menalar sendiri.
-
-## 3.7 Dua mode, satu swarm — Respond & Plan
-
-Ditambahkan 21 September 2026. Bukan modul baru: **mode kedua di atas swarm yang sama.**
-
-| | **Respond** | **Plan** |
+| Rule | Logic | Effect |
 |---|---|---|
-| Pemicu | Kejadian disrupsi (EventBridge) | Siklus mingguan · atau ambang eksposur terlampaui |
-| Horizon | Hari | Minggu–bulan |
-| Pertanyaan | Rencana rusak, apa yang kita lakukan? | Apa yang akan rusak, dan apa yang bisa dicegah sekarang? |
-| Output | Mitigasi untuk satu kejadian | Daftar tindakan pencegahan berperingkat |
-| Urgensi | Jam | Hari–minggu |
+| **TKDN** | Recompute the portfolio local-content ratio if this supplier is used | Block anything that worsens the position, or drops it below the 40% contract floor from above |
+| **LARTAS** | A new origin country → add 10 working days for the import licence | Shifts the ETA; often makes an option arrive too late |
+| **Holiday calendar** | Collective leave and national holidays freeze customs and logistics | Add calendar days to every ETA that crosses them |
+| **Priok dwell time** | A variable, not a constant — use the historical distribution | An import ETA is a range, not a single date |
 
-**Kenapa satu swarm, bukan dua sistem.** Pertanyaan planning adalah pertanyaan respons yang
-diajukan lebih awal. Agent yang sama menjawabnya: Impact menelusuri eksposur, Demand membaca
-permintaan, Inventory Integrity menilai stok yang layak pakai, Logistics memodelkan ETA,
-**Compliance tetap memveto**, Simulation menghitung, Execution mengeksekusi dalam batas wewenang.
+⚠️ `references/tkdn-rules.md` and `lartas-procedure.md` are **not written yet**. Until they
+exist, Kira judges from fixture parameters and labels the result `modelled`. Writing them
+is domain work, not programming.
 
-Ini juga yang memisahkan SIGAP dari sistem replenishment open-source: mereka punya pipeline
-planning terpisah; SIGAP mewarisi constraint reasoning ke mode planning tanpa menulis ulang apa pun.
+### A note on the TKDN rule direction
 
-### Agent baru: Exposure Scanner
+The rule is *"must not worsen the local-content position"*, not *"must be above 40%"*.
+KPN already sits at 38.2%, below its own contract floor. An early version rejected
+everything under 40%, which wrongly struck out option A — an option that changes nothing.
+The `/data/sourcing` page made this visible; `tools/compliance.py` has the check that
+keeps it fixed.
 
-Satu-satunya agent yang benar-benar ditambahkan. Domainnya: **risiko yang belum terjadi.**
+---
 
-Lolos uji kelayakan §3.4 — ia bisa tidak setuju: Sourcing bilang supplier A memadai; Exposure
-Scanner bilang A adalah satu-satunya sumber untuk tiga material sekaligus, dan itu titik gagal
-tunggal yang belum terlihat siapa pun.
+## 3. Authority limits
 
-Yang dipindai:
-
-| Pola | Kenapa penting |
+| Action | Authority |
 |---|---|
-| Material bersumber tunggal | Titik gagal tunggal, tidak terlihat sampai gagal |
-| Jalur terkonsentrasi satu pelabuhan | Satu topan melumpuhkan banyak material sekaligus |
-| Sertifikat TKDN supplier mendekati kedaluwarsa | Rasio TKDN bisa jatuh tanpa ada kejadian fisik |
-| Cover jatuh di bawah policy dalam N minggu | Stockout yang bisa dicegah |
-| Material dengan biaya stockout tertinggi | Menentukan peringkat, bukan sekadar daftar |
-| Libur nasional di depan | Pembekuan bea cukai yang bisa diantisipasi |
+| Read, analyse, simulate, recommend | Fully autonomous |
+| Inter-plant stock transfer, impact < Rp 50m | Autonomous, reported afterwards |
+| Issue a purchase order | **Draft only** — a buyer approves |
+| A new supplier, or value > Rp 500m | Escalate to the procurement lead |
+| Anything breaching TKDN / LARTAS | Blocked by design |
 
-### Tools tambahan — 4, total jadi 23
+Bounded autonomy is not a limitation — it is what makes the system usable in a
+contract-bound manufacturing environment at all.
+
+---
+
+## 4. Prevent mode — a second mode, not a second system
+
+| | **Respond** | **Prevent** |
+|---|---|---|
+| Trigger | A disruption event | A weekly cycle, or an exposure threshold crossed |
+| Horizon | Days | Weeks to months |
+| Question | The plan broke; what do we do? | What is about to break, and what can we prevent now? |
+| Output | Mitigation for one event | A ranked list of preventive actions |
+| Urgency | Hours | Days to weeks |
+
+**Why one swarm and not two systems.** A planning question is a response question asked
+earlier. The same agents answer it: Impact traces exposure, Demand reads demand, Stock
+Validity judges usable stock, Logistics models ETAs, **Rules still vetoes**, Costing
+computes, Execution acts within its authority. The constraint reasoning is inherited
+rather than rewritten.
+
+### The one new agent: Vega, Risk Scanner
+
+Her domain is risk that **has not happened yet**. She passes the test that matters for a
+new agent — she can disagree with an existing one. Sourcing says supplier A is adequate;
+Vega says A is the sole source for three materials at once, and that is a single point of
+failure nobody has looked at.
+
+What she scans for:
+
+| Pattern | Why it matters |
+|---|---|
+| Single-sourced material | A single point of failure, invisible until it fails |
+| Lanes concentrated on one port | One typhoon takes out many materials at once |
+| Supplier TKDN certificate near expiry | The ratio can fall with no physical event at all |
+| Cover dropping below policy within N weeks | A preventable stockout |
+| Materials with the highest stockout cost | Determines the ranking, not just the list |
+| National holidays ahead | A customs freeze you can plan around |
+
+### The four tools Prevent mode still needs
 
 ```python
-# Exposure Scanner
-scan_supply_exposure(horizon_weeks: int) -> list[Exposure]
-get_supplier_certifications(supplier: str) -> Certifications   # masa berlaku TKDN
+# Vega — Risk Scanner (neither written)
+scan_supply_exposure(horizon_weeks) -> list[Exposure]
+get_supplier_certifications(supplier) -> Certifications   # TKDN validity
 
-# Execution — aksi bercorak planning
-create_sourcing_event(material, rationale) -> SourcingEvent     # ⚠ approval
-propose_safety_stock_change(material, plant, new_level) -> ChangeRequest  # ⚠ approval
+# Bram — Execution, planning-flavoured actions (neither written)
+create_sourcing_event(material, rationale) -> SourcingEvent          # needs approval
+propose_safety_stock_change(material, plant, new_level) -> ChangeRequest  # always escalates
 ```
 
-`create_stock_transfer` dipakai ulang untuk pre-positioning sebelum pembekuan kalender —
-cukup beri tanggal di masa depan, tidak perlu tool baru.
+`create_stock_transfer` is reused for pre-positioning ahead of a calendar freeze — give it
+a future date; no new tool needed.
 
-### Wewenang di mode Plan
+### Authority in Prevent mode
 
-Lebih ketat, karena tidak ada urgensi yang membenarkan otonomi:
+Tighter, because no urgency justifies autonomy here:
 
-| Aksi | Wewenang |
+| Action | Authority |
 |---|---|
-| Memindai, menilai, memberi peringkat, merekomendasikan | Otonom |
-| Pre-position stok < Rp 50 juta | Otonom, lapor sesudahnya |
-| Memulai sourcing event / kualifikasi | **Draft — procurement approve** |
-| Mengubah kebijakan safety stock | **Selalu** eskalasi — ini perubahan kebijakan |
+| Scan, assess, rank, recommend | Autonomous |
+| Pre-position stock < Rp 50m | Autonomous, reported afterwards |
+| Start a sourcing event / qualification | **Draft — procurement approves** |
+| Change a safety stock policy | **Always** escalate — this is a policy change |
 
-### Permukaan produk baru
+Respond and Prevent write to the **same queue**. A planner sees one list, not two apps.
 
-| Permukaan | Isi |
-|---|---|
-| **Recommendation queue** | Rekomendasi yang belum ditindaklanjuti, berperingkat menurut risiko yang dicegah (rupiah). Tidak hilang kalau tidak segera dibuka — inilah bedanya dengan notifikasi |
-| **Action log** | Apa yang dieksekusi, atas persetujuan siapa, dan hasilnya. Wajib untuk audit, dan jadi masukan agent Precedent |
-| **Exposure board** | Peta risiko laten terkini: sumber tunggal, konsentrasi jalur, sertifikat mendekati kedaluwarsa |
+---
 
-Mode Respond dan Plan menulis ke **queue yang sama**. Planner melihat satu daftar, bukan dua aplikasi.
+## 5. The eval suite — 14 scenarios
 
-### Eval suite bertambah — skenario 11–14
+This is what turns "autonomous" into something demonstrable. **None of it is written yet.**
 
-| # | Skenario | Menguji |
+| # | Scenario | What it tests |
 |---|---|---|
-| 11 | Material X hanya punya satu supplier, tidak ada kejadian apa pun | Deteksi risiko tanpa pemicu |
-| 12 | Sertifikat TKDN supplier habis 6 minggu lagi | Antisipasi constraint sebelum jatuh tempo |
-| 13 | Cuti bersama 9 hari dalam 5 minggu | Perencanaan berbasis kalender |
-| 14 | Tujuh material lewat satu pelabuhan yang sama | Konsentrasi jalur |
+| 1 | Typhoon closes Ningbo for 6 days | Baseline — the full path |
+| 2 | Supplier plant fire, zero capacity for 3 weeks | A disruption with no clear end date |
+| 3 | COO paperwork disputed, held at Priok 12 days | A domestic disruption, not one at sea |
+| 4 | OEM raises demand 40% without warning | Disruption from the demand side |
+| 5 | Import tariff jumps on one HS code | An economic change, not a physical one |
+| 6 | Inbound batch fails inspection, 80 t rejected | Stock that "exists" turns out to be unusable |
+| 7 | Singapore transhipment delayed | A cascading delay |
+| 8 | Rupiah weakens 8% in a week | The economics of import options change |
+| 9 | Collective leave freezes customs for 9 days | A calendar constraint |
+| 10 | A local supplier loses its TKDN certification | A constraint that changes mid-flight |
+| 11 | Material X has a single supplier, nothing has happened | Risk detection with no trigger |
+| 12 | A supplier's TKDN certificate expires in 6 weeks | Anticipating a constraint before it bites |
+| 13 | Nine days of collective leave in 5 weeks | Calendar-driven planning |
+| 14 | Seven materials through the same one port | Lane concentration |
 
-Empat ini tidak punya pemicu disrupsi sama sekali — **hanya mode Plan yang bisa menjawabnya.**
+Scenarios 8, 9 and 10 exercise constraint reasoning specifically — the part that most
+distinguishes this system. Scenarios 11–14 have no disruption trigger at all; **only
+Prevent mode can answer them.**
 
-## 4. Constraint engine
+---
 
-Empat aturan yang dijalankan `check_local_constraints`. Ini isi `references/`.
+## 6. Data sources
 
-| Aturan | Logika | Efek |
+Summarised here; the verification detail is in `DATA-SOURCES.md`.
+
+| Layer | Source | Status |
 |---|---|---|
-| **TKDN** | Hitung ulang rasio konten lokal portfolio kalau supplier ini dipakai | Blokir kalau hasilnya < ambang kontrak (40%) |
-| **LARTAS** | Negara asal baru → tambah 10 hari kerja untuk izin impor | Geser ETA; sering membuat opsi jadi terlambat |
-| **Kalender libur** | Cuti bersama & libur nasional membekukan bea cukai + logistik | Tambah hari kalender ke semua ETA yang melintasinya |
-| **Dwell time Priok** | Variabel, bukan konstanta — pakai distribusi historis | ETA impor punya rentang, bukan satu tanggal |
+| **ERP** | SAP S/4HANA Cloud **sandbox** at SAP Business Accelerator Hub | ✅ confirmed · free API key from api.sap.com |
+| **Reasoning** | Claude on Amazon Bedrock | ✅ pay-as-you-go |
+| **TKDN** | Kemenperin TKDN register (P3DN) | ⚠️ public; likely manual ingest → a versioned rule pack |
+| **LARTAS** | INSW restriction classification | ⚠️ public; ingest into the rule pack |
+| **Holiday calendar** | SKB 3 Menteri, national holidays & collective leave | ✅ public, published annually |
+| **FX rate** | Bank Indonesia JISDOR | ✅ published daily |
+| **Weather & quakes** | BMKG `data.bmkg.go.id` | ✅ confirmed · JSON & XML, free, no registration |
+| **Foreign typhoons** | JTWC / JMA — **not BMKG** | ⚠️ BMKG only covers Indonesian waters |
+| **Vessel positions** | AIS (e.g. aisstream.io free tier) | ⚠️ needs registration |
+
+The BMKG point is worth keeping straight: BMKG is genuinely useful and genuinely free, but
+only for **domestic** disruption. The Ningbo trigger in §1.5 is in the East China Sea, which
+BMKG does not cover. Claiming otherwise would be wrong.
 
 ---
 
-## 5. Batas wewenang agent
+## 7. Principles worth not forgetting
 
-| Aksi | Wewenang |
-|---|---|
-| Baca, analisis, simulasi, rekomendasi | Otonom penuh |
-| Transfer stok antar-plant, dampak < Rp 50 jt | Otonom, lapor sesudahnya |
-| Terbitkan purchase order | **Draft saja** — buyer yang approve |
-| Supplier baru, atau nilai > Rp 500 jt | Eskalasi ke procurement lead |
-| Apa pun yang melanggar TKDN / LARTAS | Diblokir secara desain |
-
-Bounded autonomy bukan keterbatasan — ini yang membuat solusinya bisa dipakai di lingkungan
-manufaktur yang terikat kontrak. Tulis ini di proposal.
-
----
-
-## 6. Arsitektur & struktur repo
-
-```
-sigap/
-├── SKILL.md                  ← definisi & metodologi agent (pola serenity-skill)
-├── references/               ← pengetahuan domain, terpisah dari kode, bisa diaudit juri
-│   ├── tkdn-rules.md
-│   ├── lartas-procedure.md
-│   ├── holiday-calendar.md
-│   └── priok-dwell-time.md
-├── agents/                   ← supervisor + 5 spesialis
-│   ├── supervisor.py
-│   ├── impact_analyst.py
-│   ├── sourcing.py
-│   ├── compliance.py
-│   ├── simulation.py
-│   └── execution.py
-├── tools/                    ← 12 tools, satu file per tool
-├── clients/
-│   ├── sap_s4.py             ← satu OData client; base URL + key dari env
-│   │                            sandbox hari ini, tenant pelanggan besok
-│   ├── registers.py          ← TKDN · LARTAS · kalender · JISDOR → rule pack
-│   └── signals.py            ← BMKG · notice pelabuhan · AIS
-├── graph.py                  ← Strands supervisor pattern + Bedrock
-├── evals/                    ← 10 skenario disrupsi ⭐ bukti otonomi
-└── app.py                    ← Streamlit, tampilan agent trace
-```
-
-**Lapisan:**
-
-| Lapisan | Teknologi |
-|---|---|
-| Reasoning | Claude di Amazon Bedrock |
-| Orkestrasi | Strands Agents SDK (supervisor + 5 sub-agent) · Bedrock AgentCore (runtime, memory, observability) |
-| Tools & data | AWS Lambda per tool · DynamoDB untuk memory · Bedrock Knowledge Bases untuk kontrak & histori insiden |
-| Enterprise | SAP S/4HANA OData · SAP Ariba · SAP Business Network · SAP BAIP / Joule |
-| Dibangun dengan | Kiro (spec-driven development) |
-
----
-
-## 7. Eval suite — 10 skenario
-
-Ini yang mengubah klaim "otonom" jadi sesuatu yang bisa dibuktikan.
-Di Demo Day, juri memilih satu secara acak.
-
-| # | Skenario | Menguji |
-|---|---|---|
-| 1 | Topan menutup Ningbo 6 hari | Baseline — jalur lengkap |
-| 2 | Pabrik supplier kebakaran, kapasitas 0 selama 3 minggu | Gangguan tanpa batas waktu jelas |
-| 3 | Dokumen COO bermasalah, tertahan bea cukai Priok 12 hari | Disrupsi di dalam negeri, bukan di laut |
-| 4 | OEM menaikkan permintaan 40% mendadak | Disrupsi dari sisi permintaan, bukan pasokan |
-| 5 | Tarif impor naik mendadak pada satu HS code | Perubahan ekonomi, bukan fisik |
-| 6 | Batch masuk gagal inspeksi, 80 ton ditolak | Stok yang "ada" ternyata tidak terpakai |
-| 7 | Transhipment Singapura tertunda | Keterlambatan bertingkat |
-| 8 | Rupiah melemah 8% dalam sepekan | Ekonomi opsi impor berubah |
-| 9 | Cuti bersama membekukan bea cukai 9 hari | Constraint kalender |
-| 10 | Supplier lokal kehilangan sertifikasi TKDN | Constraint TKDN berubah di tengah jalan |
-
-Skenario 8, 9, 10 khusus menguji constraint reasoning — bagian yang paling membedakan.
-
----
-
-## 8. Prior art — dua repo referensi
-
-### `YUHAO-corn/manufacturing-agents`
-Replenishment manufaktur, 6 agent paralel via LangGraph, Streamlit + MongoDB + Redis,
-model DashScope & Google AI. Klaim: biaya inventori −25%, stockout −62%.
-
-**Diambil:** Streamlit untuk UI cepat · framing metrik before/after · prinsip "teknologi matang".
-**Diambil sebagian:** pemecahan peran jadi agent spesialis — tapi dengan perbedaan penting,
-SIGAP memakai **supervisor pattern dengan routing runtime**, bukan fan-out paralel dengan jalur
-yang sudah ditentukan di awal. Peran spesialisnya mirip; cara supervisor memutuskan siapa yang
-dipanggil dan kapan berhenti itu yang berbeda, dan itulah yang dinilai juri.
-**Tidak diambil:** MongoDB/Redis · data source Tiongkok (TuShare, JuHe) · **lapisan model
-non-AWS** — ini wajib pindah ke Bedrock.
-
-### `muxuuu/serenity-skill`
-Metodologi riset investasi yang dikemas sebagai Agent Skill: `SKILL.md` + `references/` +
-`assets/` + `scripts/` + `evals/`.
-
-**Diambil:** struktur `SKILL.md` + `references/` untuk memisahkan pengetahuan domain dari kode ·
-`evals/` sebagai bukti otonomi · output terstruktur berbasis JSON · hierarki bukti — tiap klaim
-agent harus menyebut sumbernya (nomor PO, pasal kontrak, sertifikat TKDN).
-
-### ⚠️ Aturan orisinalitas
-Hackathon mensyaratkan *"original work created during the hackathon period"*. Pakai keduanya
-sebagai referensi arsitektur — aman. Fork lalu ganti nama — berisiko diskualifikasi dan mudah
-ketahuan karena kedua repo publik. **Ambil polanya, tulis kodenya sendiri.**
-
----
-
-## 9. Rencana 6 hari
-
-| Hari | Target | PIC |
-|---|---|---|
-**Tahap 1 — submit proposal (keputusan tim: belum ada kode sampai 10 Sep).**
-
-| Hari | Target | PIC |
-|---|---|---|
-| **Kam 4 – Jum 5 Sep** | Kunci skenario & angka · pastikan seluruh aritmetika §2 konsisten | Domain + Data |
-| **Sab 6 – Min 7 Sep** | Rapikan spesifikasi: 12 tool contract, rule set, eval suite 10 skenario | Semua |
-| **Sen 8 Sep** | Isi placeholder · review silang klaim vs kenyataan | Semua |
-| **Sel 9 Sep** | Export PDF ketiga dokumen · cek proposal tetap 3 halaman | Frontend |
-| **Rab 10 Sep** | Buffer + submit — **jangan di jam terakhir** | Semua |
-
-**Tahap 2 — sesudah lolos kualifikasi:** ambil API key SAP Business Accelerator Hub, aktifkan
-Bedrock, bangun `clients/sap_s4.py`, lalu skenario Ningbo end-to-end.
-
-**Pembagian:**
-- **Backend** → tools + agent loop (Strands + Bedrock)
-- **Data/ML** → dataset sintetis + mesin `simulate_scenario` (matematika cost/OTIF/TKDN)
-- **Frontend** → Streamlit agent trace + visual proposal
-- **Domain** → skenario, angka, narasi bisnis (mengisi halaman 1 proposal)
-
----
-
-## 9b. Deliverable
-
-| File | Isi | Format cetak |
-|---|---|---|
-| `proposal/sigap-proposal.html` | Proposal 3 halaman | A4 potrait, Print → Save as PDF |
-| `proposal/sigap-architecture.html` | Chart arsitektur sistem + runtime routing | A4 **landscape** |
-| `proposal/sigap-business-model-canvas.html` | Business Model Canvas 9 blok | A4 **landscape** |
-| `sigap/DESIGN.md` | Dokumen kerja tim (file ini) | — |
-
----
-
-## 10. Checklist sebelum submit
-
-- [ ] Placeholder terisi di **kedua** file: nama tim, universitas, 3 nama anggota
-- [ ] **Tidak ada klaim present-tense soal kode yang berjalan.** Halaman 3 harus berbunyi "specification, not running software" selama belum ada implementasi
-- [ ] Angka latensi ditulis sebagai *target*, bukan hasil pengukuran
-- [ ] Maksimal 3 halaman — cek setelah export PDF
-- [ ] Semua angka konsisten dengan §2 dokumen ini
-- [ ] Klaim sumber data yang ⚠️ di §2.8 tetap ditulis sebagai "ingested into a versioned rule pack", jangan dinaikkan jadi klaim API sebelum diverifikasi
-- [ ] Disebutkan terus terang bahwa hanya profil pelanggan yang dimodelkan, beserta alasannya
-- [ ] Tidak ada kode hasil fork dari dua repo referensi
-
----
-
-## 11. Jebakan yang harus dihindari
-
-1. **Bikin dashboard dulu.** Dashboard tanpa agent = kalah. Agent tanpa dashboard = masih bisa menang.
-2. **Menambah agent atau tools.** Enam agent, 12 tools — cukup. Yang dinilai kedalaman reasoning dan cara supervisor memilih rute, bukan jumlah kotak di diagram.
-3. **Jangan pakai mock sama sekali.** Sandbox SAP gratis dan nyata — memakai mock padahal sandbox tersedia adalah kelemahan yang tidak perlu. Satu-satunya yang boleh dimodelkan adalah profil pelanggan, dan itu harus dinyatakan terbuka.
-4. **Agent yang selalu benar.** Agent yang mengakui trade-off dan minta approval terlihat jauh lebih matang.
-5. **Biaya dihitung LLM.** Harus deterministik, kalau tidak seluruh klaim penghematan bisa dipatahkan.
+1. **The dashboard is not the product.** The system works off events. The interface is
+   where you inspect and approve, not where work begins.
+2. **Cost figures never come from a language model.** They have to be deterministic, or
+   every savings claim falls to the first sceptical question.
+3. **Never mock what you can get for real.** The SAP sandbox is free and real. The only
+   modelled thing is the company profile, and it says so out loud.
+4. **An agent that admits a trade-off is worth more than one that is always right.**
+   Stating the residual risk is the feature, not a weakness.
+5. **Adding agents or tools is not progress.** What matters is the depth of the reasoning
+   and how the supervisor chooses a route — not the number of boxes in the diagram.

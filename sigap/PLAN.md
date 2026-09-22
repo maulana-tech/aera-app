@@ -1,188 +1,204 @@
-# SIGAP — Rencana & Status
+# SIGAP — Plan & Status
 
-> Konteks: **masa pengembangan aplikasi.** Bukan proyek lomba.
-> Istilah teknis ada di §8 kalau ada kata yang asing.
+> Context: **application development.** Not a competition entry.
+> Jargon is decoded in §8 if a word is unfamiliar.
 >
-> Diperbarui: 21 September 2026
+> Updated: 22 September 2026
 
 ---
 
-## 1. Apa yang dibangun
+## 1. What is being built
 
-Asisten otomatis untuk pabrik yang bahan bakunya banyak diimpor.
+An autonomous assistant for manufacturers that import most of their raw material.
 
-Kalau ada gangguan pasokan — pelabuhan tutup, supplier gagal kirim, barang tertahan bea
-cukai — sistem menyelidiki dampaknya sendiri, menyusun pilihan jalan keluar, mencoret yang
-melanggar aturan atau kontrak, menghitung mana yang paling murah, lalu mengeksekusinya ke
-SAP setelah disetujui orang yang berwenang.
+When supply is disrupted — a port closes, a supplier misses a shipment, goods are held at
+customs — the system investigates the impact itself, assembles the ways out, strikes the
+ones that break regulation or the customer contract, works out which is cheapest, and
+executes it into SAP once someone with the authority approves.
 
-Yang hari ini butuh 2–3 hari kerja manusia, dikerjakan dalam belasan menit.
+What takes 2–3 human working days today happens in tens of minutes.
 
-**Ini bukan website yang orang buka tiap pagi.** Sistemnya bekerja karena ada kejadian.
-Tampilan web adalah tempat memeriksa dan menyetujui, bukan tempat pekerjaan dimulai.
+**This is not a website people open every morning.** The system works off events. The web
+interface is where you inspect and approve, not where the work starts.
 
 ---
 
-## 2. Status sekarang
+## 2. Where it stands
 
-| Bagian | Status | Catatan |
+| Part | Status | Notes |
 |---|---|---|
-| Label asal data | ✅ **jalan** | Melekat di semua alat. Kegagalan → `TIDAK_ADA`, bukan tebakan |
-| Kalkulator biaya | ✅ **jalan** | Python murni. Menolak memberi angka kalau masukan belum tepercaya |
-| Penghubung SAP (baca) | ✅ **siap** | Otomatis pakai sandbox begitu `SAP_API_KEY` diisi |
-| Penghubung SAP (tulis) | ⚠️ **jalur lengkap, belum diuji** | Token CSRF sudah ditangani; nama entitas perlu dicocokkan |
-| Penyimpanan | ✅ **jalan** | SQLite. Aksi idempoten, persetujuan sekali pakai |
-| Auth & wewenang | ✅ **jalan** | Identitas dari token; batas nilai dicek di server |
-| Layanan API | ✅ **jalan** | 6 endpoint |
-| Antarmuka | ✅ **jalan** | Masuk, antrean, detail, persetujuan. twenty-ui |
-| Alat | 🔶 **12 dari 23** | Sisanya masih nama di `agents/definisi.py` |
-| Tim agent (`graph.py`) | ⚠️ **ditulis, belum pernah jalan** | Menunggu `AWS_REGION` |
-| Dokumen aturan (`references/`) | ❌ **belum ada** | Penghambat utama. Tugas orang domain |
-| Kumpulan uji skenario | ❌ **belum ada** | |
-| Mode Cegah | ❌ **belum ada** | |
+| Data-origin label | ✅ **working** | On every tool. A failure → `MISSING`, never a guess |
+| Cost calculator | ✅ **working** | Pure Python. Refuses figures when inputs aren't trustworthy |
+| SAP connector (read) | ✅ **ready** | Uses the sandbox automatically once `SAP_API_KEY` is set |
+| SAP connector (write) | ⚠️ **path complete, untested** | CSRF handled; entity names need checking |
+| Persistence | ✅ **working** | SQLite. Idempotent actions, one-shot approvals |
+| Auth & authority | ✅ **working** | Identity from the token; value limits checked server-side |
+| API service | ✅ **working** | 19 routes |
+| Interface | ✅ **working** | Dashboard with charts, queue, detail, approval, per-domain tables, conversations. shadcn-ui |
+| Tools | 🔶 **19 of 23** | The other 4 are Prevent-mode only |
+| Agent prompts | 🔶 **2 of 11** | Only `supervisor` and `compliance`. The rest raise on invocation |
+| Agent team (`graph.py`) | ⚠️ **written, never run** | Waiting on `AWS_REGION` |
+| Rule documents (`references/`) | ❌ **absent** | The main blocker. Domain work |
+| Scenario eval suite | ❌ **absent** | |
+| Prevent mode | ❌ **absent** | Vega has no tools at all yet |
 
-### Tiga hal yang menghambat
+`PYTHONPATH=. python3 manage.py check` prints this live, from the code rather than from
+this table.
 
-1. **`SAP_API_KEY`** — gratis, 15 menit. Begitu diisi, 5 alat baca langsung pakai data
-   sungguhan dan label asalnya berubah dari `contoh` jadi `langsung`.
-2. **`AWS_REGION`** — `graph.py` belum pernah dieksekusi sekali pun. Sampai ini ada,
-   sistem jujur menahan diri dan tidak membuat keputusan apa pun.
-3. **`references/tkdn-rules.md` dan `lartas-procedure.md`** — Ahli Aturan sudah membacanya
-   kalau ada; tanpa itu ia menilai dari parameter dan menandai hasilnya `contoh`. **Ini
-   pekerjaan pengetahuan, bukan kode** — programmer tidak bisa menulisnya.
+### What is blocking
+
+1. **`SAP_API_KEY`** — free, 15 minutes. Once set, five read tools use real data and the
+   origin label flips from `modelled` to `live`.
+2. **`AWS_REGION`** — `graph.py` has never been executed, not once. Until it is set, the
+   system honestly holds back and makes no decisions at all.
+3. **The nine missing prompts.** An agent with no `prompts/<code>.txt` raises
+   `PromptMissing`. Writing them needs nobody's permission.
+4. **`references/tkdn-rules.md` and `lartas-procedure.md`** — Kira reads them when they
+   exist; without them she judges from parameters and labels the result `modelled`.
+   **This is knowledge work, not code** — a programmer cannot write it.
 
 ---
 
-## 3. Cara kerjanya
+## 3. How it works
 
-Bayangkan satu tim kecil: ada ketua, ada beberapa ahli dengan bidang masing-masing. Ketua
-tidak mengerjakan sendiri — dia memanggil ahli yang relevan, satu per satu, sesuai apa yang
-ditemukan sebelumnya.
+Picture a small team: a lead, and several specialists with their own areas. The lead does
+not do the work — he calls the relevant specialist, one at a time, according to what the
+previous one found.
 
 ```
-kabar gangguan masuk
-  → ketua memanggil ahli dampak      "barang apa yang kena?"
-  → jawabannya memunculkan pertanyaan baru
-  → ketua memanggil ahli berikutnya  "ada sumber lain nggak?"
-  → ahli aturan mencoret yang melanggar
-  → ahli hitungan menghitung sisanya
-  → ketua menyusun rekomendasi + mengakui risiko yang tersisa
-  → yang kecil dijalankan sendiri, yang besar minta persetujuan
-  → dipantau sampai barang benar-benar datang
+a disruption arrives
+  → the lead calls Impact            "what does this actually hit?"
+  → that answer raises a new question
+  → the lead calls the next one      "is there another source?"
+  → Rules strikes out what breaks regulation
+  → Costing prices what's left
+  → the lead writes a recommendation, and admits the residual risk
+  → small things it executes itself, large things it asks a human
+  → it watches until the goods actually land
 ```
 
-**Urutannya tidak ditulis di awal.** Kalau masalahnya selesai dengan memindahkan stok antar
-pabrik, ahli pencari supplier tidak pernah dipanggil sama sekali.
+**The order is not written in advance.** If moving stock between plants solves it, the
+sourcing specialist is never called at all.
 
-### Sebelas agent
+### Eleven agents
 
-| Agent | Pertanyaan yang ia miliki |
+| Agent | The question it owns |
 |---|---|
-| **SIGAP Core** (ketua) | Siapa dipanggil berikutnya, dan kapan bukti cukup? |
-| Ahli Dampak | PO mana yang kena, pelanggan mana yang terancam? |
-| Ahli Permintaan | Pemakaiannya masih segitu, atau permintaan naik? |
-| Ahli Keabsahan Stok | Stok yang tercatat itu benar-benar bisa dipakai? |
-| Ahli Pencari Sumber | Ada sumber lain nggak? |
-| Ahli Logistik | Realistisnya sampai kapan? |
-| **Ahli Aturan** ⭐ | Boleh nggak kita pakai supplier itu? **Punya hak veto** |
-| Ahli Hitungan | Berapa biayanya, mana yang paling murah? |
-| Ahli Preseden | Dulu pernah begini? Hasilnya gimana? |
-| Ahli Eksekusi | Jalankan, lalu pantau sampai barang datang |
-| Ahli Pemindai Risiko | Apa yang **akan** rusak? *(mode Cegah)* |
+| **Arya** (lead) | Who do I call next, and when is the evidence enough? |
+| Elsa — Impact | Which POs are hit, which customers are exposed? |
+| Dara — Demand | Is consumption still that rate, or is demand rising? |
+| Iris — Stock Validity | Is the recorded stock actually usable? |
+| Clint — Sourcing | Is there another source? |
+| Milo — Logistics | Realistically, when does it land? |
+| **Kira — Rules** ⭐ | May we use that supplier at all? **Has veto** |
+| Tara — Costing | What does it cost, which is cheapest? |
+| Otto — Precedent | Has this happened before? How did it end? |
+| Bram — Execution | Carry it out, then watch until the goods arrive |
+| Vega — Risk Scanner | What is **about** to break? *(Prevent mode)* |
 
-Rincian alat tiap agent ada di `DESIGN.md` §3.
+Each agent's tools and parameters are in `AGENT-REFERENCE.md`, generated from the registry.
 
 ---
 
-## 4. Teknologi
+## 4. Technology
 
 | | AWS | SAP |
 |---|---|---|
-| Tugasnya | Tempat agent **berpikir dan berjalan** | Tempat **data asli** dan **aksi dijalankan** |
-| Apa saja | Bedrock (mesin AI), Strands, Lambda | S/4HANA, Ariba, Business Network |
+| Its job | Where the agents **think and run** | Where the **real data** and **the actions** live |
+| What | Bedrock (the model), Strands, Lambda | S/4HANA, Ariba, Business Network |
 
-Keputusan yang sudah dikunci:
+Decisions that are locked in:
 
-| Hal | Pilihan |
+| Thing | Choice |
 |---|---|
-| Mesin AI | `anthropic.claude-opus-5` lewat Bedrock |
-| Bahasa | Python (agent) · TypeScript (antarmuka) |
-| Penyimpanan | SQLite — pindah ke Postgres kalau sudah multi-perusahaan |
-| Antarmuka | Next.js + `twenty-ui` |
-| Layanan API | `http.server` stdlib — pindah ke FastAPI kalau butuh >10 rps |
+| Model | `anthropic.claude-opus-5` via Bedrock |
+| Languages | Python (agents) · TypeScript (interface) |
+| Persistence | SQLite — move to Postgres once this is multi-tenant |
+| Interface | Next.js 16 + React 19 + Tailwind v4 + shadcn-ui |
+| API service | stdlib `http.server` — move to FastAPI if you need >10 rps |
+| Language of the codebase | English throughout: files, identifiers, DB columns, API keys, UI |
 
-⚠️ Tidak semua wilayah AWS menyediakan Claude. Cek dulu; siapkan `us-west-2` sebagai cadangan.
-
----
-
-## 5. Enam jaminan yang ditegakkan kode
-
-Bukan instruksi ke AI — ini dipaksakan oleh program, jadi tidak bisa dilanggar prompt.
-
-1. **Kegagalan tidak mengarang nilai.** Alat gagal → `TIDAK_ADA`.
-2. **Kalkulator menolak** memberi angka rupiah kalau masukannya belum tepercaya.
-3. **Aksi idempoten.** Kunci yang sama tidak pernah membuat pesanan kedua.
-4. **Identitas hanya dari token sesi.** Mengaku peran lain lewat badan permintaan diabaikan.
-5. **Wewenang dicek di server**, bukan di tombol.
-6. **Produksi menolak start** tanpa SAP dan model — tidak boleh menebak apa pun.
+⚠️ Not every AWS region offers Claude. Check first; keep `us-west-2` as the fallback.
 
 ---
 
-## 6. Urutan kerja berikutnya
+## 5. Guarantees the code enforces
 
-| # | Yang dikerjakan | Siapa | Lama |
+Not instructions to a model — these are enforced by the program, so no prompt can break them.
+
+1. **A failure never invents a value.** Tool fails → `MISSING`.
+2. **The calculator refuses** rupiah figures when its inputs aren't trustworthy.
+3. **Actions are idempotent.** The same key never creates a second order.
+4. **Identity comes only from the session token.** Claiming a role via the request body
+   is ignored.
+5. **Authority is checked on the server**, not on the button.
+6. **Production refuses to start** without SAP and a model — it may not guess at anything.
+7. **A missing prompt raises** rather than sending a placeholder to the model.
+
+The full list, with the reasoning, is in `agent/README.md`.
+
+---
+
+## 6. What to do next
+
+| # | Work | Who | How long |
 |---|---|---|---|
-| 1 | Ambil `SAP_API_KEY` di api.sap.com | siapa saja | 15 menit |
-| 2 | Aktifkan Bedrock, pastikan wilayahnya | backend | 1 jam |
-| 3 | Jalankan `graph.py` sungguhan, perbaiki yang pecah | backend | 1–2 hari |
-| 4 | Tulis `references/tkdn-rules.md` + `lartas-procedure.md` | **domain** | 2 hari |
-| 5 | Cocokkan nama entitas tulis SAP di `pengirim.py` | backend | 1 hari |
-| 6 | 11 alat sisanya | backend + data | 3 hari |
-| 7 | Kumpulan uji 10 skenario | data | 2 hari |
-| 8 | Mode Cegah + Ahli Pemindai Risiko | backend | 3 hari |
+| 1 | Get `SAP_API_KEY` at api.sap.com | anyone | 15 min |
+| 2 | Enable Bedrock, confirm the region | backend | 1 hour |
+| 3 | Write the 9 missing agent prompts | backend + domain | 1–2 days |
+| 4 | Run `graph.py` for real, fix what breaks | backend | 1–2 days |
+| 5 | Write `references/tkdn-rules.md` + `lartas-procedure.md` | **domain** | 2 days |
+| 6 | Verify SAP write entity names in `sender.py` | backend | 1 day |
+| 7 | The 4 remaining tools (Prevent mode) | backend + data | 2 days |
+| 8 | A 10-scenario eval suite | data | 2 days |
+| 9 | Prevent mode end to end | backend | 3 days |
 
-Nomor 4 bisa jalan paralel sejak sekarang dan **tidak menunggu apa pun.**
+Items 3 and 5 can start now and **wait on nothing.**
 
 ---
 
-## 7. Susunan berkas
+## 7. File layout
 
 ```
 sigap/
-├── PLAN.md           berkas ini — rencana & status
-├── DESIGN.md         angka skenario, 23 alat, 11 agent, aturan lokal
-├── TEKNIS.md         nama fungsi & parameter persis
-├── SUMBER-DATA.md    hasil pengecekan tiap sumber data
-└── agent/            kode
-    ├── core/         asal data · identitas · penyimpanan · konfigurasi · registry
-    ├── clients/      penghubung SAP
-    ├── tools/        12 alat terdaftar
-    ├── engine/       kalkulator — Python murni
-    ├── agents/       definisi 11 agent
-    ├── prompts/      instruksi tiap agent
-    ├── graph.py      tim agent
-    ├── api.py        layanan HTTP
-    └── pengirim.py   kirim aksi yang disetujui ke SAP
+├── PLAN.md              this file — plan & status
+├── AGENT-REFERENCE.md   the 11 agents — GENERATED, run `manage.py docs`
+├── DESIGN.md            scenario figures, local rules
+├── TECHNICAL.md         exact function names & parameters
+├── DATA-SOURCES.md      what was verified about each data source
+└── agent/               the code
+    ├── core/            provenance · identity · store · config · registry · trace
+    ├── clients/         the SAP connector
+    ├── tools/           one file per agent, named after the agent code
+    ├── engine/          the calculator — pure Python
+    ├── agents/          the 11 agent definitions
+    ├── prompts/         each agent's instructions
+    ├── fixtures/        modelled data, clearly labelled as such
+    ├── graph.py         the agent team
+    ├── api.py           the HTTP service
+    ├── sender.py        pushes approved actions to SAP
+    └── manage.py        admin: user · secret · seed · check · docs
 
-app/sigap/            antarmuka Next.js
-app/api/              jembatan ke layanan agent
+app/(app)/               the Next.js interface
+app/api/                 the bridge to the agent service
+components/              sidebar, charts, tables, badges
 ```
 
 ---
 
-## 8. Daftar istilah
+## 8. Glossary
 
-| Yang dipakai di sini | Istilah teknisnya |
+| Said plainly here | The technical term |
 |---|---|
-| Tim agent dengan ketua | multi-agent system · *supervised swarm* |
-| Ketua | *supervisor agent* |
-| Alat | *tool* |
-| Label asal data | *provenance* |
-| Kalkulator biasa | *deterministic engine* |
-| Urutan ditentukan saat jalan | *runtime routing* |
-| Aksi tidak berganda | *idempotency* |
-| Sistem uji coba SAP | *sandbox* |
-| Pindah ke pelanggan | *tenant swap* |
-| Kandungan lokal | TKDN |
-| Izin impor | LARTAS |
-| Ketepatan pengiriman | OTIF |
+| A team of agents with a lead | multi-agent system · *supervised swarm* |
+| The lead | *supervisor agent* |
+| What an agent can do | *tool* |
+| The data-origin label | *provenance* |
+| An ordinary calculator | *deterministic engine* |
+| The order is decided while running | *runtime routing* |
+| An action never doubles | *idempotency* |
+| SAP's try-it-out system | *sandbox* |
+| Moving to a customer's own system | *tenant swap* |
+| Local content ratio | TKDN |
+| Import licensing | LARTAS |
+| Delivery reliability | OTIF |

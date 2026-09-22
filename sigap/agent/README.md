@@ -1,121 +1,147 @@
-# SIGAP — sistem agent
+# SIGAP — the agent system
 
-Aplikasi respons gangguan pasokan. Bukan proyek demo: produksi menolak jalan
-tanpa SAP dan model sungguhan.
+Supply-disruption response. Not a demo: production refuses to run without real SAP
+and a real model.
 
-## Jalankan
+## Run it
 
 ```bash
-# 1. layanan agent
+# 1. the agent service
 cd sigap/agent
 python3 api.py                      # :8787
 
-# 2. antarmuka
+# 2. the interface
 cd ../..
 SIGAP_API=http://127.0.0.1:8787 npm run dev
 
-# 3. kirim aksi yang sudah disetujui ke SAP (jalankan berkala)
-cd sigap/agent && python3 pengirim.py
-open http://localhost:3000/sigap
+# 3. push approved actions to SAP (run on a schedule)
+cd sigap/agent && python3 sender.py
+open http://localhost:3000/dashboard
 ```
 
-## Siapkan akun
+## Set up an account
 
 ```bash
-python3 kelola.py rahasia                 # keluarannya diexport sebagai SIGAP_SECRET
-python3 kelola.py pengguna budi@kpn.co.id "Budi Santoso" buyer sandi123
+python3 manage.py secret                  # export its output as SIGAP_SECRET
+python3 manage.py user budi@kpn.co.id "Budi Santoso" buyer secret123
+python3 manage.py seed                    # optional: demo events and actions
 ```
 
-Peran dan batas nilai yang boleh disetujui:
+Roles and how much each may approve:
 
-| Peran | Batas |
+| Role | Limit |
 |---|---|
-| `planner` | hanya membaca, tidak boleh menyetujui |
-| `buyer` | sampai Rp 500 juta |
-| `procurement_lead` | sampai Rp 10 miliar |
-| `admin` | sampai Rp 10 miliar |
+| `planner` | read only, may not approve |
+| `buyer` | up to Rp 500 million |
+| `procurement_lead` | up to Rp 10 billion |
+| `admin` | up to Rp 10 billion |
 
-## Konfigurasi
+## Configuration
 
-| Variabel | Arti | Wajib di produksi |
+| Variable | Meaning | Required in prod |
 |---|---|---|
 | `SIGAP_ENV` | `dev` · `staging` · `prod` | — |
-| `SAP_API_KEY` | kunci dari api.sap.com | ✅ |
-| `SAP_BASE_URL` | default sandbox SAP | — |
-| `AWS_REGION` | wilayah yang menyediakan Claude | ✅ |
-| `SIGAP_MODEL` | default `anthropic.claude-opus-5` | — |
-| `SIGAP_BATAS_OTONOM_IDR` | batas aksi tanpa persetujuan, default 50 juta | — |
-| `SIGAP_BATAS_BIAYA_IDR` | pagu biaya model per peristiwa, default 500 ribu | — |
-| `SIGAP_DB` | berkas SQLite, default `data/sigap.db` | — |
-| `SIGAP_SECRET` | kunci tanda tangan token sesi | ✅ |
+| `SAP_API_KEY` | key from api.sap.com | ✅ |
+| `SAP_BASE_URL` | defaults to the SAP sandbox | — |
+| `AWS_REGION` | a region that offers Claude | ✅ |
+| `SIGAP_MODEL` | defaults to `anthropic.claude-opus-5` | — |
+| `SIGAP_AUTONOMOUS_LIMIT_IDR` | ceiling for unapproved actions, default 50m | — |
+| `SIGAP_COST_CAP_IDR` | model spend cap per event, default 500k | — |
+| `SIGAP_DB` | SQLite file, default `data/sigap.db` | — |
+| `SIGAP_SECRET` | signing key for session tokens | ✅ |
 
-`SIGAP_ENV=prod` tanpa `SAP_API_KEY` atau `AWS_REGION` akan **menolak start**.
-Produksi tidak boleh menebak apa pun.
+`SIGAP_ENV=prod` without `SAP_API_KEY` or `AWS_REGION` **refuses to start**. Production
+does not guess at anything.
 
 ## API
 
 | | |
 |---|---|
-| `GET /sehat` | status sambungan |
-| `POST /peristiwa` | terima gangguan, mulai penanganan |
-| `GET /jalan` | daftar penanganan |
-| `GET /jalan/{id}` | langkah, aksi, persetujuan |
-| `POST /masuk` | tukar email+sandi jadi token sesi |
-| `GET /saya` | identitas dan batas wewenang |
-| `POST /aksi/{id}/putusan` | setujui · tolak · naikkan — **butuh token** |
+| `GET /health` | connection status |
+| `POST /events` | take a disruption, start a handling |
+| `GET /runs` | list handlings |
+| `GET /runs/{id}` | steps, actions, approvals |
+| `POST /login` | exchange email+password for a session token |
+| `GET /me` | identity and approval limit |
+| `POST /actions/{id}/decision` | approve · reject · escalate — **needs a token** |
+| `GET /agents` · `POST /agents/{code}/ask` | team anatomy · ask one specialist |
+| `GET /summary` · `GET /data/{domain}` · `GET /log` | dashboard, tables, audit trail |
+| `GET /uploads` · `POST /uploads` | company CSV in place of SAP |
+| `GET /reports/{run_id}` · `GET /contacts` · `POST /contacts` | write-up, notify list |
 
 ```bash
-curl -X POST localhost:8787/peristiwa -H 'content-type: application/json' \
-  -d '{"jenis":"port_closure","judul":"Ningbo tutup 6 hari",
-       "pemicu":"advisory maritim","muatan":{"pelabuhan":"CNNGB"}}'
+curl -X POST localhost:8787/events -H 'content-type: application/json' \
+  -d '{"kind":"port_closure","title":"Ningbo closed 6 days",
+       "trigger":"maritime advisory","payload":{"port":"CNNGB"}}'
 ```
 
-## Bentuk sistem
+## Shape of the system
 
 ```
-api.py                 layanan HTTP
-graph.py               tim agent — ketua + ahli, putaran tool-use ke Bedrock
-core/konfigurasi.py    produksi menolak data contoh
-core/simpan.py         SQLite: peristiwa, jalan, langkah, aksi, persetujuan
-core/provenance.py     label asal data — melekat di SEMUA alat
-core/registry.py       daftar alat: skema yang dilihat model = fungsi yang jalan
-clients/sap_s4.py      OData; sandbox hari ini, tenant pelanggan besok
-tools/                 12 alat terdaftar
-engine/simulate.py     kalkulator — Python murni, tanpa AI
-agents/definisi.py     11 agent, instruksi di prompts/
+api.py                 the HTTP service
+graph.py               the agent team — lead + specialists, tool-use loop to Bedrock
+sender.py              pushes approved actions to SAP; retried, never double-sent
+manage.py              admin: user · secret · seed · check · docs
+core/config.py         production refuses modelled data
+core/store.py          SQLite: events, runs, steps, actions, approvals, uploads, contacts
+core/provenance.py     the data-origin label — attached to EVERY tool return
+core/registry.py       tool registry: the schema the model sees IS the function that runs
+core/identity.py       pbkdf2 passwords, HMAC session tokens, per-role approval limits
+core/trace.py          step recorder; its output is what the dashboard reads
+clients/sap_s4.py      OData; the sandbox today, a customer tenant tomorrow
+engine/simulate.py     the calculator — pure Python, no AI
+agents/definitions.py  the 11 agents; instructions live in prompts/
+tools/                 one file per agent, named after the agent code
 ```
 
-## Jaminan yang ditegakkan kode, bukan instruksi
+Every tool file is named for the agent that owns it — `impact.py` holds Elsa's tools,
+`compliance.py` holds Kira's. A page and its specialist cannot drift apart.
 
-1. **Kegagalan tidak mengarang nilai.** Alat gagal → `Asal.TIDAK_ADA`, bukan tebakan.
-2. **Kalkulator menolak** mengeluarkan angka rupiah kalau masukannya belum tepercaya.
-3. **Aksi idempoten.** Kunci yang sama tidak pernah membuat pesanan kedua.
-4. **Persetujuan sekali pakai.** Aksi yang sudah diputus tidak bisa diputus ulang.
-5. **Batas putaran dan pagu biaya** per peristiwa — tim agent tidak bisa berputar tanpa henti.
-6. **Produksi menolak start** tanpa SAP dan model.
-7. **Identitas hanya dari token sesi.** Mengaku sebagai peran lain lewat badan
-   permintaan diabaikan — ini yang membuat kolom "disetujui oleh" bernilai.
-8. **Wewenang dicek di server**, bukan di tombol. Tombol yang mati di UI cuma
-   kenyamanan; penolakan sebenarnya terjadi di API.
-9. **Gagal kirim ke SAP tidak mengubah status.** Aksi tetap `disetujui` dan dicoba
-   lagi; kunci idempoten mencegah pesanan ganda.
+## Guarantees the code enforces, not the prompt
 
-## Pengecekan
+1. **A failure never invents a value.** Tool fails → `Origin.MISSING`, not a guess.
+2. **The calculator refuses** to emit a rupiah figure when its inputs aren't trustworthy.
+3. **Actions are idempotent.** The same key never creates a second order.
+4. **Approvals are one-shot.** A decided action cannot be decided again.
+5. **Round limits and a spend cap** per event — the team cannot loop forever.
+6. **Production refuses to start** without SAP and a model.
+7. **Identity comes only from the session token.** Claiming a role through the request
+   body is ignored — this is what makes the "approved by" column mean anything.
+8. **Authority is checked on the server**, not on the button. A disabled button is a
+   convenience; the real refusal happens in the API.
+9. **A failed SAP write does not change status.** The action stays `approved` and is
+   retried; the idempotency key prevents a duplicate order.
+10. **A missing prompt raises.** An agent with no `prompts/<code>.txt` cannot be run at
+    all, rather than being sent to the model with a placeholder.
+
+## Checks
 
 ```bash
-python3 -m core.provenance     # label asal data
-python3 -m engine.simulate     # kalkulator — mereproduksi angka DESIGN.md §2
-python3 -m agents.definisi     # 11 agent, 23 alat, satu veto
+python3 manage.py check        # every self-check, then what is still missing
 ```
 
-## Yang belum
+Individually:
 
-- **`references/`** — aturan TKDN & LARTAS. Ahli Aturan sudah membacanya kalau ada;
-  tanpa itu ia menilai dari parameter dan menandai hasilnya `CONTOH`. Tugas orang domain.
-- **SSO.** Auth sekarang lokal (pbkdf2 + token HMAC). Di perusahaan sungguhan ini
-  diganti SSO perusahaan — `identitas.dari_token()` satu-satunya titik yang berubah.
-- **9 prompt** ahli lainnya.
-- **Nama layanan tulis SAP belum diverifikasi.** `pengirim.py` memetakan aksi ke
-  `API_PURCHASEREQ_PROCESS_SRV` dan sejenisnya; jalurnya sudah lengkap termasuk token
-  CSRF, tapi nama entitasnya perlu dicocokkan dengan sandbox sebelum dipakai.
-- **Python 3.10+** untuk Strands. Mesin ini 3.9.
+```bash
+PYTHONPATH=. python3 core/provenance.py   # the origin label
+PYTHONPATH=. python3 engine/simulate.py   # the calculator — reproduces DESIGN.md §2
+PYTHONPATH=. python3 tools/compliance.py  # TKDN direction, LARTAS delay
+PYTHONPATH=. python3 tools/execution.py   # idempotency key
+PYTHONPATH=. python3 agents/definitions.py
+```
+
+## Not done yet
+
+- **`references/`** — the TKDN & LARTAS rules. Kira reads them when they exist; without
+  them she judges from parameters and labels the result `MODELLED`. Domain work.
+- **9 prompts.** Only `supervisor` and `compliance` are written. The other nine agents
+  raise `PromptMissing` on invocation.
+- **4 tools**, all Prevent mode: `create_sourcing_event`, `propose_safety_stock_change`
+  (Bram), `scan_supply_exposure`, `get_supplier_certifications` (Vega — so Vega has
+  no tools at all yet).
+- **SSO.** Auth is local today (pbkdf2 + HMAC token). In a real company this becomes
+  corporate SSO — `identity.from_token()` is the only place that changes.
+- **SAP write service names are unverified.** `sender.py` maps actions to
+  `API_PURCHASEREQ_PROCESS_SRV` and friends; the path is complete including the CSRF
+  token, but the entity names need checking against the sandbox before real use.
+- **Python 3.10+** for Strands. This machine is on 3.9.

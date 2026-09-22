@@ -1,60 +1,70 @@
 # SIGAP
 
-**Sistem Intelijen Gangguan & Antisipasi Pasokan**
+**Supply Disruption Intelligence & Anticipation System**
 
-Asisten otomatis untuk pabrik yang bahan bakunya banyak diimpor. Kalau ada gangguan
-pasokan, sistem menyelidiki dampaknya sendiri, menyusun pilihan jalan keluar, mencoret
-yang melanggar aturan, menghitung mana yang paling murah, lalu mengeksekusinya ke SAP
-setelah disetujui orang yang berwenang.
+An autonomous assistant for manufacturers that import most of their raw material. When
+supply is disrupted, the system investigates the impact itself, assembles the ways out,
+strikes the ones that break Indonesian regulation or the customer contract, works out
+which is cheapest, and executes it into SAP once someone with the authority approves.
 
 ---
 
-## Jalankan
+## Run it
 
 ```bash
 cd sigap/agent
-python3 kelola.py rahasia                 # export keluarannya sebagai SIGAP_SECRET
-python3 kelola.py pengguna budi@kpn.co.id "Budi" buyer sandi123
+python3 manage.py secret                  # export its output as SIGAP_SECRET
+python3 manage.py user budi@kpn.co.id "Budi" buyer secret123
+python3 manage.py seed                    # optional demo data
 python3 api.py                            # :8787
 
 cd ../..
 SIGAP_API=http://127.0.0.1:8787 npm run dev
-open http://localhost:3000/sigap
+open http://localhost:3000/dashboard
 ```
 
-## Mulai dari mana
+## Where to start
 
-| Mau apa | Buka |
+| You want to | Open |
 |---|---|
-| Paham produknya | `PLAN.md` §1 dan §3 |
-| Lihat sudah sampai mana | `PLAN.md` §2 |
-| Mulai ngoding | `agent/README.md`, lalu `TEKNIS.md` |
-| Kenal agent-nya satu per satu | `AGENT.md` |
-| Butuh angka atau skenario | `DESIGN.md` §2 |
-| Bingung ambil data dari mana | `SUMBER-DATA.md` |
+| Understand the product | `PLAN.md` §1 and §3 |
+| See how far along it is | `PLAN.md` §2, or `manage.py check` |
+| Start writing code | `agent/README.md`, then `TECHNICAL.md` |
+| Meet the agents one by one | `AGENT-REFERENCE.md` |
+| Find a number or the scenario | `DESIGN.md` §2 |
+| Work out where data comes from | `DATA-SOURCES.md` |
 
-## Isi
+## Contents
 
-| Berkas | Isinya |
+| File | What's in it |
 |---|---|
-| **`PLAN.md`** ⭐ | Rencana, status tiap bagian, urutan kerja. Bahasa sehari-hari |
-| **`AGENT.md`** | Rujukan lengkap 11 agent: fungsi, alat, parameter, batas wewenang |
-| `DESIGN.md` | Angka skenario, aturan lokal, eval suite |
-| `TEKNIS.md` | Nama fungsi dan parameter persis |
-| `SUMBER-DATA.md` | Hasil pengecekan tiap sumber data |
-| `agent/` | Kode — lihat `agent/README.md` |
+| **`PLAN.md`** ⭐ | The plan, the status of each part, the order of work |
+| **`AGENT-REFERENCE.md`** | All 11 agents: tools, parameters, limits. **Generated** — `manage.py docs` |
+| `DESIGN.md` | Scenario figures, local rules, the eval suite |
+| `TECHNICAL.md` | Exact function names and parameters |
+| `DATA-SOURCES.md` | What was verified about each data source |
+| `agent/` | The code — see `agent/README.md` |
 
-## Yang perlu diingat
+## Things to remember
 
-**PLAN.md rujukan utama.** Kalau ada yang berbeda antar dokumen, PLAN.md yang benar.
+**PLAN.md is the reference.** Where documents disagree, PLAN.md is right.
 
-**Angka selalu dari DESIGN.md §2**, dan diverifikasi mesin:
+**AGENT-REFERENCE.md is generated, never edited.** It is derived from the live tool
+registry, so it cannot drift from the code the way a hand-written copy does:
 
 ```bash
-cd agent && python3 -m engine.simulate
+cd agent && PYTHONPATH=. python3 manage.py docs
 ```
 
-Kalau ada angka di dokumen yang tidak bisa direproduksi perintah itu, **dokumennya yang salah.**
+**Numbers always come from DESIGN.md §2**, and the machine verifies them:
 
-**Tiga hal yang menghambat sekarang:** `SAP_API_KEY`, `AWS_REGION`, dan `references/`
-(aturan TKDN & LARTAS). Yang ketiga bisa dikerjakan sekarang juga dan tidak menunggu apa pun.
+```bash
+cd agent && PYTHONPATH=. python3 engine/simulate.py
+```
+
+If a figure in a document cannot be reproduced by that command, **the document is wrong.**
+
+**What is blocking, right now** — `PYTHONPATH=. python3 manage.py check` prints this
+live, but in short: `SAP_API_KEY`, `AWS_REGION`, nine agent prompts, four Prevent-mode
+tools, and `references/` (the TKDN & LARTAS rules). The prompts and `references/` need
+nobody's permission and can be started today.
