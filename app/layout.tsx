@@ -1,9 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import "twenty-ui/style.css";
-import "twenty-ui/theme-dark.css";
-import "twenty-ui/theme-light.css";
 import "./globals.css";
+import { PenyediaTema } from "@/components/tema";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -26,9 +24,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      className={`dark ${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <PenyediaTema>{children}</PenyediaTema>
+      </body>
     </html>
   );
 }

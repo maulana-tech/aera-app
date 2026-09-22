@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Button } from "@/app/ui/Twenty";
+import { Button } from "@/components/ui/button";
 
 type Putusan = "disetujui" | "ditolak" | "dinaikkan";
 
@@ -38,35 +38,32 @@ export default function Putusan({ aksiId, nilaiIdr, batasIdr }: {
     <div className="mt-3">
       <div className="flex flex-wrap gap-2">
         <Button
-          variant="solid" color="accent" size="sm"
-          loading={sibuk === "disetujui"}
+          size="sm"
           disabled={!!sibuk || diluarWewenang}
           onClick={() => kirim("disetujui")}
         >
-          Setujui
+          {sibuk === "disetujui" ? "Mengirim…" : "Setujui"}
         </Button>
         <Button
-          variant="outline" color="neutral" size="sm"
-          loading={sibuk === "dinaikkan"} disabled={!!sibuk}
+          variant="outline" size="sm" disabled={!!sibuk}
           onClick={() => kirim("dinaikkan")}
         >
           Naikkan
         </Button>
         <Button
-          variant="ghost" color="danger" size="sm"
-          loading={sibuk === "ditolak"} disabled={!!sibuk}
+          variant="ghost" size="sm" className="text-destructive" disabled={!!sibuk}
           onClick={() => kirim("ditolak")}
         >
           Tolak
         </Button>
       </div>
       {diluarWewenang && (
-        <p className="mt-2 text-[11px] leading-relaxed text-amber-300">
+        <p className="mt-2 text-[11px] leading-relaxed text-amber-700 dark:text-amber-400">
           Di luar wewenangmu{batasIdr > 0 && ` (batas Rp ${batasIdr.toLocaleString("id-ID")})`}.
           Gunakan Naikkan.
         </p>
       )}
-      {galat && <p className="mt-2 font-mono text-xs text-rose-300">{galat}</p>}
+      {galat && <p className="mt-2 font-mono text-xs text-rose-700 dark:text-rose-400">{galat}</p>}
     </div>
   );
 }
