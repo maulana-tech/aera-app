@@ -16,7 +16,7 @@ export default async function Detail({ params }: { params: Promise<{ id: string 
   const setuju = j.persetujuan ?? [];
 
   return (
-    <main className="mx-auto max-w-[1180px] px-6 py-8">
+    <main className="w-full px-6 py-8">
       <Link href="/" className="font-mono text-xs text-muted-foreground hover:text-foreground">← antrean</Link>
 
       <header className="mt-4 flex flex-wrap items-end justify-between gap-4 border-b border-border pb-5">
@@ -36,7 +36,7 @@ export default async function Detail({ params }: { params: Promise<{ id: string 
         </div>
       </header>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_340px]">
+      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <section className="rounded-xl border border-border">
           <div className="border-b border-border px-5 py-3">
             <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
@@ -74,16 +74,15 @@ export default async function Detail({ params }: { params: Promise<{ id: string 
 
         <aside className="space-y-5">
           {j.keputusan && (
-            <div className={`rounded-xl border p-5 ${
-              j.status === "ditahan" ? "border-amber-500/50 bg-amber-500/5" : "border-primary/60 bg-primary/5"}`}>
-              <p className="font-mono text-[11px] uppercase tracking-wider text-primary">
+            <div className="rounded-xl border p-5">
+              <p className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
                 {j.status === "ditahan" ? "Ditahan" : "Rekomendasi"}
               </p>
               <p className="mt-2 whitespace-pre-line text-sm leading-relaxed">
                 {j.keputusan.rekomendasi ?? j.keputusan.alasan ?? "—"}
               </p>
               {Array.isArray(j.keputusan.papan_tidak_tepercaya) && j.keputusan.papan_tidak_tepercaya.length > 0 && (
-                <p className="mt-3 text-xs leading-relaxed text-amber-700 dark:text-amber-400">
+                <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
                   Data belum tepercaya: {j.keputusan.papan_tidak_tepercaya.join(", ")}
                 </p>
               )}
@@ -125,7 +124,7 @@ export default async function Detail({ params }: { params: Promise<{ id: string 
                             batasIdr={aku.batas_idr}
                           />
                         ) : (
-                          <p className="mt-2 text-[11px] text-amber-700 dark:text-amber-400">
+                          <p className="mt-2 text-[11px] text-muted-foreground">
                             Masuk dulu untuk menyetujui.
                           </p>
                         )

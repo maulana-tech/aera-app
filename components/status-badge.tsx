@@ -8,7 +8,7 @@ const WARNA: Record<string, string> = {
   berjalan:  "border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-400",
   ditahan:   "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400",
   menunggu:  "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  runut:     "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  runut:     "border-border bg-muted text-muted-foreground",
   gagal:     "border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-400",
   ditolak:   "border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-400",
 };

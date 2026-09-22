@@ -49,24 +49,25 @@ export function AppSidebar({
           <SidebarMenu>
             {MENU.map((m) => (
               <SidebarMenuItem key={m.href}>
-                <SidebarMenuButton
-                  asChild={!m.segera}
-                  tooltip={m.segera ? `${m.judul} — belum ada` : m.judul}
-                  isActive={jalur === m.href}
-                  className={m.segera ? "cursor-not-allowed opacity-40" : undefined}
-                >
-                  {m.segera ? (
-                    <span>
-                      <m.icon />
-                      <span>{m.judul}</span>
-                    </span>
-                  ) : (
+                {m.segera ? (
+                  // Ikon dan teks HARUS jadi anak langsung — SidebarMenuButton
+                  // menata anak langsungnya, bungkus apa pun merusak barisnya.
+                  <SidebarMenuButton
+                    disabled
+                    tooltip={`${m.judul} — belum ada`}
+                    className="cursor-not-allowed opacity-45"
+                  >
+                    <m.icon />
+                    <span>{m.judul}</span>
+                  </SidebarMenuButton>
+                ) : (
+                  <SidebarMenuButton asChild tooltip={m.judul} isActive={jalur === m.href}>
                     <Link href={m.href}>
                       <m.icon />
                       <span>{m.judul}</span>
                     </Link>
-                  )}
-                </SidebarMenuButton>
+                  </SidebarMenuButton>
+                )}
               </SidebarMenuItem>
             ))}
           </SidebarMenu>

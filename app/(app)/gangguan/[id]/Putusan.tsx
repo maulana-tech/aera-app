@@ -58,7 +58,7 @@ export default function Putusan({ aksiId, nilaiIdr, batasIdr }: {
         </Button>
       </div>
       {diluarWewenang && (
-        <p className="mt-2 text-[11px] leading-relaxed text-amber-700 dark:text-amber-400">
+        <p className="text-muted-foreground mt-2 text-[11px] leading-relaxed">
           Di luar wewenangmu{batasIdr > 0 && ` (batas Rp ${batasIdr.toLocaleString("id-ID")})`}.
           Gunakan Naikkan.
         </p>

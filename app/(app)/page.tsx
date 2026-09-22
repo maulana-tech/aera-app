@@ -11,7 +11,7 @@ export default async function Antrean() {
 
   if (!data) {
     return (
-      <main className="mx-auto max-w-3xl px-6 py-24">
+      <main className="w-full px-6 py-16">
         <h1 className="text-xl font-semibold">Layanan agent tidak merespons</h1>
         <pre className="mt-4 rounded-lg border border-border bg-card p-4 font-mono text-sm">
           cd sigap/agent{"\n"}python3 api.py
@@ -24,7 +24,7 @@ export default async function Antrean() {
   const menunggu = jalan.filter((j) => j.status === "berjalan" || j.status === "ditahan");
 
   return (
-    <main className="mx-auto max-w-5xl px-6 py-10">
+    <main className="w-full px-6 py-8">
       <header className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-5">
         <div>
           <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">
@@ -59,7 +59,7 @@ export default async function Antrean() {
           </pre>
         </div>
       ) : (
-        <ul className="mt-6 space-y-3">
+        <ul className="mt-6 grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
           {jalan.map((j) => (
             <li key={j.id}>
               <Link
@@ -83,12 +83,12 @@ export default async function Antrean() {
                   </p>
                 )}
                 {j.status === "ditahan" && j.keputusan?.alasan && (
-                  <p className="mt-3 text-sm leading-relaxed text-amber-700 dark:text-amber-400">
+                  <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
                     {j.keputusan.alasan}
                   </p>
                 )}
                 {j.galat && (
-                  <p className="mt-3 font-mono text-xs text-rose-700 dark:text-rose-400">{j.galat}</p>
+                  <p className="mt-3 font-mono text-xs text-destructive">{j.galat}</p>
                 )}
 
                 <p className="mt-3 font-mono text-[11px] text-muted-foreground">
