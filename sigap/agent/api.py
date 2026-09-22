@@ -165,6 +165,57 @@ def daftar_agent(_m, _b, _h) -> Tuple[int, dict]:
     }
 
 
+@rute("POST", r"/agent/([a-z_]+)/tanya")
+def tanya_agent(m, b: dict, h) -> Tuple[int, dict]:
+    """Percakapan langsung dengan satu ahli."""
+    _pengguna(h)                                    # harus masuk dulu
+    kode, tanya = m.group(1), (b.get("tanya") or "").strip()
+    if not tanya:
+        return 400, {"galat": "'tanya' wajib diisi"}
+
+    from agents.definisi import SEMUA
+    if kode not in SEMUA:
+        return 404, {"galat": f"agent '{kode}' tidak dikenal"}
+
+    if not KONF.model_siap:
+        return 503, {
+            "galat": "AWS_REGION belum diisi — agent tidak bisa menalar.",
+            "petunjuk": "Isi AWS_REGION di sigap/agent/.env dengan wilayah "
+                        "yang menyediakan Claude di Bedrock, lalu jalankan ulang layanan.",
+        }
+    try:
+        import graph
+        return 200, graph.tanya_ahli(kode, tanya)
+    except Exception as e:                                          # noqa: BLE001
+        traceback.print_exc()
+        return 500, {"galat": f"{type(e).__name__}: {e}"}
+
+
+@rute("GET", r"/log")
+def log_mentah(_m, b: dict, _h) -> Tuple[int, dict]:
+    """Seluruh langkah dari semua penanganan, terbaru dulu."""
+    with simpan.buka() as c:
+        rows = c.execute(
+            "SELECT l.*, p.judul, p.jenis AS jenis_peristiwa FROM langkah l"
+            " JOIN jalan j ON j.id = l.jalan_id"
+            " JOIN peristiwa p ON p.id = j.peristiwa_id"
+            " ORDER BY l.id DESC LIMIT 300").fetchall()
+        aksi = c.execute(
+            "SELECT a.*, p.judul FROM aksi a"
+            " JOIN jalan j ON j.id = a.jalan_id"
+            " JOIN peristiwa p ON p.id = j.peristiwa_id"
+            " ORDER BY a.dibuat DESC LIMIT 100").fetchall()
+        setuju = c.execute(
+            "SELECT s.*, a.jenis AS jenis_aksi, a.jalan_id FROM persetujuan s"
+            " JOIN aksi a ON a.id = s.aksi_id ORDER BY s.id DESC LIMIT 100").fetchall()
+    return 200, {
+        "langkah": [dict(r) | {"alat": json.loads(r["alat"]),
+                               "detail": json.loads(r["detail"])} for r in rows],
+        "aksi": [dict(r) | {"muatan": json.loads(r["muatan"])} for r in aksi],
+        "persetujuan": [dict(r) for r in setuju],
+    }
+
+
 @rute("POST", r"/masuk")
 def login(_m, b: dict, _h) -> Tuple[int, dict]:
     try:

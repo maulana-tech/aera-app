@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ambil, rupiah, saya, type Jalan } from "@/app/lib";
+import { SegarkanOtomatis } from "@/components/segarkan-otomatis";
 import { AsalBadge, StatusBadge } from "@/components/status-badge";
 import Putusan from "./Putusan";
 
@@ -29,6 +30,7 @@ export default async function Detail({ params }: { params: Promise<{ id: string 
           {j.mode === "runut" && (
             <StatusBadge status="runut" className="px-3 py-1">mode runut</StatusBadge>
           )}
+          <SegarkanOtomatis aktif={j.status === "berjalan"} />
           <StatusBadge status={j.status} />
           {j.biaya_token_idr > 0 && (
             <span className="rounded-full border border-border px-3 py-1 text-muted-foreground">{rupiah(j.biaya_token_idr)}</span>

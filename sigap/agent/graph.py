@@ -223,3 +223,34 @@ def jalankan(peristiwa: dict, lapor: Callable[[str, dict], None]) -> dict:
 
     return {"status": "berhenti", "alasan": f"melewati {MAKS_PUTARAN_KETUA} putaran ketua",
             "agent_dipanggil": dipanggil, "biaya_idr": biaya.idr}
+
+
+def tanya_ahli(kode: str, pertanyaan: str,
+               lapor: Optional[Callable[[str, dict], None]] = None) -> dict:
+    """Tanya satu ahli secara langsung, di luar penanganan gangguan.
+
+    Dipakai halaman percakapan per agent. Ahli yang sama, alat yang sama —
+    bedanya cuma tidak ada ketua yang mengatur giliran.
+    """
+    if kode not in SEMUA:
+        raise KeyError(kode)
+    agent = SEMUA[kode]
+    papan, biaya = Papan(), Biaya()
+    jejak: List[dict] = []
+
+    def rekam(jenis: str, d: dict) -> None:
+        jejak.append({"jenis": jenis, **d})
+        if lapor:
+            lapor(jenis, d)
+
+    cl = klien()
+    jawab = _putaran_alat(cl, agent, pertanyaan, papan, biaya, rekam)
+    return {
+        "agent": kode,
+        "nama": agent.nama,
+        "jawab": jawab,
+        "alat_dipakai": [j["nama"] for j in jejak if j["jenis"] == "alat"],
+        "papan": {k: {"asal": papan.asal[k], "sumber": papan.sumber[k]} for k in papan.temuan},
+        "tidak_tepercaya": papan.ada_yang_tidak_tepercaya(),
+        "biaya_idr": biaya.idr,
+    }

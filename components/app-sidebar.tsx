@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { AlertTriangle, Inbox, Users } from "lucide-react";
+import { AlertTriangle, Inbox, ScrollText, Users } from "lucide-react";
 
 import { NavPengguna } from "@/components/nav-pengguna";
 import {
@@ -13,6 +13,7 @@ import {
 const MENU = [
   { judul: "Antrean keputusan", href: "/", icon: Inbox },
   { judul: "Tim agent", href: "/agent", icon: Users },
+  { judul: "Log", href: "/log", icon: ScrollText },
 ];
 
 export function AppSidebar({
@@ -31,10 +32,7 @@ export function AppSidebar({
                 <div className="bg-primary text-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
                   <AlertTriangle className="size-4" />
                 </div>
-                <div className="grid flex-1 text-left leading-tight">
-                  <span className="truncate font-semibold">SIGAP</span>
-                  <span className="text-muted-foreground truncate text-xs">Gangguan pasokan</span>
-                </div>
+                <span className="flex-1 truncate text-left font-semibold tracking-tight">SIGAP</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>

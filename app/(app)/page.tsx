@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ambil, rupiah, type Jalan } from "@/app/lib";
 import { Badge } from "@/components/ui/badge";
+import { SegarkanOtomatis } from "@/components/segarkan-otomatis";
 import { StatusBadge } from "@/components/status-badge";
 
 export const dynamic = "force-dynamic";
@@ -37,6 +38,7 @@ export default async function Antrean() {
         </div>
         {sehat && (
           <div className="flex flex-wrap items-center gap-2">
+            <SegarkanOtomatis aktif={jalan.some((j) => j.status === "berjalan")} />
             <Badge variant="outline" className="font-mono text-[10px]">{sehat.lingkungan}</Badge>
             <StatusBadge status={sehat.sap_siap ? "selesai" : "ditahan"}>
               SAP {sehat.sap_siap ? "tersambung" : "belum"}

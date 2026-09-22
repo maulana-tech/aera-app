@@ -1,4 +1,5 @@
 import { Crown, ShieldBan, Wrench } from "lucide-react";
+import Link from "next/link";
 
 import { ambil, type Agent, type RingkasAgent } from "@/app/lib";
 import { StatusBadge } from "@/components/status-badge";
@@ -80,9 +81,12 @@ export default async function TimAgent() {
 
       <div className="mt-6 grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
         {agent.map((a) => (
-          <article
+          <Link
             key={a.kode}
-            className={`rounded-xl border p-5 ${a.ketua ? "bg-muted/40" : ""}`}
+            href={`/agent/${a.kode}`}
+            className={`hover:border-foreground/30 block rounded-xl border p-5 transition-colors ${
+              a.ketua ? "bg-muted/40" : ""
+            }`}
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -129,7 +133,7 @@ export default async function TimAgent() {
                 </li>
               ))}
             </ul>
-          </article>
+          </Link>
         ))}
       </div>
     </main>
