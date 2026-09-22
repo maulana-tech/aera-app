@@ -1,24 +1,24 @@
 import { AppSidebar } from "@/components/app-sidebar";
-import { Separator } from "@/components/ui/separator";
-import {
-  SidebarInset, SidebarProvider, SidebarTrigger,
-} from "@/components/ui/sidebar";
-import { JudulHalaman } from "@/components/judul-halaman";
+import { Remah } from "@/components/remah";
 import { TombolTema } from "@/components/tema";
-import { saya } from "@/app/lib";
+import { Separator } from "@/components/ui/separator";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { ambil, saya } from "@/app/lib";
 
 export default async function LayoutAplikasi({ children }: { children: React.ReactNode }) {
-  const aku = await saya();
+  const [aku, sehat] = await Promise.all([
+    saya(),
+    ambil<{ lingkungan: string; sap_siap: boolean; model_siap: boolean }>("sehat"),
+  ]);
 
   return (
     <SidebarProvider>
-      <AppSidebar pengguna={aku ?? undefined} />
+      <AppSidebar pengguna={aku ?? undefined} sambungan={sehat ?? undefined} />
       <SidebarInset>
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
+        <header className="bg-background/80 sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b px-4 backdrop-blur">
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-2 h-4" />
-          <JudulHalaman />
-
+          <Remah />
           <div className="ml-auto">
             <TombolTema />
           </div>
