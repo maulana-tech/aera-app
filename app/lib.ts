@@ -61,3 +61,14 @@ export async function ambil<T>(jalur: string): Promise<T | null> {
 export async function saya(): Promise<Saya | null> {
   return ambil<Saya>("saya");
 }
+
+export type Alat = { nama: string; terpasang: boolean; deskripsi: string | null };
+export type Agent = {
+  kode: string; nama: string; peran: string; effort: string;
+  veto: boolean; ketua: boolean; alat: Alat[];
+  terpasang: number; total_alat: number; dipakai_di: number;
+};
+export type RingkasAgent = {
+  jumlah_agent: number; alat_terpasang: number; alat_total: number;
+  model_siap: boolean; sap_siap: boolean;
+};

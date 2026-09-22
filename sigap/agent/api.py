@@ -120,6 +120,51 @@ def terima_peristiwa(_m, b: dict, _h) -> Tuple[int, dict]:
     return 202, {"peristiwa_id": pid, "jalan_id": jid, "mode": mode}
 
 
+@rute("GET", r"/agent")
+def daftar_agent(_m, _b, _h) -> Tuple[int, dict]:
+    """Anatomi tim: siapa saja, punya alat apa, mana yang sudah tersambung."""
+    from agents.definisi import SEMUA
+    from core import registry
+
+    terdaftar = registry.semua()
+    keluar = []
+    for kode, a in SEMUA.items():
+        alat = []
+        for nama in a.alat:
+            ada = nama in terdaftar
+            alat.append({
+                "nama": nama,
+                "terpasang": ada,
+                "deskripsi": terdaftar[nama].deskripsi if ada else None,
+            })
+        keluar.append({
+            "kode": kode, "nama": a.nama, "peran": a.peran,
+            "effort": a.effort, "veto": a.veto,
+            "ketua": kode == "supervisor",
+            "alat": alat,
+            "terpasang": sum(1 for x in alat if x["terpasang"]),
+            "total_alat": len(alat),
+        })
+
+    # hitung berapa peristiwa yang benar-benar memanggil tiap agent
+    with simpan.buka() as c:
+        pakai = dict(c.execute(
+            "SELECT agent, COUNT(DISTINCT jalan_id) FROM langkah GROUP BY agent").fetchall())
+    for a in keluar:
+        a["dipakai_di"] = pakai.get(a["kode"], 0)
+
+    return 200, {
+        "agent": keluar,
+        "ringkas": {
+            "jumlah_agent": len(keluar),
+            "alat_terpasang": sum(a["terpasang"] for a in keluar),
+            "alat_total": sum(a["total_alat"] for a in keluar),
+            "model_siap": KONF.model_siap,
+            "sap_siap": KONF.sap_siap,
+        },
+    }
+
+
 @rute("POST", r"/masuk")
 def login(_m, b: dict, _h) -> Tuple[int, dict]:
     try:

@@ -177,3 +177,19 @@ def notify(peran: str, pesan: str) -> Hasil:
            {"referensi": {"type": "string"}}, ["referensi"])
 def monitor_shipment(referensi: str) -> Hasil:
     return _catat("monitor", True, referensi=referensi)
+
+
+# ----------------------------------------------------------------- Ketua
+@daftarkan("detect_disruption", "supervisor",
+           "Terima sinyal gangguan dari feed luar. Dalam aplikasi ini peristiwa masuk "
+           "lewat POST /peristiwa, jadi alat ini membaca yang sudah tercatat.",
+           {"peristiwa_id": {"type": "string"}}, ["peristiwa_id"])
+def detect_disruption(peristiwa_id: str) -> Hasil:
+    from core import simpan
+    with simpan.buka() as c:
+        r = c.execute("SELECT * FROM peristiwa WHERE id=?", (peristiwa_id,)).fetchone()
+    if not r:
+        return Hasil(None, Asal.TIDAK_ADA, "tabel peristiwa")
+    import json as _json
+    return Hasil({"jenis": r["jenis"], "judul": r["judul"], "pemicu": r["pemicu"],
+                  **_json.loads(r["muatan"])}, Asal.LANGSUNG, r["sumber"])

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { AlertTriangle, BookOpen, Inbox, Radar, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Inbox, Users } from "lucide-react";
 
 import { NavPengguna } from "@/components/nav-pengguna";
 import {
@@ -12,9 +12,7 @@ import {
 
 const MENU = [
   { judul: "Antrean keputusan", href: "/", icon: Inbox },
-  { judul: "Risiko laten", href: "/risiko", icon: Radar, segera: true },
-  { judul: "Aturan lokal", href: "/aturan", icon: ShieldCheck, segera: true },
-  { judul: "Catatan tindakan", href: "/catatan", icon: BookOpen, segera: true },
+  { judul: "Tim agent", href: "/agent", icon: Users },
 ];
 
 export function AppSidebar({
@@ -33,9 +31,9 @@ export function AppSidebar({
                 <div className="bg-primary text-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
                   <AlertTriangle className="size-4" />
                 </div>
-                <div className="grid flex-1 text-left text-sm leading-tight">
+                <div className="grid flex-1 text-left leading-tight">
                   <span className="truncate font-semibold">SIGAP</span>
-                  <span className="truncate text-xs">Respons gangguan pasokan</span>
+                  <span className="text-muted-foreground truncate text-xs">Gangguan pasokan</span>
                 </div>
               </Link>
             </SidebarMenuButton>
@@ -45,29 +43,20 @@ export function AppSidebar({
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Kerja harian</SidebarGroupLabel>
+          
           <SidebarMenu>
             {MENU.map((m) => (
               <SidebarMenuItem key={m.href}>
-                {m.segera ? (
-                  // Ikon dan teks HARUS jadi anak langsung — SidebarMenuButton
-                  // menata anak langsungnya, bungkus apa pun merusak barisnya.
-                  <SidebarMenuButton
-                    disabled
-                    tooltip={`${m.judul} — belum ada`}
-                    className="cursor-not-allowed opacity-45"
-                  >
+                <SidebarMenuButton
+                  asChild
+                  tooltip={m.judul}
+                  isActive={m.href === "/" ? jalur === "/" : jalur.startsWith(m.href)}
+                >
+                  <Link href={m.href}>
                     <m.icon />
                     <span>{m.judul}</span>
-                  </SidebarMenuButton>
-                ) : (
-                  <SidebarMenuButton asChild tooltip={m.judul} isActive={jalur === m.href}>
-                    <Link href={m.href}>
-                      <m.icon />
-                      <span>{m.judul}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                )}
+                  </Link>
+                </SidebarMenuButton>
               </SidebarMenuItem>
             ))}
           </SidebarMenu>
