@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SIGAP Build Spec</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap">
+<link rel="stylesheet" href="doc.css">
+</head>
+<body>
+
+<div class="topbar">
+  <b>SIGAP</b>
+  <span>Build spec</span>
+  <a href="research-aws-sap.html">Research</a>
+  <span class="spacer">29 Sep 2026</span>
+</div>
+
+<div class="wrap">
+
+  <h1>Building SIGAP on AWS and SAP</h1>
+  <p class="standfirst">
+    What runs where, which service does which job, and what is wired versus what
+    is only named.
+  </p>
+  <p class="lede">
+    <code>AWS-PLAN.md</code> has the order of the AWS work and the reasoning
+    behind the Runtime decision. <code>DATA-SOURCES.md</code> has where each kind
+    of data comes from and how it was verified. This is the wiring: the service
+    list on both sides, and the paths a request takes through them.
+  </p>
+
+  <!-- 1 -->
+  <section>
+    <span class="sec-no">01</span>
+    <h2>The case, in one page</h2>
+    <p>
+      PT Karya Presisi Nusantara, a Tier-1 automotive component maker. Two plants,
+      KRW1 Karawang and SBY1 Surabaya. 340 active materials, 61% of raw-material
+      value imported, mostly through Tanjung Priok. The OEM contract requires TKDN
+      of at least 40%; the portfolio sits at 38.2%.
+    </p>
+    <p>
+      A typhoon closes Ningbo-Zhoushan for six days. PO 4500018872, 120 t of
+      M-4471 aluminium alloy ingot, slips from 14 September to 22 September. KRW1
+      holds 84 t and the master data says it burns 9.2 t a day, so it empties on
+      13 September. Nine days with no material, against three OEM sales orders
+      worth Rp 2.14 billion and a late penalty of 0.5% a day capped at 10%.
+    </p>
+
+    <h3>What the system does with that</h3>
+    <ol>
+      <li>Works out what the disruption actually hits, and how deep the hole is</li>
+      <li>Assembles the ways out: air freight, a local supplier, a transfer from SBY1</li>
+      <li>Strikes the ones that breach TKDN or need an import licence that will not arrive in time. <strong>This veto is arithmetic, not a prompt, and cannot be overturned on cost</strong></li>
+      <li>Prices what is left and recommends one</li>
+      <li>Executes it into SAP once someone with the authority approves, or on its own authority below Rp 50 million</li>
+      <li>Watches until the goods land</li>
+    </ol>
+
+    <div class="note">
+      <div class="hd">Three things about the case are the product</div>
+      <p>
+        <strong>The plant does not run at 9.2.</strong> It has run at 10.33 for a
+        month. The gap is 118.4 t, not 82.8 t, and the 85 t air freight option
+        does not bridge it. <code>engine/forecast.py</code> is what finds that.
+      </p>
+      <p>
+        <strong>The transfer from SBY1 breaks SBY1.</strong> Moving 55 t drops it
+        from 18.0 to 12.3 days, under its own 14 day floor, emptying 16 September
+        while its own PO lands 24 September. <code>engine/matching.py</code>
+        judges a transfer from both ends.
+      </p>
+      <p>
+        <strong>Every figure says where it came from.</strong>
+        <span class="mono">LIVE</span>, <span class="mono">CACHED</span>,
+        <span class="mono">DERIVED</span>, <span class="mono">MODELLED</span>,
+        <span class="mono">MISSING</span>. The calculator refuses to produce a
+        rupiah figure from untrusted inputs rather than producing a confident
+        wrong one.
+      </p>
+    </div>
+  </section>
+
+  <!-- 2 -->
+  <section>
+    <span class="sec-no">02</span>
+    <h2>Two clouds, one line</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th></th><th>AWS</th><th>SAP</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Job</strong></td>
+            <td>Where the agents think and run</td>
+            <td>Where the record lives and where an action takes effect</td>
+          </tr>
+          <tr>
+            <td><strong>Protocol at the boundary</strong></td>
+            <td>MCP, once on Gateway. HTTPS and OData today</td>
+            <td>OData V2</td>
+          </tr>
+          <tr>
+            <td><strong>Today</strong></td>
+            <td><span class="verdict v-open">AWS_REGION empty</span>, so the model has never run</td>
+            <td>Sandbox reachable with a free key. <span class="verdict v-open">SAP_API_KEY not set</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 3 -->
+  <section>
+    <span class="sec-no">03</span>
+    <h2>AWS: the service list</h2>
+    <p class="lede">
+      Ordering, exit tests and cost are in <code>AWS-PLAN.md</code>. This is the list.
+    </p>
+
+    <h3>Adopted</h3>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Service</th><th>What it carries in SIGAP</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Bedrock</strong><br><span class="mono">anthropic.claude-opus-5</span></td><td>Every agent turn. <span class="mono">high</span> effort for Arya and Kira, <span class="mono">medium</span> for the rest</td></tr>
+          <tr><td><strong>AgentCore Runtime</strong></td><td>Hosts <code>graph.py</code>. Chosen over Managed Harness because we own the orchestration loop: the supervisor exposes ten specialists as <code>ask_&lt;code&gt;</code> tools and decides the route from the last finding</td></tr>
+          <tr><td><strong>AgentCore Gateway</strong></td><td>The 26 tools in <code>core/registry.py</code> as MCP. <code>registry.schemas_for_model()</code> already emits the shape Gateway wants</td></tr>
+          <tr><td><strong>AgentCore Observability</strong></td><td>OTel traces per specialist call, token count and latency. Replaces the placeholder cost rates in <code>graph.py</code> with real ones</td></tr>
+          <tr><td><strong>AgentCore Memory</strong> and <strong>Knowledge Base</strong></td><td>For Otto only. <code>search_past_incidents</code> returns <span class="mono">MISSING</span> today because there is nothing behind it</td></tr>
+          <tr><td><strong>AgentCore Evaluation</strong></td><td>The scenario suite in <code>DESIGN.md</code> §5, unwritten</td></tr>
+          <tr><td><strong>ECR</strong></td><td>The Runtime image</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Declined, on purpose</h3>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Service</th><th>Why not</th></tr></thead>
+        <tbody>
+          <tr><td><strong>AgentCore Identity</strong></td><td>It authenticates an agent to a tool. <code>core/identity.py</code> authenticates a buyer to an approval endpoint. Different problem, and swapping would weaken the approval trail</td></tr>
+          <tr><td><strong>Bedrock Guardrails</strong></td><td>Guardrails filter model output. Kira's veto is Python arithmetic the model cannot talk past, which is strictly stronger</td></tr>
+          <tr><td><strong>Browser, Code Interpreter, Web Search, Payments</strong></td><td>No use case. Adding them to lengthen the AWS list is the name-dropping the rubric punishes</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Under review, found 29 September</h3>
+    <div class="note">
+      <div class="hd">AWS for SAP MCP Server</div>
+      <p>
+        A container AWS ships at no cost, running on AgentCore Runtime, that
+        exposes SAP OData as MCP tools with catalog discovery and OAuth 2.0
+        already handled. It did not exist when <code>clients/sap_s4.py</code> was
+        written. See §5: it addresses the auth problem directly.
+        <a href="research-aws-sap.html">The research page</a> has the detail.
+      </p>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section>
+    <span class="sec-no">04</span>
+    <h2>SAP: the surface we actually touch</h2>
+    <p>
+      Connector is <code>clients/sap_s4.py</code>. Base URL defaults to
+      <span class="mono">https://sandbox.api.sap.com</span>, overridable with
+      <code>SAP_BASE_URL</code>.
+    </p>
+    <p>
+      Everything routes through <code>tools/fetcher.py</code>, which tries SAP
+      first and falls back to <code>fixtures/</code> when there is no key.
+      <strong>The fallback is never hidden.</strong> The origin becomes
+      <span class="mono">MODELLED</span>, which shows on screen and fails the
+      calculator's trust check.
+    </p>
+
+    <h3>Read, ten services</h3>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>OData service</th><th>What we take from it</th><th>Who needs it</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">API_MATERIAL_STOCK_SRV</td><td>On-hand stock per material per plant</td><td>Iris, Elsa, Clint, Vega</td></tr>
+          <tr><td class="mono">API_PURCHASEORDER_PROCESS_SRV</td><td>Open POs, ETAs, supplier, quantity</td><td>Elsa, Vega</td></tr>
+          <tr><td class="mono">API_SALES_ORDER_SRV</td><td>OEM commitments behind a material</td><td>Elsa</td></tr>
+          <tr><td class="mono">API_BILL_OF_MATERIAL_SRV</td><td>Which finished goods a material feeds</td><td>Elsa</td></tr>
+          <tr><td class="mono">API_PRODUCT_SRV</td><td>Safety stock floor per material</td><td>Iris</td></tr>
+          <tr><td class="mono">API_INSPECTIONLOT_SRV</td><td>Quality holds, so recorded stock is not assumed usable</td><td>Iris</td></tr>
+          <tr><td class="mono">API_PRODUCTION_ORDER_2_SRV</td><td>Production schedule and planned consumption rate</td><td>Dara</td></tr>
+          <tr><td class="mono">API_PURCHASING_INFO_RECORD_SRV</td><td>Alternate sources for a material</td><td>Clint</td></tr>
+          <tr><td class="mono">API_BUSINESS_PARTNER</td><td>Supplier master, for compliance and contact</td><td>shared</td></tr>
+          <tr><td class="mono">API_STOCK_TRANSFER_SRV</td><td>Existing transfers, read side</td><td>Bram</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Write, three targets</h3>
+    <p><code>sender.py</code> maps an approved action to a service and entity.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Action kind</th><th>Service</th><th>Entity</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">draft_po</td><td class="mono">API_PURCHASEREQ_PROCESS_SRV</td><td class="mono">A_PurchaseRequisitionHeader</td></tr>
+          <tr><td class="mono">stock_transfer</td><td class="mono">API_STOCK_TRANSFER_SRV</td><td class="mono">A_StockTransfer</td></tr>
+          <tr><td class="mono">create_sourcing_event</td><td class="mono">API_SOURCING_PROJECT_SRV</td><td class="mono">A_SourcingProject</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note">
+      <p>
+        The write path is complete, CSRF token fetched then posted.
+        <strong>The entity names have never been checked against the sandbox.</strong>
+        Nothing writes until they are.
+      </p>
+    </div>
+  </section>
+
+  <!-- 5 -->
+  <section>
+    <span class="sec-no">05</span>
+    <h2>Auth, and the thing that will bite</h2>
+    <p>
+      <code>clients/sap_s4.py</code> sends an <span class="mono">APIKey</span>
+      header. That is the SAP Business Accelerator Hub sandbox scheme, and it
+      works today.
+    </p>
+    <p>
+      A real customer system does not accept it. S/4HANA Cloud wants a
+      communication user or OAuth 2.0 through a BTP destination.
+    </p>
+    <div class="note">
+      <div class="hd">A correction to DATA-SOURCES.md §1</div>
+      <p>
+        "Change the base URL and the key, the code does not change" is optimistic.
+        The base URL changes, the key changes, <strong>and the authentication
+        scheme changes</strong>. It is one function,
+        <code>sap_s4.get()</code>, so it is a small change, but it is a change
+        and it should be written down rather than discovered on the day.
+      </p>
+      <p>
+        This is exactly what the AWS for SAP MCP Server already solves, and it is
+        the strongest argument for evaluating it before we write more connector
+        code.
+      </p>
+    </div>
+  </section>
+
+  <!-- 6 -->
+  <section>
+    <span class="sec-no">06</span>
+    <h2>The three paths through the system</h2>
+
+    <h3>A disruption arrives</h3>
+    <div class="flow"><pre>signals/bmkg.py, or POST /events
+  <span class="hit">→</span> store.record_event          <span class="cmt">events table</span>
+  <span class="hit">→</span> store.start_run             <span class="cmt">runs table, status running</span>
+  <span class="hit">→</span> graph.handle in a thread
+      <span class="hit">→</span> Arya picks a specialist, calls ask_&lt;code&gt;
+      <span class="hit">→</span> that specialist calls its tools
+          <span class="hit">→</span> tools/fetcher.py → clients/sap_s4.py → SAP OData
+          <span class="hit">→</span> no key? → fixtures/, <span class="grd">origin MODELLED</span>
+      <span class="hit">→</span> every result lands on the Board with its origin
+      <span class="hit">→</span> store.save_step          <span class="cmt">steps table, one row per turn</span>
+      <span class="hit">→</span> <span class="grd">Kira may veto. Arithmetic, not judgement</span>
+      <span class="hit">→</span> engine/simulate.py prices what survives
+  <span class="hit">→</span> store.record_action          <span class="cmt">idempotency_key, so a retry never doubles a PO</span>
+  <span class="hit">→</span> under Rp 50m: status sent. Over: status pending</pre></div>
+
+    <h3>A person approves</h3>
+    <div class="flow"><pre>POST /actions/{id}/decision
+  <span class="hit">→</span> identity.from_token          <span class="grd">identity ONLY from the token, never the body</span>
+  <span class="hit">→</span> user.may_approve(value)      <span class="grd">role cap, server side</span>
+  <span class="hit">→</span> store.decide_action          <span class="cmt">one shot; a decided action never changes again
+                                 approvals table records who, what role, when</span></pre></div>
+
+    <h3>An approved action reaches SAP</h3>
+    <div class="flow"><pre>sender.send_approved
+  <span class="hit">→</span> for each approved, unsent action
+  <span class="hit">→</span> sap_s4._csrf_token(service)  <span class="cmt">fetch</span>
+  <span class="hit">→</span> sap_s4.post(service, entity, payload)
+  <span class="hit">→</span> store.mark_sent(sap_reference)</pre></div>
+
+    <p>
+      Guards that hold regardless of what any model says:
+      <span class="mono">MAX_SPECIALIST_ROUNDS = 8</span>,
+      <span class="mono">MAX_LEAD_ROUNDS = 14</span>,
+      <span class="mono">MAX_SECONDS_PER_EVENT = 600</span>,
+      <span class="mono">CFG.cost_cap_per_event_idr</span>.
+    </p>
+  </section>
+
+  <!-- 7 -->
+  <section>
+    <span class="sec-no">07</span>
+    <h2>What moving to Runtime changes</h2>
+    <p class="lede">Less than it sounds, which is the point of having owned the loop.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>File</th><th>Change</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">graph.py</td><td>Entry point gets the AgentCore Runtime decorator. The loop itself does not change</td></tr>
+          <tr><td class="mono">core/registry.py</td><td>Same schemas, published over MCP through Gateway instead of passed in-process</td></tr>
+          <tr><td class="mono">core/trace.py</td><td>Also emits OTel spans. Keeps writing <span class="mono">steps</span>, because that table is the approval record, not a debug log</td></tr>
+          <tr><td class="mono">core/store.py</td><td><span class="verdict v-ok">Unchanged.</span> SQLite moves to Postgres when this is multi-tenant, not before</td></tr>
+          <tr><td class="mono">core/identity.py</td><td><span class="verdict v-ok">Unchanged</span>, deliberately</td></tr>
+          <tr><td class="mono">clients/sap_s4.py</td><td><span class="verdict v-recon">Decide first.</span> Either gains OAuth, or is replaced by the AWS for SAP MCP Server. Decide before writing more of it</td></tr>
+          <tr><td class="mono">api.py</td><td><span class="verdict v-ok">Unchanged.</span> It is the interface's bridge, not the agent runtime</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 8 -->
+  <section>
+    <span class="sec-no">08</span>
+    <h2>Not built yet</h2>
+    <p class="lede">Stated plainly so nobody discovers it during a demo.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th></th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">AWS_REGION</td><td><span class="verdict v-gap">Empty.</span> <code>graph.py</code> has never run against a real model. Everything above is plumbing that a scripted client proves, and judgement that nothing proves yet</td></tr>
+          <tr><td class="mono">SAP_API_KEY</td><td><span class="verdict v-gap">Not set.</span> All ten read services fall back to fixtures, labelled <span class="mono">MODELLED</span></td></tr>
+          <tr><td>SAP write entity names</td><td><span class="verdict v-gap">Unverified</span> against the sandbox</td></tr>
+          <tr><td class="mono">references/tkdn-rules.md<br>references/lartas-procedure.md</td><td><span class="verdict v-gap">Absent.</span> Kira judges from parameters and labels the result <span class="mono">MODELLED</span>. Domain work, not code</td></tr>
+          <tr><td>Scenario eval suite</td><td><span class="verdict v-gap">Absent.</span> <a href="research-aws-sap.html">The research page</a> §6 has the four-level shape to build it against</td></tr>
+          <tr><td>Foreign typhoon signal</td><td><span class="verdict v-gap">Absent.</span> BMKG covers Indonesia only, so the Ningbo trigger has no live source</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    Source of this page: <span class="mono">sigap/BUILD-SPEC.md</span><br>
+    Companion: <a href="research-aws-sap.html">How AWS and SAP say to build this</a>
+  </footer>
+
+</div>
+
+</body>
+</html>
