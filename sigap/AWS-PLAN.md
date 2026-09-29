@@ -62,10 +62,11 @@ We hand-rolled 745 lines that overlap with AgentCore. Not all of it should go.
 | What we have | AgentCore offers | Verdict |
 |---|---|---|
 | `graph.py`, the supervisor loop | **Runtime** to host it | **Adopt.** This is the whole point of Runtime. |
-| `core/registry.py`, 19 tools with schemas | **Gateway**, tools as MCP | **Adopt.** One registry already feeds the model and the executor, so exposing it over MCP is a shape change, not a rewrite. |
+| `core/registry.py`, 26 tools with schemas | **Gateway**, tools as MCP | **Adopt.** One registry already feeds the model and the executor, so exposing it over MCP is a shape change, not a rewrite. |
 | `core/trace.py`, steps into SQLite | **Observability**, OTEL traces | **Adopt.** Ours records what we chose to record. OTEL records every model call, token count and latency, which is what "trace every agent decision" means. |
 | nothing | **Memory** and **Managed Knowledge Base** | **Adopt, for Otto.** `search_past_incidents` returns MISSING today because there is no store behind it. Otto is a real agent with a real tool and nowhere to look. |
 | nothing | **Evaluation** | **Adopt late.** The 14 scenarios in `DESIGN.md` §5 are unwritten. This is where they go. |
+| `clients/sap_s4.py`, hand-rolled OData | **AWS for SAP MCP Server** | **Evaluate first.** Found 29 September, after this table was written. A container AWS ships at no cost on Runtime, with catalog discovery and OAuth 2.0 already handled. Ours speaks the sandbox's `APIKey` header, which a real customer system will not accept, so the work it saves is work we have not done yet. `BUILD-SPEC.md` §5. |
 | `core/identity.py`, HMAC sessions | **Identity** | **Keep ours.** AgentCore Identity authenticates an agent to a tool. Ours authenticates a buyer to the approval endpoint. Different problems, and swapping ours for it would be confusing a judge, not impressing one. |
 | Kira's veto in `tools/compliance.py` | **Guardrails** | **Keep ours.** Guardrails filter model output. Our veto is arithmetic in Python that the model cannot talk its way past, which is strictly stronger. Say so if asked. |
 | nothing | Browser, Code Interpreter, Web Search, Payments | **Skip.** No use case. Wiring them up to score points is exactly the name-dropping the rubric punishes under "purposeful use". |
@@ -73,6 +74,9 @@ We hand-rolled 745 lines that overlap with AgentCore. Not all of it should go.
 The honest line for the presentation: we adopted five AgentCore services
 because they do something we could not, and declined four because they do not
 fit. That is a better story than a slide with nine logos.
+
+> Updated 29 September. The service list, the SAP surface and the request paths
+> now live in `BUILD-SPEC.md`. This file keeps the ordering and the reasoning.
 
 ---
 
