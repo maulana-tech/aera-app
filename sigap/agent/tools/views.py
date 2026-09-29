@@ -79,22 +79,42 @@ def demand() -> dict:
 
 
 def sourcing() -> dict:
+    from datetime import date as _date
+
+    from engine.matching import assess
+    from tools.impact import get_material_stock
+
     r = find_alternate_sources("M-4471")
+    stock = get_material_stock()
+    start = _date.fromisoformat(profile()["AsOfDate"])
     rows = []
     for o in (r.value or []):
         v = (check_local_constraints(o["id"]).value or {})
+        donor = None
+        # An internal option moves stock out of a plant that is also using it.
+        # Compliance does not look at that, so it has to be checked here.
+        if o.get("Supplier") == "INTERNAL" and stock.value:
+            source_plant = next((p for p in {x["Plant"] for x in stock.value}
+                                 if p in o["label"]), None)
+            if source_plant:
+                t = assess(stock.value, o["Material"], source_plant, "KRW1",
+                           float(o["Quantity"]), start)
+                donor = t.verdict if t.verdict != "available" else None
         rows.append({
             "id": o["id"], "label": o["label"], "supplier": o["Supplier"],
             "qty": o["Quantity"], "arrives": o["ArrivalDate"],
             "cost_idr": o["ExtraCostIDR"], "tkdn": o.get("TkdnAfterPct"),
             "origin_country": o["Origin"],
             "allowed": v.get("allowed"), "reason": v.get("reason"),
+            "donor_impact": donor,
         })
     return _wrap(rows, [
         {"k": "id", "l": "#"}, {"k": "label", "l": "Option"},
         {"k": "arrives", "l": "Arrives"}, {"k": "cost_idr", "l": "Extra cost", "rp": True},
         {"k": "tkdn", "l": "TKDN", "n": True}, {"k": "allowed", "l": "Clears rules"},
-    ], r)
+        {"k": "donor_impact", "l": "Donor plant"},
+    ], r, "Clearing the rules is not the same as being available. An internal transfer "
+          "also has to leave the plant it came from above its own floor.")
 
 
 def compliance() -> dict:

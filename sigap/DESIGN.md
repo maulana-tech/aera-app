@@ -98,9 +98,32 @@ PO 4500018872 lands 22 Sep                        → joined up, no stockout
 - **Cost: Rp 116 million** vs Rp 186 million for air freight → **saves Rp 70 million (38%)**
 - Protects **Rp 2.14 billion** of committed revenue
 - TKDN rises **38.2% → 41.6%**
-- **Residual risk the system states outright:** SBY1 is left with 4 days of cover until
-  PO 4500018901 lands on 24 Sep. It tells the SBY1 planner and adds it to the watch list
-  rather than declaring the case closed.
+- **Residual risk the system states outright:** SBY1 cannot actually afford the full
+  55 tonnes. See the correction below.
+
+> **Correction, 29 September 2026. The second arithmetic error in this scenario.**
+>
+> Option C moves 55 tonnes out of SBY1. Nobody checked whether SBY1 could spare them.
+> It cannot:
+>
+> | SBY1 | cover | empties |
+> |---|---|---|
+> | as it stands | 18.0 days | 22 Sep |
+> | after sending 55 t | 12.3 days | 16 Sep |
+>
+> The policy floor is 14 days, so the transfer breaches it by 1.7 days, and SBY1 runs
+> dry eight days before its own replenishment, PO 4500018901, lands on 24 Sep. The
+> recommendation solved a stockout at KRW1 by creating one at SBY1.
+>
+> Nothing caught it, because compliance checks regulation and the calculator only ever
+> modelled the plant receiving the stock. `engine/matching.py` now judges both ends, and
+> the answer is that SBY1 can afford **38.4 tonnes**, which leaves it at exactly 14.0
+> days.
+>
+> Option C is deliberately left at 55 tonnes in the data. The system flags it, which is
+> worth more than a scenario quietly corrected to look clean. It is the same lesson as
+> the 40-tonne error above: an arithmetic claim nobody can recompute is a claim waiting
+> to fail in front of someone.
 
 ### 1.9 These figures are machine-verified, not typed
 

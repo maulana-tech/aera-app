@@ -58,10 +58,10 @@ SPECIALISTS = [
           ["get_demand_signal", "get_production_schedule"]),
     Agent("inventory", "Iris", "Stock Validity",
           "Which stock may actually be used: quality holds, rejected batches, safety floors.",
-          ["get_quality_holds", "get_safety_stock_policy"]),
+          ["get_quality_holds", "get_safety_stock_policy", "assess_transfer"]),
     Agent("sourcing", "Clint", "Sourcing",
           "Finds and qualifies replacement supply: other suppliers, internal stock, fast freight.",
-          ["find_alternate_sources"]),
+          ["find_alternate_sources", "find_internal_transfers"]),
     Agent("logistics", "Milo", "Logistics",
           "Models arrival dates that survive contact with reality: port dwell, transhipment, "
           "customs, transport mode.",
@@ -96,7 +96,7 @@ def demo() -> None:
     assert len(ALL) == 11, len(ALL)
     tools = [t for a in ALL.values() for t in a.tools]
     assert len(tools) == len(set(tools)), "a tool is claimed by two agents"
-    assert len(tools) == 23, len(tools)
+    assert len(tools) == 25, len(tools)
     veto = [a.code for a in ALL.values() if a.veto]
     assert veto == ["compliance"], veto
     nicknames = [a.nickname for a in ALL.values()]

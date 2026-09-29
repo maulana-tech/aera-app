@@ -8,6 +8,7 @@ summary along with the origin labels of the data behind it.
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
@@ -24,8 +25,17 @@ OUTPUT_IDR_PER_MILLION = 410_000
 MAX_SPECIALIST_ROUNDS = 8
 MAX_LEAD_ROUNDS = 14
 
+#: Rounds and rupiah are not the only ways a handling can run away. One slow
+#: specialist inside the round budget still blocks the queue behind it, so the
+#: whole handling carries a deadline as well.
+MAX_SECONDS_PER_EVENT = 600
+
 
 class BudgetExhausted(RuntimeError):
+    pass
+
+
+class DeadlineExceeded(RuntimeError):
     pass
 
 
@@ -33,24 +43,48 @@ class ModelNotReady(RuntimeError):
     pass
 
 
+@dataclass(frozen=True)
+class Entry:
+    """One finding, with where it came from, kept together.
+
+    The board used to be three parallel dicts keyed by the same string, which
+    meant a value could exist without its origin. Since the origin is the whole
+    point, they travel as one record.
+    """
+    value: Any
+    origin: str
+    source: str
+    at: str
+
+
 @dataclass
 class Board:
     """The shared blackboard. Every specialist reads and writes here."""
-    findings: Dict[str, Any] = field(default_factory=dict)
-    origin: Dict[str, str] = field(default_factory=dict)
-    source: Dict[str, str] = field(default_factory=dict)
+    entries: Dict[str, Entry] = field(default_factory=dict)
 
     def write(self, key: str, r: Result) -> None:
-        self.findings[key] = r.value
-        self.origin[key] = r.origin.value
-        self.source[key] = r.source
+        self.entries[key] = Entry(r.value, r.origin.value, r.source,
+                                  r.fetched_at.isoformat(timespec="seconds"))
+
+    # Read shapes the rest of the system already expects.
+    @property
+    def findings(self) -> Dict[str, Any]:
+        return {k: e.value for k, e in self.entries.items()}
+
+    @property
+    def origin(self) -> Dict[str, str]:
+        return {k: e.origin for k, e in self.entries.items()}
+
+    @property
+    def source(self) -> Dict[str, str]:
+        return {k: e.source for k, e in self.entries.items()}
 
     def untrusted_keys(self) -> List[str]:
-        return [k for k, v in self.origin.items()
-                if v not in ("live", "cached", "derived")]
+        return [k for k, e in self.entries.items()
+                if e.origin not in ("live", "cached", "derived")]
 
     def summary(self) -> str:
-        lines = [f"- {k}: {self.origin[k]} ({self.source[k]})" for k in self.findings]
+        lines = [f"- {k}: {e.origin} ({e.source})" for k, e in self.entries.items()]
         return "\n".join(lines) or "(the board is still empty)"
 
 
@@ -83,7 +117,8 @@ def client():
 
 # --------------------------------------------------------------------------- #
 def _tool_loop(cl, agent: Agent, task: str, board: Board,
-               cost: Cost, report: Callable[[str, dict], None]) -> str:
+               cost: Cost, report: Callable[[str, dict], None],
+               deadline: Optional[float] = None) -> str:
     """One specialist works to completion. Returns the summary it wrote."""
     tools = registry.schemas_for_model(agent.code)
     messages: List[dict] = [{
@@ -99,6 +134,9 @@ def _tool_loop(cl, agent: Agent, task: str, board: Board,
     for _ in range(MAX_SPECIALIST_ROUNDS):
         if cost.idr > CFG.cost_cap_per_event_idr:
             raise BudgetExhausted(f"over Rp {CFG.cost_cap_per_event_idr:,} per event")
+        if deadline and time.monotonic() > deadline:
+            raise DeadlineExceeded(
+                f"{agent.title} still working after {MAX_SECONDS_PER_EVENT}s")
 
         r = cl.messages.create(
             model=CFG.model,
@@ -162,6 +200,7 @@ def run(event: dict, report: Callable[[str, dict], None]) -> dict:
     board = Board()
     cost = Cost()
     called: List[str] = []
+    deadline = time.monotonic() + MAX_SECONDS_PER_EVENT
 
     lead_tools = _specialist_tools() + registry.schemas_for_model("supervisor")
     messages: List[dict] = [{
@@ -177,6 +216,8 @@ def run(event: dict, report: Callable[[str, dict], None]) -> dict:
     for _ in range(MAX_LEAD_ROUNDS):
         if cost.idr > CFG.cost_cap_per_event_idr:
             raise BudgetExhausted(f"over Rp {CFG.cost_cap_per_event_idr:,}")
+        if time.monotonic() > deadline:
+            raise DeadlineExceeded(f"handling ran past {MAX_SECONDS_PER_EVENT}s")
 
         r = cl.messages.create(
             model=CFG.model,
@@ -210,7 +251,8 @@ def run(event: dict, report: Callable[[str, dict], None]) -> dict:
                 called.append(code)
                 report("specialist_start", {"agent": code, "name": specialist.nickname,
                                             "task": b.input.get("task", "")})
-                summary = _tool_loop(cl, specialist, b.input["task"], board, cost, report)
+                summary = _tool_loop(cl, specialist, b.input["task"], board, cost,
+                                     report, deadline)
                 results.append({"type": "tool_result", "tool_use_id": b.id,
                                 "content": summary})
             else:
@@ -392,6 +434,12 @@ def demo() -> None:
     assert ruling["allowed"] is False and "TKDN" in ruling["reason"], ruling
 
     assert cost.idr > 0, "token accounting never ran"
+
+    # Value and origin are one record, so a finding cannot exist without saying
+    # where it came from.
+    for key, entry in board.entries.items():
+        assert entry.origin and entry.source and entry.at, (key, entry)
+    assert set(board.findings) == set(board.origin) == set(board.entries)
     assert seen.count("specialist_done:impact") == 1, seen
 
     print(f"graph ok, {len(called)} specialists called: {' then '.join(called)}")

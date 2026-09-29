@@ -16,7 +16,7 @@ from core import identity
 # Files that carry their own self-check in a __main__ block.
 CHECKS = [
     "core/provenance.py", "core/registry.py", "core/identity.py",
-    "engine/simulate.py", "engine/audit.py", "fixtures/generate.py",
+    "engine/simulate.py", "engine/audit.py", "engine/matching.py", "fixtures/generate.py",
     "tools/compliance.py", "tools/execution.py",
     "tools/exposure.py", "agents/definitions.py", "graph.py",
     "signals/bmkg.py",

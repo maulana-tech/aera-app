@@ -41,6 +41,7 @@ interface is where you inspect and approve, not where the work starts.
 | Agent team (`graph.py`) | 🔶 **runs, not yet against Bedrock** | Routing, tool execution and the board are exercised by `python3 graph.py`. Waiting on `AWS_REGION` for the real model |
 | Rule documents (`references/`) | ❌ **absent** | The main blocker. Domain work |
 | Scenario eval suite | ❌ **absent** | |
+| Inter-plant transfers | ✅ **judged from both ends** | `engine/matching.py`. Iris rules on whether the donor plant can afford a transfer, the way Kira rules on regulation |
 | Data audit | ✅ **working** | `engine/audit.py` reads whatever the system can see and reports what is wrong with it. Deterministic, every finding carries its evidence |
 | Prevent mode | 🔶 **scans, does not act yet** | Vega finds exposures and ranks them. The actions she recommends are raised by Bram and always wait for a person |
 
