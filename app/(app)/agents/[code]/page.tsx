@@ -6,6 +6,8 @@ import { api, me, type Agent, type AgentSummary, type View } from "@/app/lib";
 import Conversation from "./Conversation";
 import { AgentBadge } from "@/components/agent-card";
 import { DataTable } from "@/components/data-table";
+import { Figure } from "@/components/charts";
+import { ForecastChart } from "@/components/forecast-chart";
 import { RulingList, type Ruling } from "@/components/rulings";
 import { Empty, Fact, Rail, Section, ToolList } from "@/components/shell";
 import { Badge } from "@/components/ui/badge";
@@ -24,7 +26,7 @@ const DESK: Record<string, { work: string; note?: string; examples: string[] }> 
     examples: ["Which orders route through Ningbo?", "When does M-4471 at KRW1 run out?"],
   },
   demand: {
-    work: "Consumption and demand signal",
+    work: "Planned rate against what actually happened",
     examples: ["What is daily consumption of M-4471 at KRW1?", "Any demand spike?"],
   },
   inventory: {
@@ -106,6 +108,37 @@ export default async function AgentPage({ params }: { params: Promise<{ code: st
           {a.brief}
         </p>
       </header>
+
+      {/* A forecast is a range, so it gets a chart before it gets a table. */}
+      {view?.chart && (
+        <Section
+          title={`${view.chart.material} at ${view.chart.plant}, daily withdrawals`}
+          note={
+            view.chart.planned_rate
+              ? `The dashed rule is the planned ${view.chart.planned_rate} ${view.chart.unit} a day that every cover date in the system is divided by. In-sample error ${view.chart.mape_pct}%.`
+              : undefined
+          }
+        >
+          <Figure
+            title=""
+            origin={view.origin}
+            source={view.source}
+            table={{
+              head: ["Date", `Forecast ${view.chart.unit}`, "Low", "High"],
+              rows: view.chart.points.map((p) => [p.on, p.point, p.lower, p.upper]),
+            }}
+          >
+            <ForecastChart
+              observed={view.chart.observed}
+              points={view.chart.points}
+              plannedRate={view.chart.planned_rate}
+              unit={view.chart.unit}
+              confidence={view.chart.confidence}
+              windowDays={view.chart.window_days}
+            />
+          </Figure>
+        </Section>
+      )}
 
       <Section title={desk.work} note={view?.note ?? desk.note}>
         {!view ? (

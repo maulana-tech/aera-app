@@ -68,6 +68,27 @@ the gap                     9 days × 9.2 t/day = 82.8 tonnes
 Any option standing on its own must supply **at least 82.8 tonnes** to bridge it. That is
 why the air-freight option is set at 85 tonnes.
 
+> **Correction, 29 September 2026. The third arithmetic error, and the same one again.**
+>
+> 82.8 tonnes is 9 days at 9.2 a day, and 9.2 is the planned rate in master data. The
+> plant has not run at 9.2 for a month. `engine/forecast.py` over 120 days of withdrawals
+> puts the last 28 days at **10.13**, and the next 30 at a mean of 9.97.
+>
+> | rate used | depleted | gap | does 85 t bridge it |
+> |---|---|---|---|
+> | planned 9.2 | 13 Sep | 82.8 t | yes |
+> | forecast 9.97 | 12 Sep | 99.7 t | **no** |
+> | upper band | 10 Sep | 151.2 t | no |
+>
+> So the benchmark option, air freight at 85 tonnes, does not bridge the gap once the
+> observed rate is used instead of the planned one. Four of 59 material and plant pairs
+> have drifted at least 5% from plan, and every cover date in the system divides by the
+> planned figure.
+>
+> Same lesson as the two corrections above, for the third time: a confident number
+> resting on an input nobody checked. The difference is that this one was caught by a
+> tool built for the purpose rather than by accident.
+
 > **Correction, 21 Sep 2026.** An early draft said 40 tonnes. `engine/simulate.py` caught
 > it: 40 tonnes only moves the stockout from 13 Sep to 17 Sep, still a hole. This is
 > precisely why the calculator has to be deterministic. A language model will accept

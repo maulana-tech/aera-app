@@ -442,6 +442,8 @@ def demo() -> None:
     assert set(board.findings) == set(board.origin) == set(board.entries)
     assert seen.count("specialist_done:impact") == 1, seen
 
+    _check_failure_paths()
+
     print(f"graph ok, {len(called)} specialists called: {' then '.join(called)}")
     print(f"  board     {len(board.findings)} findings, "
           f"{len(board.untrusted_keys())} not yet trustworthy")
@@ -449,6 +451,72 @@ def demo() -> None:
         print(f"            {k} is {board.origin[k]} from {board.source[k]}")
     print(f"  cost      Rp {cost.idr:,} across {len(cl.calls)} model calls")
     print(f"  answer    {recommendation}")
+
+
+def _check_failure_paths() -> None:
+    """The happy path is the easy half. These are the ways a handling ends badly."""
+    from agents.definitions import PromptMissing
+
+    # Every agent must be reachable, have a prompt, and expose a valid schema.
+    for code, agent in ALL.items():
+        assert agent.instructions, code               # raises PromptMissing if absent
+        for spec in registry.schemas_for_model(code):
+            assert spec["input_schema"]["additionalProperties"] is False, spec["name"]
+            assert spec["strict"] is True, spec["name"]
+
+    # An agent with no prompt raises rather than being sent an empty one.
+    ghost = Agent("ghost", "Nemo", "Nobody", "does not exist")
+    try:
+        ghost.instructions
+        raise AssertionError("a missing prompt must raise")
+    except PromptMissing:
+        pass
+
+    # A tool that throws comes back as an error result, not a crashed handling.
+    board, cost = Board(), Cost()
+    seen: List[str] = []
+    boom = ScriptedClient([
+        _Reply([_ToolUse("check_local_constraints", {"option_id": "nope"})], "tool_use"),
+        _Reply([_Text("that option does not exist")], "end_turn"),
+    ])
+    out = _tool_loop(boom, ALL["compliance"], "rule on ZZ", board,
+                     cost, lambda k, d: seen.append(k))
+    assert "does not exist" in out, out
+
+    # A tool name the registry does not know is refused the same way.
+    board2 = Board()
+    unknown = ScriptedClient([
+        _Reply([_ToolUse("no_such_tool", {})], "tool_use"),
+        _Reply([_Text("recovered")], "end_turn"),
+    ])
+    assert _tool_loop(unknown, ALL["impact"], "go", board2, Cost(),
+                      lambda k, d: None) == "recovered"
+    assert not board2.entries, "a failed tool must not write to the board"
+
+    # The spend cap stops a handling rather than letting it run on.
+    spent = Cost(input_tokens=10**9, output_tokens=10**9)
+    assert spent.idr > CFG.cost_cap_per_event_idr
+    try:
+        _tool_loop(ScriptedClient([]), ALL["impact"], "go", Board(), spent,
+                   lambda k, d: None)
+        raise AssertionError("the spend cap did not fire")
+    except BudgetExhausted:
+        pass
+
+    # So does the deadline, independently of the spend.
+    try:
+        _tool_loop(ScriptedClient([]), ALL["impact"], "go", Board(), Cost(),
+                   lambda k, d: None, deadline=time.monotonic() - 1)
+        raise AssertionError("the deadline did not fire")
+    except DeadlineExceeded:
+        pass
+
+    # Asking for an agent that does not exist is a KeyError, not a silent default.
+    try:
+        ask_specialist("nobody", "hello")
+        raise AssertionError("an unknown agent must raise")
+    except KeyError:
+        pass
 
 
 if __name__ == "__main__":

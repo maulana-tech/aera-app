@@ -55,7 +55,7 @@ SPECIALISTS = [
            "get_bom_explosion", "get_sales_order_commitments"]),
     Agent("demand", "Dara", "Demand",
           "Owns the demand side. Daily consumption is a variable that moves, not a fixed number.",
-          ["get_demand_signal", "get_production_schedule"]),
+          ["get_demand_signal", "get_production_schedule", "forecast_demand"]),
     Agent("inventory", "Iris", "Stock Validity",
           "Which stock may actually be used: quality holds, rejected batches, safety floors.",
           ["get_quality_holds", "get_safety_stock_policy", "assess_transfer"]),
@@ -96,7 +96,7 @@ def demo() -> None:
     assert len(ALL) == 11, len(ALL)
     tools = [t for a in ALL.values() for t in a.tools]
     assert len(tools) == len(set(tools)), "a tool is claimed by two agents"
-    assert len(tools) == 25, len(tools)
+    assert len(tools) == 26, len(tools)
     veto = [a.code for a in ALL.values() if a.veto]
     assert veto == ["compliance"], veto
     nicknames = [a.nickname for a in ALL.values()]

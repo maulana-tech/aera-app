@@ -63,19 +63,81 @@ def inventory() -> dict:
 
 
 def demand() -> dict:
+    """Planned rate against forecast rate, which is the gap Demand exists to find."""
+    from tools.demand import forecast_demand
+
     r = get_material_stock()
-    rows = [{
-        "material": x.get("Material"), "plant": x.get("Plant"),
-        "daily_consumption": x.get("DailyConsumption"),
-        "unit": x.get("BaseUnit"),
-        "signal": "not connected",
-    } for x in (r.value or [])]
-    return _wrap(rows, [
+    rows = []
+    for x in (r.value or []):
+        f = forecast_demand(x["Material"], x["Plant"]).value or {}
+        drift = f.get("drift_pct")
+        rows.append({
+            "material": x.get("Material"), "plant": x.get("Plant"),
+            "planned": x.get("DailyConsumption"),
+            "observed": f.get("observed_rate"),
+            "forecast": f.get("mean_rate"),
+            "drift_pct": drift,
+            "unit": x.get("BaseUnit"),
+            "stale": drift is not None and abs(drift) >= 5,
+        })
+    rows.sort(key=lambda b: -(abs(b["drift_pct"]) if b["drift_pct"] is not None else -1))
+
+    drifting = [b for b in rows if b["stale"]]
+    note = ("Every cover date in this system divides stock by the planned rate. "
+            f"{len(drifting)} of {len(rows)} material and plant pairs ran at least 5% "
+            "away from it over the last 28 days, so those cover dates are wrong. Drift "
+            "compares what was actually withdrawn against the plan; the last column is "
+            "where the forecast expects it to go next.")
+
+    # The flagship material carries the chart, because its drift moves the answer.
+    lead = forecast_demand("M-4471", "KRW1").value or {}
+    # Daily withdrawals swing between a full shift and a Sunday, and that swing
+    # buries the question the chart is asked: is the rate above plan. A trailing
+    # weekly mean answers it, and the daily series stays as context behind it.
+    raw = _recent_history("M-4471", "KRW1", 35)
+    points = lead.get("points", [])
+
+    def trailing(values, i, n=7):
+        window = values[max(0, i - n + 1):i + 1]
+        return round(sum(window) / len(window), 2)
+
+    # One window across both halves. Smoothing only the left side would put a
+    # weekly mean and a daily figure on the same axis, which is two quantities
+    # wearing one scale.
+    daily = [q for _, q in raw] + [p["point"] for p in points]
+    lows = [q for _, q in raw] + [p["lower"] for p in points]
+    highs = [q for _, q in raw] + [p["upper"] for p in points]
+
+    history = [{"on": day.isoformat(), "qty": round(q, 2),
+                "mean": trailing(daily, i)}
+               for i, (day, q) in enumerate(raw)][-28:]
+    smoothed = [{**p,
+                 "point": trailing(daily, len(raw) + i),
+                 "lower": trailing(lows, len(raw) + i),
+                 "upper": trailing(highs, len(raw) + i)}
+                for i, p in enumerate(points)]
+    out = _wrap(rows, [
         {"k": "material", "l": "Material"}, {"k": "plant", "l": "Plant"},
-        {"k": "daily_consumption", "l": "Used/day", "n": True},
-        {"k": "signal", "l": "Demand signal"},
-    ], r, "A demand-change signal needs SAP IBP, which is not connected. What is shown "
-          "is the consumption rate from the production schedule.")
+        {"k": "planned", "l": "Planned/day", "n": True},
+        {"k": "observed", "l": "Last 28d", "n": True},
+        {"k": "drift_pct", "l": "Drift %", "n": True},
+        {"k": "forecast", "l": "Next 30d", "n": True},
+    ], r, note)
+    if lead.get("points"):
+        out["chart"] = {
+            "material": "M-4471", "plant": "KRW1",
+            "unit": lead.get("unit", ""), "confidence": lead.get("confidence", 90),
+            "planned_rate": lead.get("planned_rate"),
+            "observed": history, "points": smoothed,
+            "window_days": 7,
+            "mape_pct": lead.get("mape_pct"),
+        }
+    return out
+
+
+def _recent_history(material: str, plant: str, days: int):
+    from tools.demand import _history
+    return _history(material, plant)[-days:]
 
 
 def sourcing() -> dict:

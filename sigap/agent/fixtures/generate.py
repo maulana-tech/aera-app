@@ -314,8 +314,48 @@ def build() -> dict:
     suppliers = [{"Supplier": c, "SupplierName": n, "Country": ctry,
                   "TkdnCertifiedPct": pct or None} for c, n, ctry, pct in SUPPLIERS]
 
+    history = _consumption_history(stock, rnd)
+
     return {"MaterialStock": stock, "PurchaseOrder": orders, "BillOfMaterial": bom,
-            "SalesOrder": sales, "AlternateSource": alternates, "Supplier": suppliers}
+            "SalesOrder": sales, "AlternateSource": alternates, "Supplier": suppliers,
+            "ConsumptionHistory": history}
+
+
+#: Materials whose actual consumption has drifted away from the planned rate in
+#: the master data. This is the gap Demand exists to find: everyone downstream
+#: is dividing stock by a number that stopped being true.
+DRIFTING = {"M-4471": 1.13, "M-3308": 1.06, "M-5518": 0.91}
+
+HISTORY_DAYS = 120
+
+
+def _consumption_history(stock: list, rnd: random.Random) -> list:
+    """Daily withdrawals per material and plant, ending at the as-of date.
+
+    Shape, not noise: a plant runs six days and rests on Sunday, so the week has
+    a profile. A few materials drift away from their planned rate, because that
+    drift is the thing worth detecting.
+    """
+    # Monday through Sunday. Saturday is a short shift, Sunday is down.
+    week = [1.06, 1.04, 1.02, 1.00, 0.98, 0.62, 0.05]
+    rows = []
+    for r in stock:
+        planned = float(r["DailyConsumption"] or 0)
+        if planned <= 0:
+            continue
+        drift = DRIFTING.get(r["Material"], 1.0)
+        # Weekly profile averages below 1, so scale it back to the planned mean.
+        scale = planned * len(week) / sum(week)
+        for back in range(HISTORY_DAYS, 0, -1):
+            day = AS_OF - timedelta(days=back)
+            # Drift arrives gradually rather than as a step.
+            ramp = 1.0 + (drift - 1.0) * (HISTORY_DAYS - back) / HISTORY_DAYS
+            qty = scale * week[day.weekday()] * ramp
+            qty *= 1.0 + rnd.gauss(0, 0.055)
+            rows.append({"Material": r["Material"], "Plant": r["Plant"],
+                         "Date": day.isoformat(), "Quantity": round(max(qty, 0.0), 2),
+                         "BaseUnit": r["BaseUnit"]})
+    return rows
 
 
 def write(data: dict) -> None:
@@ -327,6 +367,12 @@ def write(data: dict) -> None:
             w = csv.DictWriter(f, fieldnames=keys)
             w.writeheader()
             w.writerows(rows)
+
+    # History is thousands of rows and only the forecaster reads it, so it lives
+    # in its own file rather than bloating the fixture every tool loads.
+    history = data.pop("ConsumptionHistory", [])
+    (HERE / "consumption_history.json").write_text(
+        json.dumps(history, indent=0, ensure_ascii=False) + "\n")
 
     # The fixture keeps its Profile, which is the customer's own master data and
     # not ours to generate. Everything else is replaced.
@@ -349,6 +395,13 @@ def demo() -> None:
     assert data == again, "the generator is not deterministic"
 
     counts = {k: len(v) for k, v in data.items()}
+
+    # The drift has to be visible in the last month, or Demand has nothing to find.
+    recent = [h for h in data["ConsumptionHistory"]
+              if h["Material"] == "M-4471" and h["Plant"] == "KRW1"
+              and h["Date"] >= (AS_OF - timedelta(days=28)).isoformat()]
+    observed = sum(h["Quantity"] for h in recent) / len(recent)
+    assert observed > 9.2 * 1.05, (observed, "M-4471 drift is not visible")
     assert counts["MaterialStock"] > 40, counts
     assert counts["PurchaseOrder"] > 40, counts
 
@@ -364,6 +417,7 @@ def demo() -> None:
     for k, v in counts.items():
         print(f"  {k:<16} {v:>4}")
     print(f"  {len(DEFECTS)} defects planted for the audit to find")
+    print(f"  M-4471 at KRW1 planned 9.2/day, last 28 days observed {observed:.2f}")
 
 
 if __name__ == "__main__":

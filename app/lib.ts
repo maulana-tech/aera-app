@@ -60,6 +60,13 @@ export type Column = { k: string; l: string; n?: boolean; rp?: boolean };
 export type View = {
   domain: string; agent: string; columns: Column[]; rows: Record<string, any>[];
   origin: string; source: string; note: string;
+  chart?: {
+    material: string; plant: string; unit: string; confidence: number;
+    planned_rate: number | null; mape_pct: number | null;
+    observed: { on: string; qty: number; mean: number }[];
+    window_days?: number;
+    points: { on: string; point: number; lower: number; upper: number }[];
+  };
 };
 export type Summary = {
   runs: Record<string, number>; actions: Record<string, number>;
