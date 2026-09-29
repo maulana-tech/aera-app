@@ -44,7 +44,7 @@ export default async function Log() {
               edited. A correction is written as a new row."
       />
 
-      <div className="mt-8 max-w-4xl space-y-10">
+      <div className="mt-8 space-y-10">
       {empty && (
         <Empty
           what="Nothing recorded yet."

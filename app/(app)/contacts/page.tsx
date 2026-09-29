@@ -10,16 +10,16 @@ export default async function ContactsPage() {
   ]);
 
   return (
-    <main className="w-full px-6 py-8">
+    <main className="mx-auto w-full max-w-3xl px-6 py-8">
       <header className="border-b pb-5">
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">Contacts</h1>
-        <p className="text-muted-foreground mt-1 max-w-3xl text-sm leading-relaxed">
+        <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
           Who Bram reaches when a disruption hits. This product works off events. The
           recommendation has to come to people, not wait to be opened.
         </p>
       </header>
 
-      <div className="mt-8 max-w-3xl space-y-10">
+      <div className="mt-8 space-y-10">
         {user ? (
           <AddContact />
         ) : (

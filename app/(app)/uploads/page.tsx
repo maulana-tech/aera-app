@@ -11,17 +11,17 @@ export default async function UploadsPage() {
   ]);
 
   return (
-    <main className="w-full px-6 py-8">
+    <main className="mx-auto w-full max-w-3xl px-6 py-8">
       <header className="border-b pb-5">
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">Upload data</h1>
-        <p className="text-muted-foreground mt-1 max-w-3xl text-sm leading-relaxed">
+        <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
           Until SAP is connected, company data can come in as CSV. This is not a substitute
           for the SAP connection. Once <span className="font-mono">SAP_API_KEY</span> is set,
           the tools read live data and uploads are ignored.
         </p>
       </header>
 
-      <div className="mt-8 max-w-3xl space-y-10">
+      <div className="mt-8 space-y-10">
         <Upload signedIn={!!user} />
 
         <section>

@@ -54,7 +54,7 @@ export default async function AuditPage() {
           />
         </div>
       ) : (
-        <article className="mt-8 max-w-4xl space-y-10">
+        <article className="mt-8 space-y-10">
           <section className="grid gap-x-10 gap-y-6 border-y py-6 sm:grid-cols-2 lg:grid-cols-4">
             {bySeverity.map(([sev, list]) => (
               <Metric
