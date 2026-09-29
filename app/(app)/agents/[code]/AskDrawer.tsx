@@ -34,9 +34,12 @@ export default function AskDrawer({
           Ask {name}
         </Button>
       </SheetTrigger>
+      {/* The width carries the same variant prefix as sheet.tsx's own rule.
+        * Without it the base data-[side=right]:sm:max-w-sm wins and the drawer
+        * stays at 384px however wide you ask for it. */}
       <SheetContent
         side="right"
-        className="flex w-full flex-col gap-0 p-0 sm:max-w-xl"
+        className="flex w-full flex-col gap-0 p-0 data-[side=right]:sm:max-w-[540px]"
       >
         {/* The drawer names who is on the other end. What to ask is the body's
           * job, so the header stays a label and does not repeat it. */}
