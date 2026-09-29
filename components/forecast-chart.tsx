@@ -36,7 +36,11 @@ export function ForecastChart({
   confidence: number;
   windowDays?: number;
 }) {
+  // Both are needed: `at` picks the column, `cursorY` places the tooltip. Anchoring
+  // the tooltip to the line instead made pointing anywhere in the band look dead,
+  // because the card appeared far above where the pointer actually was.
   const [at, setAt] = useState<number | null>(null);
+  const [cursorY, setCursorY] = useState(0);
 
   // The trailing mean is the signal. The daily series is context behind it.
   const all = [
@@ -87,10 +91,18 @@ export function ForecastChart({
         onMouseMove={(e) => {
           const r = e.currentTarget.getBoundingClientRect();
           const px = ((e.clientX - r.left) / r.width) * W;
+          const py = ((e.clientY - r.top) / r.height) * H;
           const i = Math.round(((px - PAD.left) / plotW) * (all.length - 1));
           setAt(Math.max(0, Math.min(all.length - 1, i)));
+          setCursorY(Math.max(PAD.top, Math.min(PAD.top + plotH, py)));
         }}
       >
+        {/* The whole plot answers the pointer, not just the 2px line. */}
+        <rect
+          x={PAD.left} y={PAD.top} width={plotW} height={plotH}
+          fill="transparent"
+        />
+
         {/* Grid stays recessive: it orients, it does not compete. */}
         {ticks.map((t, i) => (
           <g key={t}>
@@ -178,7 +190,7 @@ export function ForecastChart({
       {hovered && (
         <ChartTooltip
           x={(x(at!) / W) * 100}
-          y={(y(hovered.v) / H) * 100}
+          y={(cursorY / H) * 100}
           title={short(hovered.on)}
           subtitle={
             hovered.kind === "observed"
