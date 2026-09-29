@@ -72,13 +72,14 @@ why the air-freight option is set at 85 tonnes.
 >
 > 82.8 tonnes is 9 days at 9.2 a day, and 9.2 is the planned rate in master data. The
 > plant has not run at 9.2 for a month. `engine/forecast.py` over 120 days of withdrawals
-> puts the last 28 days at **10.13**, and the next 30 at a mean of 9.97.
+> puts the last 28 days at **10.33**, up 12.3% on plan, and the next 30 at a mean of
+> 10.76.
 >
 > | rate used | depleted | gap | does 85 t bridge it |
 > |---|---|---|---|
 > | planned 9.2 | 13 Sep | 82.8 t | yes |
-> | forecast 9.97 | 12 Sep | 99.7 t | **no** |
-> | upper band | 10 Sep | 151.2 t | no |
+> | forecast 10.76 | 11 Sep | 118.4 t | **no** |
+> | upper band | 10 Sep | 162.5 t | no |
 >
 > So the benchmark option, air freight at 85 tonnes, does not bridge the gap once the
 > observed rate is used instead of the planned one. Four of 59 material and plant pairs

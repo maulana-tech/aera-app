@@ -170,7 +170,13 @@ def build() -> dict:
                      "LTR": (5.0, 90.0), "MTR": (10.0, 120.0),
                      "SQM": (2.0, 20.0)}[unit]
             rate = round(rnd.uniform(*daily), 1)
-            cover = rnd.choice([6, 9, 11, 18, 24, 30, 45, 60, 90])
+            # A plant running 36% of its positions under the safety floor is a
+            # plant in crisis, not a plant. Most sit comfortably; a handful are
+            # thin, which is what makes the thin ones worth looking at.
+            cover = rnd.choices(
+                [8, 11, 13, 18, 22, 28, 35, 44, 60, 85],
+                weights=[2, 3, 3, 12, 14, 16, 15, 13, 12, 10],
+            )[0]
             stock.append({
                 "Material": code, "Plant": plant,
                 "MatlWrhsStkQtyInMatlBaseUnit": round(rate * cover, 1),
@@ -180,16 +186,20 @@ def build() -> dict:
     stock.append({"Material": "M-1202", "Plant": "CKR1",
                   "MatlWrhsStkQtyInMatlBaseUnit": 4800.0, "BaseUnit": "PC",
                   "DailyConsumption": 0.0, "Description": "Packaging crate, returnable"})
-    # planted defect: the scenario material, below any sane floor
-    for row in stock:
-        if row["Material"] == "M-4471" and row["Plant"] == "KRW1":
-            row["MatlWrhsStkQtyInMatlBaseUnit"] = 84.0
-            row["DailyConsumption"] = 9.2
-            break
-    else:
-        stock.append({"Material": "M-4471", "Plant": "KRW1",
-                      "MatlWrhsStkQtyInMatlBaseUnit": 84.0, "BaseUnit": "TON",
-                      "DailyConsumption": 9.2, "Description": "Aluminium alloy ingot ADC12"})
+    # The documented scenario is pinned, both ends of it. KRW1 is the plant in
+    # trouble; SBY1 is the donor whose own floor the transfer breaks, and
+    # DESIGN.md quotes its cover to one decimal place, so it cannot drift with
+    # the generator's weights.
+    pinned = {("M-4471", "KRW1"): (84.0, 9.2), ("M-4471", "SBY1"): (172.8, 9.6)}
+    for (material, plant), (qty, daily) in pinned.items():
+        row = next((r for r in stock
+                    if r["Material"] == material and r["Plant"] == plant), None)
+        if row is None:
+            row = {"Material": material, "Plant": plant, "BaseUnit": "TON",
+                   "Description": "Aluminium alloy ingot ADC12"}
+            stock.append(row)
+        row["MatlWrhsStkQtyInMatlBaseUnit"] = qty
+        row["DailyConsumption"] = daily
 
     # ---- purchase orders --------------------------------------------------
     single_sourced = {"M-3308", "M-5512", "M-2210", "M-1160"}
@@ -402,6 +412,12 @@ def demo() -> None:
               and h["Date"] >= (AS_OF - timedelta(days=28)).isoformat()]
     observed = sum(h["Quantity"] for h in recent) / len(recent)
     assert observed > 9.2 * 1.05, (observed, "M-4471 drift is not visible")
+
+    # Thin positions have to be the exception or the safety floor means nothing.
+    covers = [r["MatlWrhsStkQtyInMatlBaseUnit"] / r["DailyConsumption"]
+              for r in data["MaterialStock"] if r["DailyConsumption"]]
+    thin = sum(1 for c in covers if c < 14) / len(covers)
+    assert 0.03 < thin < 0.20, f"{thin:.0%} of positions below the floor is not a plant"
     assert counts["MaterialStock"] > 40, counts
     assert counts["PurchaseOrder"] > 40, counts
 
@@ -409,6 +425,9 @@ def demo() -> None:
     krw = next(r for r in data["MaterialStock"]
                if r["Material"] == "M-4471" and r["Plant"] == "KRW1")
     assert krw["MatlWrhsStkQtyInMatlBaseUnit"] == 84.0 and krw["DailyConsumption"] == 9.2
+    sby = next(r for r in data["MaterialStock"]
+               if r["Material"] == "M-4471" and r["Plant"] == "SBY1")
+    assert round(sby["MatlWrhsStkQtyInMatlBaseUnit"] / sby["DailyConsumption"], 1) == 18.0
     fg1120 = sum(s["NetAmount"] for s in data["SalesOrder"] if s["Material"] == "FG-1120")
     assert fg1120 == 2_140_000_000, fg1120
 
@@ -418,6 +437,7 @@ def demo() -> None:
         print(f"  {k:<16} {v:>4}")
     print(f"  {len(DEFECTS)} defects planted for the audit to find")
     print(f"  M-4471 at KRW1 planned 9.2/day, last 28 days observed {observed:.2f}")
+    print(f"  {thin:.0%} of positions below the 14 day floor")
 
 
 if __name__ == "__main__":

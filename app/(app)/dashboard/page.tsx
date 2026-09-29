@@ -18,6 +18,16 @@ const short = (n: number) =>
 
 const num = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 1 });
 
+/* A bar per row stops being a chart somewhere around a dozen rows and becomes a
+ * wall. The dashboard shows the sharp end and says how much it is not showing;
+ * the agent's own page carries the full table, which handles sixty rows fine. */
+const SHOWN = 8;
+
+const andMore = (total: number, where: string) =>
+  total > SHOWN
+    ? `Showing the ${SHOWN} that matter most. ${total - SHOWN} more are on ${where}.`
+    : undefined;
+
 export default async function Dashboard() {
   const [s, stock, sourcing, logistics, costing] = await Promise.all([
     api<Summary>("summary"),
@@ -40,7 +50,8 @@ export default async function Dashboard() {
   const held = s.runs.held ?? 0;
 
   // ---- stock cover: how many days until each material runs out ----------
-  const stockRows = (stock?.rows ?? []).filter((r) => r.days_left != null);
+  const stockAll = (stock?.rows ?? []).filter((r) => r.days_left != null);
+  const stockRows = stockAll.slice(0, SHOWN);
   const stockData: Datum[] = stockRows.map((r) => ({
     label: r.description || r.material,
     sub: `${r.material} · ${r.plant}`,
@@ -64,9 +75,10 @@ export default async function Dashboard() {
   }));
 
   // ---- delayed shipments ------------------------------------------------
-  const lateRows = (logistics?.rows ?? []).filter(
-    (r) => r.status !== "planned" && Number(r.delay_days ?? 0) > 0,
-  );
+  const lateAll = (logistics?.rows ?? [])
+    .filter((r) => r.status !== "planned" && Number(r.delay_days ?? 0) > 0)
+    .sort((a, b) => Number(b.delay_days) - Number(a.delay_days));
+  const lateRows = lateAll.slice(0, SHOWN);
   const lateData: Datum[] = lateRows.map((r) => ({
     label: r.reference,
     sub: `${r.material} ${r.port ?? ""}`,
@@ -139,6 +151,7 @@ export default async function Dashboard() {
           blurb="Days until each material runs out at the current consumption rate. Hatched bars are already below the threshold."
           origin={stock?.origin}
           source={stock?.source}
+          note={andMore(stockAll.length, "Iris's page")}
           empty={stockData.length ? undefined : "No stock data to work from yet."}
           table={{
             head: ["Material", "Plant", "Days left", "Depleted"],
@@ -173,6 +186,7 @@ export default async function Dashboard() {
           blurb="Days between the delivery date that was promised and the one that now applies."
           origin={logistics?.origin}
           source={logistics?.source}
+          note={andMore(lateAll.length, "Milo's page")}
           empty={lateData.length ? undefined : "Nothing is running late."}
           table={{
             head: ["Reference", "Booked", "Now", "Delay"],

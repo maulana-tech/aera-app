@@ -175,6 +175,11 @@ def demo() -> None:
     assert min(f.weekly_shape) == f.weekly_shape[6], f.weekly_shape
     assert f.as_dict()["mean_rate"] == f.mean_rate, "mean_rate missing from the dict"
 
+    # DESIGN.md quotes these to one decimal, so a regeneration that moves them
+    # has to fail here rather than leave the document quietly wrong.
+    assert 10.0 < f.observed_rate < 10.7, (f.observed_rate, "DESIGN.md says 10.33")
+    assert 10.4 < f.mean_rate < 11.1, (f.mean_rate, "DESIGN.md says 10.76")
+
     # Too little history is refused, not smoothed over.
     short = forecast(rows[-10:], 30, 90, planned)
     assert short.refused and "at least" in short.reason

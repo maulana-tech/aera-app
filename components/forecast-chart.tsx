@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { cn } from "@/lib/utils";
+import { ChartTooltip } from "@/components/chart-tooltip";
 
 export type ForecastPoint = { on: string; point: number; lower: number; upper: number };
 export type Observed = { on: string; qty: number; mean: number };
@@ -21,7 +21,7 @@ export type Observed = { on: string; qty: number; mean: number };
 
 const W = 720;
 const H = 240;
-const PAD = { top: 12, right: 14, bottom: 26, left: 44 };
+const PAD = { top: 16, right: 14, bottom: 26, left: 44 };
 
 const short = (iso: string) =>
   new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
@@ -68,12 +68,16 @@ export function ForecastChart({
     points.map((p, i) => `L${x(offset + points.length - 1 - i)},${y(points[points.length - 1 - i].lower)}`).join(" ") +
     " Z";
 
-  const ticks = [0, 0.5, 1].map((f) => +(top * f).toFixed(1));
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => +(top * f).toFixed(1));
+  // A tick a week, so the eye can count horizon rather than guess it.
+  const dateTicks = all
+    .map((d, i) => ({ i, on: d.on }))
+    .filter(({ i }) => (offset - 1 - i) % 7 === 0 && i > 0 && i < all.length - 1);
   const hovered = at === null ? null : all[at];
   const hoveredBand = at !== null && at >= offset ? points[at - offset] : null;
 
   return (
-    <div className="viz">
+    <div className="viz relative">
       <svg
         viewBox={`0 0 ${W} ${H}`}
         className="h-auto w-full"
@@ -88,17 +92,32 @@ export function ForecastChart({
         }}
       >
         {/* Grid stays recessive: it orients, it does not compete. */}
-        {ticks.map((t) => (
+        {ticks.map((t, i) => (
           <g key={t}>
             <line
               x1={PAD.left} x2={W - PAD.right} y1={y(t)} y2={y(t)}
-              stroke="var(--viz-rule)" strokeWidth="1" opacity="0.35"
+              stroke="var(--viz-rule)" strokeWidth="1"
+              opacity={i === 0 ? 0.55 : 0.22}
             />
             <text
               x={PAD.left - 8} y={y(t) + 3} textAnchor="end"
               className="fill-muted-foreground" fontSize="10" fontFamily="var(--font-mono)"
             >
               {t}
+            </text>
+          </g>
+        ))}
+        {dateTicks.map(({ i, on }) => (
+          <g key={on}>
+            <line
+              x1={x(i)} x2={x(i)} y1={PAD.top + plotH} y2={PAD.top + plotH + 4}
+              stroke="var(--viz-rule)" strokeWidth="1" opacity="0.5"
+            />
+            <text
+              x={x(i)} y={H - 8} textAnchor="middle"
+              className="fill-muted-foreground" fontSize="9" fontFamily="var(--font-mono)"
+            >
+              {short(on)}
             </text>
           </g>
         ))}
@@ -149,54 +168,50 @@ export function ForecastChart({
         )}
 
         <text
-          x={PAD.left} y={H - 8} className="fill-muted-foreground"
-          fontSize="10" fontFamily="var(--font-mono)"
-        >
-          {short(all[0].on)}
-        </text>
-        <text
-          x={x(offset - 1)} y={H - 8} textAnchor="middle"
+          x={x(offset - 1)} y={PAD.top + 10} textAnchor="middle"
           className="fill-muted-foreground" fontSize="10" fontFamily="var(--font-mono)"
         >
           today
         </text>
-        <text
-          x={W - PAD.right} y={H - 8} textAnchor="end"
-          className="fill-muted-foreground" fontSize="10" fontFamily="var(--font-mono)"
-        >
-          {short(all[all.length - 1].on)}
-        </text>
       </svg>
 
-      {/* Reserved line, so pointing at the chart moves nothing. */}
-      <div className="mt-2 min-h-[1.75rem] border-t pt-2">
-        {hovered ? (
-          <p className="text-xs leading-relaxed">
-            <span className="font-mono">{short(hovered.on)}</span>
-            <span className="text-muted-foreground">
-              {hovered.kind === "observed" ? " withdrawn " : " forecast "}
-            </span>
-            <span className="font-mono font-medium">
-              {hovered.v} {unit}
-            </span>
-            {hovered.kind === "observed" && (
-              <span className="text-muted-foreground">
-                {" "}({windowDays} day mean, that day {hovered.raw})
-              </span>
-            )}
-            {hoveredBand && (
-              <span className="text-muted-foreground">
-                {" "}between {hoveredBand.lower} and {hoveredBand.upper} at {confidence}%
-              </span>
-            )}
-          </p>
-        ) : (
-          <p className="text-muted-foreground font-mono text-[10px]">
-            faint line is each day, solid is the {windowDays} day mean, dashed is
-            forecast, the band is the {confidence}% interval
-          </p>
-        )}
-      </div>
+      {hovered && (
+        <ChartTooltip
+          x={(x(at!) / W) * 100}
+          y={(y(hovered.v) / H) * 100}
+          title={short(hovered.on)}
+          subtitle={
+            hovered.kind === "observed"
+              ? `withdrawn, ${windowDays} day mean`
+              : `forecast, ${windowDays} day mean`
+          }
+          rows={[
+            { label: hovered.kind === "observed" ? "Mean" : "Expected",
+              value: `${hovered.v} ${unit}` },
+            ...(hovered.kind === "observed"
+              ? [{ label: "That day", value: `${hovered.raw} ${unit}`, quiet: true }]
+              : []),
+            ...(hoveredBand
+              ? [{ label: `${confidence}% range`,
+                   value: `${hoveredBand.lower} to ${hoveredBand.upper}`, quiet: true }]
+              : []),
+            ...(plannedRate !== null
+              ? [{ label: "Against plan",
+                   value: `${((hovered.v / plannedRate - 1) * 100).toFixed(1)}%` }]
+              : []),
+          ]}
+          footer={
+            hovered.kind === "forecast"
+              ? "Forecast, not a record. The band widens with the horizon."
+              : undefined
+          }
+        />
+      )}
+
+      <p className="text-muted-foreground mt-2 border-t pt-2 font-mono text-[10px] leading-relaxed">
+        {unit} per day. Faint line is each day, solid is the {windowDays} day mean,
+        dashed is forecast, and the band is the {confidence}% interval
+      </p>
     </div>
   );
 }

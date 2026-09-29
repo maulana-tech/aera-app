@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { ChartTooltip } from "@/components/chart-tooltip";
 import { OriginBadge } from "@/components/status-badge";
 import { cn } from "@/lib/utils";
 
@@ -30,14 +31,11 @@ export function Bars({
   const max = Math.max(...data.map((d) => d.value), threshold ?? 0) || 1;
   const scale = (n: number) => `${Math.max((n / (max * 1.04)) * 100, 0.8)}%`;
   const [over, setOver] = useState<number | null>(null);
-
-  // The readout sits in a reserved line under the chart rather than floating
-  // over it. A tooltip on the top row of a dense list gets clipped, and a row
-  // that grows on hover shoves everything below it down.
   const shown = over === null ? null : data[over];
+  const rowHeight = 100 / Math.max(data.length, 1);
 
   return (
-    <div className="viz">
+    <div className="viz relative">
       <div className="space-y-0.5">
         {data.map((d, i) => (
           <div
@@ -101,27 +99,39 @@ export function Bars({
         ))}
       </div>
 
-      {/* One reserved line, so nothing moves when the pointer arrives. */}
-      <div className="mt-2.5 min-h-[1.75rem] border-t pt-2">
-        {shown ? (
-          <p className="text-xs leading-relaxed">
-            <span className="font-medium">{shown.label}</span>
-            <span className="text-muted-foreground"> {shown.title ?? shown.display}</span>
-          </p>
-        ) : threshold !== undefined && thresholdLabel ? (
-          <p className="text-muted-foreground flex items-center gap-1.5 font-mono text-[10px]">
-            <span
-              className="inline-block h-0 w-4 border-t border-dashed"
-              style={{ borderColor: "var(--viz-rule)" }}
-            />
-            {thresholdLabel}
-          </p>
-        ) : (
-          <p className="text-muted-foreground font-mono text-[10px]">
-            point at a bar for the detail behind it
-          </p>
-        )}
-      </div>
+      {shown && over !== null && (
+        <ChartTooltip
+          // Anchored to the middle of the row under the pointer.
+          x={58}
+          y={rowHeight * (over + 0.5)}
+          title={shown.label}
+          subtitle={shown.sub}
+          rows={[
+            { label: "Value", value: shown.display },
+            ...(threshold !== undefined
+              ? [{
+                  label: "Against threshold",
+                  value: `${shown.value >= threshold ? "+" : ""}${(
+                    shown.value - threshold
+                  ).toFixed(1)}`,
+                  quiet: true,
+                }]
+              : []),
+            ...(shown.tag ? [{ label: "Note", value: shown.tag, quiet: true }] : []),
+          ]}
+          footer={shown.title}
+        />
+      )}
+
+      {threshold !== undefined && thresholdLabel && (
+        <p className="text-muted-foreground mt-2.5 flex items-center gap-1.5 border-t pt-2 font-mono text-[10px]">
+          <span
+            className="inline-block h-0 w-4 border-t border-dashed"
+            style={{ borderColor: "var(--viz-rule)" }}
+          />
+          {thresholdLabel}
+        </p>
+      )}
     </div>
   );
 }
