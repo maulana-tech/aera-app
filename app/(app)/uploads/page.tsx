@@ -39,7 +39,11 @@ export default async function UploadsPage() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm">{u.filename}</p>
                     <p className="text-muted-foreground mt-0.5 font-mono text-[11px]">
-                      {u.entity} · {u.rows} rows · {u.uploaded_by}
+                      {u.entity}, {u.rows} rows, {u.uploaded_by}
+                    </p>
+                    <p className="text-muted-foreground mt-1 text-[11px]">
+                      declared {u.synthetic ? "a generated sample, labelled modelled"
+                                            : "real master data, labelled cached"}
                     </p>
                     <p className="text-muted-foreground mt-0.5 font-mono text-[10px]">
                       {new Date(u.uploaded_at).toLocaleString("en-GB")}

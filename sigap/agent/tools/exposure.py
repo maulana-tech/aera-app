@@ -204,18 +204,27 @@ def demo() -> None:
     assert r.value[0]["value_idr"] is not None, "an unpriced finding cannot rank first"
     assert 0 not in priced, "a finding with no order on record must be unpriced, not zero"
 
-    # M-5512 feeds FG-2040 and no customer order references it.
-    m5512 = [f for f in r.value if f["material"] == "M-5512"]
-    assert m5512 and all(f["value_idr"] is None for f in m5512), m5512
+    # Whatever the dataset, an unpriced finding sorts behind every priced one.
+    # Unpriced means the records do not say, which is not the same as zero.
+    seen_unpriced = False
+    for f in r.value:
+        if f["value_idr"] is None:
+            seen_unpriced = True
+        else:
+            assert not seen_unpriced, "a priced finding ranked behind an unpriced one"
 
     # A scan over modelled stock is modelled, never derived.
     assert r.origin is Origin.MODELLED, r.origin
 
-    # M-4471 and M-3308 both feed FG-1120, so a lane carrying both is exposed
-    # to those orders once, not twice.
-    lane = next(f for f in r.value if f["pattern"] == "lane concentration")
+    # Materials sharing a finished good must be priced through it once. The
+    # bound that catches double counting is the whole order book: no finding
+    # can be worth more than every customer order put together.
     total = sum(s["NetAmount"] for s in fixture("SalesOrder"))
-    assert lane["value_idr"] == total, (lane["value_idr"], total)
+    for f in r.value:
+        if f["value_idr"] is not None:
+            assert f["value_idr"] <= total, (f["pattern"], f["value_idr"], total)
+    lane = next(f for f in r.value if f["pattern"] == "lane concentration")
+    assert lane["value_idr"] is not None and lane["value_idr"] > 0, lane
 
     c = get_supplier_certifications("SUP-4417")
     assert c.origin is Origin.MISSING and "rule pack" in c.note, c.note

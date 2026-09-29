@@ -44,8 +44,9 @@ def pull(
         except Exception as e:                                   # noqa: BLE001
             return Result(None, Origin.MISSING, sap_service, note=f"{type(e).__name__}: {e}")
 
-    # Data the user uploaded outranks a fixture: it is the company's real data,
-    # just not pulled live. Hence CACHED rather than MODELLED.
+    # Real company data that was uploaded rather than pulled outranks a fixture:
+    # it is genuine, just not live. Hence CACHED. A file the uploader declared
+    # as generated stays MODELLED, because calling it cached would launder it.
     try:
         from core import store
         u = store.latest_upload(fixture_entity)
@@ -55,8 +56,14 @@ def pull(
         data = u["payload"]
         if keep:
             data = [r for r in data if keep(r)]
-        return Result(data, Origin.CACHED, f"upload:{u['filename']}",
-                      note=f"uploaded {u['uploaded_at']}")
+        generated = bool(u.get("synthetic"))
+        return Result(
+            data,
+            Origin.MODELLED if generated else Origin.CACHED,
+            f"upload:{u['filename']}",
+            note=(f"uploaded {u['uploaded_at']}"
+                  + (", declared as generated sample data" if generated else "")),
+        )
 
     data = fixture(fixture_entity)
     if keep:
@@ -65,3 +72,33 @@ def pull(
         data, Origin.MODELLED, f"fixture:{fixture_entity}",
         note="SAP_API_KEY is not set. Using modelled data",
     )
+
+
+#: Every entity the audit reads, with the SAP service it would come from live.
+ENTITIES = {
+    "MaterialStock": ("API_MATERIAL_STOCK_SRV", "A_MatlStkInAcctMod"),
+    "PurchaseOrder": ("API_PURCHASEORDER_PROCESS_SRV", "A_PurchaseOrder"),
+    "BillOfMaterial": ("API_BILL_OF_MATERIAL_SRV", "A_BillOfMaterial"),
+    "SalesOrder": ("API_SALES_ORDER_SRV", "A_SalesOrder"),
+    "AlternateSource": ("API_PURCHASING_INFO_RECORD_SRV", "A_PurchasingInfoRecord"),
+    "Supplier": ("API_BUSINESS_PARTNER", "A_Supplier"),
+}
+
+
+def current_dataset() -> tuple[dict, dict]:
+    """Everything the system can currently see, by the same path the tools use.
+
+    Returns the rows and, separately, where each entity came from. An audit that
+    does not say which of its inputs were modelled is an audit of nothing.
+    """
+    data: Dict[str, list] = {}
+    origins: Dict[str, dict] = {}
+    for entity, (service, sap_entity) in ENTITIES.items():
+        try:
+            r = pull(entity, service, sap_entity, {"$top": "500"})
+        except KeyError:
+            # Not every entity exists in the fixture; Supplier is newer than it.
+            continue
+        data[entity] = r.value or []
+        origins[entity] = {"origin": r.origin.value, "source": r.source, "note": r.note}
+    return data, origins

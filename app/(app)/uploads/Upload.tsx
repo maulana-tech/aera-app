@@ -20,6 +20,7 @@ export default function Upload({ signedIn }: { signedIn: boolean }) {
   const [filename, setFilename] = useState("");
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
+  const [synthetic, setSynthetic] = useState<boolean | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
   const chosen = ENTITIES.find((e) => e.v === entity)!;
@@ -37,13 +38,21 @@ export default function Upload({ signedIn }: { signedIn: boolean }) {
       const res = await fetch("/api/sigap/uploads", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ entity, filename: filename || "pasted.csv", csv: body }),
+        body: JSON.stringify({
+          entity, filename: filename || "pasted.csv", csv: body, synthetic,
+        }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error ?? "failed");
-      setMessage({ ok: true, text: `${d.rows} rows saved as ${d.entity}` });
+      setMessage({
+        ok: true,
+        text: `${d.rows} rows saved as ${d.entity}, labelled ${
+          d.synthetic ? "modelled" : "cached"
+        }`,
+      });
       setBody("");
       setFilename("");
+      setSynthetic(null);
       router.refresh();
     } catch (e) {
       setMessage({ ok: false, text: e instanceof Error ? e.message : "failed" });
@@ -115,13 +124,46 @@ export default function Upload({ signedIn }: { signedIn: boolean }) {
         </p>
       )}
 
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-muted-foreground text-xs leading-relaxed">
-          Uploaded data outranks the modelled data, and its label changes to{" "}
-          <span className="font-mono">cached</span>.
+      <div className="border-t pt-4">
+        <p className="text-muted-foreground text-xs">What is this file?</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {[
+            { value: false, label: "Our own master data",
+              hint: "Real records exported from a system. Labelled cached." },
+            { value: true, label: "Generated sample",
+              hint: "Made up for testing or a demo. Stays labelled modelled." },
+          ].map((c) => (
+            <button
+              key={String(c.value)}
+              type="button"
+              onClick={() => setSynthetic(c.value)}
+              className={`max-w-xs rounded-lg border px-3 py-2 text-left transition-colors ${
+                synthetic === c.value
+                  ? "border-primary bg-primary/5"
+                  : "hover:border-foreground/30"
+              }`}
+            >
+              <span className="block text-xs font-medium">{c.label}</span>
+              <span className="text-muted-foreground mt-0.5 block text-[11px] leading-relaxed">
+                {c.hint}
+              </span>
+            </button>
+          ))}
+        </div>
+        <p className="text-muted-foreground mt-2.5 max-w-xl text-[11px] leading-relaxed">
+          Nothing in the file itself can tell us which it is, and guessing would mean
+          labelling made-up rows as real company data. Everything downstream, including
+          whether the calculator will produce a rupiah figure, follows this answer.
         </p>
-        <Button onClick={submit} disabled={busy || !body.trim()} size="sm">
-          {busy ? "Uploading…" : "Upload"}
+      </div>
+
+      <div className="flex items-center justify-end">
+        <Button
+          onClick={submit}
+          disabled={busy || !body.trim() || synthetic === null}
+          size="sm"
+        >
+          {busy ? "Uploading…" : synthetic === null ? "Say what the file is" : "Upload"}
         </Button>
       </div>
     </div>

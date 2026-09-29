@@ -1,0 +1,8 @@
+id,label,Supplier,Material,Quantity,ArrivalDate,ExtraCostIDR,TkdnAfterPct,Origin,NewOrigin,QualificationDays
+A,Air freight 85 t from the incumbent supplier,SUP-2201,M-4471,85.0,2026-09-11,186000000,38.2,CN,False,0
+B,"Local supplier PT Logam Andalan, Gresik",SUP-4417,M-4471,60.0,2026-09-12,94000000,41.6,ID,False,3
+C,Reallocate stock from plant SBY1,INTERNAL,M-4471,55.0,2026-09-10,22000000,,ID,False,0
+D,New import source in Vietnam,SUP-3390,M-4471,80.0,2026-09-26,61000000,36.1,VN,True,7
+E,Cheapest source in China,SUP-5501,M-4471,100.0,2026-09-19,48000000,34.8,CN,False,0
+F,"PT Cipta Baja Nusantara, Cilegon",SUP-4418,M-5518,45.0,2026-09-18,31000000,44.0,ID,False,5
+G,"Busan Forging, expedited",SUP-7701,M-5518,60.0,2026-09-16,88000000,0.0,KR,False,0

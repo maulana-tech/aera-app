@@ -68,6 +68,7 @@ does not guess at anything.
 | `GET /summary` · `GET /data/{domain}` · `GET /log` | dashboard, tables, audit trail |
 | `GET /uploads` · `POST /uploads` | company CSV in place of SAP |
 | `GET /reports/{run_id}` · `GET /contacts` · `POST /contacts` | write-up, notify list |
+| `GET /audit` | audit the data the system can currently see |
 
 ```bash
 curl -X POST localhost:8787/events -H 'content-type: application/json' \
@@ -90,6 +91,9 @@ core/identity.py       pbkdf2 passwords, HMAC session tokens, per-role approval 
 core/trace.py          step recorder; its output is what the dashboard reads
 clients/sap_s4.py      OData; the sandbox today, a customer tenant tomorrow
 engine/simulate.py     the calculator, pure Python, no AI
+engine/audit.py        the data audit, also pure Python, every finding evidenced
+fixtures/generate.py   builds the dataset, deterministic, plants known defects
+signals/bmkg.py        the live quake feed, the one external source with no key
 agents/definitions.py  the 11 agents; instructions live in prompts/
 tools/                 one file per agent, named after the agent code
 ```

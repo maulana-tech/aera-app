@@ -18,6 +18,7 @@ const LABELS: Record<string, string> = {
   simulation: "Costing",
   execution: "Execution",
   agents: "Agent team",
+  audit: "Data audit",
   log: "Log",
   reports: "Reports",
   uploads: "Upload data",

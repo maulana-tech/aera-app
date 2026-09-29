@@ -178,8 +178,12 @@ def demo() -> None:
     print("  modelled data    → calculator refuses to give a figure ✓")
 
     # 3. full path, treating the data as live
-    stock = Result(fx["MaterialStock"], Origin.LIVE, "API_MATERIAL_STOCK_SRV")
-    options = Result(fx["AlternateSource"], Origin.LIVE, "A_PurchasingInfoRecord")
+    # Filter by material, which is what simulate_scenario_tool does. The file
+    # carries alternates for more than one material now.
+    stock = Result([r for r in fx["MaterialStock"] if r["Material"] == "M-4471"],
+                   Origin.LIVE, "API_MATERIAL_STOCK_SRV")
+    options = Result([o for o in fx["AlternateSource"] if o["Material"] == "M-4471"],
+                     Origin.LIVE, "A_PurchasingInfoRecord")
     rulings = {
         "A": Ruling("A", "air freight", True),
         "B": Ruling("B", "local supplier", True),

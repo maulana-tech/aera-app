@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  FileText, Inbox, LayoutDashboard, MessagesSquare,
+  ClipboardCheck, FileText, Inbox, LayoutDashboard, MessagesSquare,
   ScrollText, Settings2, Users,
 } from "lucide-react";
 
@@ -41,6 +41,7 @@ const AGENTS: NavItem[] = [
 ];
 
 const RECORDS: NavItem[] = [
+  { title: "Data audit", href: "/audit", icon: ClipboardCheck },
   { title: "Log", href: "/log", icon: ScrollText },
   { title: "Reports", href: "/reports", icon: FileText },
 ];

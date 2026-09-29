@@ -1,0 +1,60 @@
+Material,Plant,MatlWrhsStkQtyInMatlBaseUnit,BaseUnit,DailyConsumption,Description
+M-4471,SBY1,172.8,TON,9.6,Aluminium alloy ingot ADC12
+M-4472,SBY1,564.0,TON,9.4,Aluminium alloy ingot A356
+M-4478,SBY1,70.8,TON,11.8,Aluminium billet 6061
+M-4478,KRW1,128.7,TON,11.7,Aluminium billet 6061
+M-5512,CKR1,83.6,TON,7.6,Steel bar SCM440
+M-5518,KRW1,492.0,TON,8.2,Steel bar S45C
+M-5524,KRW1,111.0,TON,3.7,Bearing steel SUJ2
+M-5530,CKR1,199.8,TON,11.1,Cast iron FC250 pig
+M-3308,KRW1,13500.0,PC,300.0,Brake seal kit NBR
+M-3312,CKR1,8136.7,PC,739.7,O-ring set EPDM
+M-3312,SBY1,5090.4,PC,565.6,O-ring set EPDM
+M-3320,CKR1,5664.0,KG,236.0,Rubber compound NR60
+M-3320,SBY1,14064.0,KG,234.4,Rubber compound NR60
+M-6640,CKR1,1725.9,KG,156.9,Copper wire 2.0mm
+M-6640,KRW1,4843.2,KG,201.8,Copper wire 2.0mm
+M-6648,KRW1,40170.0,PC,669.5,Brass fitting M10
+M-6648,CKR1,12019.5,PC,267.1,Brass fitting M10
+M-7710,SBY1,3525.5,PC,320.5,Hex bolt M12 class 10.9
+M-7710,KRW1,20763.0,PC,461.4,Hex bolt M12 class 10.9
+M-7716,KRW1,1647.0,PC,91.5,Flange nut M12
+M-7722,SBY1,67986.0,PC,755.4,Spring washer M12
+M-7722,KRW1,33399.0,PC,742.2,Spring washer M12
+M-8830,CKR1,2070.0,LTR,34.5,"Epoxy primer, grey"
+M-8836,SBY1,3532.5,LTR,78.5,"Topcoat, black semi-gloss"
+M-8842,KRW1,1651.2,LTR,68.8,Anti-corrosion wax
+M-9910,SBY1,112.2,LTR,18.7,Machining coolant
+M-9916,SBY1,8103.7,PC,736.7,Grinding wheel 350mm
+M-9922,CKR1,6036.8,PC,548.8,Carbide insert CNMG
+M-2210,KRW1,25320.0,PC,844.0,Graphite electrode
+M-2216,SBY1,94.6,TON,8.6,"Foundry sand, resin coated"
+M-2216,KRW1,105.6,TON,4.4,"Foundry sand, resin coated"
+M-2222,KRW1,12423.6,PC,690.2,Ceramic filter 50ppi
+M-2228,SBY1,1572.0,KG,26.2,Ladle refractory mix
+M-1105,KRW1,175.5,SQM,19.5,"Gasket sheet, compressed"
+M-1112,CKR1,369.6,MTR,33.6,Hydraulic hose 3/8
+M-1118,SBY1,11844.0,PC,658.0,"Dust boot, TPE"
+M-1124,SBY1,31626.0,PC,527.1,"Piston seal, PTFE"
+M-1124,CKR1,583.2,PC,64.8,"Piston seal, PTFE"
+M-1130,SBY1,2474.4,PC,103.1,Bleeder screw M8
+M-1130,KRW1,1790.1,PC,198.9,Bleeder screw M8
+M-1136,CKR1,29646.0,PC,658.8,"Retaining clip, spring steel"
+M-1136,KRW1,1366.2,PC,75.9,"Retaining clip, spring steel"
+M-1142,KRW1,47898.0,PC,798.3,Shim plate 0.5mm
+M-1148,CKR1,39843.0,PC,442.7,"Guide pin, chrome"
+M-1148,SBY1,9252.0,PC,514.0,"Guide pin, chrome"
+M-1154,KRW1,14503.5,PC,322.3,"Bushing, sintered bronze"
+M-1154,SBY1,1960.2,PC,178.2,"Bushing, sintered bronze"
+M-1160,CKR1,5987.7,PC,665.3,Needle bearing HK1210
+M-1166,SBY1,5860.8,PC,532.8,Oil seal 35x52x8
+M-1172,SBY1,15770.4,PC,657.1,Snap ring 52mm
+M-1178,CKR1,24012.0,PC,533.6,Dowel pin 8x16
+M-1184,KRW1,2459.4,PC,409.9,Thread insert M8
+M-1190,KRW1,29070.0,PC,646.0,"Vent plug, brass"
+M-1196,CKR1,8256.0,PC,344.0,"Label, laser etched"
+M-1196,SBY1,11295.0,PC,251.0,"Label, laser etched"
+M-1202,SBY1,1680.6,PC,280.1,"Packaging crate, returnable"
+M-1202,KRW1,16677.0,PC,555.9,"Packaging crate, returnable"
+M-1202,CKR1,4800.0,PC,0.0,"Packaging crate, returnable"
+M-4471,KRW1,84.0,TON,9.2,Aluminium alloy ingot ADC12

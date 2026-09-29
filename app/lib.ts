@@ -71,8 +71,26 @@ export type Summary = {
 };
 export type Upload = {
   id: string; entity: string; filename: string; rows: number;
-  uploaded_by: string; uploaded_at: string;
+  uploaded_by: string; uploaded_at: string; synthetic?: number;
 };
 export type Contact = {
   id: string; name: string; role: string; email: string; notify_for: string;
+};
+
+export type Finding = {
+  severity: "critical" | "serious" | "warning" | "note";
+  category: string;
+  title: string;
+  detail: string;
+  evidence: string[];
+  value_idr: number | null;
+  action: string;
+};
+export type AuditReport = {
+  findings: Finding[];
+  counts: Record<string, number>;
+  coverage: Record<string, number>;
+  origins: Record<string, { origin: string; source: string; note: string }>;
+  weakest_origin: string;
+  note: string;
 };

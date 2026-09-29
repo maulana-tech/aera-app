@@ -175,6 +175,30 @@ def domain_view(m, _b, _h) -> Tuple[int, dict]:
     return 200, {"domain": name, "agent": name, **VIEWS[name]()}
 
 
+@route("GET", r"/audit")
+def audit(_m, _b, _h) -> Tuple[int, dict]:
+    """Read everything the system can see and report what is wrong with it."""
+    from engine import audit as engine_audit
+    from tools.fetcher import current_dataset, profile
+
+    data, origins = current_dataset()
+    if not data.get("MaterialStock"):
+        return 200, {"findings": [], "counts": {}, "coverage": {},
+                     "origins": origins,
+                     "note": "no material stock is readable, so there is nothing to audit"}
+
+    result = engine_audit.run(data, profile())
+    weakest = sorted({o["origin"] for o in origins.values()},
+                     key=["missing", "modelled", "cached", "derived", "live"].index)
+    return 200, {
+        **result.as_dict(),
+        "origins": origins,
+        "weakest_origin": weakest[0] if weakest else "missing",
+        "note": "Every finding is computed from the rows named beside it. No model was "
+                "involved, so any of it can be recomputed from the same file.",
+    }
+
+
 @route("GET", r"/uploads")
 def list_uploads(_m, _b, _h) -> Tuple[int, dict]:
     return 200, {"uploads": store.list_uploads()}
@@ -212,7 +236,12 @@ def upload(_m, b: dict, h) -> Tuple[int, dict]:
                     r[k] = float(v) if "." in v else int(v)
                 except ValueError:
                     pass
-    return 201, store.save_upload(entity, filename, rows, u.email)
+    # The uploader says whether this is real master data or a generated sample.
+    # Nothing in the file itself can tell us, and guessing would mean labelling
+    # generated rows as cached, which is exactly the laundering this system
+    # exists to prevent.
+    return 201, store.save_upload(entity, filename, rows, u.email,
+                                  synthetic=bool(b.get("synthetic")))
 
 
 @route("POST", r"/uploads/([A-Za-z0-9_]+)/delete")

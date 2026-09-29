@@ -88,7 +88,11 @@ CREATE TABLE IF NOT EXISTS uploads (
   rows        INTEGER NOT NULL,
   payload     TEXT NOT NULL,             -- JSON array
   uploaded_by TEXT NOT NULL,
-  uploaded_at TEXT NOT NULL
+  uploaded_at TEXT NOT NULL,
+  -- Declared by whoever uploaded it. The system cannot tell real master data
+  -- from a generated sample by looking at it, and labelling a generated file
+  -- as cached would launder it into looking more trustworthy than it is.
+  synthetic   INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS contacts (
@@ -121,6 +125,11 @@ def connect() -> Iterator[sqlite3.Connection]:
     c.execute("PRAGMA journal_mode = WAL")
     try:
         c.executescript(SCHEMA)
+        # Older databases predate the synthetic flag.
+        try:
+            c.execute("ALTER TABLE uploads ADD COLUMN synthetic INTEGER NOT NULL DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass
         yield c
         c.commit()
     finally:
@@ -259,14 +268,16 @@ def mark_sent(action_id: str, sap_reference: str) -> None:
 
 
 # -------------------------------------------------------------------- uploads
-def save_upload(entity: str, filename: str, payload: list, uploaded_by: str) -> dict:
+def save_upload(entity: str, filename: str, payload: list, uploaded_by: str,
+                synthetic: bool = False) -> dict:
     uid = new_id("upl")
     with connect() as c:
-        c.execute("INSERT INTO uploads (id,entity,filename,rows,payload,uploaded_by,uploaded_at)"
-                  " VALUES (?,?,?,?,?,?,?)",
+        c.execute("INSERT INTO uploads (id,entity,filename,rows,payload,uploaded_by,"
+                  "uploaded_at,synthetic) VALUES (?,?,?,?,?,?,?,?)",
                   (uid, entity, filename, len(payload),
-                   json.dumps(payload, ensure_ascii=False), uploaded_by, _now()))
-    return {"id": uid, "entity": entity, "rows": len(payload)}
+                   json.dumps(payload, ensure_ascii=False), uploaded_by, _now(),
+                   int(synthetic)))
+    return {"id": uid, "entity": entity, "rows": len(payload), "synthetic": synthetic}
 
 
 def latest_upload(entity: str) -> Optional[dict]:
@@ -279,8 +290,8 @@ def latest_upload(entity: str) -> Optional[dict]:
 
 def list_uploads() -> List[dict]:
     with connect() as c:
-        rows = c.execute("SELECT id,entity,filename,rows,uploaded_by,uploaded_at FROM uploads"
-                         " ORDER BY uploaded_at DESC LIMIT 50").fetchall()
+        rows = c.execute("SELECT id,entity,filename,rows,uploaded_by,uploaded_at,synthetic"
+                         " FROM uploads ORDER BY uploaded_at DESC LIMIT 50").fetchall()
     return [dict(r) for r in rows]
 
 
