@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { api, me, type Agent, type AgentSummary, type View } from "@/app/lib";
-import Conversation from "./Conversation";
+import AskDrawer from "./AskDrawer";
 import { AgentBadge } from "@/components/agent-card";
 import { DataTable } from "@/components/data-table";
 import { Figure } from "@/components/charts";
@@ -103,6 +103,15 @@ export default async function AgentPage({ params }: { params: Promise<{ code: st
               veto
             </Badge>
           )}
+          <div className="ml-auto">
+            <AskDrawer
+              code={a.code}
+              name={a.nickname}
+              title={a.title}
+              examples={desk.examples}
+              signedIn={!!user}
+            />
+          </div>
         </div>
         <p className="text-muted-foreground mt-3 max-w-2xl text-sm leading-relaxed">
           {a.brief}
@@ -174,7 +183,7 @@ export default async function AgentPage({ params }: { params: Promise<{ code: st
         )}
       </Section>
 
-      <div className="mt-10 grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
+      <div className="mt-10 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-4">
           <div className="rounded-lg border">
             <p className="text-muted-foreground border-b px-4 py-2.5 text-xs font-medium">
@@ -182,7 +191,9 @@ export default async function AgentPage({ params }: { params: Promise<{ code: st
             </p>
             <ToolList tools={a.tools} />
           </div>
+        </div>
 
+        <div className="space-y-4">
           <Rail>
             <Fact label="Reasoning effort" value={a.effort} />
             <Fact
@@ -201,15 +212,6 @@ export default async function AgentPage({ params }: { params: Promise<{ code: st
             </p>
           )}
         </div>
-
-        <Section title={`Ask ${a.nickname}`} className="mt-0">
-          <Conversation
-            code={a.code}
-            name={a.nickname}
-            examples={desk.examples}
-            signedIn={!!user}
-          />
-        </Section>
       </div>
     </main>
   );

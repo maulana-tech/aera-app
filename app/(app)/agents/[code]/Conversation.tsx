@@ -60,11 +60,10 @@ export default function Conversation({
   }
 
   return (
-    <div className="flex h-[24rem] flex-col rounded-lg border">
+    <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex-1 space-y-4 overflow-y-auto p-5">
         {messages.length === 0 && (
           <div className="text-muted-foreground space-y-3 text-sm">
-            <p>Ask {name} directly. Same tools as when working inside the team.</p>
             <div className="flex flex-wrap gap-2">
               {examples.map((ex) => (
                 <button
