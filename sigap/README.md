@@ -30,6 +30,7 @@ open http://localhost:3000/dashboard
 | Understand the product | `PLAN.md` §1 and §3 |
 | See how far along it is | `PLAN.md` §2, or `manage.py check` |
 | Start writing code | `agent/README.md`, then `TECHNICAL.md` |
+| Know what happens before Demo Day | `AWS-PLAN.md` |
 | Meet the agents one by one | `AGENT-REFERENCE.md` |
 | Find a number or the scenario | `DESIGN.md` §2 |
 | Work out where data comes from | `DATA-SOURCES.md` |
@@ -39,11 +40,12 @@ open http://localhost:3000/dashboard
 | File | What's in it |
 |---|---|
 | **`PLAN.md`** ⭐ | The plan, the status of each part, the order of work |
-| **`AGENT-REFERENCE.md`** | All 11 agents: tools, parameters, limits. **Generated** — `manage.py docs` |
+| **`AGENT-REFERENCE.md`** | All 11 agents: tools, parameters, limits. **Generated**, `manage.py docs` |
+| **`AWS-PLAN.md`** | Getting onto Bedrock and AgentCore, in the order that survives contact with a loop that has never run |
 | `DESIGN.md` | Scenario figures, local rules, the eval suite |
 | `TECHNICAL.md` | Exact function names and parameters |
 | `DATA-SOURCES.md` | What was verified about each data source |
-| `agent/` | The code — see `agent/README.md` |
+| `agent/` | The code, see `agent/README.md` |
 
 ## Things to remember
 
@@ -64,7 +66,7 @@ cd agent && PYTHONPATH=. python3 engine/simulate.py
 
 If a figure in a document cannot be reproduced by that command, **the document is wrong.**
 
-**What is blocking, right now** — `PYTHONPATH=. python3 manage.py check` prints this
+**What is blocking, right now**, `PYTHONPATH=. python3 manage.py check` prints this
 live, but in short: `SAP_API_KEY`, `AWS_REGION`, nine agent prompts, four Prevent-mode
 tools, and `references/` (the TKDN & LARTAS rules). The prompts and `references/` need
 nobody's permission and can be started today.

@@ -1,7 +1,7 @@
 # Technical notes
 
 > An appendix to `PLAN.md`. Only the things that need exact function names and
-> parameters live here — every conceptual explanation is in `PLAN.md`.
+> parameters live here, every conceptual explanation is in `PLAN.md`.
 
 ## Calling Claude through Bedrock
 
@@ -37,7 +37,7 @@ resp = client.messages.create(
 | Rules (Kira) | `high` | A veto decision must not be wrong |
 | Everyone else | `medium` | Their task is narrow and well defined |
 
-Use **streaming** for the supervisor — his turn is long, and without streaming it can
+Use **streaming** for the supervisor, his turn is long, and without streaming it can
 hit the HTTP timeout.
 
 ```python
@@ -51,7 +51,7 @@ Order on the wire: `tools` → `system` → `messages`. Put what **does not chan
 One changed byte near the front invalidates the cache for everything after it.
 
 In the agent team the tool list and the instructions are re-sent on **every** specialist
-turn — without caching, the cost multiplies by the number of agents.
+turn, without caching, the cost multiplies by the number of agents.
 
 ```python
 resp = client.messages.create(
@@ -82,7 +82,7 @@ class Origin(str, Enum):
     LIVE = "live"          # straight from SAP / an official API
     CACHED = "cached"      # was live once, carries its timestamp
     DERIVED = "derived"    # computed from something live
-    MODELLED = "modelled"  # company profile / fixture — labelled in the open
+    MODELLED = "modelled"  # company profile / fixture, labelled in the open
     MISSING = "missing"    # the lead stops here rather than guessing
 
 @dataclass
@@ -102,9 +102,9 @@ calculator **must not** emit a savings figure. The lead reports what is missing 
 
 These are in `graph.py` and were there from the second agent onwards:
 
-- `MAX_SPECIALIST_ROUNDS` — tool rounds inside one specialist's turn
-- `MAX_LEAD_ROUNDS` — total supervisor rounds
-- `CFG.cost_cap_per_event_idr` — model spend per event, raises `BudgetExhausted`
+- `MAX_SPECIALIST_ROUNDS`, tool rounds inside one specialist's turn
+- `MAX_LEAD_ROUNDS`, total supervisor rounds
+- `CFG.cost_cap_per_event_idr`, model spend per event, raises `BudgetExhausted`
 
 Every agent-team system needs limits like these, for the same reason: without them they
 can pass work back and forth indefinitely.

@@ -1,4 +1,4 @@
-# SIGAP — Plan & Status
+# SIGAP, Plan & Status
 
 > Context: **application development.** Not a competition entry.
 > Jargon is decoded in §8 if a word is unfamiliar.
@@ -11,8 +11,8 @@
 
 An autonomous assistant for manufacturers that import most of their raw material.
 
-When supply is disrupted — a port closes, a supplier misses a shipment, goods are held at
-customs — the system investigates the impact itself, assembles the ways out, strikes the
+When supply is disrupted, a port closes, a supplier misses a shipment, goods are held at
+customs, the system investigates the impact itself, assembles the ways out, strikes the
 ones that break regulation or the customer contract, works out which is cheapest, and
 executes it into SAP once someone with the authority approves.
 
@@ -47,22 +47,22 @@ this table.
 
 ### What is blocking
 
-1. **`SAP_API_KEY`** — free, 15 minutes. Once set, five read tools use real data and the
+1. **`SAP_API_KEY`**, free, 15 minutes. Once set, five read tools use real data and the
    origin label flips from `modelled` to `live`.
-2. **`AWS_REGION`** — `graph.py` has never been executed, not once. Until it is set, the
+2. **`AWS_REGION`**, `graph.py` has never been executed, not once. Until it is set, the
    system honestly holds back and makes no decisions at all.
 3. **The nine missing prompts.** An agent with no `prompts/<code>.txt` raises
    `PromptMissing`. Writing them needs nobody's permission.
-4. **`references/tkdn-rules.md` and `lartas-procedure.md`** — Kira reads them when they
+4. **`references/tkdn-rules.md` and `lartas-procedure.md`**, Kira reads them when they
    exist; without them she judges from parameters and labels the result `modelled`.
-   **This is knowledge work, not code** — a programmer cannot write it.
+   **This is knowledge work, not code.** A programmer cannot write it.
 
 ---
 
 ## 3. How it works
 
 Picture a small team: a lead, and several specialists with their own areas. The lead does
-not do the work — he calls the relevant specialist, one at a time, according to what the
+not do the work, he calls the relevant specialist, one at a time, according to what the
 previous one found.
 
 ```
@@ -85,16 +85,16 @@ sourcing specialist is never called at all.
 | Agent | The question it owns |
 |---|---|
 | **Arya** (lead) | Who do I call next, and when is the evidence enough? |
-| Elsa — Impact | Which POs are hit, which customers are exposed? |
-| Dara — Demand | Is consumption still that rate, or is demand rising? |
-| Iris — Stock Validity | Is the recorded stock actually usable? |
-| Clint — Sourcing | Is there another source? |
-| Milo — Logistics | Realistically, when does it land? |
-| **Kira — Rules** ⭐ | May we use that supplier at all? **Has veto** |
-| Tara — Costing | What does it cost, which is cheapest? |
-| Otto — Precedent | Has this happened before? How did it end? |
-| Bram — Execution | Carry it out, then watch until the goods arrive |
-| Vega — Risk Scanner | What is **about** to break? *(Prevent mode)* |
+| Elsa, Impact | Which POs are hit, which customers are exposed? |
+| Dara, Demand | Is consumption still that rate, or is demand rising? |
+| Iris, Stock Validity | Is the recorded stock actually usable? |
+| Clint, Sourcing | Is there another source? |
+| Milo, Logistics | Realistically, when does it land? |
+| **Kira, Rules** ⭐ | May we use that supplier at all? **Has veto** |
+| Tara, Costing | What does it cost, which is cheapest? |
+| Otto, Precedent | Has this happened before? How did it end? |
+| Bram, Execution | Carry it out, then watch until the goods arrive |
+| Vega, Risk Scanner | What is **about** to break? *(Prevent mode)* |
 
 Each agent's tools and parameters are in `AGENT-REFERENCE.md`, generated from the registry.
 
@@ -113,9 +113,9 @@ Decisions that are locked in:
 |---|---|
 | Model | `anthropic.claude-opus-5` via Bedrock |
 | Languages | Python (agents) · TypeScript (interface) |
-| Persistence | SQLite — move to Postgres once this is multi-tenant |
+| Persistence | SQLite, move to Postgres once this is multi-tenant |
 | Interface | Next.js 16 + React 19 + Tailwind v4 + shadcn-ui |
-| API service | stdlib `http.server` — move to FastAPI if you need >10 rps |
+| API service | stdlib `http.server`, move to FastAPI if you need >10 rps |
 | Language of the codebase | English throughout: files, identifiers, DB columns, API keys, UI |
 
 ⚠️ Not every AWS region offers Claude. Check first; keep `us-west-2` as the fallback.
@@ -124,7 +124,7 @@ Decisions that are locked in:
 
 ## 5. Guarantees the code enforces
 
-Not instructions to a model — these are enforced by the program, so no prompt can break them.
+Not instructions to a model, these are enforced by the program, so no prompt can break them.
 
 1. **A failure never invents a value.** Tool fails → `MISSING`.
 2. **The calculator refuses** rupiah figures when its inputs aren't trustworthy.
@@ -132,7 +132,7 @@ Not instructions to a model — these are enforced by the program, so no prompt 
 4. **Identity comes only from the session token.** Claiming a role via the request body
    is ignored.
 5. **Authority is checked on the server**, not on the button.
-6. **Production refuses to start** without SAP and a model — it may not guess at anything.
+6. **Production refuses to start** without SAP and a model, it may not guess at anything.
 7. **A missing prompt raises** rather than sending a placeholder to the model.
 
 The full list, with the reasoning, is in `agent/README.md`.
@@ -144,7 +144,7 @@ The full list, with the reasoning, is in `agent/README.md`.
 | # | Work | Who | How long |
 |---|---|---|---|
 | 1 | Get `SAP_API_KEY` at api.sap.com | anyone | 15 min |
-| 2 | Enable Bedrock, confirm the region | backend | 1 hour |
+| 2 | Enable Bedrock, confirm the region. `AWS-PLAN.md` has the rest | backend | 1 hour |
 | 3 | Write the 9 missing agent prompts | backend + domain | 1–2 days |
 | 4 | Run `graph.py` for real, fix what breaks | backend | 1–2 days |
 | 5 | Write `references/tkdn-rules.md` + `lartas-procedure.md` | **domain** | 2 days |
@@ -161,8 +161,9 @@ Items 3 and 5 can start now and **wait on nothing.**
 
 ```
 sigap/
-├── PLAN.md              this file — plan & status
-├── AGENT-REFERENCE.md   the 11 agents — GENERATED, run `manage.py docs`
+├── PLAN.md              this file, plan & status
+├── AGENT-REFERENCE.md   the 11 agents. GENERATED, run `manage.py docs`
+├── AWS-PLAN.md          Bedrock and AgentCore, week by week
 ├── DESIGN.md            scenario figures, local rules
 ├── TECHNICAL.md         exact function names & parameters
 ├── DATA-SOURCES.md      what was verified about each data source
@@ -170,7 +171,7 @@ sigap/
     ├── core/            provenance · identity · store · config · registry · trace
     ├── clients/         the SAP connector
     ├── tools/           one file per agent, named after the agent code
-    ├── engine/          the calculator — pure Python
+    ├── engine/          the calculator, pure Python
     ├── agents/          the 11 agent definitions
     ├── prompts/         each agent's instructions
     ├── fixtures/        modelled data, clearly labelled as such

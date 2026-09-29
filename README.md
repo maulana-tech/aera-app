@@ -3,8 +3,8 @@
 **Supply Disruption Intelligence & Anticipation System**
 
 An autonomous assistant for manufacturers that import most of their raw material. When
-supply is disrupted — a port closes, a supplier misses a shipment, goods are held at
-customs — the system investigates the impact itself, assembles the ways out, strikes the
+supply is disrupted, a port closes, a supplier misses a shipment, goods are held at
+customs, the system investigates the impact itself, assembles the ways out, strikes the
 ones that break Indonesian regulation or the customer contract, works out which is
 cheapest, and executes it into SAP once someone with the authority approves.
 
@@ -44,7 +44,8 @@ Everything lives in [`sigap/`](sigap/):
 | File | What's in it |
 |---|---|
 | [`sigap/PLAN.md`](sigap/PLAN.md) ⭐ | The plan, the status of each part, what to do next |
-| [`sigap/AGENT-REFERENCE.md`](sigap/AGENT-REFERENCE.md) | All 11 agents and their tools — **generated** from the registry |
+| [`sigap/AGENT-REFERENCE.md`](sigap/AGENT-REFERENCE.md) | All 11 agents and their tools, **generated** from the registry |
+| [`sigap/AWS-PLAN.md`](sigap/AWS-PLAN.md) | Getting onto Bedrock and AgentCore, in the order that works |
 | [`sigap/DESIGN.md`](sigap/DESIGN.md) | The scenario and its figures, the constraint rules, the eval suite |
 | [`sigap/TECHNICAL.md`](sigap/TECHNICAL.md) | Bedrock calling conventions, caching, limits |
 | [`sigap/DATA-SOURCES.md`](sigap/DATA-SOURCES.md) | What was verified about each data source |
@@ -59,7 +60,7 @@ scenario, the cheapest option is exactly the one that gets blocked.
 
 Two further things the code enforces rather than asks for:
 
-- **Every tool return carries its origin** — `live`, `cached`, `derived`, `modelled`, or
+- **Every tool return carries its origin**, `live`, `cached`, `derived`, `modelled`, or
   `missing`. A failure produces `missing`, never a plausible-looking guess.
 - **The calculator refuses** to emit a savings figure when any critical input is not
   trustworthy. It is pure Python with no model in it, so the arithmetic cannot be
@@ -71,7 +72,7 @@ Working: provenance labelling, the calculator, SAP reads, persistence with idemp
 actions and one-shot approvals, auth with server-side authority limits, 19 API routes, the
 full interface, and 19 of 23 tools.
 
-Not done: `AWS_REGION` is unset, so `graph.py` has never run — the system holds back rather
+Not done: `AWS_REGION` is unset, so `graph.py` has never run, the system holds back rather
 than pretending. Nine of eleven agent prompts are unwritten. The four Prevent-mode tools
 and the `references/` rule documents are outstanding. `sigap/PLAN.md` §2 has the detail.
 

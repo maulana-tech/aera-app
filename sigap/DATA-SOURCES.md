@@ -1,4 +1,4 @@
-# Data sources — what was actually verified
+# Data sources, what was actually verified
 
 > Checked on 21 September 2026 by opening each source directly. Earlier drafts had some
 > of these marked "unchecked"; they are not any more.
@@ -21,14 +21,14 @@
 
 ---
 
-## 1. Company data — settled, no research needed
+## 1. Company data, settled, no research needed
 
 **Source:** SAP Business Accelerator Hub, at `https://sandbox.api.sap.com/`
 
 **How:** register a free SAP ID account at `api.sap.com`, open the API page you need, click
 *Show API Key*. That's it.
 
-This is a real S/4HANA Cloud system holding sample data — the shapes, the pagination, and
+This is a real S/4HANA Cloud system holding sample data, the shapes, the pagination, and
 the error messages are identical to a real customer system.
 
 **What's there:**
@@ -52,11 +52,11 @@ before any real write.
 
 ---
 
-## 2. TKDN — public, but fetched by hand
+## 2. TKDN, public, but fetched by hand
 
 **Official portals:**
-- https://tkdn.kemenperin.go.id/ — certificate search and verification
-- http://pusatp3dn.kemenperin.go.id/Sertifikattkdn — summaries by commodity group
+- https://tkdn.kemenperin.go.id/, certificate search and verification
+- http://pusatp3dn.kemenperin.go.id/Sertifikattkdn, summaries by commodity group
 
 **What the check found:** the pages are public and searchable, **but there is no documented
 API**. No official endpoint documentation was found.
@@ -75,13 +75,13 @@ of certificates. And TKDN rules do not change daily.
 
 ---
 
-## 3. LARTAS — use the regulation, not the lookup portal
+## 3. LARTAS, use the regulation, not the lookup portal
 
-**Portal:** https://insw.go.id/ — the INTR menu takes an HS code and returns duty, VAT,
+**Portal:** https://insw.go.id/, the INTR menu takes an HS code and returns duty, VAT,
 income tax, and restriction status.
 
 **What the check found:** there is a [SINSW service catalogue](https://panduan.insw.go.id/en/katalog-layanan)
-listing 19 services, but it is for registered traders — not an open API.
+listing 19 services, but it is for registered traders, not an open API.
 
 **The better route:** LARTAS is governed by **Permendag No. 18 of 2021**. That is a
 regulation, readable directly, and a sounder basis than looking codes up one at a time.
@@ -95,7 +95,7 @@ regulation, readable directly, and a sounder basis than looking codes up one at 
 
 ---
 
-## 4. Indonesian weather and earthquakes — ✅ has an API, free, ready now
+## 4. Indonesian weather and earthquakes, ✅ has an API, free, ready now
 
 **Source:** https://data.bmkg.go.id/
 
@@ -133,16 +133,16 @@ East China Sea, outside its remit.
 
 ### Worth doing: add a domestic scenario
 
-BMKG is most useful precisely for domestic disruption — a quake cutting a Java land route,
+BMKG is most useful precisely for domestic disruption, a quake cutting a Java land route,
 flooding closing access to Priok. And its data is the easiest of all to get.
 
 **Add one scenario with a real BMKG earthquake as the trigger.** The value is that you can
-then say *"this signal came from a BMKG API that is running right now"* — not from a
+then say *"this signal came from a BMKG API that is running right now"*, not from a
 fixture. One genuinely live source is worth more than four that only appear on a slide.
 
 ---
 
-## 6. Holiday calendar and exchange rate — easy
+## 6. Holiday calendar and exchange rate, easy
 
 | Data | Source | Note |
 |---|---|---|
@@ -153,7 +153,7 @@ Don't spend time automating these two. The payoff is small.
 
 ---
 
-## 7. The company profile — the only invented thing
+## 7. The company profile, the only invented thing
 
 The plant list, the daily consumption rates, the contract terms and late penalties.
 
@@ -175,8 +175,8 @@ stand behind.
 | 3 | Write `references/tkdn-rules.md` | 1 day | **domain** |
 | 4 | Write `references/lartas-procedure.md` | 1 day | **domain** |
 | 5 | Copy in the holiday calendar | 1 hour | anyone |
-| 6 | Find a foreign typhoon source | — | only if the Ningbo scenario stays |
-| 7 | Register with an AIS service | — | optional, later |
+| 6 | Find a foreign typhoon source |, | only if the Ningbo scenario stays |
+| 7 | Register with an AIS service |, | optional, later |
 
 **The one that gets mis-scheduled:** 3 and 4 are done by **a domain person, not a
 programmer**. They are regulatory knowledge, not code.
@@ -186,7 +186,7 @@ programmer**. They are regulatory knowledge, not code.
 ## 9. Rules that apply
 
 1. **What is ✅ may be stated plainly.**
-2. **What is ⚠️ is described as** *"ingested into a versioned rule pack"* — honest, and
+2. **What is ⚠️ is described as** *"ingested into a versioned rule pack"*, honest, and
    still not invented data, because the source is real.
 3. **Never promote a ⚠️ to an "it has an API" claim** before proving it yourself.
 4. **The company profile is always named** as modelled, with the reason.
