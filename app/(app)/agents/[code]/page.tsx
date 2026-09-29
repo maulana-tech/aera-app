@@ -108,6 +108,7 @@ export default async function AgentPage({ params }: { params: Promise<{ code: st
               code={a.code}
               name={a.nickname}
               title={a.title}
+              work={desk.work}
               examples={desk.examples}
               signedIn={!!user}
             />
@@ -117,6 +118,36 @@ export default async function AgentPage({ params }: { params: Promise<{ code: st
           {a.brief}
         </p>
       </header>
+
+      {/* Her tools and her settings explain the table, so they come before it. */}
+      <div className="mt-8 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="rounded-lg border">
+          <p className="text-muted-foreground border-b px-4 py-2.5 text-xs font-medium">
+            Tools {a.installed} of {a.tool_count}
+          </p>
+          <ToolList tools={a.tools} />
+        </div>
+
+        <div className="space-y-4">
+          <Rail>
+            <Fact label="Reasoning effort" value={a.effort} />
+            <Fact
+              label="Instructions"
+              value={a.ready ? "written" : "not written"}
+              tone={a.ready ? "plain" : "warn"}
+            />
+            <Fact label="Used in" value={`${a.used_in} runs`} />
+          </Rail>
+
+          {!a.ready && (
+            <p className="text-muted-foreground px-1 text-xs leading-relaxed">
+              Calling {a.nickname} raises an error rather than sending the model an
+              empty prompt. Write{" "}
+              <code className="font-mono">prompts/{a.code}.txt</code> first.
+            </p>
+          )}
+        </div>
+      </div>
 
       {/* A forecast is a range, so it gets a chart before it gets a table. */}
       {view?.chart && (
@@ -183,36 +214,6 @@ export default async function AgentPage({ params }: { params: Promise<{ code: st
         )}
       </Section>
 
-      <div className="mt-10 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="space-y-4">
-          <div className="rounded-lg border">
-            <p className="text-muted-foreground border-b px-4 py-2.5 text-xs font-medium">
-              Tools {a.installed} of {a.tool_count}
-            </p>
-            <ToolList tools={a.tools} />
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <Rail>
-            <Fact label="Reasoning effort" value={a.effort} />
-            <Fact
-              label="Instructions"
-              value={a.ready ? "written" : "not written"}
-              tone={a.ready ? "plain" : "warn"}
-            />
-            <Fact label="Used in" value={`${a.used_in} runs`} />
-          </Rail>
-
-          {!a.ready && (
-            <p className="text-muted-foreground px-1 text-xs leading-relaxed">
-              Calling {a.nickname} raises an error rather than sending the model an
-              empty prompt. Write{" "}
-              <code className="font-mono">prompts/{a.code}.txt</code> first.
-            </p>
-          )}
-        </div>
-      </div>
     </main>
   );
 }

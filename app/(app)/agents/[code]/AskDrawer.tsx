@@ -15,11 +15,12 @@ import {
  * the table gets the full width, and the conversation gets the full height.
  */
 export default function AskDrawer({
-  code, name, title, examples, signedIn,
+  code, name, title, work, examples, signedIn,
 }: {
   code: string;
   name: string;
   title: string;
+  work: string;
   examples: string[];
   signedIn: boolean;
 }) {
@@ -37,15 +38,16 @@ export default function AskDrawer({
         side="right"
         className="flex w-full flex-col gap-0 p-0 sm:max-w-xl"
       >
-        <SheetHeader className="border-b px-5 py-4">
-          <SheetTitle className="text-base">Ask {name}</SheetTitle>
-          <SheetDescription>
-            {title}. Same tools as when working inside the team.
-          </SheetDescription>
+        {/* The drawer names who is on the other end. What to ask is the body's
+          * job, so the header stays a label and does not repeat it. */}
+        <SheetHeader className="border-b px-5 py-3.5">
+          <SheetTitle className="text-sm font-medium">{name}</SheetTitle>
+          <SheetDescription className="text-xs">{title}</SheetDescription>
         </SheetHeader>
         <Conversation
           code={code}
           name={name}
+          work={work}
           examples={examples}
           signedIn={signedIn}
         />

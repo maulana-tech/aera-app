@@ -21,7 +21,7 @@ export default async function Chat() {
   return (
     <main className="w-full px-6 py-8">
       <header className="border-b pb-5">
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">Ask Arya</h1>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight">Conversation</h1>
         <p className="text-muted-foreground mt-1 max-w-3xl text-sm leading-relaxed">
           Arya leads the team. She decides which specialists to pull in to answer.
           You do not have to know who to ask.
@@ -38,11 +38,13 @@ export default async function Chat() {
         </div>
       </header>
 
-      <div className="mt-6 max-w-4xl">
+      {/* Conversation fills its host, so the host is what sets the height here. */}
+      <div className="mt-6 flex h-[32rem] max-w-4xl flex-col rounded-lg border">
         {arya && (
           <Conversation
             code={arya.code}
             name={arya.nickname}
+            work="Routing"
             examples={EXAMPLES}
             signedIn={!!user}
           />

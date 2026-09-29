@@ -1,6 +1,6 @@
 "use client";
 
-import { CornerDownLeft, Loader2, Wrench } from "lucide-react";
+import { ArrowRight, CornerDownLeft, Loader2, Wrench } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
@@ -20,8 +20,10 @@ type Message =
   | { from: "error"; text: string; hint?: string };
 
 export default function Conversation({
-  code, name, examples, signedIn,
-}: { code: string; name: string; examples: string[]; signedIn: boolean }) {
+  code, name, work, examples, signedIn,
+}: {
+  code: string; name: string; work: string; examples: string[]; signedIn: boolean;
+}) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -59,26 +61,84 @@ export default function Conversation({
     }
   }
 
+  /* The composer moves. With nothing asked yet it sits in the middle of the
+   * drawer next to the question that explains what to type; once there is a
+   * transcript it drops to the bottom, where a reply box belongs.
+   */
+  const composer = !signedIn ? (
+    <div className="flex items-center justify-between gap-3 rounded-lg border px-4 py-3">
+      <p className="text-muted-foreground text-sm">
+        Sign in to ask. Conversations are recorded against your account.
+      </p>
+      <Button asChild size="sm" variant="outline">
+        <Link href="/login">Sign in</Link>
+      </Button>
+    </div>
+  ) : (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        send(text);
+      }}
+      className="focus-within:border-foreground/30 flex items-end gap-2 rounded-lg border p-2.5 transition-colors"
+    >
+      <textarea
+        ref={field}
+        rows={1}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            send(text);
+          }
+        }}
+        placeholder={`Ask ${name}…`}
+        className="max-h-32 min-h-9 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none"
+      />
+      <Button type="submit" size="sm" disabled={busy || !text.trim()}>
+        <CornerDownLeft className="size-3.5" />
+        Send
+      </Button>
+    </form>
+  );
+
+  if (messages.length === 0 && !busy) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col justify-center gap-6 overflow-y-auto px-5 py-8">
+        <div className="text-center">
+          <h2 className="text-lg font-semibold tracking-tight">Ask {name}</h2>
+          <p className="text-muted-foreground mx-auto mt-1.5 max-w-sm text-sm leading-relaxed">
+            {work}. Same tools as inside the team, and every figure keeps the
+            label of where it came from.
+          </p>
+        </div>
+
+        {composer}
+
+        {examples.length > 0 && (
+          <ul className="space-y-2">
+            {examples.map((ex) => (
+              <li key={ex}>
+                <button
+                  onClick={() => send(ex)}
+                  disabled={!signedIn}
+                  className="hover:border-foreground/30 hover:bg-muted/50 focus-visible:ring-ring group flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left text-sm outline-none transition-colors focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <span className="flex-1">{ex}</span>
+                  <ArrowRight className="text-muted-foreground group-hover:text-foreground size-3.5 shrink-0 transition-colors" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex-1 space-y-4 overflow-y-auto p-5">
-        {messages.length === 0 && (
-          <div className="text-muted-foreground space-y-3 text-sm">
-            <div className="flex flex-wrap gap-2">
-              {examples.map((ex) => (
-                <button
-                  key={ex}
-                  onClick={() => send(ex)}
-                  disabled={!signedIn}
-                  className="hover:border-foreground/30 hover:text-foreground rounded-full border px-3 py-1.5 text-left text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {ex}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         {messages.map((m, i) =>
           m.from === "person" ? (
             <div key={i} className="flex justify-end">
@@ -124,43 +184,7 @@ export default function Conversation({
         <div ref={bottom} />
       </div>
 
-      {!signedIn ? (
-        <div className="flex items-center justify-between gap-3 border-t px-4 py-3">
-          <p className="text-muted-foreground text-sm">
-            Sign in to ask. Conversations are recorded against your account.
-          </p>
-          <Button asChild size="sm" variant="outline">
-            <Link href="/login">Sign in</Link>
-          </Button>
-        </div>
-      ) : (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            send(text);
-          }}
-          className="flex items-end gap-2 border-t p-3"
-        >
-          <textarea
-            ref={field}
-            rows={1}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                send(text);
-              }
-            }}
-            placeholder={`Ask ${name}…`}
-            className="max-h-32 min-h-9 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none"
-          />
-          <Button type="submit" size="sm" disabled={busy || !text.trim()}>
-            <CornerDownLeft className="size-3.5" />
-            Send
-          </Button>
-        </form>
-      )}
+      <div className="border-t p-3">{composer}</div>
     </div>
   );
 }
