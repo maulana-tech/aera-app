@@ -35,6 +35,7 @@ const AGENTS: NavItem[] = [
       { title: "Rules", href: "/agents/compliance", owner: "Kira" },
       { title: "Costing", href: "/agents/simulation", owner: "Tara" },
       { title: "Execution", href: "/agents/execution", owner: "Bram" },
+      { title: "Latent risk", href: "/agents/exposure", owner: "Vega" },
     ],
   },
 ];

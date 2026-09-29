@@ -17,7 +17,7 @@ from core import identity
 CHECKS = [
     "core/provenance.py", "core/registry.py", "core/identity.py",
     "engine/simulate.py", "tools/compliance.py", "tools/execution.py",
-    "agents/definitions.py", "graph.py",
+    "tools/exposure.py", "agents/definitions.py", "graph.py",
 ]
 
 

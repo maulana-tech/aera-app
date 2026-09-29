@@ -176,6 +176,25 @@ def impact() -> dict:
                "evidence stops.")
 
 
+def exposure() -> dict:
+    """Vega's scan. The only view that exists without a disruption to trigger it."""
+    from tools.exposure import scan_supply_exposure
+    r = scan_supply_exposure()
+    rows = []
+    for f in (r.value or []):
+        rows.append({
+            "pattern": f["pattern"], "material": f["material"], "plant": f["plant"],
+            "detail": f["detail"], "cover_days": f["cover_days"],
+            "value_idr": f["value_idr"], "action": f["action"], "authority": f["authority"],
+        })
+    return _wrap(rows, [
+        {"k": "pattern", "l": "Exposure"}, {"k": "material", "l": "Material"},
+        {"k": "detail", "l": "Why"},
+        {"k": "value_idr", "l": "At risk", "rp": True},
+        {"k": "action", "l": "Recommended"}, {"k": "authority", "l": "Needs"},
+    ], r, r.note)
+
+
 def logistics() -> dict:
     po = get_open_purchase_orders()
     rows = [{
@@ -250,5 +269,5 @@ def execution() -> dict:
 VIEWS = {
     "impact": impact, "demand": demand, "inventory": inventory,
     "sourcing": sourcing, "logistics": logistics, "compliance": compliance,
-    "simulation": simulation, "execution": execution,
+    "simulation": simulation, "execution": execution, "exposure": exposure,
 }

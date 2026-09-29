@@ -91,6 +91,35 @@ def monitor_shipment(reference: str) -> Result:
     return _record("monitor", True, reference=reference)
 
 
+# ------------------------------------------------------- Prevent mode actions
+# Nothing in Prevent mode is urgent, so nothing in it justifies autonomy. Both
+# of these wait for a person regardless of value.
+
+@register("create_sourcing_event", "execution",
+          "Open a sourcing event to qualify a second supplier for a material. A DRAFT "
+          "for procurement to approve. Never autonomous, whatever the value.",
+          {"material": {"type": "string"},
+           "rationale": {"type": "string",
+                         "description": "the exposure this closes, in one sentence"}},
+          ["material", "rationale"])
+def create_sourcing_event(material: str, rationale: str) -> Result:
+    return _record("create_sourcing_event", False, material=material, rationale=rationale)
+
+
+@register("propose_safety_stock_change", "execution",
+          "Propose a new safety stock floor for a material at a plant. This is a policy "
+          "change rather than a transaction, so it always escalates. It is never sent to "
+          "SAP by the sender; a person applies it.",
+          {"material": {"type": "string"}, "plant": {"type": "string"},
+           "new_level": {"type": "number", "description": "the proposed floor, in base units"},
+           "rationale": {"type": "string"}},
+          ["material", "plant", "new_level", "rationale"])
+def propose_safety_stock_change(material: str, plant: str, new_level: float,
+                                rationale: str) -> Result:
+    return _record("propose_safety_stock_change", False, material=material, plant=plant,
+                   new_level=new_level, rationale=rationale)
+
+
 def demo() -> None:
     """The idempotency key must be stable across argument order, sensitive to content."""
     a = idempotency_key("draft_po", supplier="SUP-1", qty=85, material="M-4471")
@@ -101,7 +130,16 @@ def demo() -> None:
     d = idempotency_key("stock_transfer", supplier="SUP-1", qty=85, material="M-4471")
     assert a != d, "a different action kind must give a different key"
     assert a.startswith("draft_po:")
+
+    # Neither Prevent-mode action may ever run on its own authority.
+    import inspect
+    for fn in (create_sourcing_event, propose_safety_stock_change):
+        src = inspect.getsource(fn)
+        assert "_record(" in src and ", False," in src, \
+            f"{fn.__name__} must pass autonomous=False"
+
     print(f"execution ok, idempotency {a}")
+    print("  prevent-mode actions always wait for a person")
 
 
 if __name__ == "__main__":

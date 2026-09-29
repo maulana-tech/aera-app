@@ -35,12 +35,12 @@ interface is where you inspect and approve, not where the work starts.
 | Auth & authority | ✅ **working** | Identity from the token; value limits checked server-side |
 | API service | ✅ **working** | 19 routes |
 | Interface | ✅ **working** | Dashboard with charts, queue, detail, approval, per-domain tables, conversations. shadcn-ui |
-| Tools | 🔶 **19 of 23** | The other 4 are Prevent-mode only |
+| Tools | ✅ **23 of 23** | Every declared tool exists |
 | Agent prompts | ✅ **11 of 11** | Every agent can be invoked |
 | Agent team (`graph.py`) | 🔶 **runs, not yet against Bedrock** | Routing, tool execution and the board are exercised by `python3 graph.py`. Waiting on `AWS_REGION` for the real model |
 | Rule documents (`references/`) | ❌ **absent** | The main blocker. Domain work |
 | Scenario eval suite | ❌ **absent** | |
-| Prevent mode | ❌ **absent** | Vega has no tools at all yet |
+| Prevent mode | 🔶 **scans, does not act yet** | Vega finds exposures and ranks them. The actions she recommends are raised by Bram and always wait for a person |
 
 `PYTHONPATH=. python3 manage.py check` prints this live, from the code rather than from
 this table.
@@ -148,9 +148,8 @@ The full list, with the reasoning, is in `agent/README.md`.
 | 3 | Run `graph.py` against Bedrock, fix what breaks | backend | 1-2 days |
 | 4 | Write `references/tkdn-rules.md` + `lartas-procedure.md` | **domain** | 2 days |
 | 6 | Verify SAP write entity names in `sender.py` | backend | 1 day |
-| 7 | The 4 remaining tools (Prevent mode) | backend + data | 2 days |
-| 8 | A 10-scenario eval suite | data | 2 days |
-| 9 | Prevent mode end to end | backend | 3 days |
+| 7 | A 10-scenario eval suite | data | 2 days |
+| 8 | Schedule Vega weekly, wire her findings into the queue | backend | 2 days |
 
 Item 4 can start now and **waits on nothing.**
 
