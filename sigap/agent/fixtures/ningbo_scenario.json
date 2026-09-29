@@ -208,6 +208,29 @@
     "Company": "PT Karya Presisi Nusantara",
     "TkdnCurrentPct": 38.2,
     "TkdnContractFloorPct": 40.0,
-    "AsOfDate": "2026-09-04"
+    "AsOfDate": "2026-09-04",
+    "Facilities": [
+      {
+        "code": "KRW1",
+        "kind": "plant",
+        "name": "Karawang",
+        "lat": -6.3227,
+        "lon": 107.3376
+      },
+      {
+        "code": "SBY1",
+        "kind": "plant",
+        "name": "Surabaya",
+        "lat": -7.2575,
+        "lon": 112.7521
+      },
+      {
+        "code": "IDTPP",
+        "kind": "port",
+        "name": "Tanjung Priok",
+        "lat": -6.1045,
+        "lon": 106.8816
+      }
+    ]
   }
 }

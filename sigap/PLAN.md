@@ -30,6 +30,7 @@ interface is where you inspect and approve, not where the work starts.
 | Data-origin label | ✅ **working** | On every tool. A failure → `MISSING`, never a guess |
 | Cost calculator | ✅ **working** | Pure Python. Refuses figures when inputs aren't trustworthy |
 | SAP connector (read) | ✅ **ready** | Uses the sandbox automatically once `SAP_API_KEY` is set |
+| Live disruption signal | ✅ **working** | `signals/bmkg.py` polls BMKG quakes and raises events. The only live external source in the product |
 | SAP connector (write) | ⚠️ **path complete, untested** | CSRF handled; entity names need checking |
 | Persistence | ✅ **working** | SQLite. Idempotent actions, one-shot approvals |
 | Auth & authority | ✅ **working** | Identity from the token; value limits checked server-side |

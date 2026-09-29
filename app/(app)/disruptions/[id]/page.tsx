@@ -50,6 +50,16 @@ export default async function DisruptionDetail({ params }: { params: Promise<{ i
         <p className="text-muted-foreground mt-1.5 max-w-2xl text-sm leading-relaxed">
           {run.trigger}
         </p>
+        {run.signal_source && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {/* Where the signal came from is the one thing on this page that
+                can already be live, so it says which. */}
+            <OriginBadge
+              origin={run.signal_source.startsWith("http") ? "live" : "modelled"}
+              source={run.signal_source.replace(/^https?:\/\//, "")}
+            />
+          </div>
+        )}
       </header>
 
       {/* Why it stopped comes before anything else, because it explains the rest. */}

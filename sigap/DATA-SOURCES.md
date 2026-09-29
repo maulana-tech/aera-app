@@ -10,7 +10,8 @@
 | Data | Status | How to get it |
 |---|---|---|
 | Orders, stock, products, customers, production schedule, quality lots | ✅ **ready** | SAP sandbox, free API key |
-| Indonesian weather & earthquakes | ✅ **ready, has a JSON API** | `data.bmkg.go.id` |
+| Indonesian earthquakes | ✅ **wired up and live** | `signals/bmkg.py`, polls `data.bmkg.go.id` |
+| Indonesian weather | ✅ ready, same feed family | not wired yet |
 | National holiday calendar | ✅ published annually | Copy it by hand |
 | Rupiah exchange rate | ✅ published daily | Bank Indonesia |
 | TKDN | ⚠️ public portal, **no API** | Take a copy → a rule document |
@@ -171,7 +172,7 @@ stand behind.
 | Order | Work | How long | Who |
 |---|---|---|---|
 | 1 | Get the SAP API key | 15 min | anyone, today |
-| 2 | Wire up BMKG (quakes + weather) | 2 hours | backend |
+| 2 | ~~Wire up BMKG quakes~~ done. Weather from the same feed family is still open | 1 hour | backend |
 | 3 | Write `references/tkdn-rules.md` | 1 day | **domain** |
 | 4 | Write `references/lartas-procedure.md` | 1 day | **domain** |
 | 5 | Copy in the holiday calendar | 1 hour | anyone |

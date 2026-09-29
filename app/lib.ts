@@ -15,6 +15,7 @@ export type Approval = {
 };
 export type Run = {
   id: string; title: string; kind: string; trigger: string;
+  signal_source?: string;
   mode: "autonomous" | "guided"; status: string;
   started_at: string; finished_at: string | null;
   token_cost_idr: number; decision: Record<string, any> | null; error: string | null;
