@@ -95,6 +95,29 @@ CREATE TABLE IF NOT EXISTS uploads (
   synthetic   INTEGER NOT NULL DEFAULT 0
 );
 
+-- A conversation with one agent. Unlike runs, this is a person talking, so it
+-- belongs to whoever asked and is never shown to anyone else.
+CREATE TABLE IF NOT EXISTS conversations (
+  id         TEXT PRIMARY KEY,
+  agent      TEXT NOT NULL,
+  user_id    TEXT NOT NULL,
+  title      TEXT NOT NULL,             -- the first question, trimmed
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_conversations_owner
+  ON conversations(user_id, agent, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS messages (
+  id      INTEGER PRIMARY KEY AUTOINCREMENT,
+  conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  seq     INTEGER NOT NULL,
+  role    TEXT NOT NULL,                -- person | agent | error
+  body    TEXT NOT NULL,                -- JSON: the whole reply, or {"text": ...}
+  at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, seq);
+
 CREATE TABLE IF NOT EXISTS contacts (
   id         TEXT PRIMARY KEY,
   name       TEXT NOT NULL,
@@ -320,3 +343,111 @@ def delete_contact(cid: str) -> bool:
     with connect() as c:
         n = c.execute("UPDATE contacts SET active=0 WHERE id=?", (cid,)).rowcount
     return n > 0
+
+
+# ------------------------------------------------------------- conversations
+TITLE_MAX = 70
+
+
+def start_conversation(agent: str, user_id: str, first_question: str) -> str:
+    title = first_question.strip().replace("\n", " ")
+    if len(title) > TITLE_MAX:
+        title = title[: TITLE_MAX - 1].rstrip() + "…"
+    cid = new_id("cnv")
+    with connect() as c:
+        c.execute("INSERT INTO conversations (id,agent,user_id,title,created_at,updated_at)"
+                  " VALUES (?,?,?,?,?,?)", (cid, agent, user_id, title, _now(), _now()))
+    return cid
+
+
+def add_message(conversation_id: str, role: str, body: dict) -> None:
+    """Appends. A conversation is a transcript, so nothing here is ever rewritten."""
+    with connect() as c:
+        seq = c.execute("SELECT COALESCE(MAX(seq), 0) + 1 AS n FROM messages"
+                        " WHERE conversation_id=?", (conversation_id,)).fetchone()["n"]
+        c.execute("INSERT INTO messages (conversation_id,seq,role,body,at) VALUES (?,?,?,?,?)",
+                  (conversation_id, seq, role, json.dumps(body, ensure_ascii=False), _now()))
+        c.execute("UPDATE conversations SET updated_at=? WHERE id=?", (_now(), conversation_id))
+
+
+def list_conversations(user_id: str, agent: Optional[str] = None,
+                       limit: int = 50) -> List[dict]:
+    where = "WHERE c.user_id=?" + (" AND c.agent=?" if agent else "")
+    args: list = [user_id] + ([agent] if agent else []) + [limit]
+    with connect() as c:
+        rows = c.execute(
+            "SELECT c.*, (SELECT COUNT(*) FROM messages m WHERE m.conversation_id=c.id)"
+            f" AS messages FROM conversations c {where}"
+            " ORDER BY c.updated_at DESC LIMIT ?", args).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_conversation(conversation_id: str, user_id: str) -> Optional[dict]:
+    """Owner-scoped on purpose: an id in a URL is not authority to read it."""
+    with connect() as c:
+        r = c.execute("SELECT * FROM conversations WHERE id=? AND user_id=?",
+                      (conversation_id, user_id)).fetchone()
+        if not r:
+            return None
+        rows = c.execute("SELECT * FROM messages WHERE conversation_id=? ORDER BY seq",
+                         (conversation_id,)).fetchall()
+    return dict(r) | {"messages": [dict(m) | {"body": json.loads(m["body"])} for m in rows]}
+
+
+def delete_conversation(conversation_id: str, user_id: str) -> bool:
+    with connect() as c:
+        c.execute("DELETE FROM messages WHERE conversation_id IN"
+                  " (SELECT id FROM conversations WHERE id=? AND user_id=?)",
+                  (conversation_id, user_id))
+        n = c.execute("DELETE FROM conversations WHERE id=? AND user_id=?",
+                      (conversation_id, user_id)).rowcount
+    return n > 0
+
+
+def demo() -> None:
+    """Runs against a throwaway database. The __main__ block guarantees one."""
+    cid = start_conversation("demand", "usr_1", "What is daily consumption of M-4471?")
+    add_message(cid, "person", {"text": "What is daily consumption of M-4471?"})
+    add_message(cid, "agent", {"answer": "10.33 TON a day", "tools_used": ["forecast_demand"]})
+    add_message(cid, "person", {"text": "and the other plant?"})
+
+    c = get_conversation(cid, "usr_1")
+    assert c and [m["seq"] for m in c["messages"]] == [1, 2, 3]
+
+    # An id is not authority. Someone else's conversation is not readable and
+    # not deletable, which is the whole reason these take a user_id at all.
+    assert get_conversation(cid, "usr_2") is None
+    assert delete_conversation(cid, "usr_2") is False
+
+    rows = list_conversations("usr_1", "demand")
+    assert len(rows) == 1 and rows[0]["messages"] == 3
+    assert list_conversations("usr_1", "inventory") == []
+
+    start_conversation("demand", "usr_1", "x" * 200)
+    assert all(len(r["title"]) <= TITLE_MAX for r in list_conversations("usr_1"))
+
+    assert delete_conversation(cid, "usr_1") is True
+    with connect() as c2:
+        left = c2.execute("SELECT COUNT(*) n FROM messages WHERE conversation_id=?",
+                          (cid,)).fetchone()["n"]
+    assert left == 0, "messages must go when the conversation goes"
+    print("  conversations: owner-scoped ✓ · cascade clean ✓ · titles trimmed ✓")
+    print("store ok")
+
+
+if __name__ == "__main__":
+    # This check writes rows, so it must never meet the real database. CFG is
+    # frozen and read at import, so the only honest way to swap it is to start
+    # again with SIGAP_DB pointing somewhere disposable.
+    import os
+    import subprocess
+    import sys
+    import tempfile
+
+    if os.environ.get("SIGAP_STORE_CHECK") != "1":
+        db = pathlib.Path(tempfile.mkdtemp(prefix="sigap-check-")) / "check.db"
+        sys.exit(subprocess.call(
+            [sys.executable, __file__],
+            env={**os.environ, "SIGAP_DB": str(db), "SIGAP_STORE_CHECK": "1",
+                 "PYTHONPATH": os.environ.get("PYTHONPATH", ".")}))
+    demo()

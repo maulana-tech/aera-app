@@ -1,5 +1,5 @@
 import { api, me, type Agent, type AgentSummary } from "@/app/lib";
-import Conversation from "@/app/(app)/agents/[code]/Conversation";
+import ChatSurface from "./ChatSurface";
 import { AgentBadge } from "@/components/agent-card";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +10,10 @@ const EXAMPLES = [
   "If Ningbo closes for another week, what happens?",
 ];
 
-export default async function Chat() {
+export default async function Chat(
+  { searchParams }: { searchParams: Promise<{ c?: string }> },
+) {
+  const { c } = await searchParams;
   const [team, user] = await Promise.all([
     api<{ agents: Agent[]; summary: AgentSummary }>("agents"),
     me(),
@@ -40,12 +43,13 @@ export default async function Chat() {
       </header>
 
       {arya && (
-        <Conversation
+        <ChatSurface
           code={arya.code}
           name={arya.nickname}
           work="Routing"
           examples={EXAMPLES}
           signedIn={!!user}
+          threadId={c ?? null}
         />
       )}
     </main>

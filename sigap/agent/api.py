@@ -14,7 +14,9 @@ Endpoints
     POST /login                    {email, password}
     GET  /me
     GET  /agents                   team anatomy
-    POST /agents/{code}/ask        {question}
+    POST /agents/{code}/ask        {question, conversation_id?}
+    GET  /agents/{code}/conversations
+    GET  /conversations/{id} · POST /conversations/{id}/delete
     GET  /summary                  dashboard figures
     GET  /data/{domain}            per-domain table
     GET  /log                      every step, newest first
@@ -362,7 +364,7 @@ def list_agents(_m, _b, _h) -> Tuple[int, dict]:
 @route("POST", r"/agents/([a-z_]+)/ask")
 def ask_agent(m, b: dict, h) -> Tuple[int, dict]:
     """A direct conversation with one specialist."""
-    _user(h)                                       # must be signed in
+    user = _user(h)                                # identity comes from the token
     code, question = m.group(1), (b.get("question") or "").strip()
     if not question:
         return 400, {"error": "'question' is required"}
@@ -377,12 +379,68 @@ def ask_agent(m, b: dict, h) -> Tuple[int, dict]:
             "hint": "Set AWS_REGION in sigap/agent/.env to a region that offers Claude "
                     "on Bedrock, then restart the service.",
         }
+    # An existing conversation is only continued if this user owns it. An id in
+    # a request body is a claim, not proof.
+    cid = (b.get("conversation_id") or "").strip() or None
+    prior = store.get_conversation(cid, user.id) if cid else None
+    if cid and not prior:
+        return 404, {"error": "no such conversation"}
+
     try:
         import graph
-        return 200, graph.ask_specialist(code, question)
+        reply = graph.ask_specialist(code, question, history=_as_turns(prior))
     except Exception as e:                                          # noqa: BLE001
         traceback.print_exc()
         return 500, {"error": f"{type(e).__name__}: {e}"}
+
+    # Written down only once there is something to write down, so a failed ask
+    # does not leave an empty conversation in the list.
+    if not cid:
+        cid = store.start_conversation(code, user.id, question)
+    store.add_message(cid, "person", {"text": question})
+    store.add_message(cid, "agent", reply)
+    return 200, reply | {"conversation_id": cid}
+
+
+# How many earlier messages the agent is shown. Far enough back to follow a
+# thread, near enough that an old conversation cannot run the bill up.
+CONTEXT_TURNS = 12
+
+
+def _as_turns(conversation: dict | None) -> List[dict] | None:
+    """Stored messages as model turns. Errors are dropped: they are not answers."""
+    if not conversation:
+        return None
+    turns = []
+    for m in conversation["messages"]:
+        if m["role"] == "person":
+            turns.append({"role": "user", "content": m["body"]["text"]})
+        elif m["role"] == "agent":
+            turns.append({"role": "assistant", "content": m["body"]["answer"]})
+    return turns[-CONTEXT_TURNS:] or None
+
+
+@route("GET", r"/agents/([a-z_]+)/conversations")
+def agent_conversations(m, _b, h) -> Tuple[int, dict]:
+    user = _user(h)
+    return 200, {"conversations": store.list_conversations(user.id, m.group(1))}
+
+
+@route("GET", r"/conversations/([A-Za-z0-9_]+)")
+def read_conversation(m, _b, h) -> Tuple[int, dict]:
+    user = _user(h)
+    c = store.get_conversation(m.group(1), user.id)
+    if not c:
+        return 404, {"error": "no such conversation"}
+    return 200, c
+
+
+@route("POST", r"/conversations/([A-Za-z0-9_]+)/delete")
+def remove_conversation(m, _b, h) -> Tuple[int, dict]:
+    user = _user(h)
+    if not store.delete_conversation(m.group(1), user.id):
+        return 404, {"error": "no such conversation"}
+    return 200, {"deleted": True}
 
 
 @route("GET", r"/log")

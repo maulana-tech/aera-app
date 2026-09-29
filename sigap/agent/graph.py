@@ -118,10 +118,17 @@ def client():
 # --------------------------------------------------------------------------- #
 def _tool_loop(cl, agent: Agent, task: str, board: Board,
                cost: Cost, report: Callable[[str, dict], None],
-               deadline: Optional[float] = None) -> str:
-    """One specialist works to completion. Returns the summary it wrote."""
+               deadline: Optional[float] = None,
+               history: Optional[List[dict]] = None) -> str:
+    """One specialist works to completion. Returns the summary it wrote.
+
+    `history` is earlier turns of the same conversation, already trimmed by the
+    caller. Without it a follow-up question like "and the other plant?" has
+    nothing to refer to, and the transcript on screen would be a record of a
+    conversation the agent was never actually having.
+    """
     tools = registry.schemas_for_model(agent.code)
-    messages: List[dict] = [{
+    messages: List[dict] = [*(history or []), {
         "role": "user",
         "content": (
             f"{task}\n\n"
@@ -272,7 +279,8 @@ def run(event: dict, report: Callable[[str, dict], None]) -> dict:
 
 
 def ask_specialist(code: str, question: str,
-                   report: Optional[Callable[[str, dict], None]] = None) -> dict:
+                   report: Optional[Callable[[str, dict], None]] = None,
+                   history: Optional[List[dict]] = None) -> dict:
     """Ask one specialist directly, outside of disruption handling.
 
     This is what the per-agent conversation page uses. Same specialist, same
@@ -290,7 +298,7 @@ def ask_specialist(code: str, question: str,
             report(kind, d)
 
     cl = client()
-    answer = _tool_loop(cl, agent, question, board, cost, capture)
+    answer = _tool_loop(cl, agent, question, board, cost, capture, history=history)
     return {
         "agent": code,
         "name": agent.nickname,
