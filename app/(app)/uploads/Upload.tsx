@@ -76,9 +76,19 @@ export default function Upload({ signedIn }: { signedIn: boolean }) {
         ))}
       </div>
 
-      <p className="text-muted-foreground break-words font-mono text-[11px] leading-relaxed">
-        Recognised columns: {chosen.columns}
-      </p>
+      <div>
+        <p className="text-muted-foreground text-xs">Recognised columns</p>
+        <ul className="mt-1.5 flex flex-wrap gap-1.5">
+          {chosen.columns.split(", ").map((c) => (
+            <li
+              key={c}
+              className="text-muted-foreground rounded-md border px-1.5 py-0.5 font-mono text-[11px]"
+            >
+              {c}
+            </li>
+          ))}
+        </ul>
+      </div>
 
       <label className="hover:border-foreground/30 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed p-6 text-sm transition-colors">
         <UploadIcon className="size-4" />

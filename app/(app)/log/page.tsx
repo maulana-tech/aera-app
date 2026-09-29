@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { api, idr } from "@/app/lib";
+import { Empty, PageHeader, Section } from "@/components/shell";
 import { OriginBadge, StatusBadge } from "@/components/status-badge";
 
 export const dynamic = "force-dynamic";
@@ -37,22 +38,23 @@ export default async function Log() {
 
   return (
     <main className="w-full px-6 py-8">
-      <header className="border-b pb-5">
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">Log</h1>
-        <p className="text-muted-foreground mt-1 max-w-2xl text-sm leading-relaxed">
-          What the system did, what it proposed, and who decided. Rows here are never
-          edited. A correction is written as a new row.
-        </p>
-      </header>
+      <PageHeader
+        title="Log"
+        lead="What the system did, what it proposed, and who decided. Rows here are never
+              edited. A correction is written as a new row."
+      />
 
-      {empty && <p className="text-muted-foreground mt-8 text-sm">Nothing recorded yet.</p>}
+      <div className="mt-8 max-w-4xl space-y-10">
+      {empty && (
+        <Empty
+          what="Nothing recorded yet."
+          why="No event has been handled, so there is no trail to show."
+        />
+      )}
 
       {d.approvals.length > 0 && (
-        <section className="mt-8">
-          <h2 className="text-sm font-medium">
-            Approvals · {d.approvals.length}
-          </h2>
-          <ul className="mt-3 divide-y rounded-lg border">
+        <Section title={`Approvals (${d.approvals.length})`} className="mt-0">
+          <ul className="divide-y rounded-lg border">
             {d.approvals.map((a) => (
               <li key={a.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-sm">
                 <StatusBadge status={a.decision === "escalated" ? "pending" : a.decision} />
@@ -64,55 +66,65 @@ export default async function Log() {
                   href={`/disruptions/${a.run_id}`}
                   className="text-muted-foreground hover:text-foreground ml-auto font-mono text-[11px]"
                 >
-                  {when(a.at)} →
+                  {when(a.at)}
                 </Link>
               </li>
             ))}
           </ul>
-        </section>
+        </Section>
       )}
 
       {d.actions.length > 0 && (
-        <section className="mt-8">
-          <h2 className="text-sm font-medium">
-            Actions · {d.actions.length}
-          </h2>
-          <ul className="mt-3 divide-y rounded-lg border">
+        <Section title={`Actions (${d.actions.length})`} className="mt-0">
+          <ul className="divide-y rounded-lg border">
             {d.actions.map((a) => (
-              <li key={a.id} className="px-4 py-3">
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <StatusBadge status={a.status} />
-                  <span className="font-mono text-sm">{a.kind}</span>
-                  {a.autonomous === 1 && (
-                    <span className="text-muted-foreground text-xs">ran autonomously</span>
-                  )}
-                  {typeof a.payload.cost_idr === "number" && (
-                    <span className="font-mono text-xs tabular-nums">
-                      {idr(a.payload.cost_idr)}
-                    </span>
-                  )}
+              <li
+                key={a.id}
+                className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2 px-4 py-3.5"
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                    <StatusBadge status={a.status} />
+                    <span className="font-mono text-sm">{a.kind}</span>
+                    {a.autonomous === 1 && (
+                      <span className="text-muted-foreground text-xs">
+                        ran on its own authority
+                      </span>
+                    )}
+                  </div>
                   <Link
                     href={`/disruptions/${a.run_id}`}
-                    className="text-muted-foreground hover:text-foreground ml-auto font-mono text-[11px]"
+                    className="text-muted-foreground hover:text-foreground mt-1 block truncate text-xs"
                   >
-                    {when(a.created_at)} →
+                    {a.title}
                   </Link>
                 </div>
-                <p className="text-muted-foreground mt-1 break-words font-mono text-[11px]">
-                  {a.title}
-                </p>
+                <div className="shrink-0 text-right">
+                  {typeof a.payload.cost_idr === "number" && (
+                    <p className="font-mono text-sm tabular-nums">
+                      {idr(a.payload.cost_idr)}
+                    </p>
+                  )}
+                  <p className="text-muted-foreground mt-0.5 font-mono text-[11px]">
+                    {when(a.created_at)}
+                  </p>
+                </div>
               </li>
             ))}
           </ul>
-        </section>
+        </Section>
       )}
 
-      {d.steps.length > 0 && (
-        <section className="mt-8">
-          <h2 className="text-sm font-medium">
-            Agent steps · {d.steps.length}
-          </h2>
-          <ul className="mt-3 divide-y rounded-lg border">
+      <Section title={`Agent steps (${d.steps.length})`} className="mt-0">
+        {d.steps.length === 0 ? (
+          <Empty
+            what="No agent has reasoned yet."
+            why="Every action above was raised by a person or by seed data. The team itself
+                 has never run, so there is no chain of reasoning to show."
+            fix="set AWS_REGION, then POST an event to /events"
+          />
+        ) : (
+          <ul className="divide-y rounded-lg border">
             {d.steps.map((s) => (
               <li key={s.id} className="grid grid-cols-[84px_1fr] gap-4 px-4 py-3">
                 <div>
@@ -134,15 +146,16 @@ export default async function Log() {
                       href={`/disruptions/${s.run_id}`}
                       className="text-muted-foreground hover:text-foreground font-mono text-[11px]"
                     >
-                      {when(s.at)} →
+                      {when(s.at)}
                     </Link>
                   </div>
                 </div>
               </li>
             ))}
           </ul>
-        </section>
-      )}
+        )}
+      </Section>
+      </div>
     </main>
   );
 }

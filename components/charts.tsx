@@ -1,3 +1,7 @@
+"use client";
+
+import { useState } from "react";
+
 import { OriginBadge } from "@/components/status-badge";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +29,12 @@ export function Bars({
 }) {
   const max = Math.max(...data.map((d) => d.value), threshold ?? 0) || 1;
   const scale = (n: number) => `${Math.max((n / (max * 1.04)) * 100, 0.8)}%`;
+  const [over, setOver] = useState<number | null>(null);
+
+  // The readout sits in a reserved line under the chart rather than floating
+  // over it. A tooltip on the top row of a dense list gets clipped, and a row
+  // that grows on hover shoves everything below it down.
+  const shown = over === null ? null : data[over];
 
   return (
     <div className="viz">
@@ -32,8 +42,16 @@ export function Bars({
         {data.map((d, i) => (
           <div
             key={`${d.label}-${i}`}
-            title={d.title}
-            className="hover:bg-muted/40 flex items-center gap-3 rounded-md px-1.5 py-1.5"
+            onMouseEnter={() => setOver(i)}
+            onMouseLeave={() => setOver(null)}
+            onFocus={() => setOver(i)}
+            onBlur={() => setOver(null)}
+            tabIndex={d.title ? 0 : -1}
+            className={cn(
+              "flex items-center gap-3 rounded-md px-1.5 py-1.5 transition-colors",
+              "focus-visible:ring-ring outline-none focus-visible:ring-2",
+              over === i && "bg-muted/50",
+            )}
           >
             <div className="w-32 shrink-0 sm:w-44">
               <p className="truncate text-xs font-medium leading-tight">{d.label}</p>
@@ -49,9 +67,10 @@ export function Bars({
               style={{ background: "var(--viz-track)" }}
             >
               <div
-                className="absolute inset-y-0 left-0 rounded-full"
+                className="absolute inset-y-0 left-0 rounded-full transition-opacity"
                 style={{
                   width: scale(d.value),
+                  opacity: over === null || over === i ? 1 : 0.4,
                   background: d.hatched
                     ? "repeating-linear-gradient(45deg, var(--viz-series) 0 2px, transparent 2px 5px)"
                     : "var(--viz-series)",
@@ -67,7 +86,12 @@ export function Bars({
               )}
             </div>
 
-            <span className="w-20 shrink-0 text-right font-mono text-xs tabular-nums">
+            <span
+              className={cn(
+                "w-20 shrink-0 text-right font-mono text-xs tabular-nums transition-colors",
+                over === i && "text-foreground font-medium",
+              )}
+            >
               {d.display}
             </span>
             <span className="text-muted-foreground hidden w-32 shrink-0 truncate text-[10px] sm:block">
@@ -77,15 +101,27 @@ export function Bars({
         ))}
       </div>
 
-      {threshold !== undefined && thresholdLabel && (
-        <p className="text-muted-foreground mt-2.5 flex items-center gap-1.5 font-mono text-[10px]">
-          <span
-            className="inline-block h-0 w-4 border-t border-dashed"
-            style={{ borderColor: "var(--viz-rule)" }}
-          />
-          {thresholdLabel}
-        </p>
-      )}
+      {/* One reserved line, so nothing moves when the pointer arrives. */}
+      <div className="mt-2.5 min-h-[1.75rem] border-t pt-2">
+        {shown ? (
+          <p className="text-xs leading-relaxed">
+            <span className="font-medium">{shown.label}</span>
+            <span className="text-muted-foreground"> {shown.title ?? shown.display}</span>
+          </p>
+        ) : threshold !== undefined && thresholdLabel ? (
+          <p className="text-muted-foreground flex items-center gap-1.5 font-mono text-[10px]">
+            <span
+              className="inline-block h-0 w-4 border-t border-dashed"
+              style={{ borderColor: "var(--viz-rule)" }}
+            />
+            {thresholdLabel}
+          </p>
+        ) : (
+          <p className="text-muted-foreground font-mono text-[10px]">
+            point at a bar for the detail behind it
+          </p>
+        )}
+      </div>
     </div>
   );
 }

@@ -19,7 +19,7 @@ export default async function ContactsPage() {
         </p>
       </header>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="mt-8 max-w-3xl space-y-10">
         {user ? (
           <AddContact />
         ) : (
@@ -27,16 +27,16 @@ export default async function ContactsPage() {
             Sign in to add a contact.
           </p>
         )}
-        <aside>
+        <section>
           <h2 className="text-sm font-medium">
-            Recipients · {d?.contacts.length ?? 0}
+            Recipients ({d?.contacts.length ?? 0})
           </h2>
           <ContactList contacts={d?.contacts ?? []} canDelete={!!user} />
-          <p className="text-muted-foreground mt-3 text-xs leading-relaxed">
+          <p className="text-muted-foreground mt-3 max-w-xl text-xs leading-relaxed">
             Email delivery is not wired up yet. This list is what will be used once a mail
             service is connected.
           </p>
-        </aside>
+        </section>
       </div>
     </main>
   );

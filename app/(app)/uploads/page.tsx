@@ -21,12 +21,12 @@ export default async function UploadsPage() {
         </p>
       </header>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="mt-8 max-w-3xl space-y-10">
         <Upload signedIn={!!user} />
 
-        <aside>
+        <section>
           <h2 className="text-sm font-medium">
-            Uploads · {d?.uploads.length ?? 0}
+            Uploaded so far ({d?.uploads.length ?? 0})
           </h2>
           {!d?.uploads.length ? (
             <p className="text-muted-foreground mt-3 rounded-lg border border-dashed p-5 text-sm">
@@ -50,7 +50,7 @@ export default async function UploadsPage() {
               ))}
             </ul>
           )}
-        </aside>
+        </section>
       </div>
     </main>
   );

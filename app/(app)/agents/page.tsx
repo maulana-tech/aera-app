@@ -41,20 +41,19 @@ export default async function AgentTeam() {
         </p>
 
         <div className="mt-5 flex flex-wrap items-center gap-x-8 gap-y-3">
-          <div className="min-w-40">
-            <p className="text-muted-foreground text-xs">
-              Tools installed
-            </p>
+          <div className="group/bar min-w-40">
+            <p className="text-muted-foreground text-xs">Tools installed</p>
             <p className="mt-1 font-mono text-lg font-semibold tabular-nums">
               {summary.tools_installed}
               <span className="text-muted-foreground text-sm">/{summary.tools_total}</span>
             </p>
             <Progress value={pct} className="mt-1.5 h-1" />
-          </div>
-          <div className="min-w-40">
-            <p className="text-muted-foreground text-xs">
-              Prompts written
+            <p className="text-muted-foreground mt-1 h-4 font-mono text-[11px] opacity-0 transition-opacity group-hover/bar:opacity-100">
+              {pct}% ready, {summary.tools_total - summary.tools_installed} still to write
             </p>
+          </div>
+          <div className="group/bar min-w-40">
+            <p className="text-muted-foreground text-xs">Prompts written</p>
             <p className="mt-1 font-mono text-lg font-semibold tabular-nums">
               {summary.prompts_written}
               <span className="text-muted-foreground text-sm">/{summary.agent_count}</span>
@@ -63,6 +62,9 @@ export default async function AgentTeam() {
               value={Math.round((summary.prompts_written / summary.agent_count) * 100)}
               className="mt-1.5 h-1"
             />
+            <p className="text-muted-foreground mt-1 h-4 font-mono text-[11px] opacity-0 transition-opacity group-hover/bar:opacity-100">
+              {summary.agent_count - summary.prompts_written} agents cannot be run yet
+            </p>
           </div>
           <StatusBadge status={summary.model_ready ? "done" : "held"}>
             {summary.model_ready ? "Bedrock ready" : "AWS_REGION not set"}

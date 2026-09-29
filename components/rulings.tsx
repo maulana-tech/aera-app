@@ -29,9 +29,11 @@ function TkdnMeter({ before, after, floor, blocked }: {
   const span = Math.max(after, before, floor) * 1.15;
   const pos = (v: number) => `${(v / span) * 100}%`;
   const worse = after < before;
+  const gap = +(after - floor).toFixed(1);
+  const move = +(after - before).toFixed(1);
 
   return (
-    <div className="viz mt-2 max-w-md">
+    <div className="viz group/meter mt-2 max-w-md">
       <div className="flex items-baseline gap-2 font-mono text-xs tabular-nums">
         <span className="text-muted-foreground">{before}%</span>
         <span className="text-muted-foreground" aria-hidden>{"→"}</span>
@@ -62,6 +64,17 @@ function TkdnMeter({ before, after, floor, blocked }: {
           style={{ left: pos(floor), borderColor: "var(--viz-rule)" }}
         />
       </div>
+
+      {/* Reserved height, so pointing at the bar does not nudge the page. */}
+      <p className="text-muted-foreground mt-1 h-4 font-mono text-[11px] opacity-0 transition-opacity group-hover/meter:opacity-100">
+        {move === 0
+          ? "no change to local content"
+          : `${move > 0 ? "up" : "down"} ${Math.abs(move)} points`}
+        {", "}
+        {gap >= 0
+          ? `${gap} above the floor`
+          : `${Math.abs(gap)} below the floor`}
+      </p>
     </div>
   );
 }

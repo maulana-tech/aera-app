@@ -42,8 +42,8 @@ export function AddContact() {
   }
 
   return (
-    <form onSubmit={submit} className="space-y-4 rounded-lg border p-5">
-      <div className="grid gap-3 sm:grid-cols-2">
+    <form onSubmit={submit} className="space-y-5 rounded-lg border p-5">
+      <div className="grid max-w-lg gap-3 sm:grid-cols-2">
         <label className="block">
           <span className="text-muted-foreground text-xs">
             Name
