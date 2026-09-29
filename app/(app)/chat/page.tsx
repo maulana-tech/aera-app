@@ -18,18 +18,19 @@ export default async function Chat() {
   const arya = team?.agents.find((a) => a.lead);
   const specialists = team?.agents.filter((a) => !a.lead) ?? [];
 
+  /* A conversation is not a document on a page, it is the page. It takes the
+   * viewport minus the app bar, so the transcript scrolls against a composer
+   * that stays put, instead of a 32rem box floating in the middle of a page
+   * that scrolls behind it.
+   */
   return (
-    <main className="mx-auto w-full max-w-4xl px-6 py-8">
-      <header className="border-b pb-5">
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">Conversation</h1>
-        <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
-          Arya leads the team. She decides which specialists to pull in to answer.
-          You do not have to know who to ask.
+    <main className="flex h-[calc(100svh-3.5rem)] flex-col">
+      <header className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b px-6 py-3">
+        <h1 className="text-sm font-medium">Ask Arya</h1>
+        <p className="text-muted-foreground text-xs">
+          She decides which specialists to pull in. You do not have to know who to ask.
         </p>
-        <div className="mt-4 flex flex-wrap items-center gap-1.5">
-          <span className="text-muted-foreground mr-1 text-xs">
-            can call
-          </span>
+        <div className="ml-auto flex items-center gap-1">
           {specialists.map((a) => (
             <span key={a.code} title={`${a.nickname} · ${a.title}`}>
               <AgentBadge nickname={a.nickname} />
@@ -38,18 +39,15 @@ export default async function Chat() {
         </div>
       </header>
 
-      {/* Conversation fills its host, so the host is what sets the height here. */}
-      <div className="mt-6 flex h-[32rem] flex-col rounded-lg border">
-        {arya && (
-          <Conversation
-            code={arya.code}
-            name={arya.nickname}
-            work="Routing"
-            examples={EXAMPLES}
-            signedIn={!!user}
-          />
-        )}
-      </div>
+      {arya && (
+        <Conversation
+          code={arya.code}
+          name={arya.nickname}
+          work="Routing"
+          examples={EXAMPLES}
+          signedIn={!!user}
+        />
+      )}
     </main>
   );
 }
