@@ -34,9 +34,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Callable, Dict, List, Tuple
 from urllib.parse import urlparse
 
-# Importing a tool module registers its tools. One file per agent.
-import tools.impact, tools.demand, tools.inventory, tools.sourcing, tools.logistics   # noqa: F401
-import tools.compliance, tools.simulation, tools.precedent, tools.execution, tools.supervisor  # noqa: F401
+import tools  # noqa: F401  (registers every tool)
 from core import identity, store
 from core.config import CFG
 from core.identity import NotAuthorised, User

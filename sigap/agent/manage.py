@@ -17,7 +17,7 @@ from core import identity
 CHECKS = [
     "core/provenance.py", "core/registry.py", "core/identity.py",
     "engine/simulate.py", "tools/compliance.py", "tools/execution.py",
-    "agents/definitions.py",
+    "agents/definitions.py", "graph.py",
 ]
 
 
@@ -34,8 +34,7 @@ def check() -> None:
 
     from agents.definitions import ALL
     from core import config, registry
-    import tools.impact, tools.demand, tools.inventory, tools.sourcing, tools.logistics   # noqa: F401
-    import tools.compliance, tools.simulation, tools.precedent, tools.execution, tools.supervisor  # noqa: F401
+    import tools  # noqa: F401  (registers every tool)
 
     installed = registry.all_tools()
     no_prompt = [a for a in ALL.values() if not a.ready]

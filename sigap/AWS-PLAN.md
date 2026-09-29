@@ -8,10 +8,14 @@
 
 ## 1. The uncomfortable starting point
 
-`graph.py` has never executed. Not once. It is 261 lines of supervisor loop
-that talks to Bedrock, and no line of it has ever run against a real model,
-because `AWS_REGION` is empty. Nine of eleven agents have no instructions, so
-even with a region they would raise `PromptMissing` on the first call.
+All eleven agents have instructions now, and `graph.py` runs: `python3 graph.py`
+drives one event through the team against a scripted stand-in for Bedrock, which
+exercises the routing, the tool execution, the shared board and the cost
+accounting. That already found one real bug, a registry that was empty unless
+something else imported the tool modules first.
+
+What it has never done is talk to a real model, because `AWS_REGION` is empty.
+The scripted client proves the plumbing. It proves nothing about judgement.
 
 That matters for how this plan is ordered. Every AgentCore service below is
 worth having, and every one of them is worthless until the loop runs once.
@@ -78,10 +82,7 @@ fit. That is a better story than a slide with nine logos.
 
 1. **Enable Bedrock, confirm the region carries Claude.** `us-west-2` is the
    fallback. Set `AWS_REGION`, and `manage.py check` should stop listing it.
-2. **Write the nine missing prompts.** `prompts/<code>.txt`. Two exist as
-   models: `supervisor.txt` and `compliance.txt`. This needs nobody's
-   permission and blocks everything downstream.
-3. **Run the Ningbo scenario end to end, locally.** `POST /events`, watch
+2. **Run the Ningbo scenario end to end, locally, against Bedrock.** `POST /events`, watch
    `graph.py` route, fix what breaks. Expect it to break. Budget two days for
    breakage, not one.
 
@@ -168,7 +169,7 @@ That is a stronger answer than a demo where everything is green.
 - Adopting Browser, Code Interpreter or Payments to lengthen the AWS list.
 - Replacing `core/identity.py` with AgentCore Identity to say we use it. They
   solve different problems and the swap would weaken the approval trail.
-- Moving to AgentCore before step 3 passes. Deploying a loop that has never run
+- Moving to AgentCore before step 2 passes. Deploying a loop that has never run
   is deploying nothing, and it burns the week we would need to fix it.
 - Rewriting the deterministic calculator to use a model. It is the thing that
   makes the savings figure survive a question.

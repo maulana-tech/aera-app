@@ -36,8 +36,8 @@ interface is where you inspect and approve, not where the work starts.
 | API service | ✅ **working** | 19 routes |
 | Interface | ✅ **working** | Dashboard with charts, queue, detail, approval, per-domain tables, conversations. shadcn-ui |
 | Tools | 🔶 **19 of 23** | The other 4 are Prevent-mode only |
-| Agent prompts | 🔶 **2 of 11** | Only `supervisor` and `compliance`. The rest raise on invocation |
-| Agent team (`graph.py`) | ⚠️ **written, never run** | Waiting on `AWS_REGION` |
+| Agent prompts | ✅ **11 of 11** | Every agent can be invoked |
+| Agent team (`graph.py`) | 🔶 **runs, not yet against Bedrock** | Routing, tool execution and the board are exercised by `python3 graph.py`. Waiting on `AWS_REGION` for the real model |
 | Rule documents (`references/`) | ❌ **absent** | The main blocker. Domain work |
 | Scenario eval suite | ❌ **absent** | |
 | Prevent mode | ❌ **absent** | Vega has no tools at all yet |
@@ -51,9 +51,7 @@ this table.
    origin label flips from `modelled` to `live`.
 2. **`AWS_REGION`**, `graph.py` has never been executed, not once. Until it is set, the
    system honestly holds back and makes no decisions at all.
-3. **The nine missing prompts.** An agent with no `prompts/<code>.txt` raises
-   `PromptMissing`. Writing them needs nobody's permission.
-4. **`references/tkdn-rules.md` and `lartas-procedure.md`**, Kira reads them when they
+3. **`references/tkdn-rules.md` and `lartas-procedure.md`**, Kira reads them when they
    exist; without them she judges from parameters and labels the result `modelled`.
    **This is knowledge work, not code.** A programmer cannot write it.
 
@@ -134,6 +132,8 @@ Not instructions to a model, these are enforced by the program, so no prompt can
 5. **Authority is checked on the server**, not on the button.
 6. **Production refuses to start** without SAP and a model, it may not guess at anything.
 7. **A missing prompt raises** rather than sending a placeholder to the model.
+8. **Importing a tool module is what registers it**, so `tools/__init__.py` imports
+   all of them. The registry used to be populated by whoever imported first.
 
 The full list, with the reasoning, is in `agent/README.md`.
 
@@ -145,15 +145,14 @@ The full list, with the reasoning, is in `agent/README.md`.
 |---|---|---|---|
 | 1 | Get `SAP_API_KEY` at api.sap.com | anyone | 15 min |
 | 2 | Enable Bedrock, confirm the region. `AWS-PLAN.md` has the rest | backend | 1 hour |
-| 3 | Write the 9 missing agent prompts | backend + domain | 1–2 days |
-| 4 | Run `graph.py` for real, fix what breaks | backend | 1–2 days |
-| 5 | Write `references/tkdn-rules.md` + `lartas-procedure.md` | **domain** | 2 days |
+| 3 | Run `graph.py` against Bedrock, fix what breaks | backend | 1-2 days |
+| 4 | Write `references/tkdn-rules.md` + `lartas-procedure.md` | **domain** | 2 days |
 | 6 | Verify SAP write entity names in `sender.py` | backend | 1 day |
 | 7 | The 4 remaining tools (Prevent mode) | backend + data | 2 days |
 | 8 | A 10-scenario eval suite | data | 2 days |
 | 9 | Prevent mode end to end | backend | 3 days |
 
-Items 3 and 5 can start now and **wait on nothing.**
+Item 4 can start now and **waits on nothing.**
 
 ---
 
