@@ -85,6 +85,13 @@
 
 html {
   scroll-behavior: smooth;
+  /* next-themes sets color-scheme inline once it has hydrated. These two keep
+     the browser chrome (scrollbars, native controls) correct before that and
+     when JavaScript never runs, instead of pinning everything to dark. */
+  color-scheme: light;
+}
+
+html.dark {
   color-scheme: dark;
 }
 
