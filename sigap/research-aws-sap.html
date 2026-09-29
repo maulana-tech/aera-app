@@ -1,0 +1,715 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AWS and SAP Agentic Reference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* Layout: one reading column; tables, diagrams and code may breach it, each
+   scrolling inside its own container so the page never moves sideways. */
+:root {
+  --bg:      #f6f7f9;
+  --surface: #ffffff;
+  --fg:      #14171c;
+  --muted:   #59626f;
+  --rule:    #dee2e8;
+  --accent:  #2258c0;
+  --warn:    #9a6100;
+  --good:    #1f6b46;
+
+  --display: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --body:    "IBM Plex Serif", Georgia, "Times New Roman", serif;
+  --mono:    "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:      #0d1015;
+    --surface: #141920;
+    --fg:      #e4e8ee;
+    --muted:   #8c96a5;
+    --rule:    #222933;
+    --accent:  #6ba3f5;
+    --warn:    #d9a441;
+    --good:    #5fbf8e;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg:      #0d1015;
+  --surface: #141920;
+  --fg:      #e4e8ee;
+  --muted:   #8c96a5;
+  --rule:    #222933;
+  --accent:  #6ba3f5;
+  --warn:    #d9a441;
+  --good:    #5fbf8e;
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--body);
+  font-size: 17px;
+  line-height: 1.65;
+}
+img { max-width: 100%; height: auto; }
+
+/* ---------------------------------------------------------------- header */
+.topbar {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 14px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--rule);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(8px);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.topbar b { color: var(--fg); font-weight: 600; letter-spacing: 0.1em; }
+.topbar .spacer { margin-left: auto; }
+
+.wrap {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding-inline: 20px;
+  padding-block: 40px 72px;
+}
+
+/* ------------------------------------------------------------ typography */
+h1 {
+  font-family: var(--display);
+  font-size: clamp(1.9rem, 1.3rem + 2.4vw, 2.6rem);
+  font-weight: 600;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+  margin: 0 0 14px;
+}
+h2 {
+  font-family: var(--display);
+  font-size: 1.24rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+  margin: 0 0 4px;
+}
+h3 {
+  font-family: var(--display);
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+p { margin: 0 0 14px; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+code, .mono { font-family: var(--mono); font-size: 0.86em; }
+code {
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  padding: 0.1em 0.34em;
+  border-radius: 3px;
+}
+strong { font-weight: 600; }
+
+.standfirst {
+  font-size: 1.08rem;
+  color: var(--muted);
+  margin-bottom: 26px;
+}
+
+/* The section number is real: these follow the markdown's own numbering. */
+section { border-top: 1px solid var(--rule); padding-top: 26px; margin-top: 34px; }
+.sec-no {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  display: block;
+  margin-bottom: 8px;
+}
+.lede { color: var(--muted); margin-bottom: 20px; }
+
+/* ----------------------------------------------------- provenance chips */
+/* SIGAP labels every figure with where it came from. This page does the same
+   with its own claims, so a reader can tell a vendor's own words from ours. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  color: var(--muted);
+  white-space: nowrap;
+  vertical-align: 1px;
+}
+.chip.aws    { border-color: color-mix(in srgb, var(--accent) 42%, var(--rule)); color: var(--accent); }
+.chip.sap    { border-color: color-mix(in srgb, var(--warn) 42%, var(--rule)); color: var(--warn); }
+.chip.ours   { border-color: color-mix(in srgb, var(--good) 42%, var(--rule)); color: var(--good); }
+
+.verdict {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.v-aligned { color: var(--good); }
+.v-keep    { color: var(--good); }
+.v-recon   { color: var(--warn); }
+.v-gap     { color: var(--warn); }
+
+/* ------------------------------------------------------------- surfaces */
+.note {
+  border-left: 2px solid var(--warn);
+  background: color-mix(in srgb, var(--warn) 7%, transparent);
+  padding: 14px 16px;
+  margin: 0 0 18px;
+  border-radius: 0 4px 4px 0;
+}
+.note p:last-child { margin-bottom: 0; }
+.note .hd {
+  font-family: var(--display);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--warn);
+  margin-bottom: 4px;
+}
+
+figure {
+  margin: 0 0 22px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--surface);
+  overflow: hidden;
+}
+figure img { display: block; width: 100%; }
+figcaption {
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--muted);
+  padding: 10px 14px;
+  border-top: 1px solid var(--rule);
+}
+
+/* ---------------------------------------------------------------- tables */
+.scroll { overflow-x: auto; margin: 0 0 22px; -webkit-overflow-scrolling: touch; }
+table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 30rem;
+  font-family: var(--display);
+  font-size: 0.87rem;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+th, td {
+  text-align: left;
+  vertical-align: top;
+  padding: 9px 14px 9px 0;
+  border-bottom: 1px solid var(--rule);
+}
+th {
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom-color: var(--fg);
+  padding-bottom: 7px;
+}
+tbody tr:last-child td { border-bottom: none; }
+td:last-child, th:last-child { padding-right: 0; }
+
+ul, ol { margin: 0 0 14px; padding-left: 1.25em; }
+li { margin-bottom: 5px; }
+li::marker { color: var(--muted); }
+
+.sources { font-family: var(--display); font-size: 0.87rem; }
+.sources li { margin-bottom: 9px; }
+.dead { color: var(--muted); }
+
+footer {
+  border-top: 1px solid var(--rule);
+  margin-top: 34px;
+  padding-top: 18px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <b>SIGAP</b>
+  <span>Research</span>
+  <span class="spacer">Read 29 Sep 2026</span>
+</div>
+
+<div class="wrap">
+
+  <h1>How AWS and SAP say to build this</h1>
+  <p class="standfirst">
+    Read from AWS and SAP's own published architectures. Every claim carries the
+    page it came from. Where a source is silent, this document says so rather
+    than filling the gap.
+  </p>
+  <p class="lede">
+    Only the last section is about SIGAP. The rest is what other people built.
+  </p>
+
+  <!-- 1 -->
+  <section>
+    <span class="sec-no">01</span>
+    <h2>The split both vendors assume</h2>
+    <p class="lede">Neither treats this as one system. Both draw the same line.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th></th><th>AWS</th><th>SAP</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Owns</strong></td>
+            <td>Where the agent thinks, and where its tools run</td>
+            <td>Where the record lives and where an action takes effect</td>
+          </tr>
+          <tr>
+            <td><strong>Protocol at the boundary</strong></td>
+            <td class="mono">MCP</td>
+            <td class="mono">OData</td>
+          </tr>
+          <tr>
+            <td><strong>Governs</strong></td>
+            <td>Model access, tool authorisation, tracing</td>
+            <td>Licensing, metering, who may call a business API</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      This is the line <code>PLAN.md</code> §4 already drew. Nothing found
+      contradicts it.
+    </p>
+  </section>
+
+  <!-- 2 -->
+  <section>
+    <span class="sec-no">02</span>
+    <h2>AgentCore, the six primitives <span class="chip aws">AWS · docs</span></h2>
+    <p class="lede">
+      A toolkit, usable together or separately, and explicitly model-agnostic.
+    </p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Primitive</th><th>What it is</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Runtime</strong></td><td>Serverless host for a long-running agent, with session isolation</td></tr>
+          <tr><td><strong>Gateway</strong></td><td>Turns existing APIs and Lambda functions into MCP tools</td></tr>
+          <tr><td><strong>Memory</strong></td><td>Short-term conversation context and long-term memory, managed</td></tr>
+          <tr><td><strong>Identity</strong></td><td>Auth for agents, inbound and outbound, against existing identity providers</td></tr>
+          <tr><td><strong>Built-in Tools</strong></td><td>Code Interpreter and a Browser tool, both sandboxed</td></tr>
+          <tr><td><strong>Observability</strong></td><td>Traces and dashboards through CloudWatch, OpenTelemetry supported</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 3 -->
+  <section>
+    <span class="sec-no">03</span>
+    <h2>The piece that did not exist when we planned <span class="chip aws">AWS · blog</span></h2>
+    <p class="lede">
+      AWS now ships a container image, at no cost, that exposes SAP OData as MCP
+      tools and runs on AgentCore Runtime. This is the most important finding.
+    </p>
+
+    <figure>
+      <img
+        src="https://d2908q01vomqb2.cloudfront.net/17ba0791499db908433b80f37c5fbc89b870084b/2026/05/27/SAP-MCP-Arch-1.png"
+        alt="AWS for SAP MCP Server deployed on Amazon Bedrock AgentCore Runtime, with MCP clients on one side and SAP ERP reached through SAP BTP API Management on the other.">
+      <figcaption>
+        Figure 1. AWS for SAP MCP Server on Amazon Bedrock AgentCore, with SAP ERP
+        connectivity via SAP BTP. Hotlinked from the AWS for SAP blog.
+      </figcaption>
+    </figure>
+
+    <h3>What it does</h3>
+    <ol>
+      <li>Discovers which OData services exist, through a catalog discovery tool. Two modes, remote catalog or local.</li>
+      <li>Pulls service hints from configuration held in S3, for context on how a given service behaves.</li>
+      <li>Calls CRUD operations on business objects: sales orders, purchase orders, and so on.</li>
+      <li>Performs the OData call over whichever connectivity path is configured.</li>
+    </ol>
+
+    <h3>Three connectivity topologies</h3>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Topology</th><th>Path</th><th>Where traffic goes</th></tr></thead>
+        <tbody>
+          <tr><td>SAP BTP API Management</td><td>HTTPS, OAuth 2.0</td><td>Egresses to internet, TLS</td></tr>
+          <tr><td>SAP Cloud ERP Private (RISE on AWS)</td><td>VPC Peering or Transit Gateway</td><td>Stays on the AWS backbone</td></tr>
+          <tr><td>SAP ERP on AWS</td><td>Same VPC or cross-VPC</td><td>Never leaves AWS</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Authentication is two-sided</h3>
+    <p>
+      Through AgentCore Identity. Inbound, MCP client to server: IAM, Cognito,
+      Microsoft Entra ID, or Okta. Outbound, server to SAP: OAuth 2.0.
+    </p>
+
+    <div class="note">
+      <div class="hd">Stated limits</div>
+      <p>
+        The page documents OData <strong>V2</strong> compatibility and does not
+        mention V4. Service hints are a manual S3 configuration unless the remote
+        catalog is reachable.
+      </p>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section>
+    <span class="sec-no">04</span>
+    <h2>The closest published build to ours <span class="chip aws">AWS · blog</span></h2>
+    <p class="lede">
+      AWS for Industries published a procurement agent against SAP S/4HANA on EC2.
+      It is the nearest thing to SIGAP in the public record, which makes both its
+      choices and its omissions useful.
+    </p>
+
+    <figure>
+      <img
+        src="https://d2908q01vomqb2.cloudfront.net/c5b76da3e608d34edb07244cd9b875ee86906328/2026/02/18/Figure-1.png"
+        alt="Smart Procurement Assistant architecture: a React chat client over API Gateway WebSocket into a Strands agent on AgentCore Runtime, with Athena, Glue, S3 and OpenSearch on the data side and SAP S4HANA reached through AgentCore Gateway and Lambda.">
+      <figcaption>
+        Figure 2. Smart Procurement Assistant architecture. Hotlinked from the AWS
+        for Industries blog.
+      </figcaption>
+    </figure>
+
+    <h3>Shape</h3>
+    <ul>
+      <li><strong>Orchestration.</strong> Strands Agents SDK on AgentCore Runtime, containers on ECS/Fargate.</li>
+      <li><strong>Data plane.</strong> S3 holds structured procurement data, Glue Data Catalog holds metadata, Athena runs the SQL, OpenSearch does document search.</li>
+      <li><strong>SAP write path.</strong> AgentCore Gateway gives an MCP bridge, a Lambda executes the MCP client call, Secrets Manager holds the credentials.</li>
+      <li><strong>Edge.</strong> Cognito for JWT and role-based access, WAF, API Gateway for a WebSocket so replies stream.</li>
+      <li><strong>Eight tools</strong>, including schema lookup, natural language to SQL, financial analysis, quality metrics, compliance validation against REACH, RoHS, CMRT and RBA, RFQ creation through SAP OData, and a sandboxed visualisation tool.</li>
+    </ul>
+
+    <div class="note">
+      <div class="hd">Two things it does not have</div>
+      <p>
+        <strong>No approval gate.</strong> The article describes RFQ creation as
+        user-directed tool invocation and documents no review or authorisation
+        step before a write reaches SAP.
+      </p>
+      <p>
+        <strong>No stated evaluation.</strong> Outcomes are given qualitatively,
+        "reduces cycle times", "cost savings". No benchmark, no metric, no dataset.
+      </p>
+    </div>
+  </section>
+
+  <!-- 5 -->
+  <section>
+    <span class="sec-no">05</span>
+    <h2>The SAP side: Joule, the Agent Hub, A2A <span class="chip sap">SAP · learning</span></h2>
+    <p class="lede">
+      SAP does not expose its agents directly. Its published pattern is A2O,
+      agent-to-orchestrator: an external agent talks to Joule, and Joule talks to
+      SAP agents.
+    </p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Layer</th><th>Role</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Joule</strong></td><td>The central orchestrator. Governs how agents interact and how tasks are planned and delegated</td></tr>
+          <tr><td><strong>Agent Hub</strong></td><td>Protocol adapter. Translates A2A and MCP into SAP's internal agent APIs, and enforces security, licensing and metering centrally</td></tr>
+          <tr><td><strong>A2A</strong></td><td>SAP's preferred standard for agent to agent work. Discovery by role or capability, task delegation, artifact exchange</td></tr>
+          <tr><td><strong>MCP</strong></td><td>The universal interface for an agent to reach tools and data</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      A pro-code agent that runs in <strong>its own runtime</strong> integrates
+      through A2A. That is exactly the shape of a system like ours.
+    </p>
+    <div class="note">
+      <div class="hd">Timing worth knowing</div>
+      <p>
+        General availability of the enhanced A2A capabilities in Joule is reported
+        as <strong>Q4 2026</strong>. Demo day is 31 October 2026, so this is a
+        roadmap item to speak about, not one to depend on.
+      </p>
+    </div>
+  </section>
+
+  <!-- 6 -->
+  <section>
+    <span class="sec-no">06</span>
+    <h2>AgentOps: how AWS says to evaluate and operate an agent <span class="chip aws">AWS · blog</span></h2>
+    <p class="lede">
+      The richest source, and it lands directly on our largest known gap.
+    </p>
+
+    <h3>Evaluation has four levels, not one</h3>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Level</th><th>What is judged</th><th>Example metrics</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Tool</strong> <span class="mono">(span)</span></td>
+            <td>One tool call</td>
+            <td>Deterministic tools: unit tests, latency, error rate. Model-backed tools: correctness, relevance. Plus tool selection accuracy and parameter extraction</td>
+          </tr>
+          <tr>
+            <td><strong>Turn</strong> <span class="mono">(trace)</span></td>
+            <td>One question and its answer</td>
+            <td>Correctness, faithfulness, relevance, coherence, instruction following</td>
+          </tr>
+          <tr>
+            <td><strong>Session outcome</strong></td>
+            <td>Did the whole conversation achieve the goal</td>
+            <td>Task completion rate, goal accuracy, efficiency, memory consistency</td>
+          </tr>
+          <tr>
+            <td><strong>System</strong></td>
+            <td>The service</td>
+            <td>End to end latency, throughput, tool error rate, cost per task, compliance adherence</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Three modes, each with a gate</h3>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Mode</th><th>Runs</th><th>Gate</th></tr></thead>
+        <tbody>
+          <tr><td>On-demand</td><td>During development, against a reference dataset with ground truth</td><td>Must pass before pre-production</td></tr>
+          <tr><td>CI/CD</td><td>Automated, pre-production</td><td>Must pass before production</td></tr>
+          <tr><td>Online</td><td>Continuously, on sampled live traffic</td><td>Automated rollback on degradation</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Authorisation happens at four checkpoints</h3>
+    <figure>
+      <img
+        src="https://d2908q01vomqb2.cloudfront.net/f1f836cb4ea6efb2a0b1b99f41ad8b103eff4b59/2026/05/19/ml-19465-image-1.png"
+        alt="Four sequential authorization checkpoints: user identity verification, then agent access validation, then context, memory and tool access, then output authorization.">
+      <figcaption>
+        Figure 3. User identity, then agent access, then context, memory and tool
+        access, then output authorization. Hotlinked from the AWS AgentOps blog.
+      </figcaption>
+    </figure>
+    <p>
+      Tool access is evaluated deterministically with <strong>Cedar</strong>
+      policy, enforced through AgentCore Gateway, on top of least-privilege IAM.
+    </p>
+
+    <figure>
+      <img
+        src="https://d2908q01vomqb2.cloudfront.net/f1f836cb4ea6efb2a0b1b99f41ad8b103eff4b59/2026/05/20/ml-19465-image-4-1.png"
+        alt="AgentCore services in sequence: Identity handling inbound authentication, Gateway routing tools, Policy evaluating Cedar rules, then Memory resources.">
+      <figcaption>
+        Figure 4. Identity for inbound auth, Gateway for tool routing, Policy for
+        Cedar rules, then Memory resources. Hotlinked from the AWS AgentOps blog.
+      </figcaption>
+    </figure>
+
+    <h3>Observability has four instrumentation layers</h3>
+    <ol>
+      <li><strong>Agent and framework.</strong> Reasoning steps, model calls, tool invocations.</li>
+      <li><strong>Service.</strong> Memory reads and writes, gateway auth, identity policy evaluation.</li>
+      <li><strong>Infrastructure.</strong> Container and Lambda metrics.</li>
+      <li><strong>Application.</strong> Business metrics across a multi-agent system.</li>
+    </ol>
+    <p>
+      Correlation uses <strong>W3C Trace Context</strong> for a shared trace id
+      across agents, and <strong>OpenTelemetry Baggage</strong> to carry a session
+      id across separate traces. Signals AWS calls out specifically: token spend
+      per session, per agent and per task; memory extraction quality; toxicity,
+      bias, hallucination rate and PII leakage.
+    </p>
+
+    <figure>
+      <img
+        src="https://d2908q01vomqb2.cloudfront.net/f1f836cb4ea6efb2a0b1b99f41ad8b103eff4b59/2026/05/19/ml-19465-image-6.png"
+        alt="Two multi-agent systems, a Fraud agent and a Claims agent, reading and writing separate and shared long-term memory stores under IAM access controls.">
+      <figcaption>
+        Figure 5. Multi-agent memory access, separate and shared long-term memory
+        under IAM control. Hotlinked from the AWS AgentOps blog.
+      </figcaption>
+    </figure>
+
+    <h3>Four repositories, not one</h3>
+    <p>
+      Infrastructure, agents, tools and the consuming application are versioned
+      separately. Tools get their own CI/CD and are deployed behind MCP servers.
+      Agent versions are immutable, promoted by alias, and rolled back by pointing
+      the alias back.
+    </p>
+  </section>
+
+  <!-- 7 -->
+  <section>
+    <span class="sec-no">07</span>
+    <h2>What this means for SIGAP <span class="chip ours">ours</span></h2>
+    <p class="lede">
+      The shape we chose matches what both vendors publish. Two pieces are worth
+      adopting, one gap is now clearly defined, and two of our decisions look
+      better than the closest published build rather than merely different.
+    </p>
+
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Their pattern</th><th>SIGAP today</th><th>Verdict</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>AgentCore Runtime hosts the orchestration loop</td>
+            <td><code>graph.py</code> owns the loop</td>
+            <td><span class="verdict v-aligned">Aligned.</span> <code>AWS-PLAN.md</code> §2 already chose Runtime over Managed Harness for this reason</td>
+          </tr>
+          <tr>
+            <td>AWS for SAP MCP Server for OData reads</td>
+            <td><code>clients/</code> is a hand-rolled connector</td>
+            <td><span class="verdict v-recon">Reconsider.</span> This shipped after we wrote ours. Free container, catalog discovery and OAuth already handled</td>
+          </tr>
+          <tr>
+            <td>Gateway plus Lambda for SAP writes</td>
+            <td><code>sender.py</code> posts directly, handles CSRF</td>
+            <td><span class="verdict v-keep">Keep for now.</span> Ours works and is auditable. Gateway's gain is MCP tool schemas for free, not correctness</td>
+          </tr>
+          <tr>
+            <td>AgentCore Memory</td>
+            <td><code>conversations</code> and <code>messages</code> in SQLite</td>
+            <td><span class="verdict v-keep">Keep ours.</span> Ours is owner-scoped and part of the record. Memory is agent working context, a different job</td>
+          </tr>
+          <tr>
+            <td>AgentCore Identity</td>
+            <td><code>core/identity.py</code>, HMAC sessions</td>
+            <td><span class="verdict v-keep">Keep ours</span>, as already decided. Theirs authenticates an agent to a tool, ours authenticates a buyer to an approval endpoint</td>
+          </tr>
+          <tr>
+            <td>Cedar policy on tool access</td>
+            <td>Role caps and a cost cap, in business terms</td>
+            <td><span class="verdict v-gap">Real gap, different layer.</span> We authorise people. Nobody authorises the agent, per tool</td>
+          </tr>
+          <tr>
+            <td>Four-level evaluation hierarchy</td>
+            <td>Absent</td>
+            <td><span class="verdict v-gap">Biggest gap</span>, and now it has a shape. This is PLAN item 7</td>
+          </tr>
+          <tr>
+            <td>W3C Trace Context, OpenTelemetry</td>
+            <td><code>core/trace.py</code> plus the <code>steps</code> table</td>
+            <td><span class="verdict v-aligned">Partly aligned.</span> We record every step with provenance. We do not export OTel, so nothing correlates outside our own database</td>
+          </tr>
+          <tr>
+            <td>Online evaluation on sampled traffic</td>
+            <td>Absent</td>
+            <td><span class="verdict v-gap">Post-demo.</span> Needs production traffic to exist first</td>
+          </tr>
+          <tr>
+            <td>SAP A2A through Joule</td>
+            <td>Not addressed</td>
+            <td><span class="verdict v-aligned">Aligned by accident.</span> We are a pro-code agent in our own runtime, precisely the A2A shape SAP documents. One slide, not code</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Where we are ahead of the published reference</h3>
+    <p>Both are worth saying out loud, because the nearest comparable build does not do them.</p>
+    <ol>
+      <li>
+        <strong>Every action waits for authority it is entitled to.</strong>
+        Bounded autonomy to Rp 50m, role caps checked server-side, one-shot
+        approvals, idempotent actions. The Smart Procurement Assistant writes an
+        RFQ into SAP with no documented approval gate.
+      </li>
+      <li>
+        <strong>Every figure carries where it came from.</strong> An origin label
+        on every tool result, and a calculator that refuses to produce rupiah when
+        its inputs are not trustworthy. Neither published architecture labels
+        provenance at all.
+      </li>
+    </ol>
+
+    <h3>What to do about it</h3>
+    <div class="scroll">
+      <table>
+        <thead><tr><th></th><th>Work</th><th>Why now</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">1</td><td>Build the eval suite against the four levels, starting at tool and turn level</td><td>Already PLAN item 7, now with a published shape to copy</td></tr>
+          <tr><td class="mono">2</td><td>Evaluate AWS for SAP MCP Server against <code>clients/</code> before writing more connector code</td><td>It may delete work we have not done yet</td></tr>
+          <tr><td class="mono">3</td><td>Emit OpenTelemetry spans from <code>core/trace.py</code>, carrying a session id</td><td>Cheap, and it makes the trace legible outside our own interface</td></tr>
+          <tr><td class="mono">4</td><td>Decide whether agent-level tool authorisation is in scope</td><td>We have no equivalent. It may be correctly out of scope at this size</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- sources -->
+  <section>
+    <span class="sec-no">Sources</span>
+    <h2>Where each claim came from</h2>
+    <ul class="sources">
+      <li><a href="https://aws.amazon.com/blogs/awsforsap/building-agentic-enterprises-on-aws-using-aws-for-sap-mcp-server-on-amazon-bedrock-agentcore/">Building Agentic Enterprises on AWS with the AWS for SAP MCP Server on Amazon Bedrock AgentCore</a> <span class="chip aws">AWS · blog</span></li>
+      <li><a href="https://aws.amazon.com/blogs/industries/automate-procurement-workflows-with-ai-agents-using-amazon-bedrock-agentcore/">Automate Procurement Workflows with AI Agents using Amazon Bedrock AgentCore</a> <span class="chip aws">AWS · blog</span></li>
+      <li><a href="https://aws.amazon.com/blogs/machine-learning/agentops-operationalize-agentic-ai-at-scale-with-amazon-bedrock-agentcore/">AgentOps: Operationalize agentic AI at scale with Amazon Bedrock AgentCore</a> <span class="chip aws">AWS · blog</span></li>
+      <li><a href="https://docs.aws.amazon.com/sap/latest/general/rise-agenticai-bedrock-agentcore.html">Amazon Bedrock AgentCore, General SAP Guides</a> <span class="chip aws">AWS · docs</span></li>
+      <li><a href="https://learning.sap.com/courses/boosting-ai-driven-business-transformation-with-joule-agents/enabling-interoperability-for-ai-agents">Enabling Interoperability for AI Agents</a> <span class="chip sap">SAP · learning</span></li>
+      <li class="dead"><a href="https://architecture.learning.sap.com/docs/ref-arch/98efa0">Agentic AI &amp; AI Agents, SAP Architecture Center</a> not readable from here, listed for completeness</li>
+      <li class="dead"><a href="https://architecture.learning.sap.com/docs/ref-arch/7b6426">Bring Your Own Agent, SAP Architecture Center</a> not readable from here</li>
+    </ul>
+  </section>
+
+  <footer>
+    Diagrams are hotlinked to the publishers' CDN and were checked live on
+    29 September 2026. Nothing is mirrored into this repository, so the figures
+    need a network connection to appear.<br>
+    Source of this page: <span class="mono">sigap/RESEARCH-AWS-SAP.md</span>
+  </footer>
+
+</div>
+
+</body>
+</html>
