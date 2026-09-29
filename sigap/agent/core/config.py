@@ -6,6 +6,24 @@ import pathlib
 from dataclasses import dataclass
 
 
+def _value(raw: str) -> str:
+    """One .env value.
+
+    A trailing comment is stripped from an unquoted value, because the example
+    file documents each key beside it. Without this, uncommenting
+    `SAP_API_KEY=   # free at api.sap.com` sets the key to the comment: a
+    non-empty string, so the system reports itself ready and SAP answers 401,
+    which reads as a SAP problem rather than the config error it is.
+    A quoted value is taken whole, so a `#` inside a password survives.
+    """
+    v = raw.strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+        return v[1:-1]
+    if v.startswith("#"):                       # the whole value is a comment
+        return ""
+    return v.split(" #", 1)[0].split("\t#", 1)[0].strip()
+
+
 def _load_env() -> None:
     """Read .env when present. Convenient in dev; production uses real env vars."""
     f = pathlib.Path(__file__).resolve().parent.parent / ".env"
@@ -16,7 +34,7 @@ def _load_env() -> None:
         if not line or line.startswith("#") or "=" not in line:
             continue
         k, v = line.split("=", 1)
-        os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+        os.environ.setdefault(k.strip(), _value(v))
 
 
 _load_env()
@@ -78,3 +96,18 @@ def load() -> Config:
 
 
 CFG = load()
+
+
+def demo() -> None:
+    assert _value("us-west-2") == "us-west-2"
+    assert _value("  dev   # dev | staging | prod  ") == "dev"
+    assert _value("   # free at api.sap.com") == "", "a key that is only a comment is empty"
+    assert _value('"p#ssw0rd"') == "p#ssw0rd", "a quoted value keeps its hash"
+    assert _value("'p#ssw0rd'") == "p#ssw0rd"
+    assert _value("sk-abc#123") == "sk-abc#123", "only ' #' starts a comment, not any hash"
+    print("  .env values: comments stripped ✓ · quotes respected ✓ · bare # kept ✓")
+    print("config ok")
+
+
+if __name__ == "__main__":
+    demo()

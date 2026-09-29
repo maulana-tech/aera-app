@@ -13,7 +13,8 @@ which is cheapest, and executes it into SAP once someone with the authority appr
 
 ```bash
 cd sigap/agent
-python3 manage.py secret                  # export its output as SIGAP_SECRET
+cp .env.example .env                      # then fill SIGAP_SECRET
+python3 manage.py secret                  # its output goes in .env
 python3 manage.py user budi@kpn.co.id "Budi" buyer secret123
 python3 manage.py seed                    # optional demo data
 python3 api.py                            # :8787
@@ -27,6 +28,7 @@ open http://localhost:3000/dashboard
 
 | You want to | Open |
 |---|---|
+| Set it up, key by key | `SETUP.md` |
 | Understand the product | `PLAN.md` §1 and §3 |
 | See how far along it is | `PLAN.md` §2, or `manage.py check` |
 | Start writing code | `agent/README.md`, then `TECHNICAL.md` |
@@ -34,17 +36,22 @@ open http://localhost:3000/dashboard
 | Meet the agents one by one | `AGENT-REFERENCE.md` |
 | Find a number or the scenario | `DESIGN.md` §2 |
 | Work out where data comes from | `DATA-SOURCES.md` |
+| Know which AWS and SAP services we use | `BUILD-SPEC.md` |
+| See what AWS and SAP themselves publish | `RESEARCH-AWS-SAP.md` |
 
 ## Contents
 
 | File | What's in it |
 |---|---|
 | **`PLAN.md`** ⭐ | The plan, the status of each part, the order of work |
+| **`SETUP.md`** | From a clone to a system that reasons. Every step ends with a test |
 | **`AGENT-REFERENCE.md`** | All 11 agents: tools, parameters, limits. **Generated**, `manage.py docs` |
 | **`AWS-PLAN.md`** | Getting onto Bedrock and AgentCore, in the order that survives contact with a loop that has never run |
 | `DESIGN.md` | Scenario figures, local rules, the eval suite |
 | `TECHNICAL.md` | Exact function names and parameters |
 | `DATA-SOURCES.md` | What was verified about each data source |
+| `BUILD-SPEC.md` | The wiring: every AWS and SAP service, and the three request paths |
+| `RESEARCH-AWS-SAP.md` | What AWS and SAP publish about building this, read from their own pages |
 | `agent/` | The code, see `agent/README.md` |
 
 ## Things to remember
@@ -67,6 +74,7 @@ cd agent && PYTHONPATH=. python3 engine/simulate.py
 If a figure in a document cannot be reproduced by that command, **the document is wrong.**
 
 **What is blocking, right now**, `PYTHONPATH=. python3 manage.py check` prints this
-live, but in short: `SAP_API_KEY`, `AWS_REGION`, nine agent prompts, four Prevent-mode
-tools, and `references/` (the TKDN & LARTAS rules). The prompts and `references/` need
-nobody's permission and can be started today.
+live, but in short: `SAP_API_KEY`, `AWS_REGION`, and `references/` (the TKDN & LARTAS
+rules). All 11 prompts are written and all 26 tools are installed. The SAP key is
+self-service and takes 15 minutes; `references/` needs nobody's permission and is
+domain work, not code. `SETUP.md` is the runbook for the two keys.

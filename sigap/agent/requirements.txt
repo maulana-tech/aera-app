@@ -1,0 +1,3 @@
+# The agent service runs on the standard library alone. This is only needed
+# once AWS_REGION is set and the agents talk to a real model.
+anthropic>=0.40
