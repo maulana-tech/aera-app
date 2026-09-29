@@ -20,7 +20,7 @@ from tools.sourcing import find_alternate_sources
 @register(
     "simulate_scenario", "simulation",
     "Compute cost, stockout date, OTIF, and TKDN impact for every supply option that "
-    "cleared the rules, plus their combinations. Deterministic — the same inputs always "
+    "cleared the rules, plus their combinations. Deterministic, the same inputs always "
     "give the same answer. Refuses to emit figures when the inputs are not trustworthy.",
     {"material": {"type": "string"},
      "plant": {"type": "string"},

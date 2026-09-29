@@ -19,7 +19,7 @@ export default function Decision({ actionId, valueIdr, limitIdr }: {
     setBusy(decision);
     setError("");
     try {
-      // Identity is NOT sent from here — the server takes it from the session token.
+      // Identity is NOT sent from here. The server takes it from the session token.
       const res = await fetch(`/api/sigap/actions/${actionId}/decision`, {
         method: "POST",
         headers: { "content-type": "application/json" },

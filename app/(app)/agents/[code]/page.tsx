@@ -1,128 +1,182 @@
-import { Crown, ShieldBan, Wrench } from "lucide-react";
+import { ArrowLeft, Crown, ShieldBan } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { api, me, type Agent, type AgentSummary } from "@/app/lib";
+import { api, me, type Agent, type AgentSummary, type View } from "@/app/lib";
 import Conversation from "./Conversation";
 import { AgentBadge } from "@/components/agent-card";
-import { StatusBadge } from "@/components/status-badge";
+import { DataTable } from "@/components/data-table";
+import { RulingList, type Ruling } from "@/components/rulings";
+import { Empty, Fact, Rail, Section, ToolList } from "@/components/shell";
 import { Badge } from "@/components/ui/badge";
 
 export const dynamic = "force-dynamic";
 
-/** Example questions per agent — saves the blank-screen stare. */
-const EXAMPLES: Record<string, string[]> = {
-  supervisor: ["Any disruption still unhandled?", "Summarise today's supply position"],
-  impact: ["Which orders route through Ningbo?", "When does M-4471 at KRW1 run out?"],
-  demand: ["What's the daily consumption of M-4471 at KRW1?", "Any demand spike?"],
-  inventory: ["Is any M-4471 stock at KRW1 on quality hold?", "What's the safety floor?"],
-  sourcing: ["Any replacement source for M-4471?", "Which local supplier could we use?"],
-  logistics: ["Realistically, when does option B land?", "How long is dwell at Priok?"],
-  compliance: ["May we use the Vietnamese supplier for M-4471?", "Which option breaches TKDN?"],
-  simulation: ["What does combination B+C cost?", "Which is cheapest and still safe?"],
-  precedent: ["Has Ningbo disrupted us before?", "How was it handled then?"],
-  execution: ["Which actions are awaiting approval?", "Has anything been sent to SAP?"],
-  exposure: ["Which materials have only one supplier?", "Whose certificate expires soon?"],
+/** What each agent's own page is showing, and what to ask them. */
+const DESK: Record<string, { work: string; note?: string; examples: string[] }> = {
+  supervisor: {
+    work: "Routing",
+    note: "Which specialists Arya pulled in, in what order, and where she stopped.",
+    examples: ["Any disruption still unhandled?", "Summarise today's supply position"],
+  },
+  impact: {
+    work: "Disruption trace",
+    examples: ["Which orders route through Ningbo?", "When does M-4471 at KRW1 run out?"],
+  },
+  demand: {
+    work: "Consumption and demand signal",
+    examples: ["What is daily consumption of M-4471 at KRW1?", "Any demand spike?"],
+  },
+  inventory: {
+    work: "Stock, and how much of it is usable",
+    examples: ["Is any M-4471 stock on quality hold?", "What is the safety floor?"],
+  },
+  sourcing: {
+    work: "Replacement supply options",
+    examples: ["Any replacement source for M-4471?", "Which local supplier could we use?"],
+  },
+  logistics: {
+    work: "Arrival dates that survive contact with reality",
+    examples: ["When does option B really land?", "How long is dwell at Priok?"],
+  },
+  compliance: {
+    work: "Rulings",
+    examples: ["May we use the Vietnamese supplier?", "Which option breaches TKDN?"],
+  },
+  simulation: {
+    work: "Costed combinations",
+    examples: ["What does combination B+C cost?", "Which is cheapest and still safe?"],
+  },
+  precedent: {
+    work: "Comparable past incidents",
+    examples: ["Has Ningbo disrupted us before?", "How was it handled then?"],
+  },
+  execution: {
+    work: "Actions raised, and what became of them",
+    examples: ["Which actions await approval?", "Has anything been sent to SAP?"],
+  },
+  exposure: {
+    work: "Latent risk",
+    examples: ["Which materials have one supplier?", "Whose certificate expires soon?"],
+  },
 };
 
 export default async function AgentPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
-  const [d, user] = await Promise.all([
+  const [team, user] = await Promise.all([
     api<{ agents: Agent[]; summary: AgentSummary }>("agents"),
     me(),
   ]);
-  const a = d?.agents.find((x) => x.code === code);
+  const a = team?.agents.find((x) => x.code === code);
   if (!a) notFound();
 
-  const missing = a.tools.filter((t) => !t.installed);
+  const desk = DESK[code] ?? { work: "Work", examples: [] };
+  const view = await api<View>(`data/${code}`);
+  const missingTools = a.tools.filter((t) => !t.installed);
 
   return (
     <main className="w-full px-6 py-8">
-      <Link href="/agents" className="text-muted-foreground hover:text-foreground font-mono text-xs">
-        ← agent team
+      <Link
+        href="/agents"
+        className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 text-xs"
+      >
+        <ArrowLeft className="size-3" />
+        Agent team
       </Link>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_340px]">
-        <section>
-          <div className="flex flex-wrap items-center gap-3">
-            <AgentBadge nickname={a.nickname} large />
-            <h1 className="text-2xl font-semibold tracking-tight">{a.nickname}</h1>
-            <span className="text-muted-foreground text-sm">{a.title}</span>
-            {a.lead && <Crown className="size-4" />}
-            {a.veto && (
-              <Badge variant="outline" className="gap-1 font-mono text-[10px]">
-                <ShieldBan className="size-3" />
-                veto
-              </Badge>
-            )}
-          </div>
-          <p className="text-muted-foreground mt-1 max-w-2xl text-sm leading-relaxed">{a.brief}</p>
+      <header className="mt-5 border-b pb-6">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <AgentBadge nickname={a.nickname} large />
+          <h1 className="text-2xl font-semibold tracking-tight">{a.nickname}</h1>
+          <span className="text-muted-foreground text-sm">{a.title}</span>
+          {a.lead && (
+            <Badge variant="outline" className="gap-1 font-mono text-[10px]">
+              <Crown className="size-3" />
+              lead
+            </Badge>
+          )}
+          {a.veto && (
+            <Badge variant="outline" className="gap-1 font-mono text-[10px]">
+              <ShieldBan className="size-3" />
+              veto
+            </Badge>
+          )}
+        </div>
+        <p className="text-muted-foreground mt-3 max-w-2xl text-sm leading-relaxed">
+          {a.brief}
+        </p>
+      </header>
 
-          <div className="mt-5">
-            <Conversation
-              code={a.code}
-              name={a.nickname}
-              examples={EXAMPLES[a.code] ?? []}
-              signedIn={!!user}
+      <Section title={desk.work} note={view?.note ?? desk.note}>
+        {!view ? (
+          <Empty
+            what={`${a.nickname} has nothing on her desk yet.`}
+            why={
+              missingTools.length === a.tools.length
+                ? `None of her tools are written, so there is nothing for her to read.`
+                : `This agent does not publish a table of her own. Her findings show up inside a run.`
+            }
+            fix={
+              missingTools.length
+                ? `not written yet: ${missingTools.map((t) => t.name).join(", ")}`
+                : undefined
+            }
+          />
+        ) : view.rows.length === 0 ? (
+          <Empty
+            what="Nothing to show, and that is the correct answer."
+            why={view.note || "The inputs were not trustworthy enough to produce a result."}
+            fix={`source: ${view.source}`}
+          />
+        ) : code === "compliance" ? (
+          <RulingList rulings={view.rows as unknown as Ruling[]} />
+        ) : (
+          <DataTable
+            columns={view.columns}
+            rows={view.rows}
+            origin={view.origin}
+            source={view.source}
+            highlight={(r) => r.chosen === true || r.allowed === false}
+          />
+        )}
+      </Section>
+
+      <div className="mt-10 grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
+        <div className="space-y-4">
+          <div className="rounded-lg border">
+            <p className="text-muted-foreground border-b px-4 py-2.5 text-xs font-medium">
+              Tools {a.installed} of {a.tool_count}
+            </p>
+            <ToolList tools={a.tools} />
+          </div>
+
+          <Rail>
+            <Fact label="Reasoning effort" value={a.effort} />
+            <Fact
+              label="Instructions"
+              value={a.ready ? "written" : "not written"}
+              tone={a.ready ? "plain" : "warn"}
             />
-          </div>
-        </section>
+            <Fact label="Used in" value={`${a.used_in} runs`} />
+          </Rail>
 
-        <aside className="space-y-5">
           {!a.ready && (
-            <div className="rounded-xl border p-4">
-              <StatusBadge status="held">no instructions written</StatusBadge>
-              <p className="text-muted-foreground mt-2 text-xs leading-relaxed">
-                <code className="font-mono">prompts/{a.code}.txt</code> does not exist yet, so
-                calling {a.nickname} raises an error rather than running on an empty prompt.
-              </p>
-            </div>
+            <p className="text-muted-foreground px-1 text-xs leading-relaxed">
+              Calling {a.nickname} raises an error rather than sending the model an
+              empty prompt. Write{" "}
+              <code className="font-mono">prompts/{a.code}.txt</code> first.
+            </p>
           )}
+        </div>
 
-          {!d!.summary.model_ready && (
-            <div className="rounded-xl border p-4">
-              <StatusBadge status="held">reasoning engine not connected</StatusBadge>
-              <p className="text-muted-foreground mt-2 text-xs leading-relaxed">
-                Conversations are refused until <code className="font-mono">AWS_REGION</code> is
-                set. The agent will not answer with a guess.
-              </p>
-            </div>
-          )}
-
-          <div className="rounded-xl border">
-            <div className="flex items-center gap-2 border-b px-4 py-3">
-              <Wrench className="size-3.5" />
-              <p className="text-muted-foreground font-mono text-[11px] uppercase tracking-[0.15em]">
-                Tools · {a.installed}/{a.tool_count}
-              </p>
-            </div>
-            <ul className="divide-y">
-              {a.tools.map((t) => (
-                <li key={t.name} className="px-4 py-3">
-                  <p
-                    className={`break-all font-mono text-xs ${
-                      t.installed ? "" : "text-muted-foreground/50"
-                    }`}
-                  >
-                    {t.name}
-                    {!t.installed && <span className="ml-2 italic">not written</span>}
-                  </p>
-                  {t.description && (
-                    <p className="text-muted-foreground mt-1 text-xs leading-relaxed">
-                      {t.description}
-                    </p>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="text-muted-foreground space-y-1.5 px-1 font-mono text-[11px]">
-            <p>effort · {a.effort}</p>
-            <p>used in · {a.used_in} disruptions</p>
-            {missing.length > 0 && <p>{missing.length} tools not written</p>}
-          </div>
-        </aside>
+        <Section title={`Ask ${a.nickname}`} className="mt-0">
+          <Conversation
+            code={a.code}
+            name={a.nickname}
+            examples={desk.examples}
+            signedIn={!!user}
+          />
+        </Section>
       </div>
     </main>
   );

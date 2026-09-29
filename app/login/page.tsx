@@ -36,7 +36,6 @@ export default function Login() {
   return (
     <main className="mx-auto flex min-h-[70vh] max-w-sm flex-col justify-center px-6">
       <div className="flex items-center justify-between">
-        <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">SIGAP</p>
         <ThemeToggle />
       </div>
       <h1 className="mt-2 text-2xl font-semibold tracking-tight">Sign in</h1>
@@ -46,7 +45,7 @@ export default function Login() {
 
       <form onSubmit={submit} className="mt-8 space-y-4">
         <label className="block">
-          <span className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
+          <span className="text-muted-foreground text-xs">
             Email
           </span>
           <input
@@ -56,7 +55,7 @@ export default function Login() {
           />
         </label>
         <label className="block">
-          <span className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
+          <span className="text-muted-foreground text-xs">
             Password
           </span>
           <input

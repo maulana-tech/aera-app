@@ -42,16 +42,16 @@ export function AddContact() {
   }
 
   return (
-    <form onSubmit={submit} className="space-y-4 rounded-xl border p-5">
+    <form onSubmit={submit} className="space-y-4 rounded-lg border p-5">
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block">
-          <span className="text-muted-foreground font-mono text-[10px] uppercase tracking-wider">
+          <span className="text-muted-foreground text-xs">
             Name
           </span>
           <Input value={name} onChange={(e) => setName(e.target.value)} required className="mt-1.5" />
         </label>
         <label className="block">
-          <span className="text-muted-foreground font-mono text-[10px] uppercase tracking-wider">
+          <span className="text-muted-foreground text-xs">
             Email
           </span>
           <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="mt-1.5" />
@@ -59,7 +59,7 @@ export function AddContact() {
       </div>
 
       <div>
-        <span className="text-muted-foreground font-mono text-[10px] uppercase tracking-wider">
+        <span className="text-muted-foreground text-xs">
           Role
         </span>
         <div className="mt-1.5 flex flex-wrap gap-2">
@@ -77,7 +77,7 @@ export function AddContact() {
       </div>
 
       <div>
-        <span className="text-muted-foreground font-mono text-[10px] uppercase tracking-wider">
+        <span className="text-muted-foreground text-xs">
           Notified about
         </span>
         <div className="mt-1.5 flex flex-wrap gap-2">
@@ -131,13 +131,13 @@ export function DeleteContact({ id }: { id: string }) {
 export function ContactList({ contacts, canDelete }: { contacts: Contact[]; canDelete: boolean }) {
   if (!contacts.length) {
     return (
-      <p className="text-muted-foreground mt-3 rounded-xl border border-dashed p-5 text-sm">
+      <p className="text-muted-foreground mt-3 rounded-lg border border-dashed p-5 text-sm">
         No contacts yet. Without these, an agent's recommendation reaches nobody.
       </p>
     );
   }
   return (
-    <ul className="mt-3 divide-y rounded-xl border">
+    <ul className="mt-3 divide-y rounded-lg border">
       {contacts.map((c) => (
         <li key={c.id} className="flex items-start gap-3 px-4 py-3">
           <div className="min-w-0 flex-1">

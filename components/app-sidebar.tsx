@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  Database, FileText, Inbox, LayoutDashboard, MessagesSquare,
+  FileText, Inbox, LayoutDashboard, MessagesSquare,
   ScrollText, Settings2, Users,
 } from "lucide-react";
 
@@ -18,21 +18,25 @@ const WORK: NavItem[] = [
   { title: "Conversation", href: "/chat", icon: MessagesSquare },
 ];
 
-const DATA: NavItem[] = [
+// One entry per agent who publishes work of their own. The roster page sits
+// at the top of the list rather than beside it, so there is a single way in.
+const AGENTS: NavItem[] = [
   {
-    title: "Supply data",
-    href: "/data",
-    icon: Database,
+    title: "Agent team",
+    href: "/agents",
+    icon: Users,
     children: [
-      { title: "Demand", href: "/data/demand", owner: "Dara" },
-      { title: "Stock", href: "/data/inventory", owner: "Iris" },
-      { title: "Supply options", href: "/data/sourcing", owner: "Clint" },
-      { title: "Logistics", href: "/data/logistics", owner: "Milo" },
-      { title: "Costing", href: "/data/simulation", owner: "Tara" },
-      { title: "Execution", href: "/data/execution", owner: "Bram" },
+      { title: "All eleven", href: "/agents" },
+      { title: "Impact", href: "/agents/impact", owner: "Elsa" },
+      { title: "Demand", href: "/agents/demand", owner: "Dara" },
+      { title: "Stock", href: "/agents/inventory", owner: "Iris" },
+      { title: "Sourcing", href: "/agents/sourcing", owner: "Clint" },
+      { title: "Logistics", href: "/agents/logistics", owner: "Milo" },
+      { title: "Rules", href: "/agents/compliance", owner: "Kira" },
+      { title: "Costing", href: "/agents/simulation", owner: "Tara" },
+      { title: "Execution", href: "/agents/execution", owner: "Bram" },
     ],
   },
-  { title: "Agent team", href: "/agents", icon: Users },
 ];
 
 const RECORDS: NavItem[] = [
@@ -66,7 +70,7 @@ export function AppSidebar({
 
       <SidebarContent>
         <NavMain items={WORK} />
-        <NavMain label="Data" items={DATA} />
+        <NavMain label="Agents" items={AGENTS} />
         <NavMain label="Records" items={RECORDS} />
         <NavMain items={SETTINGS} />
       </SidebarContent>

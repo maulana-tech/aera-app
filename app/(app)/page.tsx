@@ -31,9 +31,6 @@ export default async function Queue() {
     <main className="w-full px-6 py-8">
       <header className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-5">
         <div>
-          <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">
-            SIGAP · Decision queue
-          </p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight">Supply disruptions</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {runs.length} handlings · {needsAttention.length} need attention
@@ -54,7 +51,7 @@ export default async function Queue() {
       </header>
 
       {runs.length === 0 ? (
-        <div className="mt-10 rounded-xl border border-dashed border-border p-8">
+        <div className="mt-10 rounded-lg border border-dashed border-border p-8">
           <p className="text-sm text-muted-foreground">No events yet. Send one:</p>
           <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-card p-4 font-mono text-xs">
 {`curl -X POST localhost:8787/events \\
@@ -69,7 +66,7 @@ export default async function Queue() {
             <li key={r.id}>
               <Link
                 href={`/disruptions/${r.id}`}
-                className="block rounded-xl border border-border bg-card p-5 transition-colors hover:border-primary/50"
+                className="block rounded-lg border border-border bg-card p-5 transition-colors hover:border-primary/50"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">

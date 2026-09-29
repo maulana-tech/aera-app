@@ -13,13 +13,10 @@ export default async function UploadsPage() {
   return (
     <main className="w-full px-6 py-8">
       <header className="border-b pb-5">
-        <p className="text-muted-foreground font-mono text-xs uppercase tracking-[0.18em]">
-          SIGAP · Data
-        </p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">Upload data</h1>
         <p className="text-muted-foreground mt-1 max-w-3xl text-sm leading-relaxed">
           Until SAP is connected, company data can come in as CSV. This is not a substitute
-          for the SAP connection — once <span className="font-mono">SAP_API_KEY</span> is set,
+          for the SAP connection. Once <span className="font-mono">SAP_API_KEY</span> is set,
           the tools read live data and uploads are ignored.
         </p>
       </header>
@@ -28,15 +25,15 @@ export default async function UploadsPage() {
         <Upload signedIn={!!user} />
 
         <aside>
-          <h2 className="text-muted-foreground font-mono text-[11px] uppercase tracking-[0.15em]">
+          <h2 className="text-sm font-medium">
             Uploads · {d?.uploads.length ?? 0}
           </h2>
           {!d?.uploads.length ? (
-            <p className="text-muted-foreground mt-3 rounded-xl border border-dashed p-5 text-sm">
+            <p className="text-muted-foreground mt-3 rounded-lg border border-dashed p-5 text-sm">
               None yet. The system is using modelled data.
             </p>
           ) : (
-            <ul className="mt-3 divide-y rounded-xl border">
+            <ul className="mt-3 divide-y rounded-lg border">
               {d.uploads.map((u) => (
                 <li key={u.id} className="flex items-start gap-3 px-4 py-3">
                   <div className="min-w-0 flex-1">

@@ -29,4 +29,4 @@ def get_production_schedule(material: str, plant: str) -> Result:
           {"material": {"type": "string"}}, ["material"])
 def get_demand_signal(material: str) -> Result:
     return Result(None, Origin.MISSING, "SAP IBP demand plan",
-                  note="not connected — the SAP sandbox exposes no demand plan")
+                  note="not connected. The SAP sandbox exposes no demand plan")

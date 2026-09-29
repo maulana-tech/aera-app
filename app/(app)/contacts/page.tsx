@@ -12,12 +12,9 @@ export default async function ContactsPage() {
   return (
     <main className="w-full px-6 py-8">
       <header className="border-b pb-5">
-        <p className="text-muted-foreground font-mono text-xs uppercase tracking-[0.18em]">
-          SIGAP · Settings
-        </p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">Contacts</h1>
         <p className="text-muted-foreground mt-1 max-w-3xl text-sm leading-relaxed">
-          Who Bram reaches when a disruption hits. This product works off events — the
+          Who Bram reaches when a disruption hits. This product works off events. The
           recommendation has to come to people, not wait to be opened.
         </p>
       </header>
@@ -26,12 +23,12 @@ export default async function ContactsPage() {
         {user ? (
           <AddContact />
         ) : (
-          <p className="text-muted-foreground rounded-xl border border-dashed p-6 text-sm">
+          <p className="text-muted-foreground rounded-lg border border-dashed p-6 text-sm">
             Sign in to add a contact.
           </p>
         )}
         <aside>
-          <h2 className="text-muted-foreground font-mono text-[11px] uppercase tracking-[0.15em]">
+          <h2 className="text-sm font-medium">
             Recipients · {d?.contacts.length ?? 0}
           </h2>
           <ContactList contacts={d?.contacts ?? []} canDelete={!!user} />

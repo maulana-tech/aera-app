@@ -20,14 +20,14 @@ export default async function Report({ params }: { params: Promise<{ id: string 
         <ReportActions markdown={d.markdown} title={d.title} />
       </div>
 
-      <div className="mt-6 max-w-4xl overflow-x-auto rounded-xl border">
+      <div className="mt-6 max-w-4xl overflow-x-auto rounded-lg border">
         <pre className="whitespace-pre-wrap p-6 font-mono text-xs leading-relaxed">
           {d.markdown}
         </pre>
       </div>
 
       <p className="text-muted-foreground mt-3 max-w-4xl text-xs leading-relaxed">
-        The report is assembled from the stored record, not re-summarised by a model — so
+        The report is assembled from the stored record, not re-summarised by a model, so
         it says exactly what the log says.
       </p>
     </main>

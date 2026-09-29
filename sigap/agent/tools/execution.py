@@ -1,11 +1,11 @@
 """Bram's tools (Execution).
 
-The only file that writes outward — to SAP and to the action record. Two
+The only file that writes outward, to SAP and to the action record. Two
 guards here must not be removed:
 
-  · idempotency — identical action content yields an identical key, so a retry
+  · idempotency, identical action content yields an identical key, so a retry
     never becomes a second purchase order;
-  · the autonomy limit — above Rp 50 million an action waits for a human, and
+  · the autonomy limit, above Rp 50 million an action waits for a human, and
     anything waiting never touches SAP.
 """
 from __future__ import annotations
@@ -34,7 +34,7 @@ def _record(kind: str, autonomous: bool, **details) -> Result:
 
     if action.get("repeated"):
         return Result(action, Origin.DERIVED, "action record",
-                      note="an identical action was already raised — not sent again")
+                      note="an identical action was already raised, so it was not sent again")
 
     # Only autonomous actions touch SAP directly. The rest wait for approval.
     if autonomous and sap_s4.available() and kind == "stock_transfer":
@@ -65,7 +65,7 @@ def create_stock_transfer(material: str, from_plant: str, to_plant: str,
 
 
 @register("create_draft_po", "execution",
-          "Create a DRAFT purchase order. Always waits for buyer approval — never autonomous.",
+          "Create a DRAFT purchase order. Always waits for buyer approval, never autonomous.",
           {"supplier": {"type": "string"}, "material": {"type": "string"},
            "qty": {"type": "number"}, "needed_by": {"type": "string"},
            "cost_idr": {"type": "integer"}},
@@ -101,7 +101,7 @@ def demo() -> None:
     d = idempotency_key("stock_transfer", supplier="SUP-1", qty=85, material="M-4471")
     assert a != d, "a different action kind must give a different key"
     assert a.startswith("draft_po:")
-    print(f"execution ok — idempotency {a}")
+    print(f"execution ok, idempotency {a}")
 
 
 if __name__ == "__main__":

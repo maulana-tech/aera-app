@@ -25,7 +25,7 @@ export default async function DisruptionDetail({ params }: { params: Promise<{ i
 
       <header className="mt-4 flex flex-wrap items-end justify-between gap-4 border-b border-border pb-5">
         <div>
-          <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">{run.kind}</p>
+          <p className="text-muted-foreground font-mono text-xs">{run.kind}</p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight">{run.title}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{run.trigger}</p>
         </div>
@@ -44,16 +44,16 @@ export default async function DisruptionDetail({ params }: { params: Promise<{ i
       </header>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <section className="rounded-xl border border-border">
+        <section className="rounded-lg border border-border">
           <div className="border-b border-border px-5 py-3">
-            <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+            <p className="text-sm font-medium">
               How the system reasoned · {steps.length} steps
             </p>
           </div>
           {steps.length === 0 ? (
             <p className="px-5 py-8 text-sm text-muted-foreground">
               {run.status === "held"
-                ? "No steps — the system stopped before reasoning."
+                ? "No steps. The system stopped before reasoning."
                 : "No steps recorded yet."}
             </p>
           ) : (
@@ -87,12 +87,12 @@ export default async function DisruptionDetail({ params }: { params: Promise<{ i
 
         <aside className="space-y-5">
           {run.decision && (
-            <div className="rounded-xl border p-5">
-              <p className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
+            <div className="rounded-lg border p-5">
+              <p className="text-muted-foreground text-xs">
                 {run.status === "held" ? "Held" : "Recommendation"}
               </p>
               <p className="mt-2 whitespace-pre-line text-sm leading-relaxed">
-                {run.decision.recommendation ?? run.decision.reason ?? "—"}
+                {run.decision.recommendation ?? run.decision.reason ?? "not recorded"}
               </p>
               {Array.isArray(run.decision.untrusted_on_board) &&
                 run.decision.untrusted_on_board.length > 0 && (
@@ -103,9 +103,9 @@ export default async function DisruptionDetail({ params }: { params: Promise<{ i
             </div>
           )}
 
-          <div className="rounded-xl border border-border">
+          <div className="rounded-lg border border-border">
             <div className="border-b border-border px-5 py-3">
-              <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+              <p className="text-sm font-medium">
                 Actions · {actions.length}
               </p>
             </div>
@@ -128,7 +128,7 @@ export default async function DisruptionDetail({ params }: { params: Promise<{ i
                       </p>
                       {a.autonomous === 1 && (
                         <p className="mt-1 text-[11px] text-muted-foreground">
-                          ran autonomously — under the authority limit
+                          ran autonomously, under the authority limit
                         </p>
                       )}
                       {history.map((p) => (

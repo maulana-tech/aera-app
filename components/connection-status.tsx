@@ -51,7 +51,7 @@ export function ConnectionStatus({ c }: { c?: Connection }) {
             sideOffset={4}
           >
             <DropdownMenuLabel className="text-muted-foreground text-xs">
-              Environment {c?.env ?? "—"}
+              Environment {c?.env ?? "unknown"}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem disabled className="opacity-100">

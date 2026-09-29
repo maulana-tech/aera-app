@@ -31,21 +31,18 @@ export default async function AgentTeam() {
   return (
     <main className="w-full px-6 py-8">
       <header className="border-b pb-5">
-        <p className="text-muted-foreground font-mono text-xs uppercase tracking-[0.18em]">
-          SIGAP · Agent team
-        </p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">
           One lead, ten specialists
         </h1>
         <p className="text-muted-foreground mt-1 max-w-3xl text-sm leading-relaxed">
-          Arya calls whichever specialist the last finding warrants — the order is decided
+          Arya calls whichever specialist the last finding warrants. The order is decided
           in the moment, not written in advance. If moving stock between plants solves it,
           Clint never gets called at all.
         </p>
 
         <div className="mt-5 flex flex-wrap items-center gap-x-8 gap-y-3">
           <div className="min-w-40">
-            <p className="text-muted-foreground font-mono text-[10px] uppercase tracking-wider">
+            <p className="text-muted-foreground text-xs">
               Tools installed
             </p>
             <p className="mt-1 font-mono text-lg font-semibold tabular-nums">
@@ -55,7 +52,7 @@ export default async function AgentTeam() {
             <Progress value={pct} className="mt-1.5 h-1" />
           </div>
           <div className="min-w-40">
-            <p className="text-muted-foreground font-mono text-[10px] uppercase tracking-wider">
+            <p className="text-muted-foreground text-xs">
               Prompts written
             </p>
             <p className="mt-1 font-mono text-lg font-semibold tabular-nums">
@@ -78,7 +75,7 @@ export default async function AgentTeam() {
 
       {/* ---------------- the lead ---------------- */}
       <section className="mt-8">
-        <div className="bg-muted/40 flex flex-wrap items-center gap-4 rounded-xl border p-5">
+        <div className="bg-muted/40 flex flex-wrap items-center gap-4 rounded-lg border p-5">
           <AgentBadge nickname={lead.nickname} large />
           <div className="min-w-60 flex-1">
             <h2 className="font-semibold">
@@ -95,7 +92,7 @@ export default async function AgentTeam() {
           </Link>
         </div>
 
-        <p className="text-muted-foreground mt-3 flex flex-wrap items-center justify-center gap-x-6 gap-y-1 font-mono text-[11px] uppercase tracking-[0.12em]">
+        <p className="text-muted-foreground mt-4 flex flex-wrap items-center gap-x-6 gap-y-1 text-xs">
           <span className="flex items-center gap-1.5">
             <ArrowDown className="size-3" /> calls on what was found
           </span>
@@ -116,15 +113,15 @@ export default async function AgentTeam() {
 
       {/* ---------------- the shared board ---------------- */}
       <section className="mt-3">
-        <div className="text-muted-foreground flex flex-wrap items-start gap-3 rounded-xl border border-dashed p-4">
+        <div className="text-muted-foreground flex flex-wrap items-start gap-3 rounded-lg border border-dashed p-4">
           <Database className="mt-0.5 size-4 shrink-0" />
           <div className="min-w-60 flex-1">
-            <p className="text-foreground font-mono text-[11px] uppercase tracking-[0.12em]">
+            <p className="text-sm font-medium">
               Shared board
             </p>
             <p className="mt-1 text-xs leading-relaxed">
               Every specialist reads and writes here, and each finding carries its origin
-              label. This is what lets Iris hand a quality hold straight to Elsa — the
+              label. This is what lets Iris hand a quality hold straight to Elsa. The
               stockout date gets recomputed without going back through Arya.
             </p>
           </div>
@@ -133,7 +130,7 @@ export default async function AgentTeam() {
 
       {/* ---------------- prevent mode ---------------- */}
       <section className="mt-8">
-        <h2 className="text-muted-foreground font-mono text-[11px] uppercase tracking-[0.15em]">
+        <h2 className="text-sm font-medium">
           Prevent mode · not built yet
         </h2>
         <p className="text-muted-foreground mt-1 max-w-2xl text-xs leading-relaxed">

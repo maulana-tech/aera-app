@@ -11,9 +11,6 @@ export default async function ReportList() {
   return (
     <main className="w-full px-6 py-8">
       <header className="border-b pb-5">
-        <p className="text-muted-foreground font-mono text-xs uppercase tracking-[0.18em]">
-          SIGAP · Reports
-        </p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">Write up a handling</h1>
         <p className="text-muted-foreground mt-1 max-w-3xl text-sm leading-relaxed">
           Any handling can become a report: what happened, how the system reasoned, the
@@ -22,7 +19,7 @@ export default async function ReportList() {
       </header>
 
       {!d?.runs.length ? (
-        <p className="text-muted-foreground mt-6 rounded-xl border border-dashed p-6 text-sm">
+        <p className="text-muted-foreground mt-6 rounded-lg border border-dashed p-6 text-sm">
           No handlings to report on yet.
         </p>
       ) : (
@@ -31,7 +28,7 @@ export default async function ReportList() {
             <li key={r.id}>
               <Link
                 href={`/reports/${r.id}`}
-                className="hover:border-foreground/30 block rounded-xl border p-4 transition-colors"
+                className="hover:border-foreground/30 block rounded-lg border p-4 transition-colors"
               >
                 <div className="flex items-start justify-between gap-3">
                   <p className="min-w-0 font-medium">{r.title}</p>

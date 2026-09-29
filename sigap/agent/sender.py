@@ -22,7 +22,7 @@ TARGETS = {
 
 def send_approved() -> int:
     if not sap_s4.available():
-        print("SAP_API_KEY is not set — nothing sent.")
+        print("SAP_API_KEY is not set. Nothing sent.")
         return 0
 
     with store.connect() as c:
@@ -45,7 +45,7 @@ def send_approved() -> int:
             sent += 1
         except Exception as e:                                       # noqa: BLE001
             # A failure does NOT change the status. The action stays 'approved'
-            # and is retried later — the idempotency key prevents a double order.
+            # and is retried later, the idempotency key prevents a double order.
             print(f"  ✗ {a['id']}: {type(e).__name__}: {e}", file=sys.stderr)
     return sent
 

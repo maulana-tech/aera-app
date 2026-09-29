@@ -6,7 +6,7 @@ export type Datum = {
   sub?: string;
   value: number;
   display: string;       // the value as it should read
-  hatched?: boolean;     // fails a condition — marked by texture, not another colour
+  hatched?: boolean;     // fails a condition, marked by texture rather than another colour
   tag?: string;          // short note on the right
   title?: string;        // shown when the cursor rests on the row
 };
@@ -14,7 +14,7 @@ export type Datum = {
 /** A single-series horizontal bar chart.
  *
  *  One hue only. Critical vs safe is carried by the threshold line, the row
- *  order, and direct labels — not by red/green: that pair is only ΔE 4.1 apart
+ *  order, and direct labels, not by red/green. That pair is only ΔE 4.1 apart
  *  under deuteranopia, far below the floor of 8. */
 export function Bars({
   data, threshold, thresholdLabel,
@@ -91,7 +91,7 @@ export function Bars({
 }
 
 /** Chart wrapper: title, data origin, and a fallback table.
- *  The table is always there — the numbers must be readable even if the chart isn't. */
+ *  The table is always there, because the numbers must be readable even if the chart is not. */
 export function Figure({
   title, blurb, origin, source, note, empty, table, className, children,
 }: {
@@ -106,7 +106,7 @@ export function Figure({
   children?: React.ReactNode;
 }) {
   return (
-    <figure className={cn("rounded-xl border p-5", className)}>
+    <figure className={cn("rounded-lg border p-5", className)}>
       <figcaption className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-sm font-medium">{title}</h3>

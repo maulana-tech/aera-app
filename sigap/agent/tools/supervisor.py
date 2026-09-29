@@ -1,7 +1,7 @@
 """Arya's tools (Team lead).
 
 One way in: a disruption event that is already on the record. Arya does not
-invent triggers — she reads what arrived through POST /events.
+invent triggers, she reads what arrived through POST /events.
 """
 from __future__ import annotations
 

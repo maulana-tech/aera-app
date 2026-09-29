@@ -32,7 +32,7 @@ export function AgentCard({ a }: { a: Agent }) {
   return (
     <Link
       href={`/agents/${a.code}`}
-      className="hover:border-foreground/30 hover:bg-muted/30 group block rounded-xl border p-4 transition-colors"
+      className="hover:border-foreground/30 hover:bg-muted/30 group block rounded-lg border p-4 transition-colors"
     >
       <div className="flex items-start gap-3">
         <AgentBadge nickname={a.nickname} />

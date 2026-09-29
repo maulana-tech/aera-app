@@ -20,7 +20,7 @@ LARTAS_WORKING_DAYS_NEW_ORIGIN = 10
 
 
 def _rule_pack() -> Dict[str, str]:
-    """Read the rule documents. If one isn't written yet, say so — don't guess."""
+    """Read the rule documents. If one isn't written yet, say so, don't guess."""
     out: Dict[str, str] = {}
     for name in ("tkdn-rules", "lartas-procedure", "holiday-calendar", "priok-dwell-time"):
         f = REFERENCES / f"{name}.md"
@@ -61,7 +61,7 @@ def check_local_constraints(option_id: str) -> Result:
     # --- TKDN ---
     # The rule: an option must not WORSEN the local-content position, and must
     # not push it below the contract floor when we are currently above it. A
-    # company already below the floor does not thereby lose every option — what
+    # company already below the floor does not thereby lose every option, what
     # is forbidden is making it worse.
     tkdn = option.get("TkdnAfterPct")
     current = p["TkdnCurrentPct"]
@@ -90,7 +90,7 @@ def check_local_constraints(option_id: str) -> Result:
         arrives = licensed
 
     note = "" if pack else (
-        "references/ is not written yet — TKDN & LARTAS were judged from fixture "
+        "references/ is not written yet. TKDN and LARTAS were judged from fixture "
         "parameters rather than from the rule documents"
     )
     return Result(
@@ -113,7 +113,7 @@ def demo() -> None:
         "the scenario assumes the company already sits below the floor"
 
     # An option that keeps TKDN where it is must NOT be rejected just for
-    # being under the floor — that was the bug this check exists to catch.
+    # being under the floor, that was the bug this check exists to catch.
     a = check_local_constraints("A").value
     assert a["allowed"] is True, a["reason"]
 
@@ -128,7 +128,7 @@ def demo() -> None:
     assert "LARTAS" in d["reason"]
 
     assert check_local_constraints("ZZ").origin is Origin.MISSING
-    print("compliance ok — keeps TKDN ✓ · worsens TKDN → blocked ✓ · LARTAS delay ✓")
+    print("compliance ok, keeps TKDN ✓ · worsens TKDN → blocked ✓ · LARTAS delay ✓")
 
 
 if __name__ == "__main__":

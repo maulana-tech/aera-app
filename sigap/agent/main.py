@@ -5,7 +5,7 @@
 
 Without Bedrock credentials this runs in GUIDED MODE: the step order follows
 the design, and the figures still come from the real calculator. The mode is
-stamped on the trace — it does not pretend an agent did the reasoning.
+stamped on the trace, it does not pretend an agent did the reasoning.
 """
 from __future__ import annotations
 
@@ -71,7 +71,7 @@ def run_ningbo(treat_as_live: bool = False) -> Trace:
         "B": Ruling("B", "local supplier, Gresik", True),
         "C": Ruling("C", "reallocate from SBY1", True),
         "D": Ruling("D", "Vietnam", False,
-                    "LARTAS: a new origin country adds 10 working days — arrives after the "
+                    "LARTAS: a new origin country adds 10 working days, so it arrives after the "
                     "line has already stopped"),
         "E": Ruling("E", "cheapest, China", False,
                     f"TKDN drops to 34.8%; contract floor {p['TkdnContractFloorPct']}%"),
@@ -98,7 +98,7 @@ def run_ningbo(treat_as_live: bool = False) -> Trace:
 
     best = sim.chosen
     t.record("SIMULATE", A["simulation"],
-             f"Cheapest safe combination: {best['combination']} — Rp {best['cost_idr']:,}",
+             f"Cheapest safe combination: {best['combination']}, Rp {best['cost_idr']:,}",
              ["simulate_scenario"],
              Result(sim.combinations, Origin.DERIVED, "engine/simulate.py"),
              combinations=sim.combinations[:6],
@@ -110,7 +110,7 @@ def run_ningbo(treat_as_live: bool = False) -> Trace:
 
     t.record("DECIDE", A["supervisor"],
              f"Recommends {best['combination']} over "
-             f"{benchmark['combination'] if benchmark else '—'} — saves Rp {saved:,}",
+             f"{benchmark['combination'] if benchmark else 'nothing'}, saves Rp {saved:,}",
              [], None,
              residual_risk="SBY1 is left with 4 days of cover until PO 4500018901 "
                            "lands on 24 Sep")

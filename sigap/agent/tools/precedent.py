@@ -14,4 +14,4 @@ from core.registry import register
           {"keywords": {"type": "string"}}, ["keywords"])
 def search_past_incidents(keywords: str) -> Result:
     return Result([], Origin.MISSING, "Bedrock Knowledge Bases",
-                  note="the incident knowledge base is empty — this is the first one")
+                  note="the incident knowledge base is empty. This is the first one")

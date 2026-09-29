@@ -1,10 +1,10 @@
-"""Persistence. SQLite — plenty for a dozen events a day, zero dependencies.
+"""Persistence. SQLite, plenty for a dozen events a day, zero dependencies.
 
 # ponytail: SQLite; move to Postgres once this is multi-tenant or needs concurrent writes
 
 What lands here is the official record: what the agents decided, on what
 evidence, who approved it, and what was actually sent to SAP. Rows in the
-actions and approvals tables are NEVER updated in place — a correction is
+actions and approvals tables are NEVER updated in place, a correction is
 written as a new row.
 """
 from __future__ import annotations

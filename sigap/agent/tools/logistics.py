@@ -14,7 +14,7 @@ from tools.fetcher import fixture
 
 @register("estimate_eta", "logistics",
           "Estimate a realistic arrival date, accounting for port dwell time and customs "
-          "clearance. Deterministic — not a model guess.",
+          "clearance. Deterministic, not a model guess.",
           {"option_id": {"type": "string"},
            "dwell_days": {"type": "integer", "description": "port dwell, default 4"}},
           ["option_id"])

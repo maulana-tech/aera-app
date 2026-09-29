@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 
 // Bridge to the agent service. The browser never calls it directly, and the
-// session token is attached here — never sent from the page side.
+// session token is attached here, never from the page side.
 const UPSTREAM = process.env.SIGAP_API ?? "http://127.0.0.1:8787";
 
 async function forward(req: Request, path: string[], method: "GET" | "POST") {

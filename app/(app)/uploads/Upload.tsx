@@ -54,14 +54,14 @@ export default function Upload({ signedIn }: { signedIn: boolean }) {
 
   if (!signedIn) {
     return (
-      <p className="text-muted-foreground rounded-xl border border-dashed p-6 text-sm">
+      <p className="text-muted-foreground rounded-lg border border-dashed p-6 text-sm">
         Sign in to upload. Uploads are recorded against your account.
       </p>
     );
   }
 
   return (
-    <div className="space-y-4 rounded-xl border p-5">
+    <div className="space-y-4 rounded-lg border p-5">
       <div className="flex flex-wrap gap-2">
         {ENTITIES.map((e) => (
           <button

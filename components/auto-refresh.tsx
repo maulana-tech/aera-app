@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 /** Refresh the page while a handling is still running.
- *  This product is about agents working on their own — the user should not
+ *  This product is about agents working on their own. The user should not
  *  have to hit reload to find out how far along they are. */
 export function AutoRefresh({ active, every = 4000 }: { active: boolean; every?: number }) {
   const router = useRouter();

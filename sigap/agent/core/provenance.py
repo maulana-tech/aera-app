@@ -16,7 +16,7 @@ class Origin(str, Enum):
     LIVE = "live"          # straight from SAP / an official API
     CACHED = "cached"      # was live once, carries its timestamp
     DERIVED = "derived"    # computed from something live
-    MODELLED = "modelled"  # company profile / fixture — labelled in the open
+    MODELLED = "modelled"  # company profile / fixture, labelled in the open
     MISSING = "missing"    # the lead stops here rather than guessing
 
 

@@ -1,5 +1,5 @@
 {
-  "_note": "MODELLED DATA — not from SAP. The figures follow DESIGN.md §2. Field names mirror SAP conventions.",
+  "_note": "MODELLED DATA, not from SAP. The figures follow DESIGN.md §2. Field names mirror SAP conventions.",
   "PurchaseOrder": [
     {
       "PurchaseOrder": "4500018872",
@@ -204,7 +204,7 @@
     }
   ],
   "Profile": {
-    "_note": "Customer profile — the only genuinely modelled part. Each installation fills this from its own master data.",
+    "_note": "Customer profile, the only genuinely modelled part. Each installation fills this from its own master data.",
     "Company": "PT Karya Presisi Nusantara",
     "TkdnCurrentPct": 38.2,
     "TkdnContractFloorPct": 40.0,

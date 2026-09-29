@@ -24,4 +24,4 @@ def get_quality_holds(material: str, plant: str) -> Result:
           ["material", "plant"])
 def get_safety_stock_policy(material: str, plant: str) -> Result:
     return Result(None, Origin.MISSING, "API_PRODUCT_SRV (MARC)",
-                  note="not in the fixture — needs the customer's own master data")
+                  note="not in the fixture. It needs the customer's own master data")

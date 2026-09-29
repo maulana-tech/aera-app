@@ -63,5 +63,5 @@ def pull(
         data = [r for r in data if keep(r)]
     return Result(
         data, Origin.MODELLED, f"fixture:{fixture_entity}",
-        note="SAP_API_KEY is not set — using modelled data",
+        note="SAP_API_KEY is not set. Using modelled data",
     )

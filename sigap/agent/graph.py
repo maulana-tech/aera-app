@@ -1,7 +1,7 @@
 """The agent team. The lead calls specialists; each runs its own tool loop.
 
 The pattern: specialists are exposed as tools belonging to the lead. The lead
-decides who to call based on the last finding — there is no fixed sequence.
+decides who to call based on the last finding, there is no fixed sequence.
 Each specialist runs its own tool-use loop to completion, then hands back a
 summary along with the origin labels of the data behind it.
 """
@@ -16,7 +16,7 @@ from core import registry
 from core.config import CFG
 from core.provenance import Result
 
-# Reference rates for the cost cap. Bedrock has its own pricing — replace these
+# Reference rates for the cost cap. Bedrock has its own pricing, replace these
 # from aws.amazon.com/bedrock/pricing before going to production.
 INPUT_IDR_PER_MILLION = 82_000
 OUTPUT_IDR_PER_MILLION = 410_000
@@ -91,7 +91,7 @@ def _tool_loop(cl, agent: Agent, task: str, board: Board,
             f"{task}\n\n"
             f"What is on the shared board right now:\n{board.summary()}\n\n"
             "Use your tools as needed, then write up what you found. If data you "
-            "need is unavailable, say what is missing — do not guess."
+            "need is unavailable, say what is missing, do not guess."
         ),
     }]
 
@@ -140,7 +140,7 @@ def _specialist_tools() -> List[dict]:
     """Each specialist appears as one tool belonging to the lead."""
     return [{
         "name": f"ask_{a.code}",
-        "description": (f"{a.nickname} ({a.title}) — {a.brief}"
+        "description": (f"{a.nickname} ({a.title}), {a.brief}"
                         + (" HAS VETO." if a.veto else "")),
         "input_schema": {
             "type": "object",
@@ -233,7 +233,7 @@ def ask_specialist(code: str, question: str,
     """Ask one specialist directly, outside of disruption handling.
 
     This is what the per-agent conversation page uses. Same specialist, same
-    tools — the only difference is that no lead is deciding the turn order.
+    tools, the only difference is that no lead is deciding the turn order.
     """
     if code not in ALL:
         raise KeyError(code)

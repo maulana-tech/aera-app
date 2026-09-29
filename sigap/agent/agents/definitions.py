@@ -19,7 +19,7 @@ class Agent:
     title: str              # the functional role: "Impact", "Rules"
     brief: str
     tools: List[str] = field(default_factory=list)
-    effort: str = "medium"       # supervisor & compliance run "high" — see TECHNICAL.md
+    effort: str = "medium"       # supervisor & compliance run "high", see TECHNICAL.md
     veto: bool = False
 
     @property
@@ -28,7 +28,7 @@ class Agent:
         if not f.exists():
             # This used to return a placeholder string, which meant the agent
             # was still sent to the model with that placeholder as its system
-            # prompt — a silent failure. Better to stop here.
+            # prompt, a silent failure. Better to stop here.
             raise PromptMissing(
                 f"{self.nickname} ({self.code}) has no instructions yet. "
                 f"Write prompts/{self.code}.txt before running this agent."
@@ -57,7 +57,7 @@ SPECIALISTS = [
           "Owns the demand side. Daily consumption is a variable that moves, not a fixed number.",
           ["get_demand_signal", "get_production_schedule"]),
     Agent("inventory", "Iris", "Stock Validity",
-          "Which stock may actually be used — quality holds, rejected batches, safety floors.",
+          "Which stock may actually be used: quality holds, rejected batches, safety floors.",
           ["get_quality_holds", "get_safety_stock_policy"]),
     Agent("sourcing", "Clint", "Sourcing",
           "Finds and qualifies replacement supply: other suppliers, internal stock, fast freight.",
@@ -71,7 +71,7 @@ SPECIALISTS = [
           "calendar. Her rejection cannot be overturned on cost.",
           ["check_local_constraints"], effort="high", veto=True),
     Agent("simulation", "Tara", "Costing",
-          "Costs the options that cleared the rules, and their combinations. Deterministic — "
+          "Costs the options that cleared the rules, and their combinations. Deterministic: "
           "she calls engine/simulate.py rather than reasoning it out.",
           ["simulate_scenario"]),
     Agent("precedent", "Otto", "Precedent",
@@ -84,7 +84,7 @@ SPECIALISTS = [
           ["create_stock_transfer", "create_draft_po", "notify", "monitor_shipment",
            "create_sourcing_event", "propose_safety_stock_change"]),   # last two: Prevent mode
     Agent("exposure", "Vega", "Risk Scanner",
-          "Prevent mode: hunts risk that has not happened yet — single sources, concentrated "
+          "Prevent mode: hunts risk that has not happened yet. Single sources, concentrated "
           "lanes, certificates about to lapse.",
           ["scan_supply_exposure", "get_supplier_certifications"]),
 ]
@@ -102,12 +102,12 @@ def demo() -> None:
     nicknames = [a.nickname for a in ALL.values()]
     assert len(nicknames) == len(set(nicknames)), "nicknames must be unique"
     assert len({n[0] for n in nicknames}) == len(nicknames), "first letters must all differ"
-    print(f"definitions ok — {len(ALL)} agents, {len(tools)} tools, veto: {veto[0]}")
+    print(f"definitions ok, {len(ALL)} agents, {len(tools)} tools, veto: {veto[0]}")
     print("  " + " · ".join(f"{a.nickname} ({a.title})" for a in ALL.values()))
 
     pending = [f"{a.nickname} ({a.code})" for a in ALL.values() if not a.ready]
     if pending:
-        print(f"\n  {len(pending)} agent(s) have no instructions yet — invoking one raises"
+        print(f"\n  {len(pending)} agent(s) have no instructions yet, invoking one raises"
               f" PromptMissing rather than running on an empty prompt:")
         for p in pending:
             print(f"    · {p}")

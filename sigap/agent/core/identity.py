@@ -4,8 +4,8 @@ The hole this closed: 'who approved it' used to come from the request body,
 which meant anyone could claim any role. Identity now comes ONLY from a
 session token the server signed.
 
-# ponytail: local auth on an HMAC token. In a real company this becomes SSO —
-#           `from_token()` is the single place that changes.
+# ponytail: local auth on an HMAC token. In a real company this becomes SSO,
+#           and `from_token()` is the single place that changes.
 """
 from __future__ import annotations
 

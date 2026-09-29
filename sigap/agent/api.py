@@ -1,6 +1,6 @@
 """SIGAP HTTP service.
 
-# ponytail: stdlib http.server — fine for a dozen events/day, zero dependencies.
+# ponytail: stdlib http.server, fine for a dozen events/day, zero dependencies.
 #           Move to FastAPI + uvicorn if you need async, websockets, or >10 rps.
 
     python3 api.py                 # listen on :8787
@@ -128,7 +128,7 @@ def receive_event(_m, b: dict, _h) -> Tuple[int, dict]:
     else:
         store.close_run(rid, "held", decision={
             "status": "held",
-            "reason": "AWS_REGION is not set — the agent team cannot reason. "
+            "reason": "AWS_REGION is not set. The agent team cannot reason. "
                       "No decision was made.",
         })
 
@@ -241,19 +241,19 @@ def report_for_run(m, _b, _h) -> Tuple[int, dict]:
     ]
     if d["decision"]:
         k = d["decision"]
-        lines += ["## Decision", "", k.get("recommendation") or k.get("reason") or "—", ""]
+        lines += ["## Decision", "", k.get("recommendation") or k.get("reason") or "not recorded", ""]
     if d["steps"]:
         lines += ["## Reasoning", ""]
         for s in d["steps"]:
             origin = f" [{s['origin']}]" if s.get("origin") else ""
-            lines.append(f"{s['seq']}. **{s['stage']}** · {s['agent_name']} — "
+            lines.append(f"{s['seq']}. **{s['stage']}** · {s['agent_name']}, "
                          f"{s['summary']}{origin}")
         lines.append("")
     if d["actions"]:
         lines += ["## Actions", "", "| Action | Value | Status |", "|---|---|---|"]
         for a in d["actions"]:
             n = a["payload"].get("cost_idr")
-            lines.append(f"| {a['kind']} | {('Rp ' + format(n, ',')) if n else '—'} "
+            lines.append(f"| {a['kind']} | {('Rp ' + format(n, ',')) if n else '-'} "
                          f"| {a['status']} |")
         lines.append("")
     if d["approvals"]:
@@ -346,7 +346,7 @@ def ask_agent(m, b: dict, h) -> Tuple[int, dict]:
 
     if not CFG.model_ready:
         return 503, {
-            "error": "AWS_REGION is not set — the agent cannot reason.",
+            "error": "AWS_REGION is not set. The agent cannot reason.",
             "hint": "Set AWS_REGION in sigap/agent/.env to a region that offers Claude "
                     "on Bedrock, then restart the service.",
         }

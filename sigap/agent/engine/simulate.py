@@ -83,7 +83,7 @@ def simulate_scenario(
     """Cost every option that cleared the rules, plus their combinations.
 
     A plan counts as SAFE when there is no shortfall before the last scheduled
-    delivery lands — not forever. The job is to bridge the gap, not to supply
+    delivery lands, not forever. The job is to bridge the gap, not to supply
     the plant indefinitely.
 
     Refuses to emit figures when a critical input is not trustworthy.
@@ -185,7 +185,7 @@ def demo() -> None:
         "B": Ruling("B", "local supplier", True),
         "C": Ruling("C", "SBY1 reallocation", True),
         "D": Ruling("D", "Vietnam", False, "LARTAS new origin +10 working days"),
-        "E": Ruling("E", "cheapest", False, "TKDN drops to 34.8% — contract floor 40%"),
+        "E": Ruling("E", "cheapest", False, "TKDN drops to 34.8%, contract floor 40%"),
     }
     po = [Arrival("4500018872", date(2026, 9, 22), 120.0)]
     sim = simulate_scenario(stock, options, rulings, fx["Profile"], start, 9.2, 84.0, po)

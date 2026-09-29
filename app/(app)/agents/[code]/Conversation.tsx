@@ -60,7 +60,7 @@ export default function Conversation({
   }
 
   return (
-    <div className="flex h-[calc(100vh-13rem)] flex-col rounded-xl border">
+    <div className="flex h-[24rem] flex-col rounded-lg border">
       <div className="flex-1 space-y-4 overflow-y-auto p-5">
         {messages.length === 0 && (
           <div className="text-muted-foreground space-y-3 text-sm">
@@ -83,12 +83,12 @@ export default function Conversation({
         {messages.map((m, i) =>
           m.from === "person" ? (
             <div key={i} className="flex justify-end">
-              <p className="bg-primary text-primary-foreground max-w-[80%] rounded-2xl rounded-br-sm px-4 py-2 text-sm">
+              <p className="bg-primary text-primary-foreground max-w-[80%] rounded-lg rounded-br-sm px-4 py-2 text-sm">
                 {m.text}
               </p>
             </div>
           ) : m.from === "error" ? (
-            <div key={i} className="max-w-[85%] rounded-2xl rounded-bl-sm border p-4">
+            <div key={i} className="max-w-[85%] rounded-lg rounded-bl-sm border p-4">
               <p className="text-destructive text-sm">{m.text}</p>
               {m.hint && (
                 <p className="text-muted-foreground mt-2 text-xs leading-relaxed">{m.hint}</p>
@@ -96,7 +96,7 @@ export default function Conversation({
             </div>
           ) : (
             <div key={i} className="max-w-[85%] space-y-2">
-              <div className="bg-muted/50 rounded-2xl rounded-bl-sm border p-4">
+              <div className="bg-muted/50 rounded-lg rounded-bl-sm border p-4">
                 <p className="whitespace-pre-line text-sm leading-relaxed">{m.reply.answer}</p>
               </div>
               {m.reply.tools_used.length > 0 && (

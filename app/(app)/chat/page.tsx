@@ -21,16 +21,13 @@ export default async function Chat() {
   return (
     <main className="w-full px-6 py-8">
       <header className="border-b pb-5">
-        <p className="text-muted-foreground font-mono text-xs uppercase tracking-[0.18em]">
-          SIGAP · Conversation
-        </p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">Ask Arya</h1>
         <p className="text-muted-foreground mt-1 max-w-3xl text-sm leading-relaxed">
-          Arya leads the team. She decides which specialists to pull in to answer —
-          you don't have to know who to ask.
+          Arya leads the team. She decides which specialists to pull in to answer.
+          You do not have to know who to ask.
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-1.5">
-          <span className="text-muted-foreground mr-1 font-mono text-[10px] uppercase tracking-wider">
+          <span className="text-muted-foreground mr-1 text-xs">
             can call
           </span>
           {specialists.map((a) => (

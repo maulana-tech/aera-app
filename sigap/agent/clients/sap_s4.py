@@ -1,7 +1,7 @@
 """Connector to SAP S/4HANA Cloud.
 
 One client, two destinations: the sandbox today, a customer tenant tomorrow.
-Only SAP_BASE_URL and SAP_API_KEY change — the code does not.
+Only SAP_BASE_URL and SAP_API_KEY change, the code does not.
 
 When there is no API key this client does NOT invent data. It raises
 MissingApiKey, and the caller turns that into Origin.MISSING.
@@ -34,9 +34,9 @@ def available() -> bool:
 def get(service: str, entity: str, params: Optional[Dict[str, Any]] = None) -> dict:
     """Call one OData entity.
 
-    service  — e.g. "API_PURCHASEORDER_PROCESS_SRV"
-    entity   — e.g. "A_PurchaseOrder"
-    params   — OData parameters: $filter, $top, $select, $expand
+    service , e.g. "API_PURCHASEORDER_PROCESS_SRV"
+    entity  , e.g. "A_PurchaseOrder"
+    params  , OData parameters: $filter, $top, $select, $expand
     """
     if not API_KEY:
         raise MissingApiKey(
@@ -94,11 +94,11 @@ def post(service: str, entity: str, payload: dict,
     """Write one entity to SAP.
 
     idempotency_key goes out as a header so the SAP side can reject a repeat.
-    Our side also guards it in the actions table — two layers, because a
+    Our side also guards it in the actions table, two layers, because a
     duplicate purchase order is expensive.
     """
     if not API_KEY:
-        raise MissingApiKey("SAP_API_KEY is not set — the write to SAP is refused")
+        raise MissingApiKey("SAP_API_KEY is not set. The write to SAP is refused")
 
     token, cookie = _csrf_token(service)
     url = f"{BASE_URL}/s4hanacloud/sap/opu/odata/sap/{service}/{entity}"

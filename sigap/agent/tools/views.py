@@ -1,7 +1,7 @@
 """Per-domain table views.
 
 Each domain page needs its own table. This file arranges tools that already
-exist into a shape that displays well — it adds no new data source, so origin
+exist into a shape that displays well, it adds no new data source, so origin
 labels flow through untouched.
 
 Views are keyed by agent code, so a page and the specialist who owns it can
@@ -17,7 +17,8 @@ from core.provenance import Origin, Result
 from engine.simulate import project_cover
 from tools.compliance import check_local_constraints
 from tools.fetcher import fixture, profile
-from tools.impact import get_material_stock, get_open_purchase_orders
+from tools.impact import (get_bom_explosion, get_material_stock,
+                          get_open_purchase_orders, get_sales_order_commitments)
 from tools.logistics import estimate_eta
 from tools.sourcing import find_alternate_sources
 
@@ -96,6 +97,85 @@ def sourcing() -> dict:
     ], r)
 
 
+def compliance() -> dict:
+    """Kira's rulings. The one view where the reason matters more than the number."""
+    r = find_alternate_sources("M-4471")
+    p = profile()
+    rows = []
+    for o in (r.value or []):
+        v = check_local_constraints(o["id"]).value or {}
+        tkdn = o.get("TkdnAfterPct")
+        rows.append({
+            "id": o["id"], "option": o["label"],
+            "allowed": v.get("allowed"),
+            "reason": v.get("reason"),
+            "tkdn_before": p["TkdnCurrentPct"],
+            "tkdn_after": tkdn,
+            "tkdn_floor": p["TkdnContractFloorPct"],
+            "cost_idr": o["ExtraCostIDR"],
+            "arrival_booked": o["ArrivalDate"],
+            "arrival_effective": v.get("arrival_effective"),
+            "origin_country": o["Origin"],
+            "new_origin": bool(o.get("NewOrigin")),
+        })
+    blocked = [x for x in rows if x["allowed"] is False]
+    allowed = [x for x in rows if x["allowed"]]
+    note = f"{len(blocked)} of {len(rows)} options blocked on the rules, not on price."
+    # The line worth making is when a blocked option undercuts an allowed one,
+    # because that is exactly the trade a pure cost model would take.
+    if blocked and allowed:
+        cheapest_blocked = min(blocked, key=lambda x: x["cost_idr"])
+        dearest_beaten = [a for a in allowed if a["cost_idr"] > cheapest_blocked["cost_idr"]]
+        if dearest_beaten:
+            note += (f" {cheapest_blocked['option']} costs Rp {cheapest_blocked['cost_idr']:,}"
+                     f" and is still out, while {min(dearest_beaten, key=lambda x: x['cost_idr'])['option']}"
+                     f" at Rp {min(dearest_beaten, key=lambda x: x['cost_idr'])['cost_idr']:,} is allowed."
+                     " Cost does not overturn a rule.")
+    return _wrap(rows, [
+        {"k": "id", "l": "#"}, {"k": "option", "l": "Option"},
+        {"k": "tkdn_after", "l": "TKDN after", "n": True},
+        {"k": "cost_idr", "l": "Cost", "rp": True},
+        {"k": "allowed", "l": "Allowed"}, {"k": "reason", "l": "Reason"},
+    ], r, note)
+
+
+def impact() -> dict:
+    """Elsa's trace: a disruption followed through to the money at risk."""
+    po = get_open_purchase_orders(port="CNNGB")
+    stock = get_material_stock()
+    bom = get_bom_explosion("M-4471")
+    finished = [x["FinishedGood"] for x in (bom.value or [])]
+    orders = get_sales_order_commitments(finished)
+    exposed = sum(x["NetAmount"] for x in (orders.value or []))
+
+    rows = [{
+        "stage": "Purchase orders through Ningbo",
+        "count": len(po.value or []),
+        "detail": ", ".join(x["PurchaseOrder"] for x in (po.value or [])[:4]),
+        "value_idr": None,
+    }, {
+        "stage": "Materials affected",
+        "count": len({x["Material"] for x in (stock.value or [])}),
+        "detail": ", ".join(sorted({x["Material"] for x in (stock.value or [])})),
+        "value_idr": None,
+    }, {
+        "stage": "Finished goods that consume M-4471",
+        "count": len(finished),
+        "detail": ", ".join(finished) or "none",
+        "value_idr": None,
+    }, {
+        "stage": "Customer orders at risk",
+        "count": len(orders.value or []),
+        "detail": ", ".join(x["SalesOrder"] for x in (orders.value or [])),
+        "value_idr": exposed,
+    }]
+    return _wrap(rows, [
+        {"k": "stage", "l": "Stage"}, {"k": "count", "l": "Count", "n": True},
+        {"k": "detail", "l": "Which"}, {"k": "value_idr", "l": "At risk", "rp": True},
+    ], orders, "Each stage is read from SAP, not inferred. The chain stops where the "
+               "evidence stops.")
+
+
 def logistics() -> dict:
     po = get_open_purchase_orders()
     rows = [{
@@ -111,7 +191,7 @@ def logistics() -> dict:
         if e:
             rows.append({
                 "reference": f"option {o['id']}", "material": o["Material"],
-                "plant": "—", "qty": o["Quantity"], "port": o["Origin"],
+                "plant": "-", "qty": o["Quantity"], "port": o["Origin"],
                 "status": "planned", "arrival_original": e["arrival_booked"],
                 "arrival_revised": e["arrival_effective"], "delay_days": e["dwell_days"],
             })
@@ -168,6 +248,7 @@ def execution() -> dict:
 
 #: domain name == the agent code that owns it
 VIEWS = {
-    "inventory": inventory, "demand": demand, "sourcing": sourcing,
-    "logistics": logistics, "simulation": simulation, "execution": execution,
+    "impact": impact, "demand": demand, "inventory": inventory,
+    "sourcing": sourcing, "logistics": logistics, "compliance": compliance,
+    "simulation": simulation, "execution": execution,
 }

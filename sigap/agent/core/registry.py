@@ -91,7 +91,7 @@ def demo() -> None:
         raise AssertionError("an unregistered tool must raise")
     except KeyError:
         pass
-    print(f"registry ok — {len(all_tools())} tool(s)")
+    print(f"registry ok, {len(all_tools())} tool(s)")
 
 
 if __name__ == "__main__":

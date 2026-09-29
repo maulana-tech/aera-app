@@ -38,13 +38,10 @@ export default async function Log() {
   return (
     <main className="w-full px-6 py-8">
       <header className="border-b pb-5">
-        <p className="text-muted-foreground font-mono text-xs uppercase tracking-[0.18em]">
-          SIGAP · Records
-        </p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">Log</h1>
         <p className="text-muted-foreground mt-1 max-w-2xl text-sm leading-relaxed">
           What the system did, what it proposed, and who decided. Rows here are never
-          edited — a correction is written as a new row.
+          edited. A correction is written as a new row.
         </p>
       </header>
 
@@ -52,10 +49,10 @@ export default async function Log() {
 
       {d.approvals.length > 0 && (
         <section className="mt-8">
-          <h2 className="text-muted-foreground font-mono text-[11px] uppercase tracking-[0.15em]">
+          <h2 className="text-sm font-medium">
             Approvals · {d.approvals.length}
           </h2>
-          <ul className="mt-3 divide-y rounded-xl border">
+          <ul className="mt-3 divide-y rounded-lg border">
             {d.approvals.map((a) => (
               <li key={a.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-sm">
                 <StatusBadge status={a.decision === "escalated" ? "pending" : a.decision} />
@@ -77,10 +74,10 @@ export default async function Log() {
 
       {d.actions.length > 0 && (
         <section className="mt-8">
-          <h2 className="text-muted-foreground font-mono text-[11px] uppercase tracking-[0.15em]">
+          <h2 className="text-sm font-medium">
             Actions · {d.actions.length}
           </h2>
-          <ul className="mt-3 divide-y rounded-xl border">
+          <ul className="mt-3 divide-y rounded-lg border">
             {d.actions.map((a) => (
               <li key={a.id} className="px-4 py-3">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -112,10 +109,10 @@ export default async function Log() {
 
       {d.steps.length > 0 && (
         <section className="mt-8">
-          <h2 className="text-muted-foreground font-mono text-[11px] uppercase tracking-[0.15em]">
+          <h2 className="text-sm font-medium">
             Agent steps · {d.steps.length}
           </h2>
-          <ul className="mt-3 divide-y rounded-xl border">
+          <ul className="mt-3 divide-y rounded-lg border">
             {d.steps.map((s) => (
               <li key={s.id} className="grid grid-cols-[84px_1fr] gap-4 px-4 py-3">
                 <div>

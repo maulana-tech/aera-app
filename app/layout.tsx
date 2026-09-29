@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SIGAP — Decision queue",
+  title: "SIGAP Decision queue",
   description:
     "Autonomous supply-disruption response. Investigates the impact, assembles the "
     + "options, strikes out the ones that break the rules, then executes into SAP "

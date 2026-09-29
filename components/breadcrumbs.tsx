@@ -25,7 +25,7 @@ const LABELS: Record<string, string> = {
   disruptions: "Handling",
 };
 
-/** Segments that aren't pages of their own — shown, but not clickable. */
+/** Segments that are not pages of their own. Shown, but not clickable. */
 const NOT_A_PAGE = new Set(["data", "disruptions"]);
 
 export function Breadcrumbs() {

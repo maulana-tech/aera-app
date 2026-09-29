@@ -5,7 +5,7 @@ const idr = (n: number) => "Rp " + n.toLocaleString("en-US");
 
 function cell(v: any, c: Column) {
   if (v === null || v === undefined || v === "")
-    return <span className="text-muted-foreground">—</span>;
+    return <span className="text-muted-foreground">-</span>;
   if (typeof v === "boolean")
     return (
       <span className={v ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400"}>
@@ -35,11 +35,11 @@ export function DataTable({
       )}
 
       {rows.length === 0 ? (
-        <p className="text-muted-foreground rounded-xl border border-dashed p-6 text-sm">
+        <p className="text-muted-foreground rounded-lg border border-dashed p-6 text-sm">
           Nothing to show here.
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border">
+        <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b">
