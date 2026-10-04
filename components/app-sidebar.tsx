@@ -26,11 +26,12 @@ const AGENTS: NavItem[] = [
     href: "/agents",
     icon: Users,
     children: [
-      { title: "All eleven", href: "/agents" },
+      { title: "All agents", href: "/agents" },
       { title: "Impact", href: "/agents/impact", owner: "Elsa" },
       { title: "Demand", href: "/agents/demand", owner: "Dara" },
       { title: "Stock", href: "/agents/inventory", owner: "Iris" },
       { title: "Sourcing", href: "/agents/sourcing", owner: "Clint" },
+      { title: "Procurement", href: "/agents/procurement", owner: "Prita" },
       { title: "Logistics", href: "/agents/logistics", owner: "Milo" },
       { title: "Rules", href: "/agents/compliance", owner: "Kira" },
       { title: "Costing", href: "/agents/simulation", owner: "Tara" },
