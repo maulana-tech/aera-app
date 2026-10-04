@@ -1,4 +1,4 @@
-"""The eleven agents. Their instructions live in prompts/, not here."""
+"""The twelve agents. Their instructions live in prompts/, not here."""
 from __future__ import annotations
 
 import pathlib
@@ -62,6 +62,14 @@ SPECIALISTS = [
     Agent("sourcing", "Clint", "Sourcing",
           "Finds and qualifies replacement supply: other suppliers, internal stock, fast freight.",
           ["find_alternate_sources", "find_internal_transfers"]),
+    Agent("procurement", "Prita", "Procurement",
+          "Owns the supplier book as a whole: who the company buys from, in what volume, "
+          "from which country, on what certificate, and whether each of them kept the "
+          "date on its own purchase orders. Reads the quotations on file, compares them "
+          "on price against lead time, and drafts the purchase order that follows from "
+          "the comparison.",
+          ["get_supplier_master", "get_supplier_performance", "get_quotations",
+           "compare_quotations", "propose_purchase_order"]),
     Agent("logistics", "Milo", "Logistics",
           "Models arrival dates that survive contact with reality: port dwell, transhipment, "
           "customs, transport mode.",
@@ -93,10 +101,10 @@ ALL = {a.code: a for a in [SUPERVISOR, *SPECIALISTS]}
 
 
 def demo() -> None:
-    assert len(ALL) == 11, len(ALL)
+    assert len(ALL) == 12, len(ALL)
     tools = [t for a in ALL.values() for t in a.tools]
     assert len(tools) == len(set(tools)), "a tool is claimed by two agents"
-    assert len(tools) == 26, len(tools)
+    assert len(tools) == 31, len(tools)
     veto = [a.code for a in ALL.values() if a.veto]
     assert veto == ["compliance"], veto
     nicknames = [a.nickname for a in ALL.values()]
