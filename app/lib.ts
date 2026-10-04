@@ -57,16 +57,123 @@ export type AgentSummary = {
 };
 
 export type Column = { k: string; l: string; n?: boolean; rp?: boolean };
+
+/* One chart payload per domain, discriminated on `kind`.
+ *
+ * A view carries at most one chart, and the shape of that chart is a property
+ * of the domain, so a union with a tag is what the data actually is. A bag of
+ * optional fields would let a page ask for the demand band on stock data and
+ * find out at render time.
+ */
+export type DemandChartData = {
+  kind: "demand";
+  material: string; plant: string; unit: string; confidence: number;
+  planned_rate: number | null; mape_pct: number | null;
+  observed: { on: string; qty: number; mean: number }[];
+  window_days?: number;
+  points: { on: string; point: number; lower: number; upper: number }[];
+};
+export type CoverChartData = {
+  kind: "cover";
+  unit: string;
+  /** every line the table shows, so the chart can say how much it left out */
+  total: number;
+  threshold: number;
+  threshold_label: string;
+  items: {
+    material: string; plant: string; description: string;
+    days: number; qty: number; unit: string; daily: number;
+    depleted_on: string | null;
+  }[];
+};
+export type ArrivalChartData = {
+  kind: "arrival";
+  total: number;
+  /** the scenario's as-of date, which is what "today" means on this page */
+  today: string;
+  items: {
+    reference: string; material: string; port: string; status: string;
+    booked: string; revised: string; slip: number;
+  }[];
+};
+/* Concentration, as a Pareto: each supplier's share of the purchase-order book
+ * against the running total. Both series are percentages of the same book, so
+ * they share one axis — a second scale would let a bar and a line wear the same
+ * unit and mean two different things.
+ */
+export type PortfolioChartData = {
+  kind: "portfolio";
+  /** suppliers on the approved list */
+  total: number;
+  /** of those, the ones that actually hold orders */
+  active: number;
+  /** the cumulative share the rule is drawn at */
+  rule_pct: number;
+  /** how many suppliers it takes to reach rule_pct — the point of the chart */
+  cover_n: number;
+  items: {
+    supplier: string; name: string; country: string;
+    share: number; cumulative: number;
+    volume: number; unit: string | null;
+    orders: number; late: number; slip: number | null; tkdn: number | null;
+  }[];
+};
+/* The quotation comparison: price against lead time, one dot per offer.
+ *
+ * Those two are different units, and there is no honest way to put them on one
+ * axis or on two that share a name — a rupiah and a day drawn as a bar and a
+ * line would be two scales arguing about which is which. A scatter sidesteps it:
+ * one axis each, and the shape of the cloud is the trade-off itself. Bottom-left
+ * is cheap and quick, which is where nobody stays for long.
+ */
+export type OffersChartData = {
+  kind: "offers";
+  material: string;
+  /** the purchasing unit the price is quoted in, such as TON */
+  unit: string;
+  /** the quantity every offer in this comparison was priced for */
+  qty: number;
+  /** offers still valid on the as-of date */
+  live: number;
+  total: number;
+  points: {
+    supplier: string; name: string; country: string;
+    price: number; lead: number;
+    live: boolean;
+    /** on the line nothing beats on both axes at once */
+    on_line: boolean;
+    tkdn: number | null;
+  }[];
+};
+export type DomainChart =
+  | DemandChartData | CoverChartData | ArrivalChartData | PortfolioChartData
+  | OffersChartData;
+
+/** One table row. Keys are the column `k`s, so a view can hand its columns and
+ *  its rows straight to DataTable without remapping either. */
+export type Row = Record<string, any>;
+
+/* One section of an agent's desk: a heading, the finding under it, a table, and
+ * a chart when the domain has one. Most domains have exactly one section and
+ * return its fields flat; a desk with two questions to answer returns `sections`
+ * instead, and the page renders both shapes the same way.
+ */
+export type ViewSection = {
+  title: string;
+  note?: string;
+  columns: Column[];
+  rows: Row[];
+  origin: string;
+  source: string;
+  chart?: DomainChart;
+};
+
 export type View = {
-  domain: string; agent: string; columns: Column[]; rows: Record<string, any>[];
-  origin: string; source: string; note: string;
-  chart?: {
-    material: string; plant: string; unit: string; confidence: number;
-    planned_rate: number | null; mape_pct: number | null;
-    observed: { on: string; qty: number; mean: number }[];
-    window_days?: number;
-    points: { on: string; point: number; lower: number; upper: number }[];
-  };
+  domain: string; agent: string;
+  columns?: Column[]; rows?: Row[];
+  origin?: string; source?: string; note?: string;
+  chart?: DomainChart;
+  sections?: ViewSection[];
 };
 export type Summary = {
   runs: Record<string, number>; actions: Record<string, number>;
