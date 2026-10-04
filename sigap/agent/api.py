@@ -37,7 +37,7 @@ from typing import Any, Callable, Dict, List, Tuple
 from urllib.parse import urlparse
 
 import tools  # noqa: F401  (registers every tool)
-from core import identity, store
+from core import identity, registry, store
 from core.config import CFG
 from core.identity import NotAuthorised, User
 from tools.views import VIEWS
@@ -67,7 +67,10 @@ def _handle(run_id: str, event: dict) -> None:
 
     try:
         import graph
-        result = graph.run(event, report)
+        # Every tool called inside this handling knows which run it belongs to,
+        # so an action raised by one lands on this run rather than on nothing.
+        with registry.bind_run(run_id):
+            result = graph.run(event, report)
         store.close_run(run_id, "done", result, cost_idr=result.get("cost_idr", 0))
     except Exception as e:                                           # noqa: BLE001
         store.close_run(run_id, "failed", error=f"{type(e).__name__}: {e}")
