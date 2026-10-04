@@ -1,12 +1,19 @@
 """Bram's tools (Execution).
 
-The only file that writes outward, to SAP and to the action record. Two
-guards here must not be removed:
+The action record lives here, and this is the only file that writes outward to
+SAP. Three guards here must not be removed:
 
   · idempotency, identical action content yields an identical key, so a retry
     never becomes a second purchase order;
   · the autonomy limit, above Rp 50 million an action waits for a human, and
-    anything waiting never touches SAP.
+    anything waiting never touches SAP;
+  · no run, no row, because an action nobody can trace back to a handling is
+    an action nobody can approve or refuse.
+
+Recording an action is shared through `raise_action` rather than duplicated,
+because a draft does not have to be raised by the agent that sends it onward.
+Prita picks the supplier and raises the purchase order; Bram is the one who
+takes an approved action to SAP. Both write the same record.
 """
 from __future__ import annotations
 
@@ -24,24 +31,48 @@ def idempotency_key(kind: str, **details) -> str:
     return f"{kind}:{hashlib.sha256(fingerprint.encode()).hexdigest()[:16]}"
 
 
-def _record(kind: str, autonomous: bool, **details) -> Result:
-    from clients import sap_s4
-    from core import store
+def raise_action(kind: str, autonomous: bool, **details) -> Result:
+    """Key an action, attach it to the run in force, write it down.
+
+    Returns a value of None when no run is open. That is a refusal, not a
+    failure: actions.run_id references runs(id), and an id invented here would
+    either fail that reference or leave a row nothing could be traced to.
+
+    The run comes from the context rather than an argument, because it cannot
+    come from an argument: the tool schema is shown to the model as it stands
+    and additionalProperties is false, so there is no spare parameter to carry it.
+    """
+    from core import registry, store
+
+    run_id = registry.current_run()
+    if not run_id:
+        return Result(None, Origin.MISSING, "runs table",
+                      note=("no run is open, so this action has nothing to attach "
+                            "to. Raise it from a signal rather than from a question."))
 
     key = idempotency_key(kind, **details)
-    run_id = details.pop("_run_id", None) or "run_detached"
     action = store.record_action(run_id, key, kind, autonomous, details)
-
     if action.get("repeated"):
         return Result(action, Origin.DERIVED, "action record",
                       note="an identical action was already raised, so it was not sent again")
+    return Result(action, Origin.DERIVED, "action record")
+
+
+def _record(kind: str, autonomous: bool, **details) -> Result:
+    from clients import sap_s4
+
+    r = raise_action(kind, autonomous, **details)
+    if r.value is None or r.value.get("repeated"):
+        return r
+    action = r.value
+    key = idempotency_key(kind, **details)
 
     # Only autonomous actions touch SAP directly. The rest wait for approval.
     if autonomous and sap_s4.available() and kind == "stock_transfer":
         try:
-            r = sap_s4.post("API_STOCK_TRANSFER_SRV", "A_StockTransfer",
-                            details, idempotency_key=key)
-            return Result(action | {"sap_reference": r.get("d", {}).get("MaterialDocument")},
+            posted = sap_s4.post("API_STOCK_TRANSFER_SRV", "A_StockTransfer",
+                                 details, idempotency_key=key)
+            return Result(action | {"sap_reference": posted.get("d", {}).get("MaterialDocument")},
                           Origin.LIVE, "API_STOCK_TRANSFER_SRV")
         except Exception as e:                                       # noqa: BLE001
             return Result(action, Origin.MISSING, "API_STOCK_TRANSFER_SRV",
@@ -138,8 +169,17 @@ def demo() -> None:
         assert "_record(" in src and ", False," in src, \
             f"{fn.__name__} must pass autonomous=False"
 
+    # Outside a handling no run is open, and an action is refused rather than
+    # written down where nothing could be traced to it. This writes no row.
+    from core import registry
+    refused = raise_action("draft_po", False, supplier="SUP-1", material="M-4471",
+                           qty=85, needed_by="2026-09-20", cost_idr=1)
+    assert registry.current_run() is None, "a run must not outlive its handling"
+    assert refused.value is None and refused.origin is Origin.MISSING, refused.note
+
     print(f"execution ok, idempotency {a}")
     print("  prevent-mode actions always wait for a person")
+    print("  no run open, so an action is refused rather than written")
 
 
 if __name__ == "__main__":
