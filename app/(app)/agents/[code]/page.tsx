@@ -2,12 +2,13 @@ import { ArrowLeft, Crown, ShieldBan } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { api, me, type Agent, type AgentSummary, type View } from "@/app/lib";
+import { Fragment } from "react";
+
+import { api, me, type Agent, type AgentSummary, type View, type ViewSection } from "@/app/lib";
 import AskDrawer from "./AskDrawer";
 import { AgentBadge } from "@/components/agent-card";
 import { DataTable } from "@/components/data-table";
-import { Figure } from "@/components/charts";
-import { ForecastChart } from "@/components/forecast-chart";
+import { ChartBlock } from "@/components/chart-block";
 import { RulingList, type Ruling } from "@/components/rulings";
 import { Empty, Fact, Rail, Section, ToolList } from "@/components/shell";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +37,16 @@ const DESK: Record<string, { work: string; note?: string; examples: string[] }> 
   sourcing: {
     work: "Replacement supply options",
     examples: ["Any replacement source for M-4471?", "Which local supplier could we use?"],
+  },
+  procurement: {
+    work: "Vendor offers, and the supplier book behind them",
+    note: "What the firms are quoting, and who carries the book.",
+    examples: [
+      "Who quotes M-4471 cheapest and who can deliver fastest?",
+      "How concentrated is our supply base?",
+      "Which suppliers deliver late?",
+      "Which suppliers hold no orders?",
+    ],
   },
   logistics: {
     work: "Arrival dates that survive contact with reality",
@@ -75,6 +86,24 @@ export default async function AgentPage({ params }: { params: Promise<{ code: st
   const desk = DESK[code] ?? { work: "Work", examples: [] };
   const view = await api<View>(`data/${code}`);
   const missingTools = a.tools.filter((t) => !t.installed);
+
+  // A desk with one question returns its view flat. One with two returns
+  // `sections`, each with its own heading. Both are drawn the same way below,
+  // so a new domain cannot arrive half-wired: it either publishes a section or
+  // it publishes nothing.
+  const sections: ViewSection[] =
+    view?.sections ??
+    (view
+      ? [{
+          title: desk.work,
+          note: view.note,
+          columns: view.columns ?? [],
+          rows: view.rows ?? [],
+          origin: view.origin ?? "modelled",
+          source: view.source ?? "",
+          chart: view.chart,
+        }]
+      : []);
 
   return (
     <main className="w-full px-6 py-8">
@@ -149,39 +178,11 @@ export default async function AgentPage({ params }: { params: Promise<{ code: st
         </div>
       </div>
 
-      {/* A forecast is a range, so it gets a chart before it gets a table. */}
-      {view?.chart && (
-        <Section
-          title={`${view.chart.material} at ${view.chart.plant}, daily withdrawals`}
-          note={
-            view.chart.planned_rate
-              ? `The dashed rule is the planned ${view.chart.planned_rate} ${view.chart.unit} a day that every cover date in the system is divided by. In-sample error ${view.chart.mape_pct}%.`
-              : undefined
-          }
-        >
-          <Figure
-            title=""
-            origin={view.origin}
-            source={view.source}
-            table={{
-              head: ["Date", `Forecast ${view.chart.unit}`, "Low", "High"],
-              rows: view.chart.points.map((p) => [p.on, p.point, p.lower, p.upper]),
-            }}
-          >
-            <ForecastChart
-              observed={view.chart.observed}
-              points={view.chart.points}
-              plannedRate={view.chart.planned_rate}
-              unit={view.chart.unit}
-              confidence={view.chart.confidence}
-              windowDays={view.chart.window_days}
-            />
-          </Figure>
-        </Section>
-      )}
-
-      <Section title={desk.work} note={view?.note ?? desk.note}>
-        {!view ? (
+      {/* Each section publishes its chart, then its table underneath: the shape
+          of the finding is the finding, and the numbers are there for anyone
+          who would rather check. */}
+      {sections.length === 0 ? (
+        <Section title={desk.work} note={desk.note}>
           <Empty
             what={`${a.nickname} has nothing on her desk yet.`}
             why={
@@ -195,24 +196,49 @@ export default async function AgentPage({ params }: { params: Promise<{ code: st
                 : undefined
             }
           />
-        ) : view.rows.length === 0 ? (
-          <Empty
-            what="Nothing to show, and that is the correct answer."
-            why={view.note || "The inputs were not trustworthy enough to produce a result."}
-            fix={`source: ${view.source}`}
-          />
-        ) : code === "compliance" ? (
-          <RulingList rulings={view.rows as unknown as Ruling[]} />
-        ) : (
-          <DataTable
-            columns={view.columns}
-            rows={view.rows}
-            origin={view.origin}
-            source={view.source}
-            highlight={(r) => r.chosen === true || r.allowed === false}
-          />
-        )}
-      </Section>
+        </Section>
+      ) : (
+        sections.map((sec, i) => (
+          <Fragment key={sec.title}>
+            {/* The chart comes first and outside the section below it: its own
+                heading is the one that says what the picture is, and the
+                section's heading then frames the table of numbers underneath.
+                That is how every other domain on the site is laid out, so a
+                two-section desk reads exactly like two single-section ones. */}
+            {sec.chart && (
+              <ChartBlock chart={sec.chart} origin={sec.origin} source={sec.source} />
+            )}
+
+            <Section
+              title={sec.title}
+              note={sec.note ?? (sections.length === 1 ? desk.note : undefined)}
+            >
+              {sec.rows.length === 0 ? (
+                <Empty
+                  what="Nothing to show, and that is the correct answer."
+                  why={sec.note || "The inputs were not trustworthy enough to produce a result."}
+                  fix={`source: ${sec.source}`}
+                />
+              ) : code === "compliance" && i === 0 ? (
+                <RulingList rulings={sec.rows as unknown as Ruling[]} />
+              ) : (
+                <DataTable
+                  columns={sec.columns}
+                  rows={sec.rows}
+                  origin={sec.origin}
+                  source={sec.source}
+                  highlight={(r) =>
+                    r.chosen === true ||
+                    r.allowed === false ||
+                    r.flagged === true ||
+                    r.live === false
+                  }
+                />
+              )}
+            </Section>
+          </Fragment>
+        ))
+      )}
 
     </main>
   );
