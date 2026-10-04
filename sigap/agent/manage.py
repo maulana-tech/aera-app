@@ -136,9 +136,9 @@ def docs() -> None:
         f"{len(ALL)} agents · {len(installed)}/{declared} tools installed · "
         f"{sum(1 for a in ALL.values() if a.ready)}/{len(ALL)} prompts written",
         "",
-        "One supervisor and ten specialists. The supervisor decides who to call from what",
-        "the last specialist found; there is no fixed pipeline. Specialists are exposed to",
-        "the supervisor as tools named `ask_<code>`.",
+        "The supervisor decides who to call from what the last specialist found; there is",
+        "no fixed pipeline. Specialists are exposed to the supervisor as tools named",
+        "`ask_<code>`.",
         "",
         "| Agent | Who | Effort | Tools | Prompt |",
         "|---|---|---|---|---|",
