@@ -20,7 +20,19 @@ from tools.fetcher import fixture, profile
 from tools.impact import (get_bom_explosion, get_material_stock,
                           get_open_purchase_orders, get_sales_order_commitments)
 from tools.logistics import estimate_eta
+from tools.procurement import (compare_quotations, get_quotations,
+                               get_supplier_master, get_supplier_performance)
 from tools.sourcing import find_alternate_sources
+
+# Display constants. `floor_days` is documented as 14 in both tools that take it
+# and is what the dashboard already draws its threshold at; a view that charted
+# a different number would be arguing with the rest of the system.
+SAFETY_FLOOR_DAYS = 14
+
+# A view's table can carry fifty rows. A chart of fifty bars is a smear, so each
+# chart draws the lines that answer its question and the caption says how many
+# of the total were left out.
+CHART_LINES = 12
 
 
 def _wrap(rows: List[dict], columns: List[dict], r: Result, note: str = "") -> dict:
@@ -53,13 +65,33 @@ def inventory() -> dict:
             "days_left": round(float(qty) / float(daily), 1) if daily else None,
         })
     rows.sort(key=lambda b: b["days_left"] if b["days_left"] is not None else 9999)
-    return _wrap(rows, [
+    out = _wrap(rows, [
         {"k": "material", "l": "Material"}, {"k": "description", "l": "Name"},
         {"k": "plant", "l": "Plant"}, {"k": "qty", "l": "Quantity", "n": True},
         {"k": "daily_consumption", "l": "Used/day", "n": True},
         {"k": "days_left", "l": "Days left", "n": True},
         {"k": "depleted_on", "l": "Depleted"},
     ], r)
+    # Already sorted by cover ascending, so the first lines are the ones that
+    # empty first and the chart needs no ordering of its own. A line with no
+    # consumption has no cover to draw; it stays in the table where the blank
+    # is meaningful.
+    tightest = [x for x in rows if x["days_left"] is not None][:CHART_LINES]
+    if tightest:
+        out["chart"] = {
+            "kind": "cover",
+            "unit": "days",
+            "total": len(rows),
+            "threshold": SAFETY_FLOOR_DAYS,
+            "threshold_label": f"{SAFETY_FLOOR_DAYS}-day safety floor",
+            "items": [{
+                "material": x["material"], "plant": x["plant"],
+                "description": x["description"], "days": x["days_left"],
+                "qty": x["qty"], "unit": x["unit"],
+                "daily": x["daily_consumption"], "depleted_on": x["depleted_on"],
+            } for x in tightest],
+        }
+    return out
 
 
 def demand() -> dict:
@@ -125,6 +157,7 @@ def demand() -> dict:
     ], r, note)
     if lead.get("points"):
         out["chart"] = {
+            "kind": "demand",
             "material": "M-4471", "plant": "KRW1",
             "unit": lead.get("unit", ""), "confidence": lead.get("confidence", 90),
             "planned_rate": lead.get("planned_rate"),
@@ -177,6 +210,215 @@ def sourcing() -> dict:
         {"k": "donor_impact", "l": "Donor plant"},
     ], r, "Clearing the rules is not the same as being available. An internal transfer "
           "also has to leave the plant it came from above its own floor.")
+
+
+def _procurement_book() -> dict:
+    """The supplier book, and what its shape says.
+
+    Concentration is the question no other domain asks. Sourcing reads the
+    options for one material, Impact traces lines through a bill of materials,
+    Vega counts single sources — none of them will tell you how few suppliers
+    carry most of what is bought, which is the fact a portfolio exists to show.
+    """
+    master = get_supplier_master()
+    if not master.value:
+        out = _wrap([], [], master, master.note or "no supplier master to read")
+        out["title"] = "The supplier book, and who carries it"
+        return out
+
+    # Both tools read the same master, so the join cannot disagree with itself
+    # about which code belongs to which company.
+    perf = {r["supplier"]: r for r in (get_supplier_performance().value or [])}
+    floor = profile().get("TkdnContractFloorPct")
+
+    rows = [{
+        "name": s.get("name"), "country": s.get("country"),
+        "orders": s.get("orders", 0), "share": s.get("share_pct"),
+        "late": (perf.get(s["supplier"]) or {}).get("late"),
+        "slip": (perf.get(s["supplier"]) or {}).get("avg_slip_days"),
+        "tkdn": s.get("tkdn_certified_pct"),
+        # Shaded because it is worth noticing, not because it is at fault: a
+        # certified supplier with no orders is capacity the book is not using.
+        "flagged": not s.get("orders"),
+    } for s in master.value]
+
+    def certified(r, at_or_above: bool) -> bool:
+        if r["tkdn"] is None or floor is None:
+            return False
+        return r["tkdn"] >= floor if at_or_above else r["tkdn"] < floor
+
+    unused = [r for r in rows if r["flagged"]]
+    below_used = [r for r in rows if r["orders"] and certified(r, False)]
+    dups = [s for s in master.value if s.get("duplicate_of")]
+
+    if not unused:
+        note = f"{len(rows)} suppliers on the approved list, all of them holding orders"
+    else:
+        note = (f"{len(rows)} suppliers on the approved list, {len(unused)} of them "
+                f"holding no orders")
+        names = ", ".join(str(r["name"]) for r in unused)
+        if all(certified(r, True) for r in unused):
+            note += (f". All {len(unused)} — {names} — are certified at or above the "
+                     f"{floor:g}% contract floor")
+            if below_used:
+                note += (f", while the {len(below_used)} certified below it carry "
+                         f"{sum(r['share'] for r in below_used):.0f}% of the book")
+            note += "."
+        else:
+            note += f": {names}."
+    if dups:
+        note += (" " + "; ".join(
+            f"{d['name']} appears twice, as {d['supplier']} and {d['duplicate_of']}"
+            for d in dups) + ".")
+
+    out = _wrap(rows, [
+        {"k": "name", "l": "Supplier"}, {"k": "country", "l": "Origin"},
+        {"k": "orders", "l": "Orders", "n": True},
+        {"k": "share", "l": "Share %", "n": True},
+        {"k": "late", "l": "Late", "n": True},
+        {"k": "slip", "l": "Avg slip (d)", "n": True},
+        {"k": "tkdn", "l": "TKDN cert %", "n": True},
+    ], master, note)
+    out["title"] = "The supplier book, and who carries it"
+
+    # The chart carries the suppliers that hold orders. One with none is a bar
+    # of zero and a cumulative line it does not move, which is the table's job.
+    active = [s for s in master.value if s.get("orders")]
+    if not active:
+        return out
+
+    rule_pct = 80
+    marks, running = [], 0.0
+    for s in active:
+        running += float(s.get("share_pct") or 0)
+        p = perf.get(s["supplier"]) or {}
+        marks.append({
+            "supplier": s["supplier"], "name": s.get("name"),
+            "country": s.get("country"),
+            "share": s.get("share_pct") or 0,
+            "cumulative": round(running, 2),
+            "volume": s.get("volume"), "unit": s.get("unit"),
+            "orders": s.get("orders"), "late": p.get("late", 0),
+            "slip": p.get("avg_slip_days"),
+            "tkdn": s.get("tkdn_certified_pct"),
+        })
+
+    # How many suppliers it takes to make four fifths of the book. That count
+    # is the whole question a concentration chart is asked.
+    cover_n = next((i + 1 for i, m in enumerate(marks)
+                    if m["cumulative"] >= rule_pct), len(marks))
+    out["chart"] = {
+        "kind": "portfolio",
+        "total": len(rows),
+        "active": len(active),
+        "rule_pct": rule_pct,
+        "cover_n": cover_n,
+        "items": marks[:CHART_LINES],
+    }
+    return out
+
+
+def _procurement_offers() -> dict:
+    """What the quotations say on the material carrying the most committed value.
+
+    The material is not chosen by hand. It is the one with the most money
+    already committed against open purchase orders, priced off the very
+    quotations the comparison then ranks, so the desk leads with a live
+    decision rather than with whichever material sorts first. Every figure
+    here comes from two tools: the purchase-order lines for the volume, the
+    quotation book for the price.
+    """
+    title = "Vendor offers, price against lead time"
+
+    def empty(r, why) -> dict:
+        out = _wrap([], [], r, why)
+        out["title"] = title
+        return out
+
+    orders = get_open_purchase_orders()
+    quotes = get_quotations()
+    if not orders.value:
+        return empty(orders, orders.note or
+                     "no open purchase orders, so there is no volume to price an offer against")
+    if not quotes.value:
+        return empty(quotes, quotes.note or "no quotations on file to compare")
+
+    # The incumbent's own quote when it is still valid, the cheapest live one
+    # when it is not. Committed value is what the company would pay today, not
+    # what it paid on the order it placed.
+    live_cheapest: dict = {}
+    for q in quotes.value:
+        if q["live"]:
+            m = q["material"]
+            live_cheapest[m] = min(live_cheapest.get(m, q["unit_price"]), q["unit_price"])
+    own_quote = {(q["material"], q["supplier"]): q for q in quotes.value if q["live"]}
+
+    committed, volume, unit_of = {}, {}, {}
+    for o in orders.value:
+        m = o.get("Material")
+        if m not in live_cheapest:
+            continue                       # nothing live to rank, so nothing to show
+        hit = own_quote.get((m, o.get("Supplier")))
+        price = hit["unit_price"] if hit else live_cheapest[m]
+        qty = float(o.get("OrderQuantity") or 0)
+        committed[m] = committed.get(m, 0.0) + price * qty
+        volume[m] = volume.get(m, 0.0) + qty
+        unit_of[m] = o.get("BaseUnit")
+
+    if not committed:
+        return empty(quotes, "no material still has a live offer, so there is nothing to rank")
+
+    material = max(committed, key=lambda m: committed[m])
+    qty = volume[material]
+    unit = unit_of.get(material) or ""
+    r = compare_quotations(material, qty)
+    rows = r.value or []
+    note = (f"Rp {committed[material]:,.0f} committed on {material}, the largest value on "
+            f"the book, priced at the {qty:g} {unit} already on order. " + (r.note or ""))
+
+    out = _wrap(rows, [
+        {"k": "rank", "l": "Rank", "n": True},
+        {"k": "name", "l": "Supplier"},
+        {"k": "country", "l": "Origin"},
+        {"k": "unit_price", "l": f"Rp per {unit}", "rp": True},
+        {"k": "lead_days", "l": "Lead (d)", "n": True},
+        {"k": "total", "l": f"Total for {qty:g} {unit}", "rp": True},
+        {"k": "tkdn", "l": "TKDN cert %", "n": True},
+        {"k": "valid_to", "l": "Valid to"},
+        {"k": "live", "l": "Live"},
+        {"k": "on_line", "l": "Trade-off line"},
+    ], r, note)
+    out["title"] = title
+    out["chart"] = {
+        "kind": "offers",
+        "material": material,
+        "unit": unit,
+        "qty": qty,
+        "live": sum(1 for x in rows if x["live"]),
+        "total": len(rows),
+        "points": [{
+            "supplier": x["supplier"], "name": x["name"], "country": x["country"],
+            "price": x["unit_price"], "lead": x["lead_days"],
+            "live": x["live"], "on_line": x["on_line"],
+            "tkdn": x["tkdn"],
+        } for x in rows],
+    }
+    return out
+
+
+def procurement() -> dict:
+    """Prita's desk, in the order her work runs: what the quotes say, then the book.
+
+    Her brief is to receive a signal, compare the vendors on price against lead
+    time, and raise the draft that follows. So the comparison leads — it is the
+    live decision — and the portfolio sits behind it, because how concentrated
+    the book is decides how much freedom there is to choose at all.
+
+    A view may return a list of these as `sections`, each one chart and table
+    under its own heading. Domains with a single question still return one flat
+    view, and the page renders both shapes.
+    """
+    return {"sections": [_procurement_offers(), _procurement_book()]}
 
 
 def compliance() -> dict:
@@ -296,13 +538,30 @@ def logistics() -> dict:
                 "status": "planned", "arrival_original": e["arrival_booked"],
                 "arrival_revised": e["arrival_effective"], "delay_days": e["dwell_days"],
             })
-    return _wrap(rows, [
+    out = _wrap(rows, [
         {"k": "reference", "l": "Reference"}, {"k": "material", "l": "Material"},
         {"k": "port", "l": "Origin"}, {"k": "status", "l": "Status"},
         {"k": "arrival_original", "l": "Arrival booked"},
         {"k": "arrival_revised", "l": "Arrival actual"},
         {"k": "delay_days", "l": "Delay (days)", "n": True},
     ], po)
+    # Sort on the slip the table reports, then on when it lands, so the eight
+    # shipments that share a delay still read in arrival order rather than
+    # whatever order the fixture happened to list them in.
+    worst = sorted(rows, key=lambda x: (-x["delay_days"], x["arrival_revised"]))[:CHART_LINES]
+    if worst:
+        out["chart"] = {
+            "kind": "arrival",
+            "total": len(rows),
+            "today": profile()["AsOfDate"],
+            "items": [{
+                "reference": x["reference"], "material": x["material"],
+                "port": x["port"] or "-", "status": x["status"],
+                "booked": x["arrival_original"], "revised": x["arrival_revised"],
+                "slip": x["delay_days"],
+            } for x in worst],
+        }
+    return out
 
 
 def simulation() -> dict:
@@ -350,6 +609,7 @@ def execution() -> dict:
 #: domain name == the agent code that owns it
 VIEWS = {
     "impact": impact, "demand": demand, "inventory": inventory,
-    "sourcing": sourcing, "logistics": logistics, "compliance": compliance,
-    "simulation": simulation, "execution": execution, "exposure": exposure,
+    "sourcing": sourcing, "procurement": procurement, "logistics": logistics,
+    "compliance": compliance, "simulation": simulation, "execution": execution,
+    "exposure": exposure,
 }
