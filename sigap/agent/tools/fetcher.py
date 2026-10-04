@@ -82,6 +82,9 @@ ENTITIES = {
     "SalesOrder": ("API_SALES_ORDER_SRV", "A_SalesOrder"),
     "AlternateSource": ("API_PURCHASING_INFO_RECORD_SRV", "A_PurchasingInfoRecord"),
     "Supplier": ("API_BUSINESS_PARTNER", "A_Supplier"),
+    # The only entity carrying a price. ExtraCost on an alternate source is what
+    # an option costs over the baseline; this is what a firm charges for a tonne.
+    "Quotation": ("API_QTN_PROCESS_SRV", "A_SupplierQuotation"),
 }
 
 
