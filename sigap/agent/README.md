@@ -94,7 +94,7 @@ engine/simulate.py     the calculator, pure Python, no AI
 engine/audit.py        the data audit, also pure Python, every finding evidenced
 fixtures/generate.py   builds the dataset, deterministic, plants known defects
 signals/bmkg.py        the live quake feed, the one external source with no key
-agents/definitions.py  the 11 agents; instructions live in prompts/
+agents/definitions.py  the 12 agents; instructions live in prompts/
 tools/                 one file per agent, named after the agent code
 ```
 
@@ -138,11 +138,6 @@ PYTHONPATH=. python3 agents/definitions.py
 
 - **`references/`**, the TKDN & LARTAS rules. Kira reads them when they exist; without
   them she judges from parameters and labels the result `MODELLED`. Domain work.
-- **9 prompts.** Only `supervisor` and `compliance` are written. The other nine agents
-  raise `PromptMissing` on invocation.
-- **4 tools**, all Prevent mode: `create_sourcing_event`, `propose_safety_stock_change`
-  (Bram), `scan_supply_exposure`, `get_supplier_certifications` (Vega, so Vega has
-  no tools at all yet).
 - **SSO.** Auth is local today (pbkdf2 + HMAC token). In a real company this becomes
   corporate SSO, `identity.from_token()` is the only place that changes.
 - **SAP write service names are unverified.** `sender.py` maps actions to
