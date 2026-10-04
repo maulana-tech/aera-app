@@ -18,6 +18,7 @@ from tools import (  # noqa: F401
     inventory,
     logistics,
     precedent,
+    procurement,
     simulation,
     sourcing,
     supervisor,
