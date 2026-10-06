@@ -304,8 +304,40 @@ here, so that warning was not the cause of anything above.
 Do not use `--sso`. The manual says it causes a `redirect_uri` mismatch on this
 tenant.
 
+Both were verified on 6 October. Joule by logging in. AI Core by taking a token
+and calling a model, which is worth doing before you depend on it:
+
+```bash
+cd sigap/agent
+python3 - <<'EOF'
+import base64, json, pathlib, urllib.parse, urllib.request
+c = json.loads(pathlib.Path(".secrets/ai-core.json").read_text())
+auth = base64.b64encode(f"{c['clientid']}:{c['clientsecret']}".encode()).decode()
+req = urllib.request.Request(
+    f"{c['url']}/oauth/token",
+    data=urllib.parse.urlencode({"grant_type": "client_credentials"}).encode(),
+    headers={"Authorization": f"Basic {auth}",
+             "Content-Type": "application/x-www-form-urlencoded"})
+tok = json.load(urllib.request.urlopen(req, timeout=30))["access_token"]
+req = urllib.request.Request(
+    c["serviceurls"]["AI_API_URL"]
+    + "/v2/inference/deployments/d1a82575de60e02a/chat/completions"
+      "?api-version=2024-12-01-preview",
+    data=json.dumps({"messages": [{"role": "user", "content": "Say ok."}],
+                     "max_completion_tokens": 20}).encode(),
+    headers={"Authorization": f"Bearer {tok}", "AI-Resource-Group": "default",
+             "Content-Type": "application/json"})
+d = json.load(urllib.request.urlopen(req, timeout=60))
+print(d["model"], "->", d["choices"][0]["message"]["content"].strip())
+EOF
+```
+
+It printed `gpt-5.4-2026-03-05`. The token lasts 12 hours; do not write it to a
+file that outlives the command.
+
 Nothing in SIGAP reads AI Core or Joule credentials today, so there is no
 `.env` entry for them and none should be added until something needs one.
+`BUILD-SPEC.md` §3 says why AI Core is not where the agent loop should run.
 
 ### Deploy the agent service
 
