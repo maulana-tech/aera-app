@@ -203,6 +203,7 @@ Honest list, so nothing is discovered during a demo.
 | Scenario eval suite | Absent. `RESEARCH-AWS-SAP.md` §6 has the four-level shape to build it against |
 | Foreign typhoon signal | BMKG covers Indonesia only, so the Ningbo trigger has no live source. `DATA-SOURCES.md` §5 |
 | AgentCore deployment | Local only so far. `AWS-PLAN.md` week 2, and deliberately not before §3 above passes |
+| Joule capability | The SAP half of the demo. Needs the agent service on a public endpoint first: `sigap/agent/manifest.yml` has the `cf push` commands for the hackathon space, and the warning about SQLite on that platform |
 
 ---
 

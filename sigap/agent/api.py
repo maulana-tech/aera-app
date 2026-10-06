@@ -29,6 +29,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import os
 import re
 import threading
 import traceback
@@ -38,11 +39,11 @@ from urllib.parse import urlparse
 
 import tools  # noqa: F401  (registers every tool)
 from core import identity, store
-from core.config import CFG
+from core.config import CFG, bind_target
 from core.identity import NotAuthorised, User
 from tools.views import VIEWS
 
-PORT = 8787
+HOST, PORT = bind_target(os.environ)
 
 
 # ------------------------------------------------------------------- handling
@@ -578,5 +579,5 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     print(f"SIGAP API · env={CFG.env} · sap={'ready' if CFG.sap_ready else 'no'} "
           f"· model={'ready' if CFG.model_ready else 'no'}")
-    print(f"listening on http://127.0.0.1:{PORT}")
-    ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()
+    print(f"listening on http://{HOST}:{PORT}")
+    ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()

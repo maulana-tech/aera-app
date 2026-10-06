@@ -1,0 +1,24 @@
+---
+# Deploy the agent service into the hackathon Cloud Foundry space, so a Joule
+# capability has a public endpoint to call.
+#
+#   cf target -o "SEAIO_aws-sap-hackathon-si4ykj9d" -s "hackathon-<your-team>"
+#   cf push
+#   cf set-env sigap-agent SIGAP_SECRET "$(python3 manage.py secret)"
+#   cf restart sigap-agent
+#
+# WARNING, read before trusting anything this writes.
+# SIGAP_DB is SQLite on the container filesystem, which Cloud Foundry resets on
+# every restart, redeploy and scale. The approvals table is the official record
+# of who authorised what, so on this platform it survives only until the next
+# restart. Fine for a demo. Before anything real, bind a Postgres service and
+# move core/store.py onto it.
+applications:
+  - name: sigap-agent
+    memory: 512M
+    instances: 1
+    buildpacks:
+      - python_buildpack
+    command: python3 api.py
+    env:
+      SIGAP_ENV: dev

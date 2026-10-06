@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import pathlib
 from dataclasses import dataclass
+from typing import Mapping, Tuple
 
 
 def _value(raw: str) -> str:
@@ -98,7 +99,27 @@ def load() -> Config:
 CFG = load()
 
 
+def bind_target(env: Mapping[str, str]) -> Tuple[str, int]:
+    """Where the HTTP service should listen.
+
+    Cloud Foundry sets PORT and routes traffic into the container from outside
+    it, so the listener has to accept more than loopback or the health check
+    fails and the app looks like a platform problem. Nothing sets PORT on a dev
+    machine, and binding to loopback there keeps the API off the local network.
+    SIGAP_HOST overrides both.
+    """
+    port = int(env.get("PORT") or 8787)
+    host = env.get("SIGAP_HOST") or ("0.0.0.0" if env.get("PORT") else "127.0.0.1")
+    return host, port
+
+
 def demo() -> None:
+    assert bind_target({}) == ("127.0.0.1", 8787), "a dev machine stays off the network"
+    assert bind_target({"PORT": "8080"}) == ("0.0.0.0", 8080), "a platform port opens the bind"
+    assert bind_target({"SIGAP_HOST": "127.0.0.1", "PORT": "8080"}) == ("127.0.0.1", 8080)
+    assert bind_target({"SIGAP_HOST": "0.0.0.0"}) == ("0.0.0.0", 8787)
+    print("  bind: loopback by default ✓ · opens only when the platform sets PORT ✓")
+
     assert _value("us-west-2") == "us-west-2"
     assert _value("  dev   # dev | staging | prod  ") == "dev"
     assert _value("   # free at api.sap.com") == "", "a key that is only a comment is empty"
