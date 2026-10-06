@@ -251,6 +251,22 @@ joule login --no-app-tid \
 joule status        # expect: Logged in
 ```
 
+Two things that cost time here.
+
+`--apiurl` is the DAS URL above. The key file also has a `uaa.apiurl`, and it
+is a different thing: `https://api.authentication.ap10.hana.ondemand.com`, the
+UAA endpoint. Passing that one fails.
+
+**Run this at your own keyboard, not from an agent shell.** The CLI stores the
+token in the macOS Keychain, and a process without a GUI session cannot unlock
+it, which surfaces as `AUTH_LOAD_FAILED` and the unhelpful message *loading
+authentication properties failed*. The `-e, --unsecure-storage` flag exists for
+exactly that case, but it writes the clientsecret to a plain local store, so
+take it only if you have decided you want that.
+
+If it still fails in your own terminal, check Node: the CLI declares
+`node >=22 <25` and warns `EBADENGINE` on v26.
+
 Do not use `--sso`. The manual says it causes a `redirect_uri` mismatch on this
 tenant.
 
