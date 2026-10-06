@@ -120,14 +120,23 @@ trust check.
 
 `sender.py` maps an approved action to a service and entity:
 
-| Action kind | Service | Entity |
-|---|---|---|
-| `draft_po` | `API_PURCHASEREQ_PROCESS_SRV` | `A_PurchaseRequisitionHeader` |
-| `stock_transfer` | `API_STOCK_TRANSFER_SRV` | `A_StockTransfer` |
-| `create_sourcing_event` | `API_SOURCING_PROJECT_SRV` | `A_SourcingProject` |
+| Action kind | Service | Entity | Checked 6 Oct |
+|---|---|---|---|
+| `draft_po` | `API_PURCHASEREQ_PROCESS_SRV` | `A_PurchaseRequisitionHeader` | **verified**, reads back |
+| `stock_transfer` | `API_STOCK_TRANSFER_SRV` | `A_StockTransfer` | service 403 |
+| `create_sourcing_event` | `API_SOURCING_PROJECT_SRV` | `A_SourcingProject` | service 403 |
 
-The write path is complete, CSRF token fetched then posted. **The entity names
-have never been checked against the sandbox.** Nothing writes until they are.
+The write path is complete, CSRF token fetched then posted.
+
+Checked with a real key. `draft_po` is confirmed: the service answers, the
+entity exists, a row reads back. The other two fail at the **service**, not the
+entity: `$metadata` on both returns 403 with the key that reads the other ten
+services happily, so those APIs are not exposed on the free sandbox and their
+entity names remain unverifiable from here.
+
+What that means for the demo: `draft_po` is the one action kind that can be
+shown writing into SAP. A stock transfer or a sourcing event needs a system
+that carries those services.
 
 ---
 

@@ -8,15 +8,29 @@ MissingApiKey, and the caller turns that into Origin.MISSING.
 """
 from __future__ import annotations
 
+import gzip
 import json
 import os
 import urllib.parse
 import urllib.request
 from typing import Any, Dict, Optional, Tuple
 
-BASE_URL = os.environ.get("SAP_BASE_URL", "https://sandbox.api.sap.com")
-API_KEY = os.environ.get("SAP_API_KEY", "")
+from core.config import CFG
+
+# Read through CFG, not os.environ. core.config is what loads .env, so reading
+# the environment directly here made the connector work or not depending on
+# whether something else had imported config first. It did work through api.py,
+# by luck of import order, and failed the moment anything imported this module
+# on its own.
 TIMEOUT = int(os.environ.get("SAP_TIMEOUT", "30"))
+
+
+def base_url() -> str:
+    return CFG.sap_base_url
+
+
+def api_key() -> str:
+    return CFG.sap_api_key
 
 
 class MissingApiKey(RuntimeError):
@@ -27,8 +41,21 @@ class SapError(RuntimeError):
     pass
 
 
+def _body(resp) -> str:
+    """The response text, decompressed if the gateway sent it compressed.
+
+    SAP's sandbox gzips even when nothing asked it to, and urllib hands back
+    the raw bytes. Without this, the first live call of the product's life dies
+    on a UnicodeDecodeError at byte 0x8b, which says nothing about gzip.
+    """
+    raw = resp.read()
+    if (resp.headers.get("Content-Encoding") or "").lower() == "gzip" or raw[:2] == b"\x1f\x8b":
+        raw = gzip.decompress(raw)
+    return raw.decode("utf-8", errors="replace")
+
+
 def available() -> bool:
-    return bool(API_KEY)
+    return bool(api_key())
 
 
 def get(service: str, entity: str, params: Optional[Dict[str, Any]] = None) -> dict:
@@ -38,7 +65,7 @@ def get(service: str, entity: str, params: Optional[Dict[str, Any]] = None) -> d
     entity  , e.g. "A_PurchaseOrder"
     params  , OData parameters: $filter, $top, $select, $expand
     """
-    if not API_KEY:
+    if not api_key():
         raise MissingApiKey(
             "SAP_API_KEY is not set. Get one free at https://api.sap.com "
             "(sign in with an SAP ID, open the API page, click Show API Key)."
@@ -46,14 +73,14 @@ def get(service: str, entity: str, params: Optional[Dict[str, Any]] = None) -> d
 
     q = dict(params or {})
     q.setdefault("$format", "json")
-    url = (f"{BASE_URL}/s4hanacloud/sap/opu/odata/sap/{service}/{entity}"
+    url = (f"{base_url()}/s4hanacloud/sap/opu/odata/sap/{service}/{entity}"
            f"?{urllib.parse.urlencode(q)}")
 
-    req = urllib.request.Request(url, headers={"APIKey": API_KEY,
+    req = urllib.request.Request(url, headers={"APIKey": api_key(),
                                                "Accept": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
-            return json.loads(r.read().decode())
+            return json.loads(_body(r))
     except urllib.error.HTTPError as e:
         raise SapError(f"HTTP {e.code} from {service}/{entity}: "
                        f"{e.read()[:200].decode(errors='replace')}") from e
@@ -74,9 +101,9 @@ class CsrfFailed(SapError):
 
 def _csrf_token(service: str) -> Tuple[str, str]:
     """SAP OData v2 refuses writes without a CSRF token. Fetch it, keep the cookie."""
-    url = f"{BASE_URL}/s4hanacloud/sap/opu/odata/sap/{service}/"
+    url = f"{base_url()}/s4hanacloud/sap/opu/odata/sap/{service}/"
     req = urllib.request.Request(url, headers={
-        "APIKey": API_KEY, "X-CSRF-Token": "Fetch", "Accept": "application/json"})
+        "APIKey": api_key(), "X-CSRF-Token": "Fetch", "Accept": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
             token = r.headers.get("X-CSRF-Token", "")
@@ -97,13 +124,13 @@ def post(service: str, entity: str, payload: dict,
     Our side also guards it in the actions table, two layers, because a
     duplicate purchase order is expensive.
     """
-    if not API_KEY:
+    if not api_key():
         raise MissingApiKey("SAP_API_KEY is not set. The write to SAP is refused")
 
     token, cookie = _csrf_token(service)
-    url = f"{BASE_URL}/s4hanacloud/sap/opu/odata/sap/{service}/{entity}"
+    url = f"{base_url()}/s4hanacloud/sap/opu/odata/sap/{service}/{entity}"
     headers = {
-        "APIKey": API_KEY,
+        "APIKey": api_key(),
         "X-CSRF-Token": token,
         "Content-Type": "application/json",
         "Accept": "application/json",
@@ -117,7 +144,7 @@ def post(service: str, entity: str, payload: dict,
         url, data=json.dumps(payload).encode(), headers=headers, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
-            return json.loads(r.read().decode() or "{}")
+            return json.loads(_body(r) or "{}")
     except urllib.error.HTTPError as e:
         raise SapError(
             f"HTTP {e.code} writing to {service}/{entity}: "
