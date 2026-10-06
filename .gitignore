@@ -50,3 +50,6 @@ sigap/agent/data/
 
 # Hackathon service keys. Fetched from the keybroker, never committed.
 sigap/agent/.secrets/
+
+# Joule CLI debug dumps. They can carry credentials.
+sigap/agent/debug-*.json

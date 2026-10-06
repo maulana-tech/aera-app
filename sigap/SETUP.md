@@ -238,34 +238,48 @@ curl -s "$BROKER/ai-core/stoiksm-team-key" -o sigap/agent/.secrets/ai-core.json
 chmod 600 sigap/agent/.secrets/*.json
 ```
 
-Then log in without the secret ever reaching the terminal or shell history:
+Then log in without the secret ever reaching the terminal or shell history.
+**The `--authurl` here is not the one the manual gives**, for the reason below:
 
 ```bash
 cd sigap/agent
 J=.secrets/joule.json
 joule login --no-app-tid \
-  --authurl 'https://auisywroy.authentication.ap10.hana.ondemand.com' \
+  --authurl "$(python3 -c "import json;print(json.load(open('$J'))['uaa']['url'])")" \
   --apiurl  'https://aws-sap-hackathon-si4ykj9d.ap10.sapdas.cloud.sap' \
   -c "$(python3 -c "import json;print(json.load(open('$J'))['uaa']['clientid'])")" \
   -s "$(python3 -c "import json;print(json.load(open('$J'))['uaa']['clientsecret'])")"
 joule status        # expect: Logged in
 ```
 
-Two things that cost time here.
+Three things that cost time here.
 
-`--apiurl` is the DAS URL above. The key file also has a `uaa.apiurl`, and it
-is a different thing: `https://api.authentication.ap10.hana.ondemand.com`, the
-UAA endpoint. Passing that one fails.
+**The manual's `--authurl` is wrong and fails with a message that never says
+so.** It gives `https://auisywroy.authentication.ap10.hana.ondemand.com`.
+`auisywroy` is the IAS tenant subdomain; the XSUAA subdomain is
+`aws-sap-hackathon-si4ykj9d`. The CLI detects `authType: XSUAA`, asks the
+authurl for `/.well-known/openid-configuration`, gets a 404, and reports
+`loading authentication properties failed (code: AUTH_LOAD_FAILED)`, which
+mentions neither the URL nor the 404. Use `uaa.url` from the key file, as the
+command above does. Checked directly: the key file's URL answers 200 on that
+path and the manual's answers 404.
 
-**Run this at your own keyboard, not from an agent shell.** The CLI stores the
-token in the macOS Keychain, and a process without a GUI session cannot unlock
-it, which surfaces as `AUTH_LOAD_FAILED` and the unhelpful message *loading
-authentication properties failed*. The `-e, --unsecure-storage` flag exists for
-exactly that case, but it writes the clientsecret to a plain local store, so
-take it only if you have decided you want that.
+`joule -d login ...` is what finds this. It writes a `debug-login-*.json` next
+to you with the real inner error. That pattern is gitignored, because the dump
+holds the request detail.
 
-If it still fails in your own terminal, check Node: the CLI declares
-`node >=22 <25` and warns `EBADENGINE` on v26.
+`--apiurl` is the DAS URL above, and it is the one the manual gives. The key
+file also has a `uaa.apiurl`, which is a different thing again:
+`https://api.authentication.ap10.hana.ondemand.com`. Passing that one fails
+too. So: `authurl` from the key file, `apiurl` from the manual.
+
+**Run this at your own keyboard.** Once the URL is right, the CLI prompts
+`? Username:` and then for a password: your IAS email in lowercase, and the
+password you set at activation. The client credentials alone are not enough,
+and a non-interactive shell dies at that prompt.
+
+The CLI declares `node >=22 <25` and warns `EBADENGINE` on v26. It ran anyway
+here, so that warning was not the cause of anything above.
 
 Do not use `--sso`. The manual says it causes a `redirect_uri` mismatch on this
 tenant.
