@@ -193,6 +193,73 @@ reply should carry the tool names it used underneath.
 
 ---
 
+## 5. SAP BTP, the hackathon tenant
+
+A separate thing from §1. That key reads **business data** from the S/4HANA
+sandbox. This tenant has **no ERP in it**: what it carries is AI Core, Joule,
+and a Cloud Foundry space. The two do not substitute for each other.
+
+Team slug is **`stoiksm-team`**, confirmed against the keybroker. Everything
+below takes it as given.
+
+| | |
+|---|---|
+| IAS logon | `https://auisywroy.accounts.ondemand.com` |
+| Cockpit | `https://apac.cockpit.btp.cloud.sap/cockpit/?idp=auisywroy.accounts.ondemand.com/` |
+| CF API | `https://api.cf.ap10.hana.ondemand.com` |
+| CF org | `SEAIO_aws-sap-hackathon-si4ykj9d` |
+| CF space | `hackathon-stoiksm-team` |
+| CF origin key | `auisywroy-platform` |
+| Joule auth | `https://auisywroy.authentication.ap10.hana.ondemand.com` |
+| Joule API | `https://aws-sap-hackathon-si4ykj9d.ap10.sapdas.cloud.sap` |
+
+Sign in with the registered email in **lowercase**. The same IAS password is
+used for the cockpit, CF SSO and Joule.
+
+### Credentials
+
+Three endpoints on
+`https://hackathon-keybroker.cfapps.ap10.hana.ondemand.com`:
+
+| Path | Returns | Secret |
+|---|---|---|
+| `/ai-core/stoiksm-team-key` | clientid, clientsecret, url, AI_API_URL | **yes** |
+| `/joule/stoiksm-team-key` | `uaa.clientid`, `uaa.clientsecret` | **yes** |
+| `/group/stoiksm-team` | the IAS group UUID for `visibility_condition` | no |
+
+Fetch the two secret ones only when you are about to use them, and do not let
+them reach a file this repository tracks. `joule login` takes them as
+arguments, so they never need to be written down at all:
+
+```bash
+BROKER=https://hackathon-keybroker.cfapps.ap10.hana.ondemand.com
+curl -s "$BROKER/joule/stoiksm-team-key" | python3 -m json.tool | grep -A2 uaa
+```
+
+Nothing in SIGAP reads AI Core or Joule credentials today, so there is no
+`.env` entry for them and none should be added until something needs one.
+
+### Deploy the agent service
+
+`agent/manifest.yml` carries the commands, and the warning about SQLite on a
+filesystem Cloud Foundry resets. Read that warning before trusting anything the
+deployed app writes.
+
+```bash
+cf login -a https://api.cf.ap10.hana.ondemand.com --sso   # origin key: auisywroy-platform
+cf target -o "SEAIO_aws-sap-hackathon-si4ykj9d" -s "hackathon-stoiksm-team"
+cd sigap/agent && cf push
+cf set-env sigap-agent SIGAP_SECRET "$(python3 manage.py secret)"
+cf restart sigap-agent
+cf app sigap-agent        # the route is the endpoint a Joule capability calls
+```
+
+**Test.** `curl https://<route>/health` returns the same JSON as the local
+service, with `sap_ready` and `model_ready` reflecting whatever is set in the
+CF environment rather than your laptop's `.env`.
+
+---
+
 ## What is still not set up after all this
 
 Honest list, so nothing is discovered during a demo.

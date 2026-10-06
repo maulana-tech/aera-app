@@ -2,7 +2,7 @@
 # Deploy the agent service into the hackathon Cloud Foundry space, so a Joule
 # capability has a public endpoint to call.
 #
-#   cf target -o "SEAIO_aws-sap-hackathon-si4ykj9d" -s "hackathon-<your-team>"
+#   cf target -o "SEAIO_aws-sap-hackathon-si4ykj9d" -s "hackathon-stoiksm-team"
 #   cf push
 #   cf set-env sigap-agent SIGAP_SECRET "$(python3 manage.py secret)"
 #   cf restart sigap-agent
