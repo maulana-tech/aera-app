@@ -45,6 +45,14 @@ product working, not a placeholder.
 
 Fifteen minutes, free, self-service. **This does not wait for anyone at SAP.**
 
+**SAP ID is not the hackathon IAS account.** Two different identity systems.
+The organiser's account lives on `auisywroy.accounts.ondemand.com` and is only
+for the hackathon tenant; api.sap.com wants an SAP ID, the universal SAP
+account. Signing in there with the hackathon credentials fails with *we
+couldn't authenticate you*, which reads like a wrong password. Register an SAP
+ID, or use an older one if you already have a SAP Community or SAP Learning
+login.
+
 1. Register an SAP ID account at <https://api.sap.com>
 2. Open any API page, for example
    [Material Stock](https://api.sap.com/api/API_MATERIAL_STOCK_SRV/overview)
