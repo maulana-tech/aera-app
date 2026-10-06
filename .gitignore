@@ -47,3 +47,6 @@ __pycache__/
 .env
 sigap/agent/.env
 sigap/agent/data/
+
+# Hackathon service keys. Fetched from the keybroker, never committed.
+sigap/agent/.secrets/

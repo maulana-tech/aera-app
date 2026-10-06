@@ -227,14 +227,32 @@ Three endpoints on
 | `/joule/stoiksm-team-key` | `uaa.clientid`, `uaa.clientsecret` | **yes** |
 | `/group/stoiksm-team` | the IAS group UUID for `visibility_condition` | no |
 
-Fetch the two secret ones only when you are about to use them, and do not let
-them reach a file this repository tracks. `joule login` takes them as
-arguments, so they never need to be written down at all:
+Pull them straight to disk rather than to a screen. `agent/.secrets/` is
+gitignored and exists for this. Neither command prints anything:
 
 ```bash
 BROKER=https://hackathon-keybroker.cfapps.ap10.hana.ondemand.com
-curl -s "$BROKER/joule/stoiksm-team-key" | python3 -m json.tool | grep -A2 uaa
+mkdir -p sigap/agent/.secrets && chmod 700 sigap/agent/.secrets
+curl -s "$BROKER/joule/stoiksm-team-key"   -o sigap/agent/.secrets/joule.json
+curl -s "$BROKER/ai-core/stoiksm-team-key" -o sigap/agent/.secrets/ai-core.json
+chmod 600 sigap/agent/.secrets/*.json
 ```
+
+Then log in without the secret ever reaching the terminal or shell history:
+
+```bash
+cd sigap/agent
+J=.secrets/joule.json
+joule login --no-app-tid \
+  --authurl 'https://auisywroy.authentication.ap10.hana.ondemand.com' \
+  --apiurl  'https://aws-sap-hackathon-si4ykj9d.ap10.sapdas.cloud.sap' \
+  -c "$(python3 -c "import json;print(json.load(open('$J'))['uaa']['clientid'])")" \
+  -s "$(python3 -c "import json;print(json.load(open('$J'))['uaa']['clientsecret'])")"
+joule status        # expect: Logged in
+```
+
+Do not use `--sso`. The manual says it causes a `redirect_uri` mismatch on this
+tenant.
 
 Nothing in SIGAP reads AI Core or Joule credentials today, so there is no
 `.env` entry for them and none should be added until something needs one.
