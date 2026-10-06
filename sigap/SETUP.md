@@ -213,8 +213,20 @@ below takes it as given.
 | Joule auth | `https://auisywroy.authentication.ap10.hana.ondemand.com` |
 | Joule API | `https://aws-sap-hackathon-si4ykj9d.ap10.sapdas.cloud.sap` |
 
-Sign in with the registered email in **lowercase**. The same IAS password is
-used for the cockpit, CF SSO and Joule.
+### Activate the IAS account first
+
+Nothing else in this section works until this is done, and nothing says so:
+`cf login --sso` and `joule login` both fail in ways that point elsewhere.
+
+1. Open `https://auisywroy.accounts.ondemand.com`
+2. Username is the registered email, **lowercase**
+3. Password is the organiser's temporary one
+4. Set a new password when prompted
+5. You are activated once you land on the profile page
+
+That new password is the one used for the cockpit, `cf login --sso` and
+`joule login`. Only one of the addresses a team registered will be the one
+IAS knows.
 
 ### Credentials
 
