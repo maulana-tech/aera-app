@@ -21,7 +21,7 @@ Endpoints
     GET  /data/{domain}            per-domain table
     GET  /log                      every step, newest first
     GET  /uploads · POST /uploads
-    GET  /reports/{run_id}
+    POST /mcp                      the tool registry over MCP\n    GET  /reports/{run_id}
     GET  /contacts · POST /contacts
 """
 from __future__ import annotations
@@ -442,6 +442,20 @@ def remove_conversation(m, _b, h) -> Tuple[int, dict]:
     if not store.delete_conversation(m.group(1), user.id):
         return 404, {"error": "no such conversation"}
     return 200, {"deleted": True}
+
+
+@route("POST", r"/mcp")
+def mcp_endpoint(_m, b: dict, h) -> Tuple[int, dict]:
+    """The tool registry over MCP, for AgentCore Gateway and for SAP Joule.
+
+    Authenticated like every other route. Joule reaches an MCP server through a
+    BTP destination, and the destination is where the credential lives, so this
+    staying closed is the correct default rather than an obstacle.
+    """
+    _user(h)
+    import mcp
+    reply = mcp.handle(b or {})
+    return (204, {}) if not reply else (200, reply)
 
 
 @route("GET", r"/log")

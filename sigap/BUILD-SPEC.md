@@ -197,6 +197,36 @@ Guards that hold regardless of what any model says: `MAX_SPECIALIST_ROUNDS = 8`,
 
 ---
 
+## 6b. How SAP Joule reaches us
+
+Found on 6 October by reading the CLI's own schema, `da.sapdas.schema.json`,
+rather than the manual. A digital assistant manifest has a first-class
+`mcp_servers` array:
+
+| Field | Meaning |
+|---|---|
+| `namespace` + `path` | How the server is addressed. Unique together |
+| `type` | Transport |
+| `destination.design_time` | A BTP destination used to **list** the tools, with technical credentials |
+| `destination.runtime` | A BTP destination used to **call** them, with **principal propagation** |
+
+So Joule does not need a bespoke adapter. It needs our tools as MCP, which is
+the same thing AgentCore Gateway wants. `mcp.py` is that surface: a translation
+over `core/registry.py`, not a second registry.
+
+Principal propagation on the runtime destination matters more than it looks.
+The acting user's identity reaches our tools, which is what makes the role caps
+in `core/identity.py` meaningful on a call that arrived through SAP rather than
+through our own interface.
+
+**Open question, and it is a real one.** Creating a BTP destination needs write
+access to the subaccount, and the hackathon manual says participants get
+read-only. If that holds, the destination has to be created by an organiser, or
+the integration has to arrive some other way. Worth asking early rather than on
+the last weekend.
+
+---
+
 ## 7. What moving to Runtime changes
 
 Less than it sounds, which is the point of having owned the loop.
@@ -210,6 +240,7 @@ Less than it sounds, which is the point of having owned the loop.
 | `core/identity.py` | Unchanged, deliberately |
 | `clients/sap_s4.py` | Either gains OAuth, or is replaced by the AWS for SAP MCP Server. Decide before writing more of it |
 | `api.py` | Unchanged. It is the interface's bridge, not the agent runtime |
+| `mcp.py` | Unchanged. It already speaks what Gateway and Joule both want |
 
 ---
 
