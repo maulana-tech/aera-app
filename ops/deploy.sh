@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Executed as root by SSM on Ubuntu EC2. Dependencies run as ubuntu.
+# Executed via sudo on Ubuntu EC2. Dependencies run as ubuntu.
 set -Eeuo pipefail
-[[ $EUID == 0 ]] || { echo 'Run via SSM or sudo'; exit 1; }
+[[ $EUID == 0 ]] || { echo 'Run via sudo'; exit 1; }
 archive=${1:?release archive required}
 release_id=${2:?release ID required}
 [[ $release_id =~ ^[a-f0-9]{40}-[0-9]+-[0-9]+$ ]] || { echo 'Invalid release ID'; exit 1; }

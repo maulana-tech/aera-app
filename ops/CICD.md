@@ -1,162 +1,184 @@
-# CI/CD SIGAP: GitHub main → EC2
+# CI/CD SIGAP lewat SSH: GitHub → EC2
 
-Pipeline menjalankan lint, build Next.js, self-check Python, dan test rollback.
-CI juga memeriksa rendering output agent dari `scripts/check-agent-output.mjs`.
-PR ke `main` hanya menjalankan CI. Push/merge ke `main` menjalankan CI lalu deploy.
-`workflow_dispatch` juga tersedia, tetapi deployment hanya diizinkan dari `main`.
-Build berjalan di GitHub (Ubuntu x86_64, Node 22), bukan di EC2.
-CI memakai `next build --webpack`, yang sudah diverifikasi untuk project ini.
+Push ke **semua branch** menjalankan CI. PR menuju `main` juga menjalankan CI.
+Deployment hanya berjalan setelah CI lulus untuk push ke `main` atau manual run
+pada `main`. Build memakai GitHub runner Ubuntu x86_64, Node 22, dan Webpack.
+CI memeriksa lint, output agent, self-check Python, serta transport SSH/rollback.
 
-## 1. Buat resource AWS sekali
+Deployment ini tidak memerlukan CloudFormation, Terraform, S3, OIDC, atau
+AWS access key GitHub. `ops/aws-cicd.yaml` adalah alternatif SSM lama dan tidak
+dipakai workflow SSH. Role EC2 yang sudah memberikan akses Bedrock tetap dipakai.
+Tidak perlu upgrade account hanya untuk menjalankan script deployment SSH.
 
-Siapkan **instance ID** EC2 yang sudah menjalankan SIGAP, misalnya `i-0123456789abcdef0`.
-Gunakan region EC2 tersebut; runbook lama menggunakan `ap-southeast-2`, tetapi
-pastikan instance yang dipilih benar. Instance harus Ubuntu **x86_64**.
+## 1. Siapkan server
 
-Di AWS Console, buka **CloudFormation → Create stack → With new resources →
-Upload a template file**. Upload `ops/aws-cicd.yaml` dari repo ini.
+Target mengikuti runbook `sigap/AGENT-ONLY-EXTERNAL-DEPLOYMENT.md`:
 
-- Stack name: `sigap-cicd`.
-- `GitHubRepository`: `maulana-tech/socrates` (ubah jika repo berbeda).
-- `InstanceId`: ID EC2 target.
-- `ExistingGitHubOidcProviderArn`: kosong jika belum ada provider GitHub.
-  Jika sudah ada, buka IAM → Identity providers → `token.actions.githubusercontent.com`
-  dan salin ARN-nya. Gunakan provider yang memiliki audience `sts.amazonaws.com`.
-- Konfirmasi capability pembuatan IAM resources, lalu Create stack.
-- Tunggu status `CREATE_COMPLETE`; buka tab **Outputs**.
+- EC2 Ubuntu **x86_64**, user SSH `ubuntu`, port **22**.
+- Node.js **22** tersedia di `/usr/bin/node`; Python **3.10+**, `python3-venv`,
+  `curl`, `flock`, dan `tar` tersedia. AWS CLI tidak diperlukan untuk deploy SSH.
+- Unit `sigap-agent.service` dan `sigap-web.service` sudah berjalan sebagai `ubuntu`.
+- User `ubuntu` bisa menjalankan `sudo -n true` tanpa password dan tanpa TTY.
+- `.env` tetap di `/opt/sigap-project/sigap/agent/.env`.
+- `.env` harus berisi `SIGAP_DB=/var/lib/sigap/sigap.db`, secret session, region,
+  model, dan konfigurasi SAP yang diperlukan. Database tetap di lokasi tersebut
+  dan direktorinya harus dapat ditulis `ubuntu`.
+- Jika systemd menggunakan `EnvironmentFile`, gunakan `KEY=value` dengan komentar
+  di baris tersendiri. Jangan memasukkan AWS access key ke `.env`.
+- EC2 bisa mengakses repository dependency Python melalui internet.
+- Izin dan akses model Bedrock tetap diperlukan untuk menjalankan agent; deploy
+  SSH tidak mengubah kebijakan atau mengaktifkan model.
 
-Stack membuat bucket privat terenkripsi, role GitHub khusus deployment,
-role/profile EC2 dengan SSM + baca release + inference Claude, dan OIDC provider
-jika diperlukan. Stack tidak membuat EC2 baru atau mengubah instance yang ada.
-
-Identitas pembuat stack memerlukan izin CloudFormation, IAM, dan S3 yang sesuai.
-Policy IAM/EC2/SSM/S3/Bedrock yang dibahas sebelumnya **belum memberikan izin
-CloudFormation**. Minta admin menjalankan stack, atau tambahkan izin CloudFormation
-untuk stack ini. Template tidak otomatis mengaktifkan akses model Bedrock.
-
-## 2. Siapkan EC2 sekali
-
-EC2 → Instances → pilih instance → Actions → Security → Modify IAM role.
-Pilih instance profile dari Output `Ec2InstanceProfileName`. Jika role lama punya
-izin tambahan yang masih diperlukan, sertakan izin itu pada role baru sebelum
-mengganti profile; sebuah EC2 hanya menggunakan satu instance profile.
-
-Alternatif mempertahankan role lama `sigap_agents`: attach
-`AmazonSSMManagedInstanceCore` dan salin inline policy `ReadReleases` serta
-`ClaudeInference` dari role keluaran stack ke role lama. Profile baru tidak wajib
-dipasang apabila izin itu sudah terpasang pada role lama.
-
-Pastikan:
-
-- SSM Agent aktif dan instance muncul **Online** di Systems Manager → Fleet Manager.
-- AWS CLI v2, Node.js **22** di `/usr/bin/node`, Python **3.10+**, `python3-venv`,
-  `curl`, dan `flock` tersedia. EC2 memerlukan internet untuk SSM/S3 dan pip,
-  atau endpoint/rute jaringan yang sesuai.
-- User Linux `ubuntu` dan unit `sigap-agent.service` / `sigap-web.service` sudah ada,
-  sesuai `sigap/AGENT-ONLY-EXTERNAL-DEPLOYMENT.md`. User service harus `ubuntu`.
-- `.env` tetap di `/opt/sigap-project/sigap/agent/.env` dan berisi
-  `SIGAP_DB=/var/lib/sigap/sigap.db` (path absolut), `SIGAP_SECRET`, region/model,
-  dan SAP key sesuai lingkungan. Jangan simpan AWS access key di `.env`.
-- `/var/lib/sigap` dimiliki `ubuntu` dan menyimpan database yang sudah digunakan.
-  Jangan mengganti path database sebelum menyalin data lama dengan benar.
-- Jika unit lama memakai `EnvironmentFile`, gunakan format systemd: `KEY=value`,
-  komentar di baris tersendiri; hindari komentar di akhir nilai.
-- Akses model Claude sudah diaktifkan di account; First Time Use Anthropic sudah
-  dipenuhi. Izin template mencakup model Claude dan inference profile Claude
-  lintas region. Pembatasan SCP/region organisasi masih dapat memblokir inference.
-
-Contoh pengecekan melalui SSH atau SSM Session Manager:
+Verifikasi lewat koneksi SSH admin yang sudah dipercaya:
 
 ```bash
 /usr/bin/node --version
 python3 --version
-aws --version
+sudo -n true
 sudo systemctl is-active sigap-agent sigap-web
-sudo test -f /opt/sigap-project/sigap/agent/.env
-sudo install -d -o ubuntu -g ubuntu /var/lib/sigap
 curl --fail http://127.0.0.1:8787/health
 curl --fail http://127.0.0.1:3000/login
 ```
 
-Nginx dan domain tetap memakai port 3000/8787 seperti runbook. Deployment tidak
-memerlukan GitHub mengakses port SSH EC2.
+Pastikan Nginx tetap mengarah ke frontend 3000 dan backend 8787.
 
-## 3. Isi GitHub environment
+## 2. Buat key deployment khusus
 
-Repo GitHub → **Settings → Environments → New environment → `production`**.
-Pada deployment branches/tags, pilih **Selected branches and tags**, tambahkan
-branch `main`. Untuk deploy otomatis, jangan aktifkan required reviewers.
-Trust OIDC template menggunakan subject environment `production`; pembatasan
-branch environment ini wajib, selain guard `main` pada workflow.
-
-Pada environment `production`, tambahkan **Variables**, bukan secrets:
-
-| Variable | Sumber |
-|---|---|
-| `AWS_REGION` | Output `AWSRegion` |
-| `AWS_ROLE_ARN` | Output `GitHubRoleArn` |
-| `DEPLOY_BUCKET` | Output `DeployBucket` |
-| `EC2_INSTANCE_ID` | ID EC2 target, sama dengan parameter stack |
-
-Tidak diperlukan AWS access key, secret access key, atau private SSH key.
-Tidak perlu menyalin SAP key atau SIGAP_SECRET ke GitHub.
-
-## 4. Aktifkan pipeline
-
-Commit file workflow dan folder `ops`, lalu push/merge ke `main`:
+Jalankan di laptop, bukan di GitHub atau lewat chat:
 
 ```bash
-git add .github/workflows/deploy.yml ops app components hooks README.md
-git commit -m "ci: deploy SIGAP main to EC2 through SSM"
-git push origin main
+mkdir -p ~/.ssh
+ssh-keygen -t ed25519 -N '' -C 'github-sigap-deploy' -f ~/.ssh/sigap-github-deploy
 ```
 
-Buka tab **Actions → CI and deploy EC2** untuk hasil CI dan deployment.
-SSM command ID juga tercetak di log deploy. Untuk melindungi `main`, jadikan
-job `ci` sebagai required status check melalui branch protection/ruleset.
+Melalui sesi SSH admin, tambahkan isi file **`sigap-github-deploy.pub`** ke
+`/home/ubuntu/.ssh/authorized_keys` di EC2. Jangan menimpa key admin yang sudah ada.
+Tambahkan prefix `restrict` pada baris key tersebut untuk menonaktifkan forwarding
+serta PTY; SSH noninteraktif dan transfer SFTP/SCP tetap tersedia:
 
-## Cara deployment bekerja
+```text
+restrict ssh-ed25519 AAAA... github-sigap-deploy
+```
 
-Artifact frontend mencakup standalone server, public, dan static assets.
-Backend termasuk prompt, fixture, dan references yang **sudah tracked Git**.
-`.env`, database lokal, dan virtualenv tidak dimasukkan ke artifact.
+File `.ssh/authorized_keys` harus dimiliki `ubuntu`, permission direktori `.ssh`
+700, permission file `authorized_keys` 600. Key ini menjalankan deploy sebagai
+`ubuntu` dan memakai sudo; perlakukan private key sebagai kredensial server.
 
-Paket diupload ke `releases/<commit>-<run>-<attempt>.tar.gz` di S3. EC2 memverifikasi
-SHA-256 lalu menyiapkan virtualenv di `/opt/sigap-project/releases/<release-id>`.
-Dependensi backend diinstall sebagai `ubuntu`, bukan root. Pipeline tidak
-mengubah requirements aplikasi; boto3 ditambahkan pada virtualenv untuk Bedrock.
-Versi dependency Python belum dikunci, mengikuti requirements repo saat ini.
+Coba koneksi dengan key baru dan host key server yang sudah diverifikasi:
 
-Symlink `/opt/sigap-project/current` menunjuk release aktif. Script membuat
-systemd drop-in `10-release.conf` untuk memakai symlink tersebut dan restart dua
-service. ENV dan database tetap berada di lokasi lama, di luar release.
-Health check memeriksa service aktif, API `/health`, dan frontend `/login`.
-Jika gagal, symlink dan drop-in sebelumnya dikembalikan lalu service direstart;
-GitHub tetap melaporkan deployment gagal. Pada deployment pertama, konfigurasi
-service awal dipulihkan. Rollback kode **tidak membatalkan perubahan database**.
-`/health` hanya membuktikan API hidup; tidak melakukan panggilan Bedrock/SAP asli.
+```bash
+ssh -i ~/.ssh/sigap-github-deploy -o BatchMode=yes ubuntu@<IP-ATAU-DNS-EC2> 'sudo -n true'
+```
 
-Ada jeda singkat ketika service direstart. Release lokal lama dipertahankan agar
-rollback tersedia; hapus release yang tidak aktif secara berkala untuk menjaga
-ruang disk. Paket S3 kedaluwarsa setelah 30 hari. Workflow concurrency dan lock
-EC2 mencegah dua deployment mengubah service secara bersamaan.
+## 3. Ambil host key EC2 yang dipercaya
 
-## Validasi lokal
+Di sesi SSH admin yang sudah dipercaya (atau EC2 console yang terautentikasi),
+jalankan pada **server EC2**:
+
+```bash
+printf 'sigap-ec2 '
+sudo cat /etc/ssh/ssh_host_ed25519_key.pub
+```
+
+Salin satu baris hasilnya. Bentuknya:
+
+```text
+sigap-ec2 ssh-ed25519 AAAAC3... root@server
+```
+
+Prefix `sigap-ec2` wajib: workflow memakai `HostKeyAlias=sigap-ec2`. Ini adalah
+**public host key server**, bukan public key deployment yang dibuat di laptop.
+Jangan mengambil key dari koneksi yang belum diverifikasi, dan jangan mematikan
+host key checking ketika mendapat error. Jika server diganti atau host key
+berubah, verifikasi ulang melalui akses admin sebelum mengganti secret.
+
+## 4. Isi konfigurasi GitHub
+
+Repo → **Settings → Secrets and variables → Actions**. Gunakan konfigurasi
+**repository**, sehingga tidak memerlukan pengelolaan environment `production`.
+
+Pada tab **Variables**, klik **New repository variable**:
+
+| Nama | Isi |
+|---|---|
+| `EC2_HOST` | IP publik atau hostname DNS EC2; tanpa `https://`, username, port, atau path |
+
+Pada tab **Secrets**, klik **New repository secret**:
+
+| Nama | Isi |
+|---|---|
+| `EC2_SSH_KEY` | Seluruh isi private key `~/.ssh/sigap-github-deploy`, termasuk BEGIN/END dan newline |
+| `EC2_KNOWN_HOSTS` | Satu baris public host key server dengan prefix `sigap-ec2` dari langkah 3 |
+
+Private key harus tanpa passphrase karena workflow noninteraktif. Private key
+hanya dimasukkan melalui GitHub Secrets; jangan commit atau kirim melalui chat.
+`AWS_REGION`, `AWS_ROLE_ARN`, `DEPLOY_BUCKET`, dan `EC2_INSTANCE_ID` tidak dibaca
+oleh workflow SSH. Environment `production` juga tidak dipakai workflow ini.
+
+## 5. Pastikan jaringan SSH dapat dijangkau
+
+Koneksi SSH dari laptop belum membuktikan runner GitHub dapat masuk. Security
+group, network ACL, firewall OS, dan route EC2 harus mengizinkan port 22 dari
+jalur jaringan runner yang disetujui pengelola. Aturan SSH dengan source **My IP**
+hanya mengizinkan laptop tersebut, bukan runner GitHub.
+
+Runner GitHub Ubuntu biasa mempunyai IP keluar yang berubah-ubah. Jangan
+mengandalkan IP satu run untuk deploy berikutnya, atau membuka port 22 ke semua
+IP sebagai solusi otomatis. Jika tidak tersedia jalur jaringan yang diizinkan,
+pengaturan runner dengan egress tetap/VPN atau self-hosted runner perlu dilakukan
+sebelum SSH dari GitHub bisa bekerja. Script tidak mengubah security group AWS.
+
+## 6. Aktifkan workflow
+
+Setelah konfigurasi server, GitHub, dan jaringan siap, commit dan push perubahan
+workflow ke `main`. Buka **Actions → CI and deploy EC2** untuk melihat CI/deploy.
+Jika sudah dipush, **Run workflow** dari `main` memulai deployment baru.
+
+Mintalah admin repo membatasi perubahan `main` melalui PR, review, dan required
+status check job `ci`. Job deploy memiliki guard `main`; secret tidak digunakan
+pada job PR atau push ke branch lain. Workflow SSH tidak memiliki approval gate
+environment, sehingga izin push/perubahan workflow ke `main` perlu dikendalikan.
+
+## Cara deploy dan rollback
+
+CI memaketkan Next.js standalone, static/public assets, serta file backend,
+prompt, fixture, dan references yang sudah tracked Git. `.env`, virtualenv,
+dan database lokal tidak dimasukkan ke paket.
+
+`ops/deploy-ssh.sh` memverifikasi private key/host key, memeriksa sudo, mengirim
+paket lewat SCP, memverifikasi SHA-256 di EC2, lalu menjalankan `ops/deploy.sh`
+melalui `sudo -n`. Kredensial sementara pada runner dan paket upload dibersihkan.
+
+Release berada di `/opt/sigap-project/releases/<commit>-<run>-<attempt>`.
+Dependency Python diinstall di virtualenv release sebagai `ubuntu`. Versi Python
+dependency belum dikunci, mengikuti requirements repo, ditambah boto3 untuk SDK
+Bedrock. Build frontend dilakukan di GitHub, bukan pada EC2 kecil.
+
+Script mengubah symlink `/opt/sigap-project/current`, memasang systemd drop-in
+`10-release.conf`, dan restart dua service. Health check memeriksa service aktif,
+backend `/health`, dan frontend `/login`. Jika gagal, symlink serta drop-in lama
+dipulihkan lalu service direstart; job GitHub tetap gagal. Pada deploy pertama,
+konfigurasi service awal dipulihkan. ENV dan database disimpan di luar release.
+
+Restart menyebabkan jeda singkat. Rollback kode tidak membatalkan perubahan
+schema/data. Endpoint `/health` hanya membuktikan backend hidup; tidak menguji
+panggilan Bedrock atau SAP asli. Release lokal lama tetap disimpan untuk rollback;
+hapus release yang tidak aktif secara berkala agar disk tidak penuh.
+
+## Validasi offline
 
 ```bash
 bash -n ops/deploy.sh
+bash -n ops/deploy-ssh.sh
 python3 ops/test_deploy.py
-npm run lint
-node scripts/check-agent-output.mjs
-npm run build -- --webpack
-cd sigap/agent && SIGAP_ENV=dev python3 manage.py check
+python3 ops/test_deploy_ssh.py
 ```
 
-Test deployment memakai command stub dan direktori sementara. Test memeriksa
-aktivasi release, rollback setelah kegagalan health check, dan pemulihan unit
-awal pada deployment pertama; tidak mengakses AWS atau mengubah systemd host.
+Test memakai stub dan direktori sementara, tanpa mengakses EC2/AWS. Test memeriksa
+aktivasi, pemulihan konfigurasi, kegagalan SSH/deploy, host checking, input host,
+secret yang belum diisi, dan pembersihan kredensial sementara.
 
 Referensi:
-- https://docs.github.com/en/actions/how-tos/secure-your-work/security-harden-deployments/oidc-in-aws
-- https://docs.aws.amazon.com/systems-manager/latest/userguide/setup-instance-permissions.html
-- https://docs.aws.amazon.com/bedrock/latest/userguide/model-access.html
+- https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets
+- https://docs.github.com/en/actions/reference/runners/github-hosted-runners
+- https://man.openbsd.org/ssh_config
