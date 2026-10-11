@@ -111,8 +111,12 @@ def client():
             "Check that the region offers Claude in the Bedrock console."
         )
     # imported here so a dev machine without the SDK can still run the rest
-    from anthropic import AnthropicBedrockMantle
-    return AnthropicBedrockMantle(aws_region=CFG.aws_region)
+    try:
+        from anthropic import AnthropicBedrock
+        return AnthropicBedrock(aws_region=CFG.aws_region)
+    except Exception:
+        from anthropic import AnthropicBedrockMantle
+        return AnthropicBedrockMantle(aws_region=CFG.aws_region)
 
 
 # --------------------------------------------------------------------------- #
@@ -145,15 +149,17 @@ def _tool_loop(cl, agent: Agent, task: str, board: Board,
             raise DeadlineExceeded(
                 f"{agent.title} still working after {MAX_SECONDS_PER_EVENT}s")
 
-        r = cl.messages.create(
-            model=CFG.model,
-            max_tokens=8000,
-            system=agent.instructions,
-            thinking={"type": "adaptive"},
-            output_config={"effort": agent.effort},
-            tools=tools,
-            messages=messages,
-        )
+        req = {
+            "model": CFG.model,
+            "max_tokens": 8000,
+            "system": agent.instructions,
+            "tools": tools,
+            "messages": messages,
+        }
+        if "haiku" not in CFG.model.lower():
+            req["thinking"] = {"type": "adaptive"}
+            req["output_config"] = {"effort": agent.effort}
+        r = cl.messages.create(**req)
         cost.add(r.usage)
         messages.append({"role": "assistant", "content": r.content})
 
@@ -226,15 +232,17 @@ def run(event: dict, report: Callable[[str, dict], None]) -> dict:
         if time.monotonic() > deadline:
             raise DeadlineExceeded(f"handling ran past {MAX_SECONDS_PER_EVENT}s")
 
-        r = cl.messages.create(
-            model=CFG.model,
-            max_tokens=16000,
-            system=SUPERVISOR.instructions,
-            thinking={"type": "adaptive"},
-            output_config={"effort": SUPERVISOR.effort},
-            tools=lead_tools,
-            messages=messages,
-        )
+        lead_req = {
+            "model": CFG.model,
+            "max_tokens": 16000,
+            "system": SUPERVISOR.instructions,
+            "tools": lead_tools,
+            "messages": messages,
+        }
+        if "haiku" not in CFG.model.lower():
+            lead_req["thinking"] = {"type": "adaptive"}
+            lead_req["output_config"] = {"effort": SUPERVISOR.effort}
+        r = cl.messages.create(**lead_req)
         cost.add(r.usage)
         messages.append({"role": "assistant", "content": r.content})
 
