@@ -2,7 +2,7 @@
 
 Push ke **semua branch** menjalankan CI. PR menuju `main` juga menjalankan CI.
 Deployment hanya berjalan setelah CI lulus untuk push ke `main` atau manual run
-pada `main`. Build memakai GitHub runner Ubuntu x86_64, Node 22, dan Webpack.
+pada `main`. Build memakai GitHub runner Ubuntu x86_64, Node 20, dan Webpack.
 CI memeriksa lint, output agent, self-check Python, serta transport SSH/rollback.
 
 Deployment ini tidak memerlukan CloudFormation, Terraform, S3, OIDC, atau
@@ -15,7 +15,7 @@ Tidak perlu upgrade account hanya untuk menjalankan script deployment SSH.
 Target mengikuti runbook `sigap/AGENT-ONLY-EXTERNAL-DEPLOYMENT.md`:
 
 - EC2 Ubuntu **x86_64**, user SSH `ubuntu`, port **22**.
-- Node.js **22** tersedia di `/usr/bin/node`; Python **3.10+**, `python3-venv`,
+- Node.js **20** (minimal **20.9.0**) tersedia di `/usr/bin/node`; Python **3.10+**, `python3-venv`,
   `curl`, `flock`, dan `tar` tersedia. AWS CLI tidak diperlukan untuk deploy SSH.
 - Unit `sigap-agent.service` dan `sigap-web.service` sudah berjalan sebagai `ubuntu`.
 - User `ubuntu` bisa menjalankan `sudo -n true` tanpa password dan tanpa TTY.

@@ -11,7 +11,7 @@ current="$root/current"
 env_file="$root/sigap/agent/.env"
 [[ -f $env_file ]] || { echo "Missing server configuration: $env_file"; exit 1; }
 for tool in node python3 curl flock runuser; do command -v "$tool" >/dev/null; done
-[[ $(node -p 'process.versions.node.split(".")[0]') == 22 ]] || { echo 'Install Node.js 22 on EC2'; exit 1; }
+[[ $(node -p 'process.versions.node.split(".")[0]') == 20 ]] || { echo 'Install Node.js 20 on EC2'; exit 1; }
 # ponytail: one EC2 deployment lock; use an orchestrator for multiple instances.
 exec 9>/var/lock/sigap-deploy.lock
 flock -w 120 9

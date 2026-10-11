@@ -47,7 +47,7 @@ class DeploymentTest(unittest.TestCase):
             binaries = base / "bin"
             binaries.mkdir()
             stubs = {
-                "node": "echo 22",
+                "node": "echo 20",
                 "runuser": "exit 0",
                 "chown": "exit 0",
                 "systemctl": 'echo "$*" >> "$TEST_SYSTEMCTL_LOG"',
