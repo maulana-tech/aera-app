@@ -3,7 +3,7 @@ import type { Column } from "@/app/lib";
 
 const idr = (n: number) => "Rp " + n.toLocaleString("en-US");
 
-function cell(v: any, c: Column) {
+function cell(v: unknown, c: Column) {
   if (v === null || v === undefined || v === "")
     return <span className="text-muted-foreground">-</span>;
   if (typeof v === "boolean")
@@ -13,15 +13,15 @@ function cell(v: any, c: Column) {
       </span>
     );
   if (c.rp && typeof v === "number") return <span className="tabular-nums">{idr(v)}</span>;
-  if (c.n) return <span className="tabular-nums">{v}</span>;
-  return <>{v}</>;
+  if (c.n) return <span className="tabular-nums">{String(v)}</span>;
+  return <>{String(v)}</>;
 }
 
 export function DataTable({
   columns, rows, origin, source, note, highlight,
 }: {
-  columns: Column[]; rows: Record<string, any>[]; origin: string; source: string;
-  note?: string; highlight?: (row: Record<string, any>) => boolean;
+  columns: Column[]; rows: Record<string, unknown>[]; origin: string; source: string;
+  note?: string; highlight?: (row: Record<string, unknown>) => boolean;
 }) {
   return (
     <div className="space-y-3">

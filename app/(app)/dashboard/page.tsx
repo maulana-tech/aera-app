@@ -53,7 +53,7 @@ export default async function Dashboard() {
   const stockAll = (stock?.rows ?? []).filter((r) => r.days_left != null);
   const stockRows = stockAll.slice(0, SHOWN);
   const stockData: Datum[] = stockRows.map((r) => ({
-    label: r.description || r.material,
+    label: String(r.description || r.material),
     sub: `${r.material} · ${r.plant}`,
     value: Number(r.days_left),
     display: `${num(Number(r.days_left))}d`,
@@ -65,13 +65,13 @@ export default async function Dashboard() {
 
   // ---- supply options: extra cost of each ------------------------------
   const sourcingData: Datum[] = (sourcing?.rows ?? []).map((r) => ({
-    label: r.label,
+    label: String(r.label),
     sub: `${r.supplier ?? "-"} ${r.origin_country ?? ""}`,
     value: Number(r.cost_idr ?? 0),
     display: `Rp ${short(Number(r.cost_idr ?? 0))}`,
     hatched: r.allowed === false,
     tag: r.allowed === false ? "blocked by rules" : r.arrives ? `arrives ${r.arrives}` : undefined,
-    title: r.reason || `Arrives ${r.arrives}, TKDN becomes ${r.tkdn ?? "-"}`,
+    title: String(r.reason || `Arrives ${r.arrives}, TKDN becomes ${r.tkdn ?? "-"}`),
   }));
 
   // ---- delayed shipments ------------------------------------------------
@@ -80,7 +80,7 @@ export default async function Dashboard() {
     .sort((a, b) => Number(b.delay_days) - Number(a.delay_days));
   const lateRows = lateAll.slice(0, SHOWN);
   const lateData: Datum[] = lateRows.map((r) => ({
-    label: r.reference,
+    label: String(r.reference),
     sub: `${r.material} ${r.port ?? ""}`,
     value: Number(r.delay_days),
     display: `${r.delay_days}d`,
@@ -90,7 +90,7 @@ export default async function Dashboard() {
 
   // ---- costing: what each combination would cost ------------------------
   const costingData: Datum[] = (costing?.rows ?? []).map((r) => ({
-    label: r.combination,
+    label: String(r.combination),
     value: Number(r.cost_idr ?? 0),
     display: `Rp ${short(Number(r.cost_idr ?? 0))}`,
     hatched: r.safe === false,
@@ -158,7 +158,7 @@ export default async function Dashboard() {
             rows: stockRows.map((r) => [
               `${r.material} ${r.description}`, r.plant,
               num(Number(r.days_left)), r.depleted_on ?? "-",
-            ]),
+            ].map(String)),
           }}
         >
           <Bars data={stockData} threshold={14} thresholdLabel="14-day safety threshold" />
@@ -175,7 +175,7 @@ export default async function Dashboard() {
             rows: (sourcing?.rows ?? []).map((r) => [
               r.label, r.arrives ?? "-", idr(Number(r.cost_idr ?? 0)),
               r.allowed === false ? "no" : "yes",
-            ]),
+            ].map(String)),
           }}
         >
           <Bars data={sourcingData} />
@@ -192,7 +192,7 @@ export default async function Dashboard() {
             head: ["Reference", "Booked", "Now", "Delay"],
             rows: lateRows.map((r) => [
               r.reference, r.arrival_original, r.arrival_revised, `${r.delay_days}d`,
-            ]),
+            ].map(String)),
           }}
         >
           <Bars data={lateData} />
@@ -214,7 +214,7 @@ export default async function Dashboard() {
             rows: (costing?.rows ?? []).map((r) => [
               r.combination, idr(Number(r.cost_idr ?? 0)),
               r.safe ? "yes" : "no", r.depleted_on ?? "-",
-            ]),
+            ].map(String)),
           }}
         >
           <Bars data={costingData} />

@@ -45,6 +45,7 @@ Everything lives in [`sigap/`](sigap/):
 |---|---|
 | [`sigap/PLAN.md`](sigap/PLAN.md) ⭐ | The plan, the status of each part, what to do next |
 | [`sigap/AGENT-REFERENCE.md`](sigap/AGENT-REFERENCE.md) | All 12 agents and their tools, **generated** from the registry |
+| [`ops/CICD.md`](ops/CICD.md) | GitHub Actions: CI and automatic deployment from main to EC2 |
 | [`sigap/AWS-PLAN.md`](sigap/AWS-PLAN.md) | Getting onto Bedrock and AgentCore, in the order that works |
 | [`sigap/DESIGN.md`](sigap/DESIGN.md) | The scenario and its figures, the constraint rules, the eval suite |
 | [`sigap/TECHNICAL.md`](sigap/TECHNICAL.md) | Bedrock calling conventions, caching, limits |

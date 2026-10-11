@@ -132,7 +132,7 @@ export function ContactList({ contacts, canDelete }: { contacts: Contact[]; canD
   if (!contacts.length) {
     return (
       <p className="text-muted-foreground mt-3 rounded-lg border border-dashed p-5 text-sm">
-        No contacts yet. Without these, an agent's recommendation reaches nobody.
+        No contacts yet. Without these, an agent&apos;s recommendation reaches nobody.
       </p>
     );
   }

@@ -14,7 +14,7 @@ type Step = {
 };
 type Action = {
   id: string; run_id: string; title: string; kind: string; status: string;
-  autonomous: number; payload: Record<string, any>; created_at: string;
+  autonomous: number; payload: Record<string, unknown>; created_at: string;
 };
 type Approval = {
   id: number; action_id: string; run_id: string; action_kind: string;

@@ -33,7 +33,7 @@ const PROSE = new Set(["rationale", "message"]);
 
 const idr = (n: number) => "Rp " + n.toLocaleString("en-US");
 
-export function ActionPayload({ payload }: { payload: Record<string, any> }) {
+export function ActionPayload({ payload }: { payload: Record<string, unknown> }) {
   const keys = Object.keys(payload)
     .filter((k) => !k.startsWith("_"))
     .sort((a, b) => {

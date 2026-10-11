@@ -91,6 +91,8 @@ export default function Conversation({
   }, [code, signedIn]);
 
   useEffect(() => {
+    // The state update happens after the history fetch, not synchronously.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadThreads();
   }, [loadThreads]);
 
@@ -99,6 +101,8 @@ export default function Conversation({
   useEffect(() => {
     if (!threadId) return;
     let alive = true;
+    // Mark the external request as loading before restoring its result.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRestoring(true);
     fetch(`/api/sigap/conversations/${threadId}`)
       .then((r) => (r.ok ? r.json() : null))

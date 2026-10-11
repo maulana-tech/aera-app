@@ -7,7 +7,7 @@ export type Step = {
 };
 export type Action = {
   id: string; kind: string; autonomous: number; status: string;
-  payload: Record<string, any>; sap_reference: string | null; created_at: string;
+  payload: Record<string, unknown>; sap_reference: string | null; created_at: string;
 };
 export type Approval = {
   id: number; action_id: string; decided_by: string; role: string;
@@ -18,7 +18,7 @@ export type Run = {
   signal_source?: string;
   mode: "autonomous" | "guided"; status: string;
   started_at: string; finished_at: string | null;
-  token_cost_idr: number; decision: Record<string, any> | null; error: string | null;
+  token_cost_idr: number; decision: { recommendation?: string; reason?: string; agents_called?: string[]; untrusted_on_board?: string[] } | null; error: string | null;
   steps?: Step[]; actions?: Action[]; approvals?: Approval[];
 };
 
@@ -151,7 +151,7 @@ export type DomainChart =
 
 /** One table row. Keys are the column `k`s, so a view can hand its columns and
  *  its rows straight to DataTable without remapping either. */
-export type Row = Record<string, any>;
+export type Row = Record<string, unknown>;
 
 /* One section of an agent's desk: a heading, the finding under it, a table, and
  * a chart when the domain has one. Most domains have exactly one section and
