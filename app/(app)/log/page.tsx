@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { StepSummary, stepAgentName } from "@/components/agent-activity";
 import { api, idr } from "@/app/lib";
 import { Empty, PageHeader, Section } from "@/components/shell";
 import { OriginBadge, StatusBadge } from "@/components/status-badge";
@@ -131,15 +132,10 @@ export default async function Log() {
                   <p className="text-primary font-mono text-[11px] font-semibold tracking-wider">
                     {s.stage}
                   </p>
-                  <p className="text-muted-foreground mt-0.5 text-[11px]">{s.agent_name}</p>
+                  <p className="text-muted-foreground mt-0.5 text-[11px]">{stepAgentName(s)}</p>
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm leading-relaxed">{s.summary}</p>
-                  {s.tools.length > 0 && (
-                    <p className="text-muted-foreground mt-1 break-words font-mono text-[11px]">
-                      {s.tools.join(" · ")}
-                    </p>
-                  )}
+                  <StepSummary step={s} />
                   <div className="mt-1.5 flex flex-wrap items-center gap-2">
                     {s.origin && <OriginBadge origin={s.origin} source={s.source} />}
                     <Link

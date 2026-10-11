@@ -1,12 +1,14 @@
 "use client";
 
 import {
-  ArrowRight, CornerDownLeft, Loader2, Plus, Trash2, Wrench,
+  ArrowRight, CornerDownLeft, Loader2, Plus, Trash2,
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { ToolActivity } from "@/components/agent-activity";
 import { AgentBadge } from "@/components/agent-card";
+import { Markdown } from "@/components/markdown";
 import { OriginBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 
@@ -324,16 +326,9 @@ export default function Conversation({
                   ) : (
                     <>
                       <div className="bg-muted/50 rounded-lg rounded-tl-sm border p-4">
-                        <p className="whitespace-pre-line text-sm leading-relaxed">
-                          {m.reply.answer}
-                        </p>
+                        <Markdown>{m.reply.answer}</Markdown>
                       </div>
-                      {m.reply.tools_used?.length > 0 && (
-                        <p className="text-muted-foreground flex flex-wrap items-center gap-1.5 font-mono text-[11px]">
-                          <Wrench className="size-3" />
-                          {m.reply.tools_used.join(" · ")}
-                        </p>
-                      )}
+                      <ToolActivity tools={m.reply.tools_used ?? []} />
                       {Object.keys(m.reply.board ?? {}).length > 0 && (
                         <div className="flex flex-wrap gap-1.5">
                           {Object.entries(m.reply.board).map(([k, v]) => (

@@ -2,6 +2,8 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { StepSummary, stepAgentName } from "@/components/agent-activity";
+import { Markdown } from "@/components/markdown";
 import { api, idr, type Run } from "@/app/lib";
 import { OriginBadge, StatusBadge } from "@/components/status-badge";
 import { ReportActions } from "./Actions";
@@ -70,9 +72,7 @@ export default async function Report({ params }: { params: Promise<{ id: string 
         </header>
 
         <Part title="Decision">
-          <p className="whitespace-pre-line text-sm leading-relaxed">
-            {run.decision?.recommendation ?? run.decision?.reason ?? "No decision was recorded."}
-          </p>
+          <Markdown>{run.decision?.recommendation ?? run.decision?.reason ?? "No decision was recorded."}</Markdown>
         </Part>
 
         <Part title={`Actions (${actions.length})`}>
@@ -130,10 +130,8 @@ export default async function Report({ params }: { params: Promise<{ id: string 
                     {s.stage}
                   </span>
                   <div className="min-w-0">
-                    <p className="text-sm leading-relaxed">
-                      <span className="text-muted-foreground">{s.agent_name}. </span>
-                      {s.summary}
-                    </p>
+                    <p className="text-muted-foreground mb-1 text-xs">{stepAgentName(s)}</p>
+                    <StepSummary step={s} />
                     {s.origin && (
                       <div className="mt-1.5">
                         <OriginBadge origin={s.origin} source={s.source} />
