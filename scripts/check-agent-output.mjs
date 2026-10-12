@@ -47,6 +47,7 @@ assert.equal(stepAgentName({ agent: "impact", agent_name: "get_material_stock" }
 assert.equal(render(ToolActivity, { tools: [] }), "");
 const step = render(StepSummary, { step: { stage: "TOOL", summary: "get_material_stock", tools: ["get_material_stock"] } });
 assert.match(step, /Checking material stock/);
+assert.match(step, /<summary[^>]*>Activity details<\/summary>/);
 assert.doesNotMatch(step, /get_material_stock/);
 assert.match(render(StepSummary, { step: { stage: "FINDING", summary: "**13** materials", tools: [] } }), /<strong>13<\/strong> materials/);
-console.log("Agent output checks passed: Markdown, safe rendering, activity labels, and stage labels.");
+console.log("Agent output checks passed: Markdown, safe rendering, activity details, and stage labels.");

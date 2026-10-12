@@ -74,6 +74,12 @@ export function ToolActivity({ tools }: { tools: string[] }) {
   return (
     <div className="text-muted-foreground mt-1 text-xs">
       <p>{tools.map(toolLabel).join(" · ")}</p>
+      <details className="mt-1">
+        <summary className="cursor-pointer hover:text-foreground">Activity details</summary>
+        <p className="mt-1 break-words text-foreground/80">
+          {tools.map(toolLabel).join(" · ")}
+        </p>
+      </details>
     </div>
   );
 }
