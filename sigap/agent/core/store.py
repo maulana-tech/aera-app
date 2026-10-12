@@ -376,10 +376,43 @@ def list_conversations(user_id: str, agent: Optional[str] = None,
     args: list = [user_id] + ([agent] if agent else []) + [limit]
     with connect() as c:
         rows = c.execute(
-            "SELECT c.*, (SELECT COUNT(*) FROM messages m WHERE m.conversation_id=c.id)"
-            f" AS messages FROM conversations c {where}"
+            "SELECT c.*,"
+            " (SELECT COUNT(*) FROM messages m WHERE m.conversation_id=c.id) AS messages,"
+            " (SELECT COALESCE(SUM(json_extract(m.body, '$.tokens.total')), 0)"
+            "  FROM messages m WHERE m.conversation_id=c.id AND m.role='agent') AS total_tokens,"
+            " (SELECT COALESCE(SUM(json_extract(m.body, '$.cost_idr')), 0)"
+            "  FROM messages m WHERE m.conversation_id=c.id AND m.role='agent') AS cost_idr"
+            f" FROM conversations c {where}"
             " ORDER BY c.updated_at DESC LIMIT ?", args).fetchall()
     return [dict(r) for r in rows]
+
+
+def conversation_usage_summary(user_id: str) -> Dict[str, Any]:
+    """Aggregate token and cost usage across all conversations for a user, plus run costs."""
+    with connect() as c:
+        row = c.execute(
+            "SELECT"
+            " COALESCE(SUM(json_extract(m.body, '$.tokens.input')), 0) AS input_tokens,"
+            " COALESCE(SUM(json_extract(m.body, '$.tokens.output')), 0) AS output_tokens,"
+            " COALESCE(SUM(json_extract(m.body, '$.tokens.total')), 0) AS total_tokens,"
+            " COALESCE(SUM(json_extract(m.body, '$.cost_idr')), 0) AS cost_idr,"
+            " COUNT(m.id) AS replies"
+            " FROM messages m"
+            " JOIN conversations cv ON cv.id = m.conversation_id"
+            " WHERE cv.user_id = ? AND m.role = 'agent'",
+            (user_id,),
+        ).fetchone()
+        runs_cost = c.execute(
+            "SELECT COALESCE(SUM(token_cost_idr), 0) FROM runs"
+        ).fetchone()[0]
+    return {
+        "input_tokens": int(row["input_tokens"] or 0),
+        "output_tokens": int(row["output_tokens"] or 0),
+        "total_tokens": int(row["total_tokens"] or 0),
+        "cost_idr": int(row["cost_idr"] or 0),
+        "replies": int(row["replies"] or 0),
+        "runs_cost_idr": int(runs_cost or 0),
+    }
 
 
 def get_conversation(conversation_id: str, user_id: str) -> Optional[dict]:
