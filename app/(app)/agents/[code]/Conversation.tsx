@@ -19,6 +19,12 @@ type Reply = {
   untrusted: string[];
   cost_idr: number;
   conversation_id?: string;
+  thinking_time?: number;
+  tokens?: {
+    input: number;
+    output: number;
+    total: number;
+  };
 };
 type Message =
   | { from: "person"; text: string }
@@ -50,6 +56,28 @@ function fromRows(rows: { role: string; body: Record<string, unknown> }[]): Mess
       : r.role === "error"
         ? { from: "error", text: String(r.body.text ?? ""), hint: r.body.hint as string }
         : { from: "agent", reply: r.body as unknown as Reply },
+  );
+}
+
+function ThinkingIndicator({
+  seconds,
+  tokens,
+}: {
+  seconds?: number;
+  tokens?: { input: number; output: number; total: number };
+}) {
+  if (seconds === undefined && !tokens) return null;
+
+  return (
+    <div className="mb-2 text-[11px] font-mono text-muted-foreground/80 select-none">
+      {seconds !== undefined && <span>Thought for {seconds.toFixed(1)}s</span>}
+      {seconds !== undefined && tokens && <span> · </span>}
+      {tokens && (
+        <span>
+          {tokens.total.toLocaleString()} tokens ({tokens.input.toLocaleString()} prompt / {tokens.output.toLocaleString()} response)
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -329,6 +357,10 @@ export default function Conversation({
                     </div>
                   ) : (
                     <>
+                      <ThinkingIndicator
+                        seconds={m.reply.thinking_time}
+                        tokens={m.reply.tokens}
+                      />
                       <div className="bg-muted/50 rounded-lg rounded-tl-sm border p-4">
                         <Markdown>{m.reply.answer}</Markdown>
                       </div>
@@ -350,9 +382,9 @@ export default function Conversation({
           {busy && (
             <div className="flex gap-3">
               <AgentBadge nickname={name} />
-              <p className="text-muted-foreground flex items-center gap-2 pt-2 text-sm">
+              <p className="text-muted-foreground flex items-center gap-2 pt-2 text-xs font-mono">
                 <Loader2 className="size-3.5 animate-spin" />
-                {name} is working…
+                {name} is thinking…
               </p>
             </div>
           )}

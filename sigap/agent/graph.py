@@ -305,8 +305,10 @@ def ask_specialist(code: str, question: str,
         if report:
             report(kind, d)
 
+    start_time = time.monotonic()
     cl = client()
     answer = _tool_loop(cl, agent, question, board, cost, capture, history=history)
+    duration_s = round(time.monotonic() - start_time, 2)
     return {
         "agent": code,
         "name": agent.nickname,
@@ -317,6 +319,12 @@ def ask_specialist(code: str, question: str,
                   for k in board.findings},
         "untrusted": board.untrusted_keys(),
         "cost_idr": cost.idr,
+        "thinking_time": duration_s,
+        "tokens": {
+            "input": cost.input_tokens,
+            "output": cost.output_tokens,
+            "total": cost.input_tokens + cost.output_tokens,
+        },
     }
 
 
