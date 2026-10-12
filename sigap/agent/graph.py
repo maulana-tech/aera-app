@@ -120,10 +120,60 @@ def client():
 
 
 # --------------------------------------------------------------------------- #
+def _build_user_content(prompt_text: str,
+                        attachments: Optional[List[dict]] = None) -> Any:
+    """Build Anthropic message content from prompt text and optional file/image attachments."""
+    if not attachments:
+        return prompt_text
+
+    blocks: List[dict] = []
+    text_parts: List[str] = []
+    allowed_images = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+
+    for att in attachments:
+        if not isinstance(att, dict):
+            continue
+        name = str(att.get("name") or "attachment")
+        mime = str(att.get("mime_type") or "").lower()
+        b64 = att.get("data")
+        txt = att.get("text_content")
+
+        if mime in allowed_images and isinstance(b64, str) and b64:
+            blocks.append({
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": mime,
+                    "data": b64,
+                },
+            })
+        elif mime == "application/pdf" and isinstance(b64, str) and b64:
+            blocks.append({
+                "type": "document",
+                "source": {
+                    "type": "base64",
+                    "media_type": "application/pdf",
+                    "data": b64,
+                },
+            })
+        elif isinstance(txt, str) and txt:
+            text_parts.append(
+                f"Attached file '{name}' ({mime or 'text'}):\n```\n{txt[:30000]}\n```"
+            )
+        else:
+            text_parts.append(f"[Attached file: {name} ({mime or 'binary'})]")
+
+    combined_text = ("\n\n".join(text_parts) + "\n\n" + prompt_text) if text_parts else prompt_text
+    if blocks:
+        return [*blocks, {"type": "text", "text": combined_text}]
+    return combined_text
+
+
 def _tool_loop(cl, agent: Agent, task: str, board: Board,
                cost: Cost, report: Callable[[str, dict], None],
                deadline: Optional[float] = None,
-               history: Optional[List[dict]] = None) -> str:
+               history: Optional[List[dict]] = None,
+               attachments: Optional[List[dict]] = None) -> str:
     """One specialist works to completion. Returns the summary it wrote.
 
     `history` is earlier turns of the same conversation, already trimmed by the
@@ -132,14 +182,15 @@ def _tool_loop(cl, agent: Agent, task: str, board: Board,
     conversation the agent was never actually having.
     """
     tools = registry.schemas_for_model(agent.code)
+    prompt_text = (
+        f"{task}\n\n"
+        f"What is on the shared board right now:\n{board.summary()}\n\n"
+        "Use your tools as needed, then write up what you found. If data you "
+        "need is unavailable, say what is missing, do not guess."
+    )
     messages: List[dict] = [*(history or []), {
         "role": "user",
-        "content": (
-            f"{task}\n\n"
-            f"What is on the shared board right now:\n{board.summary()}\n\n"
-            "Use your tools as needed, then write up what you found. If data you "
-            "need is unavailable, say what is missing, do not guess."
-        ),
+        "content": _build_user_content(prompt_text, attachments),
     }]
 
     for _ in range(MAX_SPECIALIST_ROUNDS):
@@ -288,7 +339,8 @@ def run(event: dict, report: Callable[[str, dict], None]) -> dict:
 
 def ask_specialist(code: str, question: str,
                    report: Optional[Callable[[str, dict], None]] = None,
-                   history: Optional[List[dict]] = None) -> dict:
+                   history: Optional[List[dict]] = None,
+                   attachments: Optional[List[dict]] = None) -> dict:
     """Ask one specialist directly, outside of disruption handling.
 
     This is what the per-agent conversation page uses. Same specialist, same
@@ -307,7 +359,8 @@ def ask_specialist(code: str, question: str,
 
     start_time = time.monotonic()
     cl = client()
-    answer = _tool_loop(cl, agent, question, board, cost, capture, history=history)
+    answer = _tool_loop(cl, agent, question, board, cost, capture,
+                        history=history, attachments=attachments)
     duration_s = round(time.monotonic() - start_time, 2)
     return {
         "agent": code,
