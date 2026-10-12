@@ -47,4 +47,6 @@ __pycache__/
 .env
 sigap/agent/.env
 sigap/agent/data/
+/data/
+*.db
 .codegraph/
