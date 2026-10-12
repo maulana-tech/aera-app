@@ -33,11 +33,9 @@ export default async function Chat(
         <p className="text-muted-foreground text-xs">
           She decides which specialists to pull in. You do not have to know who to ask.
         </p>
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex items-center gap-1.5">
           {specialists.map((a) => (
-            <span key={a.code} title={`${a.nickname} · ${a.title}`}>
-              <AgentBadge nickname={a.nickname} />
-            </span>
+            <AgentBadge key={a.code} nickname={a.nickname} />
           ))}
         </div>
       </header>
