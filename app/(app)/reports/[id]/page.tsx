@@ -2,7 +2,7 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { StepSummary, stepAgentName } from "@/components/agent-activity";
+import { StepSummary, stageLabel, stepAgentName } from "@/components/agent-activity";
 import { Markdown } from "@/components/markdown";
 import { api, idr, type Run } from "@/app/lib";
 import { OriginBadge, StatusBadge } from "@/components/status-badge";
@@ -127,7 +127,7 @@ export default async function Report({ params }: { params: Promise<{ id: string 
               {steps.map((s) => (
                 <li key={s.seq} className="grid grid-cols-[92px_minmax(0,1fr)] gap-4">
                   <span className="text-muted-foreground font-mono text-[11px]">
-                    {s.stage}
+                    {stageLabel(s.stage)}
                   </span>
                   <div className="min-w-0">
                     <p className="text-muted-foreground mb-1 text-xs">{stepAgentName(s)}</p>

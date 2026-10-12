@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { StepSummary, stepAgentName } from "@/components/agent-activity";
+import { StepSummary, stageLabel, stepAgentName } from "@/components/agent-activity";
 import { api, idr } from "@/app/lib";
 import { Empty, PageHeader, Section } from "@/components/shell";
 import { OriginBadge, StatusBadge } from "@/components/status-badge";
@@ -130,7 +130,7 @@ export default async function Log() {
               <li key={s.id} className="grid grid-cols-[84px_1fr] gap-4 px-4 py-3">
                 <div>
                   <p className="text-primary font-mono text-[11px] font-semibold tracking-wider">
-                    {s.stage}
+                    {stageLabel(s.stage)}
                   </p>
                   <p className="text-muted-foreground mt-0.5 text-[11px]">{stepAgentName(s)}</p>
                 </div>
