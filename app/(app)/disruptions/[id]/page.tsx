@@ -2,7 +2,7 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { StepSummary, stepAgentName } from "@/components/agent-activity";
+import { StepSummary, stageLabel, stepAgentName } from "@/components/agent-activity";
 import { Markdown } from "@/components/markdown";
 import { api, idr, me, type Run } from "@/app/lib";
 import { ActionPayload } from "@/components/action-payload";
@@ -168,7 +168,7 @@ export default async function DisruptionDetail({ params }: { params: Promise<{ i
             {steps.map((s) => (
               <li key={s.seq} className="grid grid-cols-[92px_minmax(0,1fr)] gap-4 px-5 py-4">
                 <div>
-                  <p className="text-primary font-mono text-[11px] font-semibold">{s.stage}</p>
+                  <p className="text-primary font-mono text-[11px] font-semibold">{stageLabel(s.stage)}</p>
                   <p className="text-muted-foreground mt-1 text-[11px]">{stepAgentName(s)}</p>
                 </div>
                 <div className="min-w-0">
