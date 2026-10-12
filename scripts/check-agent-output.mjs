@@ -25,7 +25,7 @@ async function componentURL(name) {
 }
 
 const { Markdown } = await import(await componentURL("markdown"));
-const { StepSummary, ToolActivity, stepAgentName, toolLabel } = await import(await componentURL("agent-activity"));
+const { StepSummary, ToolActivity, stepAgentName, toolLabel, stageLabel } = await import(await componentURL("agent-activity"));
 const render = (Component, props) => renderToStaticMarkup(createElement(Component, props));
 
 const html = render(Markdown, { children: "## Finding\n\n**Stock** for `M-4471`\n\n1. Check orders\n2. Check stock\n\n| Item | Qty |\n| --- | --- |\n| M-4471 | 13 |" });
@@ -40,11 +40,13 @@ assert.equal(toolLabel("get_material_stock"), "Checking material stock");
 assert.equal(toolLabel("ask_impact"), "Consulting Elsa");
 assert.equal(toolLabel("unknown_tool"), "Running a system check");
 assert.equal(toolLabel("constructor"), "Running a system check");
+assert.equal(stageLabel("DELEGATE"), "Delegation");
+assert.equal(stageLabel("TOOL"), "Data Check");
+assert.equal(stageLabel("FINDING"), "Finding");
 assert.equal(stepAgentName({ agent: "impact", agent_name: "get_material_stock" }), "Elsa");
 assert.equal(render(ToolActivity, { tools: [] }), "");
 const step = render(StepSummary, { step: { stage: "TOOL", summary: "get_material_stock", tools: ["get_material_stock"] } });
 assert.match(step, /Checking material stock/);
-assert.match(step, /<summary[^>]*>Technical details<\/summary>/);
-assert.equal(step.split("get_material_stock").length - 1, 1);
+assert.doesNotMatch(step, /get_material_stock/);
 assert.match(render(StepSummary, { step: { stage: "FINDING", summary: "**13** materials", tools: [] } }), /<strong>13<\/strong> materials/);
-console.log("Agent output checks passed: Markdown, safe rendering, activity labels, and technical details.");
+console.log("Agent output checks passed: Markdown, safe rendering, activity labels, and stage labels.");

@@ -53,15 +53,27 @@ export function stepAgentName(step: { agent: string; agent_name: string }): stri
   return Object.hasOwn(agentNames, step.agent) ? agentNames[step.agent] : step.agent_name;
 }
 
+const stageLabels: Record<string, string> = {
+  DELEGATE: "Delegation",
+  TOOL: "Data Check",
+  FINDING: "Finding",
+  SPECIALIST_START: "Delegation",
+  SPECIALIST_DONE: "Finding",
+  START: "Trigger",
+  DONE: "Completed",
+};
+
+export function stageLabel(stage: string): string {
+  const normalized = stage.toUpperCase().trim();
+  if (Object.hasOwn(stageLabels, normalized)) return stageLabels[normalized];
+  return stage.charAt(0).toUpperCase() + stage.slice(1).toLowerCase();
+}
+
 export function ToolActivity({ tools }: { tools: string[] }) {
   if (!tools.length) return null;
   return (
-    <div className="text-muted-foreground mt-1.5 text-xs">
+    <div className="text-muted-foreground mt-1 text-xs">
       <p>{tools.map(toolLabel).join(" · ")}</p>
-      <details className="mt-1">
-        <summary className="cursor-pointer hover:text-foreground">Technical details</summary>
-        <p className="mt-1 break-words font-mono">{tools.join(" · ")}</p>
-      </details>
     </div>
   );
 }
