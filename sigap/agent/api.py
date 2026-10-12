@@ -368,9 +368,13 @@ def list_agents(_m, _b, _h) -> Tuple[int, dict]:
 def ask_agent(m, b: dict, h) -> Tuple[int, dict]:
     """A direct conversation with one specialist."""
     user = _user(h)                                # identity comes from the token
-    code, question = m.group(1), (b.get("question") or "").strip()
-    if not question:
-        return 400, {"error": "'question' is required"}
+    code = m.group(1)
+    question = (b.get("question") or "").strip()
+    raw_attachments = b.get("attachments") or []
+    attachments = [a for a in raw_attachments if isinstance(a, dict)] if isinstance(raw_attachments, list) else []
+
+    if not question and not attachments:
+        return 400, {"error": "'question' or an attachment is required"}
 
     from agents.definitions import ALL
     if code not in ALL:
@@ -389,25 +393,68 @@ def ask_agent(m, b: dict, h) -> Tuple[int, dict]:
     if cid and not prior:
         return 404, {"error": "no such conversation"}
 
+    effective_question = question or (
+        "The user uploaded the attached image/file without a caption: "
+        + ", ".join(str(a.get("name") or "attachment") for a in attachments)
+        + ". Read all visible text, numbers, and visual context in the attachment carefully, "
+        "summarise what it shows, and explain the supply-chain impact or next steps."
+    )
+
     try:
         import graph
-        reply = graph.ask_specialist(code, question, history=_as_turns(prior))
+        reply = graph.ask_specialist(
+            code,
+            effective_question,
+            history=_as_turns(prior),
+            attachments=attachments or None,
+        )
     except Exception as e:                                          # noqa: BLE001
         traceback.print_exc()
         return 500, {"error": f"{type(e).__name__}: {e}"}
 
     # Written down only once there is something to write down, so a failed ask
     # does not leave an empty conversation in the list.
+    title_seed = question or str(attachments[0].get("name") or "Attachment")
     if not cid:
-        cid = store.start_conversation(code, user.id, question)
-    store.add_message(cid, "person", {"text": question})
+        cid = store.start_conversation(code, user.id, title_seed)
+
+    stored_attachments = [
+        {
+            "name": str(a.get("name") or "attachment"),
+            "mime_type": str(a.get("mime_type") or ""),
+            "size": int(a.get("size") or 0),
+            "kind": "image" if str(a.get("mime_type") or "").startswith("image/") else "file",
+            "preview_url": a.get("preview_url") if str(a.get("mime_type") or "").startswith("image/") else None,
+            "text_content": (str(a.get("text_content"))[:10000] if a.get("text_content") else None),
+        }
+        for a in attachments
+    ]
+    person_body: Dict[str, Any] = {"text": question}
+    if stored_attachments:
+        person_body["attachments"] = stored_attachments
+
+    store.add_message(cid, "person", person_body)
     store.add_message(cid, "agent", reply)
-    return 200, reply | {"conversation_id": cid}
+    return 200, reply | {"conversation_id": cid, "usage": _usage_payload(user.id)}
 
 
 # How many earlier messages the agent is shown. Far enough back to follow a
 # thread, near enough that an old conversation cannot run the bill up.
 CONTEXT_TURNS = 12
+
+
+def _usage_payload(user_id: str) -> dict:
+    import graph
+    return {
+        **store.conversation_usage_summary(user_id),
+        "cost_cap_idr": CFG.cost_cap_per_event_idr,
+        "max_output_tokens": 8000,
+        "context_turns": CONTEXT_TURNS,
+        "max_rounds": graph.MAX_SPECIALIST_ROUNDS,
+        "input_idr_per_million": graph.INPUT_IDR_PER_MILLION,
+        "output_idr_per_million": graph.OUTPUT_IDR_PER_MILLION,
+        "model": CFG.model,
+    }
 
 
 def _as_turns(conversation: dict | None) -> List[dict] | None:
@@ -417,7 +464,20 @@ def _as_turns(conversation: dict | None) -> List[dict] | None:
     turns = []
     for m in conversation["messages"]:
         if m["role"] == "person":
-            turns.append({"role": "user", "content": m["body"]["text"]})
+            text = str(m["body"].get("text") or "")
+            atts = m["body"].get("attachments") or []
+            if atts:
+                notes = []
+                for a in atts:
+                    name = a.get("name", "attachment")
+                    txt = a.get("text_content")
+                    if txt:
+                        notes.append(f"[Attached file '{name}']:\n{txt[:4000]}")
+                    else:
+                        notes.append(f"[Attached {a.get('kind', 'file')}: {name}]")
+                text = ("\n\n".join(notes) + ("\n\n" + text if text else "")).strip()
+            if text:
+                turns.append({"role": "user", "content": text})
         elif m["role"] == "agent":
             turns.append({"role": "assistant", "content": m["body"]["answer"]})
     return turns[-CONTEXT_TURNS:] or None
@@ -426,7 +486,10 @@ def _as_turns(conversation: dict | None) -> List[dict] | None:
 @route("GET", r"/agents/([a-z_]+)/conversations")
 def agent_conversations(m, _b, h) -> Tuple[int, dict]:
     user = _user(h)
-    return 200, {"conversations": store.list_conversations(user.id, m.group(1))}
+    return 200, {
+        "conversations": store.list_conversations(user.id, m.group(1)),
+        "usage": _usage_payload(user.id),
+    }
 
 
 @route("GET", r"/conversations/([A-Za-z0-9_]+)")
@@ -435,7 +498,7 @@ def read_conversation(m, _b, h) -> Tuple[int, dict]:
     c = store.get_conversation(m.group(1), user.id)
     if not c:
         return 404, {"error": "no such conversation"}
-    return 200, c
+    return 200, c | {"usage": _usage_payload(user.id)}
 
 
 @route("POST", r"/conversations/([A-Za-z0-9_]+)/delete")
