@@ -106,7 +106,17 @@ def demo() -> None:
     assert len(ALL) == 12, len(ALL)
     tools = [t for a in ALL.values() for t in a.tools]
     assert len(tools) == len(set(tools)), "a tool is claimed by two agents"
-    assert len(tools) == 31, len(tools)
+
+    # The count used to be written here as a number, which tested the number
+    # rather than the thing worth testing and went stale on every new tool.
+    # What matters is that what the agents claim and what is actually
+    # registered are the same set, in both directions.
+    import tools as _tools  # noqa: F401  (registers every tool)
+    from core import registry
+
+    declared, installed = set(tools), set(registry.all_tools())
+    assert not declared - installed, f"claimed but not written: {sorted(declared - installed)}"
+    assert not installed - declared, f"written but no agent owns it: {sorted(installed - declared)}"
     veto = [a.code for a in ALL.values() if a.veto]
     assert veto == ["compliance"], veto
     nicknames = [a.nickname for a in ALL.values()]
