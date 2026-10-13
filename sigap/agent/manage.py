@@ -200,8 +200,18 @@ def main() -> None:
     elif cmd == "secret":
         print(f'export SIGAP_SECRET="{secrets.token_hex(32)}"')
     elif cmd == "user":
+        if len(sys.argv) != 6:
+            # The command people are told to run on their first day should not
+            # answer a mistake with a stack trace.
+            print('usage: python3 manage.py user <email> "<Full Name>" <role> "<password>"')
+            print(f"  roles: {', '.join(identity.ROLE_LIMITS)}")
+            sys.exit(2)
         email, name, role, password = sys.argv[2:6]
-        u = identity.add_user(email, name, role, password)
+        try:
+            u = identity.add_user(email, name, role, password)
+        except ValueError as e:
+            print(f"{e}\n  roles: {', '.join(identity.ROLE_LIMITS)}")
+            sys.exit(2)
         print(f"created: {u.email} · {u.role} · limit Rp {u.limit_idr:,}")
     else:
         print(__doc__)
