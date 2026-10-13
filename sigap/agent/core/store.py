@@ -14,7 +14,7 @@ import pathlib
 import sqlite3
 import uuid
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterator, List, Optional
 
 from core.config import CFG
@@ -200,7 +200,7 @@ def record_event(kind: str, title: str, trigger: str, payload: dict, source: str
     return eid
 
 
-def event_exists(title: str, trigger: str) -> bool:
+def event_exists(title: str, trigger: str, within_days: Optional[int] = None) -> bool:
     """Has this exact signal already been recorded?
 
     A feed reports the same quake for hours, so a watcher that polls every few
@@ -208,9 +208,16 @@ def event_exists(title: str, trigger: str) -> bool:
     the signal's natural identity: the trigger carries the source's own
     timestamp, so a genuinely new event never collides with an old one.
     """
+    sql = "SELECT 1 FROM events WHERE title=? AND trigger=? "
+    args: List[Any] = [title, trigger]
+    if within_days is not None:
+        # A standing risk is not news every week, but it is news again if it is
+        # still there months later. Without a window a one-off suppression
+        # becomes permanent silence about a problem nobody fixed.
+        sql += "AND received_at >= ? "
+        args.append((datetime.now(timezone.utc) - timedelta(days=within_days)).isoformat())
     with connect() as c:
-        row = c.execute("SELECT 1 FROM events WHERE title=? AND trigger=? LIMIT 1",
-                        (title, trigger)).fetchone()
+        row = c.execute(sql + "LIMIT 1", args).fetchone()
     return row is not None
 
 

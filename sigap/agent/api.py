@@ -943,12 +943,17 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     print(f"SIGAP API · env={CFG.env} · sap={'ready' if CFG.sap_ready else 'no'} "
           f"· model={'ready' if CFG.model_ready else 'no'}")
+    # Bind before watching. The watchers write real events into the record, and
+    # a second copy of the service that cannot take the port must not spend its
+    # last moments raising disruptions nobody is serving.
+    server = ThreadingHTTPServer((HOST, PORT), Handler)
     print(f"listening on http://{HOST}:{PORT}")
 
-    # Watching is what separates this from an inbox. Opt out with SIGAP_WATCH=0
-    # when running the service somewhere that should not reach out to a feed.
+    # Watching is what separates this from an inbox: one eye on what happened,
+    # one on what has not happened yet. Opt out with SIGAP_WATCH=0 when running
+    # the service somewhere that should not reach out to a feed.
     if os.environ.get("SIGAP_WATCH", "1") != "0":
         from signals import watch
         watch.start(lambda body: raise_event(body)[0])
 
-    ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
+    server.serve_forever()

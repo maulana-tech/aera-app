@@ -31,6 +31,19 @@ from signals import bmkg
 # hours, so polling faster buys nothing and just burns the feed's goodwill.
 INTERVAL_SECONDS = 300
 
+# Vega is Prevent mode: it looks for risk that has not happened yet. Nothing it
+# finds is urgent, so it runs on its own, slower cadence.
+EXPOSURE_INTERVAL_SECONDS = 7 * 24 * 3600
+
+# The scan returns dozens of findings. Raising all of them would bury the queue
+# it exists to inform, which is the same mistake as re-raising every quake, so
+# only the most valuable few become events.
+EXPOSURE_TOP_N = 3
+
+# A standing exposure is not news every week. It is news again if it is still
+# there a month later and nobody has acted on it.
+EXPOSURE_QUIET_DAYS = 30
+
 
 def sweep(raise_event: Callable[[dict], str]) -> List[str]:
     """One pass. Returns the ids of events actually raised, newest first.
@@ -51,12 +64,45 @@ def sweep(raise_event: Callable[[dict], str]) -> List[str]:
     return raised
 
 
-def _loop(raise_event: Callable[[dict], str], interval: int) -> None:
+def as_exposure_event(finding: dict) -> dict:
+    """One Vega finding, in the shape POST /events expects."""
+    where = finding.get("plant") or "-"
+    return {
+        "kind": "exposure",
+        "title": f"{finding['pattern']}: {finding['material']}"[:120],
+        # The trigger is the finding's identity, so the same standing risk
+        # dedupes against itself while a different one still gets through.
+        "trigger": f"Vega: {finding['pattern']} · {finding['material']} · {where}"[:200],
+        "payload": finding,
+        "source": "tools/exposure.py",
+    }
+
+
+def sweep_exposure(raise_event: Callable[[dict], str]) -> List[str]:
+    """One Prevent-mode pass. Raises the few most valuable findings."""
+    from core import registry, store
+    import tools  # noqa: F401  (registers every tool)
+
+    r = registry.run("scan_supply_exposure", {})
+    if not r.value:
+        return []
+
+    ranked = sorted(r.value, key=lambda f: f.get("value_idr") or 0, reverse=True)
+    raised: List[str] = []
+    for finding in ranked[:EXPOSURE_TOP_N]:
+        body = as_exposure_event(finding)
+        if store.event_exists(body["title"], body["trigger"], within_days=EXPOSURE_QUIET_DAYS):
+            continue
+        raised.append(raise_event(body))
+    return raised
+
+
+def _loop(name: str, one_pass: Callable[[], List[str]], interval: int) -> None:
     while True:
         try:
-            raised = sweep(raise_event)
+            raised = one_pass()
             if raised:
-                print(f"  watch: raised {len(raised)} event(s) from BMKG", flush=True)
+                print(f"  watch: raised {len(raised)} event(s) from {name}", flush=True)
         except Exception:                                            # noqa: BLE001
             # A watcher that dies on a bad response stops watching, and nobody
             # finds out until the demo. Lose the round, keep the thread.
@@ -64,11 +110,20 @@ def _loop(raise_event: Callable[[dict], str], interval: int) -> None:
         time.sleep(interval)
 
 
-def start(raise_event: Callable[[dict], str], interval: int = INTERVAL_SECONDS) -> threading.Thread:
-    t = threading.Thread(target=_loop, args=(raise_event, interval), daemon=True)
-    t.start()
-    print(f"  watch: BMKG every {interval}s", flush=True)
-    return t
+def start(raise_event: Callable[[dict], str],
+          interval: int = INTERVAL_SECONDS,
+          exposure_interval: int = EXPOSURE_INTERVAL_SECONDS) -> List[threading.Thread]:
+    """Both watches: react to what happened, and look for what has not yet."""
+    threads = [
+        threading.Thread(target=_loop, daemon=True,
+                         args=("BMKG", lambda: sweep(raise_event), interval)),
+        threading.Thread(target=_loop, daemon=True,
+                         args=("Vega", lambda: sweep_exposure(raise_event), exposure_interval)),
+    ]
+    for t in threads:
+        t.start()
+    print(f"  watch: BMKG every {interval}s · Vega every {exposure_interval}s", flush=True)
+    return threads
 
 
 def demo() -> None:
@@ -98,6 +153,20 @@ def demo() -> None:
     again = sweep(fake_raise)
     assert again == [], f"the same quakes were raised twice: {again}"
     print("  second sweep raised nothing, so a restart will not replay the feed ✓")
+
+    # Prevent mode. The scan finds dozens; only the few worth a person's
+    # attention become events, and a standing risk does not reappear weekly.
+    before = len(seen)
+    first = sweep_exposure(fake_raise)
+    assert len(first) <= EXPOSURE_TOP_N, f"the queue must not be buried: {len(first)}"
+    if first:
+        ranked = [b["payload"]["value_idr"] for b in seen[before:]]
+        assert ranked == sorted(ranked, reverse=True), "the most valuable should go first"
+        assert all(b["kind"] == "exposure" for b in seen[before:])
+        print(f"  Vega raised the top {len(first)} of the scan, worth "
+              f"Rp {ranked[0]:,} at the head")
+    assert sweep_exposure(fake_raise) == [], "a standing exposure was raised twice"
+    print("  the same standing risk does not come back next pass ✓")
     print("watch ok")
 
 
