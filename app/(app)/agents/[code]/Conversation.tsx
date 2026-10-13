@@ -21,6 +21,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ToolActivity } from "@/components/agent-activity";
 import { AgentBadge } from "@/components/agent-card";
 import { Markdown } from "@/components/markdown";
+import { OrchestrationTimeline, type OrchestrationStep } from "@/components/orchestration-timeline";
 import { OriginBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 
@@ -42,6 +43,8 @@ type Reply = {
   cost_idr: number;
   conversation_id?: string;
   thinking_time?: number;
+  steps?: OrchestrationStep[];
+  usage?: UsageOverview;
   tokens?: {
     input: number;
     output: number;
@@ -539,6 +542,7 @@ export default function Conversation({
   const [text, setText] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [busy, setBusy] = useState(false);
+  const [activeSteps, setActiveSteps] = useState<OrchestrationStep[]>([]);
   const [restoring, setRestoring] = useState(!!threadId);
   const bottom = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
@@ -547,7 +551,7 @@ export default function Conversation({
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, busy]);
+  }, [messages, busy, activeSteps]);
 
   useEffect(() => {
     fetch("/api/sigap/health")
@@ -668,16 +672,82 @@ export default function Conversation({
     setText("");
     setAttachments([]);
     setBusy(true);
+    setActiveSteps([]);
     try {
       const r = await fetch(`/api/sigap/agents/${code}/ask`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          accept: "text/event-stream",
+        },
         body: JSON.stringify({
           question: q,
           conversation_id: id,
           attachments: currentAttachments.length > 0 ? currentAttachments : undefined,
         }),
       });
+
+      const contentType = r.headers.get("content-type") || "";
+      if (r.ok && contentType.includes("text/event-stream") && r.body) {
+        const reader = r.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let finalReply: Reply | null = null;
+        const liveSteps: OrchestrationStep[] = [];
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split("\n\n");
+          buffer = parts.pop() ?? "";
+
+          for (const part of parts) {
+            const trimmed = part.trim();
+            if (!trimmed) continue;
+            let event = "message";
+            let dataStr = "";
+            for (const line of trimmed.split("\n")) {
+              if (line.startsWith("event:")) {
+                event = line.slice(6).trim();
+              } else if (line.startsWith("data:")) {
+                dataStr = line.slice(5).trim();
+              }
+            }
+
+            if (!dataStr) continue;
+            try {
+              const data = JSON.parse(dataStr);
+              if (event === "step") {
+                liveSteps.push(data as OrchestrationStep);
+                setActiveSteps([...liveSteps]);
+              } else if (event === "done") {
+                finalReply = data as Reply;
+              } else if (event === "error") {
+                throw new Error(data.error || "failed");
+              }
+            } catch (err) {
+              if (event === "error") throw err;
+            }
+          }
+        }
+
+        if (finalReply) {
+          if (!finalReply.steps || finalReply.steps.length === 0) {
+            finalReply.steps = liveSteps;
+          }
+          setMessages((m) => [...m, { from: "agent", reply: finalReply! }]);
+          if (finalReply.usage) setUsage(finalReply.usage as unknown as UsageOverview);
+          if (finalReply.conversation_id && finalReply.conversation_id !== id) {
+            setId(finalReply.conversation_id);
+            onOpen?.(finalReply.conversation_id);
+          }
+          loadThreads();
+          return;
+        }
+      }
+
+      // Fallback JSON
       const d = await r.json();
       if (!r.ok) {
         setMessages((m) => [...m, { from: "error", text: d.error ?? "failed", hint: d.hint }]);
@@ -693,6 +763,7 @@ export default function Conversation({
     } catch {
       setMessages((m) => [...m, { from: "error", text: "the agent service is not responding" }]);
     } finally {
+      setActiveSteps([]);
       setBusy(false);
       field.current?.focus();
     }
@@ -987,6 +1058,13 @@ export default function Conversation({
                   ) : (
                     <>
                       <ThinkingIndicator seconds={m.reply.thinking_time} />
+                      {m.reply.steps && m.reply.steps.length > 0 && (
+                        <OrchestrationTimeline
+                          steps={m.reply.steps}
+                          duration={m.reply.thinking_time}
+                          isRunning={false}
+                        />
+                      )}
                       <div className="bg-muted/50 rounded-lg rounded-tl-sm border p-4">
                         <Markdown>{m.reply.answer}</Markdown>
                       </div>
@@ -1008,10 +1086,19 @@ export default function Conversation({
           {busy && (
             <div className="flex gap-3">
               <AgentBadge nickname={name} />
-              <p className="text-muted-foreground flex items-center gap-2 pt-2 text-xs font-mono">
-                <Loader2 className="size-3.5 animate-spin" />
-                {name} is thinking…
-              </p>
+              <div className="min-w-0 flex-1">
+                {activeSteps.length > 0 ? (
+                  <OrchestrationTimeline
+                    steps={activeSteps}
+                    isRunning={true}
+                  />
+                ) : (
+                  <p className="text-muted-foreground flex items-center gap-2 pt-2 text-xs font-mono">
+                    <Loader2 className="size-3.5 animate-spin" />
+                    {name} is thinking…
+                  </p>
+                )}
+              </div>
             </div>
           )}
           <div ref={bottom} />
