@@ -100,7 +100,9 @@ CFG = load()
 
 
 def fixtures_only(script: str, flag: str) -> None:
-    """Re-exec a self-check with SAP_API_KEY blank. Returns only in the child.
+    """Re-exec a self-check on fixtures and a scratch database.
+
+    Returns only in the child.
 
     A demo that asserts figures from `fixtures/` has to actually read fixtures,
     and `_load_env` above fills SAP_API_KEY from .env with setdefault, so
@@ -109,13 +111,19 @@ def fixtures_only(script: str, flag: str) -> None:
     with it blank is the only honest way, the same move core/store.py makes for
     SIGAP_DB. Without this a check passes or fails depending on whose .env it
     ran on, which is worse than no check at all.
+
+    SIGAP_DB is redirected for the same reason, one step further: a check that
+    writes a specimen event into the operator's real database leaves a fake
+    disruption sitting in the record the approvals are kept in.
     """
     import subprocess
     import sys
+    import tempfile
 
     if os.environ.get(flag) == "1":
         return
-    env = {**os.environ, "SAP_API_KEY": "", flag: "1",
+    scratch = pathlib.Path(tempfile.mkdtemp(prefix="sigap-check-")) / "check.db"
+    env = {**os.environ, "SAP_API_KEY": "", "SIGAP_DB": str(scratch), flag: "1",
            "PYTHONPATH": os.environ.get("PYTHONPATH", ".")}
     sys.exit(subprocess.call([sys.executable, script], env=env))
 

@@ -64,7 +64,7 @@ We hand-rolled 745 lines that overlap with AgentCore. Not all of it should go.
 | `graph.py`, the supervisor loop | **Runtime** to host it | **Adopt.** This is the whole point of Runtime. |
 | `core/registry.py`, 31 tools with schemas | **Gateway**, tools as MCP | **Adopt.** One registry already feeds the model and the executor, so exposing it over MCP is a shape change, not a rewrite. |
 | `core/trace.py`, steps into SQLite | **Observability**, OTEL traces | **Adopt.** Ours records what we chose to record. OTEL records every model call, token count and latency, which is what "trace every agent decision" means. |
-| nothing | **Memory** and **Managed Knowledge Base** | **Adopt, for Otto.** `search_past_incidents` returns MISSING today because there is no store behind it. Otto is a real agent with a real tool and nowhere to look. |
+| nothing | **Memory** and **Managed Knowledge Base** | **Adopt, for Otto.** `search_past_incidents` now reads the `runs` and `events` tables, so Otto has somewhere to look and finds precedent by exact words. A Knowledge Base buys semantic recall over the same rows: "port closure" matching a typhoon incident that never used the phrase. |
 | nothing | **Evaluation** | **Adopt late.** The 14 scenarios in `DESIGN.md` §5 are unwritten. This is where they go. |
 | `clients/sap_s4.py`, hand-rolled OData | **AWS for SAP MCP Server** | **Evaluate first.** Found 29 September, after this table was written. A container AWS ships at no cost on Runtime, with catalog discovery and OAuth 2.0 already handled. Ours speaks the sandbox's `APIKey` header, which a real customer system will not accept, so the work it saves is work we have not done yet. `BUILD-SPEC.md` §5. |
 | `core/identity.py`, HMAC sessions | **Identity** | **Keep ours.** AgentCore Identity authenticates an agent to a tool. Ours authenticates a buyer to the approval endpoint. Different problems, and swapping ours for it would be confusing a judge, not impressing one. |
@@ -111,8 +111,8 @@ answer as the local run, and the trace is visible in the console.
 
 ### Week 3, 13 to 19 Oct. Give Otto a memory, give ourselves evidence.
 
-7. **Knowledge Base for precedent.** Seed it with the handled runs we have.
-   `search_past_incidents` starts returning rows instead of MISSING, and Otto
+7. **Knowledge Base for precedent.** Index the handled runs Otto already reads.
+   `search_past_incidents` starts matching on meaning rather than words, and Otto
    becomes a working agent rather than a declared one.
 8. **Eval suite into Evaluation.** Start with scenarios 1, 6 and 10 from
    `DESIGN.md` §5: the baseline, the quality hold, and the mid-flight TKDN

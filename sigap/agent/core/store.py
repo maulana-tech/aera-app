@@ -171,6 +171,20 @@ def record_event(kind: str, title: str, trigger: str, payload: dict, source: str
     return eid
 
 
+def event_exists(title: str, trigger: str) -> bool:
+    """Has this exact signal already been recorded?
+
+    A feed reports the same quake for hours, so a watcher that polls every few
+    minutes would raise it again on every pass. Title and trigger together are
+    the signal's natural identity: the trigger carries the source's own
+    timestamp, so a genuinely new event never collides with an old one.
+    """
+    with connect() as c:
+        row = c.execute("SELECT 1 FROM events WHERE title=? AND trigger=? LIMIT 1",
+                        (title, trigger)).fetchone()
+    return row is not None
+
+
 # ----------------------------------------------------------------------- runs
 def start_run(event_id: str, mode: str) -> str:
     rid = new_id("run")
@@ -250,6 +264,42 @@ def list_runs(limit: int = 50) -> List[dict]:
             " ORDER BY r.started_at DESC LIMIT ?", (limit,)).fetchall()
     return [dict(r) | {"decision": json.loads(r["decision"]) if r["decision"] else None}
             for r in rows]
+
+
+def past_incidents(terms: List[str], limit: int = 5) -> tuple[List[dict], int]:
+    """Handled disruptions, ranked by how many of `terms` they mention.
+
+    Returns the matches AND the number of finished runs on record, because
+    "we have never handled anything" and "we looked and nothing was
+    comparable" are different answers and only the first is a gap in the data.
+    The caller needs to tell them apart to label its result honestly.
+
+    # ponytail: ranks in Python over every finished run. Fine for a dozen
+    #           events a day; move to FTS5 when the table outgrows a scan.
+    """
+    with connect() as c:
+        rows = c.execute(
+            "SELECT r.id AS run_id, r.status, r.mode, r.started_at, r.finished_at,"
+            "       r.token_cost_idr, r.decision, e.title, e.kind, e.trigger"
+            " FROM runs r JOIN events e ON e.id = r.event_id"
+            " WHERE r.finished_at IS NOT NULL"
+            " ORDER BY r.finished_at DESC").fetchall()
+
+    total = len(rows)
+    scored = []
+    for r in rows:
+        hay = f"{r['title']} {r['kind']} {r['trigger']}".lower()
+        hits = sum(1 for t in terms if t in hay)
+        if hits:
+            scored.append((hits, dict(r) | {
+                "decision": json.loads(r["decision"]) if r["decision"] else None,
+                "matched": hits,
+            }))
+
+    # Most terms matched first; the query already ordered by recency, and
+    # Python's sort is stable, so equal scores keep the newest incident on top.
+    scored.sort(key=lambda p: p[0], reverse=True)
+    return [row for _, row in scored[:limit]], total
 
 
 def get_run(run_id: str) -> Optional[dict]:

@@ -112,15 +112,13 @@ def health(_m, _b, _h) -> Tuple[int, dict]:
     }
 
 
-@route("POST", r"/events")
-def receive_event(_m, b: dict, _h) -> Tuple[int, dict]:
-    for field in ("kind", "title", "trigger"):
-        if not b.get(field):
-            return 400, {"error": f"'{field}' is required"}
+def raise_event(b: dict) -> Tuple[str, str, str]:
+    """Record a disruption and set the team on it. Returns (event, run, mode).
 
-    if CFG.production and not (CFG.sap_ready and CFG.model_ready):
-        return 503, {"error": "production is not ready: SAP or the model is not connected"}
-
+    Both the endpoint below and the BMKG watcher come through here. They used
+    to be the same ten lines in two places, which is how a signal raised by a
+    machine and one raised by a person drift into behaving differently.
+    """
     eid = store.record_event(b["kind"], b["title"], b["trigger"],
                              b.get("payload", {}), b.get("source", "api"))
     mode = "autonomous" if CFG.model_ready else "guided"
@@ -137,7 +135,19 @@ def receive_event(_m, b: dict, _h) -> Tuple[int, dict]:
             "reason": "AWS_REGION is not set. The agent team cannot reason. "
                       "No decision was made.",
         })
+    return eid, rid, mode
 
+
+@route("POST", r"/events")
+def receive_event(_m, b: dict, _h) -> Tuple[int, dict]:
+    for field in ("kind", "title", "trigger"):
+        if not b.get(field):
+            return 400, {"error": f"'{field}' is required"}
+
+    if CFG.production and not (CFG.sap_ready and CFG.model_ready):
+        return 503, {"error": "production is not ready: SAP or the model is not connected"}
+
+    eid, rid, mode = raise_event(b)
     return 202, {"event_id": eid, "run_id": rid, "mode": mode}
 
 
@@ -919,4 +929,11 @@ if __name__ == "__main__":
     print(f"SIGAP API · env={CFG.env} · sap={'ready' if CFG.sap_ready else 'no'} "
           f"· model={'ready' if CFG.model_ready else 'no'}")
     print(f"listening on http://{HOST}:{PORT}")
+
+    # Watching is what separates this from an inbox. Opt out with SIGAP_WATCH=0
+    # when running the service somewhere that should not reach out to a feed.
+    if os.environ.get("SIGAP_WATCH", "1") != "0":
+        from signals import watch
+        watch.start(lambda body: raise_event(body)[0])
+
     ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()

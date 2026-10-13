@@ -71,7 +71,7 @@ Ordering, exit tests and cost are in `AWS-PLAN.md` §4 and §5. This is the list
 | **AgentCore Runtime** | Hosts `graph.py`. Chosen over Managed Harness because we own the orchestration loop: the supervisor exposes ten specialists as `ask_<code>` tools and decides the route from the last finding |
 | **AgentCore Gateway** | The 31 tools in `core/registry.py` as MCP. `registry.schemas_for_model()` already emits the shape Gateway wants |
 | **AgentCore Observability** | OTel traces per specialist call, token count and latency. Replaces the placeholder cost rates in `graph.py` with real ones |
-| **AgentCore Memory + Knowledge Base** | For Otto only. `search_past_incidents` returns `MISSING` today because there is nothing behind it |
+| **AgentCore Memory + Knowledge Base** | For Otto only, and now an upgrade rather than a gap. `search_past_incidents` reads the `runs` and `events` tables, so precedent works on exact words today. A Knowledge Base would add semantic recall over the same record, not a second record |
 | **AgentCore Evaluation** | The scenario suite in `DESIGN.md` §5, unwritten |
 | **ECR** | The Runtime image |
 
@@ -164,7 +164,7 @@ strongest argument for evaluating it before we write more connector code.
 ### A disruption arrives
 
 ```
-signals/bmkg.py, or POST /events
+signals/watch.py, every 5 min -> signals/bmkg.py, or POST /events
   → store.record_event          events table
   → store.start_run             runs table, status running
   → graph.handle in a thread
@@ -264,4 +264,4 @@ Stated plainly so nobody discovers it during a demo.
 | SAP write entity names | Unverified against the sandbox |
 | `references/tkdn-rules.md`, `lartas-procedure.md` | Absent. Kira judges from parameters and labels the result `MODELLED`. Domain work, not code |
 | Scenario eval suite | Absent. `RESEARCH-AWS-SAP.md` §6 has the four-level shape to build it against |
-| Foreign typhoon signal | Absent. BMKG covers Indonesia only, so the Ningbo trigger has no live source. See `DATA-SOURCES.md` §5 |
+| Foreign typhoon signal | Absent. BMKG covers Indonesia only, so the Ningbo trigger has no live source. `signals/watch.py` polls BMKG on a timer and raises quakes near a facility by itself, deduplicated against the record, so the seismic half of perception is autonomous. A foreign maritime feed is not. See `DATA-SOURCES.md` §5 |

@@ -20,8 +20,9 @@ CHECKS = [
     "engine/simulate.py", "engine/audit.py", "engine/matching.py",
     "engine/forecast.py", "fixtures/generate.py",
     "tools/compliance.py", "tools/execution.py",
-    "tools/exposure.py", "agents/definitions.py", "graph.py", "mcp.py",
-    "signals/bmkg.py",
+    "tools/exposure.py", "tools/precedent.py",
+    "agents/definitions.py", "graph.py", "mcp.py",
+    "signals/bmkg.py", "signals/watch.py",
 ]
 
 
