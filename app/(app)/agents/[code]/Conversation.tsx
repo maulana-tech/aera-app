@@ -691,6 +691,7 @@ export default function Conversation({
         at: new Date().toISOString(),
       },
     ]);
+    let activeCid = id;
     try {
       const r = await fetch(`/api/sigap/agents/${code}/ask`, {
         method: "POST",
@@ -713,41 +714,50 @@ export default function Conversation({
         let finalReply: Reply | null = null;
         const liveSteps: OrchestrationStep[] = [];
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const parts = buffer.split("\n\n");
-          buffer = parts.pop() ?? "";
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const parts = buffer.split("\n\n");
+            buffer = parts.pop() ?? "";
 
-          for (const part of parts) {
-            const trimmed = part.trim();
-            if (!trimmed) continue;
-            let event = "message";
-            let dataStr = "";
-            for (const line of trimmed.split("\n")) {
-              if (line.startsWith("event:")) {
-                event = line.slice(6).trim();
-              } else if (line.startsWith("data:")) {
-                dataStr = line.slice(5).trim();
+            for (const part of parts) {
+              const trimmed = part.trim();
+              if (!trimmed || trimmed.startsWith(":")) continue; // ignore keepalive comments
+              let event = "message";
+              let dataStr = "";
+              for (const line of trimmed.split("\n")) {
+                if (line.startsWith("event:")) {
+                  event = line.slice(6).trim();
+                } else if (line.startsWith("data:")) {
+                  dataStr = line.slice(5).trim();
+                }
               }
-            }
 
-            if (!dataStr) continue;
-            try {
-              const data = JSON.parse(dataStr);
-              if (event === "step") {
-                liveSteps.push(data as OrchestrationStep);
-                setActiveSteps([...liveSteps]);
-              } else if (event === "done") {
-                finalReply = data as Reply;
-              } else if (event === "error") {
-                throw new Error(data.error || "failed");
+              if (!dataStr) continue;
+              try {
+                const data = JSON.parse(dataStr);
+                if (data.conversation_id && !activeCid) {
+                  activeCid = data.conversation_id;
+                  setId(data.conversation_id);
+                  onOpen?.(data.conversation_id);
+                }
+                if (event === "step") {
+                  liveSteps.push(data as OrchestrationStep);
+                  setActiveSteps([...liveSteps]);
+                } else if (event === "done") {
+                  finalReply = data as Reply;
+                } else if (event === "error") {
+                  throw new Error(data.error || "failed");
+                }
+              } catch (err) {
+                if (event === "error") throw err;
               }
-            } catch (err) {
-              if (event === "error") throw err;
             }
           }
+        } catch (streamErr) {
+          console.warn("SSE stream interrupted, entering auto-recovery polling:", streamErr);
         }
 
         if (finalReply) {
@@ -763,21 +773,50 @@ export default function Conversation({
           loadThreads();
           return;
         }
-      }
 
-      // Fallback JSON
-      const d = await r.json();
-      if (!r.ok) {
-        setMessages((m) => [...m, { from: "error", text: d.error ?? "failed", hint: d.hint }]);
+        // Auto-recovery polling: if stream disconnected prematurely, poll conversation until finished
+        if (activeCid) {
+          const pollStart = Date.now();
+          while (Date.now() - pollStart < 120000) {
+            await new Promise((res) => setTimeout(res, 2000));
+            try {
+              const checkRes = await fetch(`/api/sigap/conversations/${activeCid}`);
+              if (checkRes.ok) {
+                const checkData = await checkRes.json();
+                const msgs = checkData.messages ?? [];
+                const lastMsg = msgs[msgs.length - 1];
+                if (lastMsg && lastMsg.role === "agent") {
+                  const replyData = lastMsg.body as Reply;
+                  if (!replyData.steps || replyData.steps.length === 0) {
+                    replyData.steps = liveSteps;
+                  }
+                  setMessages((m) => [...m, { from: "agent", reply: replyData }]);
+                  if (checkData.usage) setUsage(checkData.usage as unknown as UsageOverview);
+                  loadThreads();
+                  return;
+                }
+              }
+            } catch {
+              // ignore transient error during polling check
+            }
+          }
+        }
+      } else {
+        // Fallback JSON (only for non-streaming responses)
+        const d = await r.json();
+        if (!r.ok) {
+          setMessages((m) => [...m, { from: "error", text: d.error ?? "failed", hint: d.hint }]);
+          return;
+        }
+        setMessages((m) => [...m, { from: "agent", reply: d as Reply }]);
+        if (d.usage) setUsage(d.usage);
+        if (d.conversation_id && d.conversation_id !== id) {
+          setId(d.conversation_id);
+          onOpen?.(d.conversation_id);
+        }
+        loadThreads();
         return;
       }
-      setMessages((m) => [...m, { from: "agent", reply: d as Reply }]);
-      if (d.usage) setUsage(d.usage);
-      if (d.conversation_id && d.conversation_id !== id) {
-        setId(d.conversation_id);
-        onOpen?.(d.conversation_id);
-      }
-      loadThreads();
     } catch {
       setMessages((m) => [...m, { from: "error", text: "the agent service is not responding" }]);
     } finally {

@@ -551,6 +551,11 @@ def ask_agent(m, b: dict, h):
     if stored_attachments:
         person_body["attachments"] = stored_attachments
 
+    title_seed = question or (str(attachments[0].get("name") or "Attachment") if attachments else "Conversation")
+    if not cid:
+        cid = store.start_conversation(code, user.id, title_seed)
+    store.add_message(cid, "person", person_body)
+
     if wants_stream:
         def sse_generator():
             q: queue.Queue = queue.Queue()
@@ -589,6 +594,7 @@ def ask_agent(m, b: dict, h):
                 "kind": "init",
                 "agent": "supervisor",
                 "agent_name": "Arya",
+                "conversation_id": cid,
                 "narrative": "Analyzing request and mapping specialist delegations",
                 "badge": "Analysis ›",
                 "detail": "Orchestrating agent team...",
@@ -598,7 +604,13 @@ def ask_agent(m, b: dict, h):
             yield f"event: step\ndata: {json.dumps(init_step, ensure_ascii=False)}\n\n"
 
             while True:
-                item = q.get()
+                try:
+                    item = q.get(timeout=2.0)
+                except queue.Empty:
+                    # Heartbeat prevents TCP/proxy idle timeouts while agent models think
+                    yield ": ping\n\n"
+                    continue
+
                 if item is sentinel:
                     break
                 _, step_data = item
@@ -613,12 +625,6 @@ def ask_agent(m, b: dict, h):
             reply = result_holder["res"]
             reply["steps"] = steps_collected
 
-            nonlocal cid
-            title_seed = question or str(attachments[0].get("name") or "Attachment")
-            if not cid:
-                cid = store.start_conversation(code, user.id, title_seed)
-
-            store.add_message(cid, "person", person_body)
             store.add_message(cid, "agent", reply)
             done_payload = reply | {"conversation_id": cid, "usage": _usage_payload(user.id)}
             yield f"event: done\ndata: {json.dumps(done_payload, ensure_ascii=False, default=str)}\n\n"
@@ -647,11 +653,6 @@ def ask_agent(m, b: dict, h):
         return 500, {"error": f"{type(e).__name__}: {e}"}
 
     reply["steps"] = steps_collected
-    title_seed = question or str(attachments[0].get("name") or "Attachment")
-    if not cid:
-        cid = store.start_conversation(code, user.id, title_seed)
-
-    store.add_message(cid, "person", person_body)
     store.add_message(cid, "agent", reply)
     return 200, reply | {"conversation_id": cid, "usage": _usage_payload(user.id)}
 
