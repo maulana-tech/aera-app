@@ -35,7 +35,13 @@ export default async function Chat(
         </p>
         <div className="ml-auto flex items-center gap-1.5">
           {specialists.map((a) => (
-            <AgentBadge key={a.code} nickname={a.nickname} />
+            <AgentBadge
+              key={a.code}
+              nickname={a.nickname}
+              title={a.title}
+              href={`/agents/${a.code}`}
+              align="end"
+            />
           ))}
         </div>
       </header>

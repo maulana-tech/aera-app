@@ -391,11 +391,24 @@ export function AgentBadge({
   large,
   size,
   showTooltip,
+  title,
+  href,
+  align = "center",
 }: {
   nickname: string;
   large?: boolean;
   size?: "xs" | "sm" | "lg";
   showTooltip?: boolean;
+  /** The role, e.g. "Impact". A name alone does not say what the agent does. */
+  title?: string;
+  /** Makes the badge a link. The hover lift already promises one. */
+  href?: string;
+  /**
+   * "end" hangs the tooltip off the badge's right edge instead of centring it.
+   * A row of badges pinned to the right margin clips a centred tooltip: the
+   * last one read "Vega · Risk Scann" before this existed.
+   */
+  align?: "center" | "end";
 }) {
   const { bodyPath, eyes, color } = getBotGeometry(nickname);
   const isInk = color === "#0a0a0c";
@@ -407,10 +420,9 @@ export function AgentBadge({
       : "size-8";
   const withTooltip = showTooltip ?? !isXs;
 
-  return (
-    <span
-      className={`group/badge relative inline-flex shrink-0 items-center justify-center select-none hover:z-30 ${sizeClass}`}
-    >
+  const wrapClass = `group/badge relative inline-flex shrink-0 items-center justify-center select-none hover:z-30 ${sizeClass}`;
+  const body = (
+    <>
       <svg
         viewBox="-122 -122 244 244"
         className={`size-full overflow-visible drop-shadow-[0_1px_2px_rgba(0,0,0,0.12)] transition-transform duration-200 ease-out ${
@@ -419,7 +431,10 @@ export function AgentBadge({
             : "group-hover/badge:-translate-y-0.5 group-hover/badge:scale-[1.32] group-hover/badge:drop-shadow-[0_4px_8px_rgba(0,0,0,0.2)]"
         }`}
         role="img"
-        aria-label={nickname}
+        // The link below carries the name when there is one, so announcing it
+        // here too would read the agent out twice.
+        aria-hidden={href ? true : undefined}
+        aria-label={href ? undefined : nickname}
       >
         <path
           d={bodyPath}
@@ -435,13 +450,27 @@ export function AgentBadge({
       {withTooltip && (
         <span
           role="tooltip"
-          className="bg-foreground text-background pointer-events-none absolute top-full left-1/2 z-50 mt-1.5 -translate-x-1/2 -translate-y-1 rounded-md px-2 py-0.5 text-[11px] font-medium whitespace-nowrap opacity-0 shadow-md transition-all duration-150 ease-out group-hover/badge:translate-y-0 group-hover/badge:opacity-100"
+          className={`bg-foreground text-background pointer-events-none absolute top-full z-50 mt-1.5 -translate-y-1 rounded-md px-2 py-0.5 text-[11px] font-medium whitespace-nowrap opacity-0 shadow-md transition-all duration-150 ease-out group-hover/badge:translate-y-0 group-hover/badge:opacity-100 ${
+            align === "end" ? "right-0 translate-x-0" : "left-1/2 -translate-x-1/2"
+          }`}
         >
-          <span className="border-b-foreground absolute -top-1.5 left-1/2 -translate-x-1/2 border-4 border-transparent" />
-          {nickname}
+          <span
+            className={`border-b-foreground absolute -top-1.5 border-4 border-transparent ${
+              align === "end" ? "right-3" : "left-1/2 -translate-x-1/2"
+            }`}
+          />
+          {title ? `${nickname} · ${title}` : nickname}
         </span>
       )}
-    </span>
+    </>
+  );
+
+  return href ? (
+    <Link href={href} className={wrapClass} aria-label={title ? `${nickname}, ${title}` : nickname}>
+      {body}
+    </Link>
+  ) : (
+    <span className={wrapClass}>{body}</span>
   );
 }
 
