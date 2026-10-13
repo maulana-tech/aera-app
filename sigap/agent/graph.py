@@ -649,4 +649,11 @@ def _check_failure_paths() -> None:
 
 
 if __name__ == "__main__":
+    # The assertions in demo() pin the orchestration loop, not the state of
+    # anyone's .env. With a SAP key present the stock read comes back live and
+    # the origin assertions flipped, reporting a failure that was only a key
+    # being set.
+    from core.config import fixtures_only
+
+    fixtures_only(__file__, "SIGAP_GRAPH_CHECK")
     demo()

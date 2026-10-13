@@ -99,6 +99,27 @@ def load() -> Config:
 CFG = load()
 
 
+def fixtures_only(script: str, flag: str) -> None:
+    """Re-exec a self-check with SAP_API_KEY blank. Returns only in the child.
+
+    A demo that asserts figures from `fixtures/` has to actually read fixtures,
+    and `_load_env` above fills SAP_API_KEY from .env with setdefault, so
+    an already-set key wins and an unset one gets refilled. Clearing it in the
+    running process is too late because CFG is frozen at import. Starting again
+    with it blank is the only honest way, the same move core/store.py makes for
+    SIGAP_DB. Without this a check passes or fails depending on whose .env it
+    ran on, which is worse than no check at all.
+    """
+    import subprocess
+    import sys
+
+    if os.environ.get(flag) == "1":
+        return
+    env = {**os.environ, "SAP_API_KEY": "", flag: "1",
+           "PYTHONPATH": os.environ.get("PYTHONPATH", ".")}
+    sys.exit(subprocess.call([sys.executable, script], env=env))
+
+
 def bind_target(env: Mapping[str, str]) -> Tuple[str, int]:
     """Where the HTTP service should listen.
 

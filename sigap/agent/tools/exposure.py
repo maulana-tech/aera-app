@@ -41,6 +41,21 @@ def scan_supply_exposure(horizon_weeks: int = 8, cover_floor_days: int = 14) -> 
     if stock.value is None or orders.value is None:
         return Result(None, Origin.MISSING, "scan", note="could not read stock or purchase orders")
 
+    # A_PurchaseOrder is the PO *header*. Material, order quantity and delivery
+    # date live on A_PurchaseOrderItem, which this query does not expand, so a
+    # live row carries no Material and the grouping below has nothing to key on.
+    # The fixtures flatten header and item into a single row, which is why this
+    # only appears once SAP_API_KEY is set.
+    # ponytail: refuses instead of guessing. Fixing it properly means reading
+    #           A_PurchaseOrderItem (or $expand=to_PurchaseOrderItem) and
+    #           deciding where LoadingPort, RevisedDeliveryDate and Status come
+    #           from, as those three have no standard SAP equivalent at all.
+    if orders.value and "Material" not in orders.value[0]:
+        return Result(None, Origin.MISSING, orders.source,
+                      note="purchase order rows carry no Material: A_PurchaseOrder is the "
+                           "header, material sits on A_PurchaseOrderItem which is not "
+                           "expanded here")
+
     bom = fixture("BillOfMaterial")
     sales = fixture("SalesOrder")
     alternates = fixture("AlternateSource")
@@ -236,4 +251,9 @@ def demo() -> None:
 
 
 if __name__ == "__main__":
+    # demo() asserts figures computed from fixtures/, so it has to read them
+    # rather than whatever the live service happens to return today.
+    from core.config import fixtures_only
+
+    fixtures_only(__file__, "SIGAP_EXPOSURE_CHECK")
     demo()
