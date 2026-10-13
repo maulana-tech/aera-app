@@ -24,6 +24,46 @@ from core.registry import register
 
 AUTONOMOUS_LIMIT_IDR = 50_000_000
 
+# Absence of precedent is not weak evidence about the material, it is the
+# system's own youth. Everything else on the board describes the situation
+# being acted on, and an untrusted figure there is a reason to ask a person.
+NOT_EVIDENCE = {"precedent.search_past_incidents"}
+
+
+def autonomy_check(cost_idr: int) -> tuple[bool, str]:
+    """May this be done without a person? Returns the verdict and the reason.
+
+    Value alone was the whole test, and value is a number the model hands in:
+    nothing stopped it from declaring a Rp 200 million transfer as Rp 1 million
+    and granting itself the authority to execute. So the figure has to be
+    corroborated by evidence the model did not author.
+
+    The board is that evidence. Every specialist writes its findings there with
+    the origin they came from, so "is anything under this decision modelled,
+    or missing" is already a question the board can answer. If it can be
+    answered yes, the action waits for a person however cheap it claims to be.
+    """
+    from core import registry
+
+    if cost_idr >= AUTONOMOUS_LIMIT_IDR:
+        return False, f"Rp {cost_idr:,} is at or over the Rp {AUTONOMOUS_LIMIT_IDR:,} limit"
+
+    board = registry.current_board()
+    if board is None:
+        # A tool called outside a handling has no evidence behind it at all.
+        # That is the weakest case, not the strongest, so it never goes alone.
+        return False, "no evidence on record: this was not raised from a handling"
+
+    weak = [k for k in board.untrusted_keys() if k not in NOT_EVIDENCE]
+    if weak:
+        return False, ("the figures under this are not all trusted: "
+                       + ", ".join(sorted(weak)))
+
+    if not [k for k in board.origin if k not in NOT_EVIDENCE]:
+        return False, "nothing was read before deciding"
+
+    return True, f"Rp {cost_idr:,} is under the limit and every figure under it is trusted"
+
 
 def idempotency_key(kind: str, **details) -> str:
     """A stable key from the action's content. The same action is never sent twice."""
@@ -83,16 +123,24 @@ def _record(kind: str, autonomous: bool, **details) -> Result:
 
 
 @register("create_stock_transfer", "execution",
-          "Move stock between plants. Autonomous when the cost impact is under Rp 50 million.",
+          "Move stock between plants. Autonomous only when the cost impact is under Rp 50 "
+          "million AND every figure the decision rests on is trusted. A modelled or "
+          "missing figure anywhere under it sends this to a person however cheap it is.",
           {"material": {"type": "string"}, "from_plant": {"type": "string"},
            "to_plant": {"type": "string"}, "qty": {"type": "number"},
            "cost_idr": {"type": "integer"}},
           ["material", "from_plant", "to_plant", "qty", "cost_idr"])
 def create_stock_transfer(material: str, from_plant: str, to_plant: str,
                           qty: float, cost_idr: int) -> Result:
-    return _record("stock_transfer", cost_idr < AUTONOMOUS_LIMIT_IDR,
-                   material=material, from_plant=from_plant, to_plant=to_plant,
-                   qty=qty, cost_idr=cost_idr)
+    alone, why = autonomy_check(cost_idr)
+    r = _record("stock_transfer", alone,
+                material=material, from_plant=from_plant, to_plant=to_plant,
+                qty=qty, cost_idr=cost_idr)
+    # The reason travels with the action. A planner asking why this one waited
+    # and that one did not should not have to read the code to find out.
+    if isinstance(r.value, dict):
+        r.value["autonomy"] = {"autonomous": alone, "reason": why}
+    return r
 
 
 @register("create_draft_po", "execution",
@@ -180,6 +228,54 @@ def demo() -> None:
     print(f"execution ok, idempotency {a}")
     print("  prevent-mode actions always wait for a person")
     print("  no run open, so an action is refused rather than written")
+
+    # The autonomy gate. The point is that value alone can be forged by the
+    # caller, so a cheap claim must still be backed by trusted evidence.
+    from core import registry
+
+    class FakeBoard:
+        def __init__(self, origins):
+            self.origin = origins
+
+        def untrusted_keys(self):
+            return [k for k, o in self.origin.items()
+                    if o not in ("live", "cached", "derived")]
+
+    cheap = 1_000_000
+    alone, why = autonomy_check(cheap)
+    assert not alone and "not raised from a handling" in why, why
+
+    trusted = FakeBoard({"impact.get_material_stock": "live",
+                         "simulation.simulate_scenario": "derived"})
+    with registry.bind_board(trusted):
+        alone, why = autonomy_check(cheap)
+        assert alone, why
+        over, why_over = autonomy_check(AUTONOMOUS_LIMIT_IDR)
+        assert not over and "limit" in why_over, why_over
+
+    # The forgery this closes: a model declaring a huge move as a small one.
+    # It is under the limit, so the old gate would have let it execute alone.
+    modelled = FakeBoard({"impact.get_material_stock": "modelled",
+                          "simulation.simulate_scenario": "derived"})
+    with registry.bind_board(modelled):
+        alone, why = autonomy_check(cheap)
+        assert not alone, "a modelled figure under the decision must stop autonomy"
+        assert "impact.get_material_stock" in why, why
+
+    # Having no precedent is the system being young, not the evidence being
+    # weak, so it must not be what blocks a well-evidenced action.
+    young = FakeBoard({"impact.get_material_stock": "live",
+                       "precedent.search_past_incidents": "missing"})
+    with registry.bind_board(young):
+        alone, why = autonomy_check(cheap)
+        assert alone, f"an empty memory must not block a trusted decision: {why}"
+
+    with registry.bind_board(FakeBoard({})):
+        alone, why = autonomy_check(cheap)
+        assert not alone and "nothing was read" in why, why
+
+    print("  autonomy needs a trusted board, not just a small number")
+    print("  a modelled figure anywhere under the decision sends it to a person")
 
 
 if __name__ == "__main__":

@@ -32,7 +32,9 @@ What the system does with that:
    overturned on cost**
 4. Prices what is left and recommends one
 5. Executes it into SAP once someone with the authority approves, or on its own
-   authority below Rp 50 million
+   authority below Rp 50 million, and only when every figure the decision
+   rests on is trusted. Value is a number the model hands in; the board's
+   origins are not, so the cheap claim has to be corroborated
 6. Watches until the goods land
 
 Three things about the case are the product, and everything below serves them:

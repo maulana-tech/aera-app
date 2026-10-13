@@ -88,6 +88,29 @@ def current_run() -> Optional[str]:
     return _CURRENT_RUN.get()
 
 
+_CURRENT_BOARD: ContextVar[Optional[Any]] = ContextVar("sigap_board", default=None)
+
+
+def current_board() -> Optional[Any]:
+    """The blackboard this call belongs to, or None outside a handling.
+
+    Tools read it to find out how trustworthy the evidence under them is. It is
+    typed loosely on purpose: core must not import graph, and all a caller
+    needs from it is `untrusted_keys()`.
+    """
+    return _CURRENT_BOARD.get()
+
+
+@contextmanager
+def bind_board(board: Any) -> Iterator[Any]:
+    """Make `board` the evidence in force for the duration of a handling."""
+    token = _CURRENT_BOARD.set(board)
+    try:
+        yield board
+    finally:
+        _CURRENT_BOARD.reset(token)
+
+
 @contextmanager
 def bind_run(run_id: str) -> Iterator[str]:
     """Make `run_id` the current run for the duration of a handling."""

@@ -311,8 +311,17 @@ def _specialist_tools() -> List[dict]:
 
 def run(event: dict, report: Callable[[str, dict], None]) -> dict:
     """Handle one event. `report` is called on every piece of progress."""
-    cl = client()
     board = Board()
+    # The board is the evidence in force for this handling. Binding it here
+    # lets a tool ask how trustworthy the ground under it is without having to
+    # be handed the board through every call: tools/execution.py refuses to act
+    # on its own authority when anything under the decision is not trusted.
+    with registry.bind_board(board):
+        return _handle_event(event, report, board)
+
+
+def _handle_event(event: dict, report: Callable[[str, dict], None], board: Board) -> dict:
+    cl = client()
     cost = Cost()
     called: List[str] = []
     deadline = time.monotonic() + MAX_SECONDS_PER_EVENT
