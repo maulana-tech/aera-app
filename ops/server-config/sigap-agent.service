@@ -1,0 +1,17 @@
+[Unit]
+Description=SIGAP Agent Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/sigap-project/sigap/agent
+EnvironmentFile=/opt/sigap-project/sigap/agent/.env
+ExecStart=/opt/sigap-project/sigap/agent/.venv/bin/python /opt/sigap-project/sigap/agent/api.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
