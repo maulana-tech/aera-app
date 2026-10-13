@@ -372,33 +372,33 @@ _AGENT_NICKNAMES = {
 }
 
 _TOOL_LABELS = {
-    "get_materials": "katalog material",
-    "get_open_purchase_orders": "purchase order terbuka",
-    "get_material_stock": "ketersediaan stok material di plant",
-    "get_bom_explosion": "komponen produk (BOM)",
-    "get_sales_order_commitments": "komitmen sales order pelanggan",
-    "get_demand_signal": "sinyal permintaan pasar",
-    "get_production_schedule": "jadwal rencana produksi",
-    "forecast_demand": "proyeksi kebutuhan material",
-    "get_quality_holds": "penahanan kualitas stok",
-    "get_safety_stock_policy": "kebijakan safety stock",
-    "assess_transfer": "kelayakan transfer stok",
-    "find_alternate_sources": "pemasok alternatif",
-    "find_internal_transfers": "stok di plant lain",
-    "get_supplier_master": "data master pemasok",
-    "get_supplier_performance": "performa pemasok",
-    "get_quotations": "penawaran harga pemasok",
-    "compare_quotations": "perbandingan penawaran pemasok",
-    "propose_purchase_order": "draf purchase order",
-    "get_shipment_status": "status pengiriman logistik",
-    "estimate_eta": "estimasi kedatangan (ETA)",
-    "check_local_constraints": "regulasi kepatuhan TKDN/lokal",
-    "simulate_scenario": "biaya skenario mitigasi",
-    "search_past_incidents": "riwayat insiden serupa",
-    "create_stock_transfer": "pengajuan transfer stok",
-    "create_draft_po": "pembuatan draf PO",
-    "notify": "pengiriman notifikasi",
-    "detect_disruption": "deteksi sinyal disrupsi",
+    "get_materials": "material master records",
+    "get_open_purchase_orders": "open purchase orders",
+    "get_material_stock": "plant stock availability",
+    "get_bom_explosion": "bill of materials (BOM)",
+    "get_sales_order_commitments": "customer order commitments",
+    "get_demand_signal": "demand signals",
+    "get_production_schedule": "production schedule",
+    "forecast_demand": "material demand forecast",
+    "get_quality_holds": "stock quality holds",
+    "get_safety_stock_policy": "safety stock policy",
+    "assess_transfer": "stock transfer feasibility",
+    "find_alternate_sources": "alternative suppliers",
+    "find_internal_transfers": "stock at alternative plants",
+    "get_supplier_master": "supplier master records",
+    "get_supplier_performance": "supplier performance history",
+    "get_quotations": "supplier quotations",
+    "compare_quotations": "quotation comparisons",
+    "propose_purchase_order": "purchase order proposal",
+    "get_shipment_status": "shipment tracking status",
+    "estimate_eta": "estimated arrival dates (ETA)",
+    "check_local_constraints": "compliance and regulatory constraints",
+    "simulate_scenario": "scenario mitigation costs",
+    "search_past_incidents": "similar past incident records",
+    "create_stock_transfer": "stock transfer request",
+    "create_draft_po": "draft purchase order creation",
+    "notify": "notification dispatch",
+    "detect_disruption": "disruption signal detection",
 }
 
 _TOOL_BADGES = {
@@ -422,7 +422,7 @@ def format_orchestration_step(kind: str, d: dict, seq: int) -> dict:
         target_name = d.get("name") or _AGENT_NICKNAMES.get(target_code, target_code.title())
         task = str(d.get("task", "")).strip()
         first_clause = task.split(".")[0].strip() if task else ""
-        narrative = f"Menugaskan {target_name}: {first_clause}" if first_clause else f"Menugaskan analisis ke {target_name}"
+        narrative = f"Delegating to {target_name}: {first_clause}" if first_clause else f"Delegating analysis to {target_name}"
         return {
             "seq": seq,
             "kind": "specialist_start",
@@ -432,7 +432,7 @@ def format_orchestration_step(kind: str, d: dict, seq: int) -> dict:
             "target_name": target_name,
             "narrative": narrative,
             "badge": f"{target_name} ›",
-            "detail": f"{task[:110]}…" if len(task) > 110 else (task or f"Delegasi ke {target_name}"),
+            "detail": f"{task[:110]}…" if len(task) > 110 else (task or f"Delegating to {target_name}"),
             "at": now,
         }
     if kind == "tool":
@@ -443,7 +443,7 @@ def format_orchestration_step(kind: str, d: dict, seq: int) -> dict:
         args = d.get("arguments", {})
         arg_summary = " · ".join(f"{k}: {v}" for k, v in list(args.items())[:2])
         badge = _TOOL_BADGES.get(tool_name, "Data Check")
-        narrative = f"{agent_name} memeriksa {tool_desc}"
+        narrative = f"{agent_name} checking {tool_desc}"
         detail = f"{tool_name}{f' ({arg_summary})' if arg_summary else ''} ›"
         return {
             "seq": seq,
@@ -460,7 +460,7 @@ def format_orchestration_step(kind: str, d: dict, seq: int) -> dict:
         agent_name = d.get("name") or _AGENT_NICKNAMES.get(agent_code, agent_code.title())
         summary = str(d.get("summary", "")).strip()
         first_line = summary.split("\n")[0].split(".")[0].strip()
-        narrative = f"{agent_name} melaporkan: {first_line}" if first_line else f"{agent_name} menyelesaikan temuan"
+        narrative = f"{agent_name} reported: {first_line}" if first_line else f"{agent_name} completed findings"
         return {
             "seq": seq,
             "kind": "specialist_done",
@@ -479,9 +479,9 @@ def format_orchestration_step(kind: str, d: dict, seq: int) -> dict:
             "kind": "summary",
             "agent": "supervisor",
             "agent_name": "Arya",
-            "narrative": "Merumuskan rekomendasi mitigasi akhir untuk pengguna",
+            "narrative": "Formulating final mitigation recommendation",
             "badge": "Summary ›",
-            "detail": "Formulasi solusi siap disajikan",
+            "detail": "Synthesizing findings for user",
             "at": now,
         }
     return {
@@ -582,6 +582,19 @@ def ask_agent(m, b: dict, h):
             threading.Thread(target=worker, daemon=True).start()
 
             steps_collected = []
+            init_step = {
+                "seq": 0,
+                "kind": "init",
+                "agent": "supervisor",
+                "agent_name": "Arya",
+                "narrative": "Analyzing request and mapping specialist delegations",
+                "badge": "Analysis ›",
+                "detail": "Orchestrating agent team...",
+                "at": store._now(),
+            }
+            steps_collected.append(init_step)
+            yield f"event: step\ndata: {json.dumps(init_step, ensure_ascii=False)}\n\n"
+
             while True:
                 item = q.get()
                 if item is sentinel:
@@ -833,7 +846,8 @@ class Handler(BaseHTTPRequestHandler):
                     if hasattr(res, "__iter__") and not isinstance(res, (tuple, list, dict, str, bytes)):
                         self.send_response(200)
                         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
-                        self.send_header("Cache-Control", "no-cache")
+                        self.send_header("Cache-Control", "no-cache, no-transform")
+                        self.send_header("X-Accel-Buffering", "no")
                         self.send_header("Connection", "keep-alive")
                         self.send_header("Access-Control-Allow-Origin", "*")
                         self.send_header("Access-Control-Allow-Headers", "content-type,authorization,accept")

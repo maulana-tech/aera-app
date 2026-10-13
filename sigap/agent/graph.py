@@ -222,7 +222,7 @@ def _tool_loop(cl, agent: Agent, task: str, board: Board,
             text = "".join(b.text for b in r.content if b.type == "text")
             if agent.code == "supervisor":
                 report("summary", {"agent": "supervisor", "name": "Arya",
-                                   "summary": "Merumuskan rekomendasi mitigasi akhir"})
+                                   "summary": "Formulating final mitigation recommendation"})
             else:
                 report("specialist_done", {"agent": agent.code, "name": agent.nickname,
                                            "summary": text[:400]})

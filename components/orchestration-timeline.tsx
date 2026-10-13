@@ -51,11 +51,13 @@ export function OrchestrationTimeline({
 
   if (!steps.length && !isRunning) return null;
 
-  const summaryTitle = specialistsCount > 0
-    ? `Mengorkestrasi ${specialistsCount} spesialis${
-        checksCount > 0 ? ` dan ${checksCount} pengecekan data` : ""
+  const summaryTitle = isRunning && specialistsCount === 0
+    ? "Analyzing and orchestrating agent team..."
+    : specialistsCount > 0
+    ? `Orchestrating ${specialistsCount} specialist${specialistsCount > 1 ? "s" : ""}${
+        checksCount > 0 ? ` and ${checksCount} data check${checksCount > 1 ? "s" : ""}` : ""
       }`
-    : `Alur orkestrasi ${steps.length} langkah`;
+    : `Orchestration workflow (${steps.length} steps)`;
 
   return (
     <Collapsible
