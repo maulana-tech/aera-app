@@ -21,7 +21,8 @@ Endpoints
     GET  /data/{domain}            per-domain table
     GET  /log                      every step, newest first
     GET  /uploads · POST /uploads
-    POST /mcp                      the tool registry over MCP\n    GET  /reports/{run_id}
+    POST /mcp                      the tool registry over MCP
+    GET  /reports/{run_id}
     GET  /contacts · POST /contacts
 """
 from __future__ import annotations
