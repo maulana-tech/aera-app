@@ -554,6 +554,13 @@ export default function Conversation({
   }, [messages, busy, activeSteps]);
 
   useEffect(() => {
+    if (field.current) {
+      field.current.style.height = "auto";
+      field.current.style.height = `${Math.min(field.current.scrollHeight, 220)}px`;
+    }
+  }, [text]);
+
+  useEffect(() => {
     fetch("/api/sigap/health")
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
@@ -793,10 +800,10 @@ export default function Conversation({
           addFiles(e.dataTransfer.files);
         }
       }}
-      className="focus-within:border-foreground/30 bg-background flex flex-col gap-2 rounded-lg border p-2 transition-colors"
+      className="focus-within:border-foreground/30 focus-within:ring-1 focus-within:ring-ring/20 bg-background flex flex-col rounded-xl border p-3 shadow-xs transition-all"
     >
       {attachments.length > 0 && (
-        <div className="flex flex-wrap gap-2 px-1 pt-1">
+        <div className="mb-2 flex flex-wrap gap-2 px-0.5">
           {attachments.map((att, idx) => (
             <div
               key={`${att.name}-${idx}`}
@@ -833,30 +840,55 @@ export default function Conversation({
         </div>
       )}
 
-      <div className="flex items-end gap-1.5">
-        <input
-          ref={photoInputRef}
-          type="file"
-          accept="image/png,image/jpeg,image/webp,image/gif"
-          multiple
-          className="hidden"
-          onChange={(e) => {
-            if (e.target.files) addFiles(e.target.files);
-            e.target.value = "";
-          }}
-        />
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".csv,.pdf,.txt,.json,.md,.log,.tsv,.xml,.yaml,.yml,image/*"
-          multiple
-          className="hidden"
-          onChange={(e) => {
-            if (e.target.files) addFiles(e.target.files);
-            e.target.value = "";
-          }}
-        />
-        <div className="flex shrink-0 items-center gap-0.5 pb-0.5">
+      {/* Hidden file inputs */}
+      <input
+        ref={photoInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files) addFiles(e.target.files);
+          e.target.value = "";
+        }}
+      />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".csv,.pdf,.txt,.json,.md,.log,.tsv,.xml,.yaml,.yml,image/*"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files) addFiles(e.target.files);
+          e.target.value = "";
+        }}
+      />
+
+      {/* Full-width auto-expanding Textarea */}
+      <textarea
+        ref={field}
+        rows={2}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onPaste={(e) => {
+          if (e.clipboardData.files?.length) {
+            e.preventDefault();
+            addFiles(e.clipboardData.files);
+          }
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            send(text);
+          }
+        }}
+        placeholder={`Ask ${name}…`}
+        className="min-h-[48px] max-h-56 w-full resize-none bg-transparent px-1 py-1 text-sm leading-relaxed outline-none placeholder:text-muted-foreground/60"
+      />
+
+      {/* Bottom Action Bar */}
+      <div className="mt-2 flex items-center justify-between border-t border-border/40 pt-2">
+        <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={() => photoInputRef.current?.click()}
@@ -879,28 +911,7 @@ export default function Conversation({
           </button>
         </div>
 
-        <textarea
-          ref={field}
-          rows={1}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onPaste={(e) => {
-            if (e.clipboardData.files?.length) {
-              e.preventDefault();
-              addFiles(e.clipboardData.files);
-            }
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              send(text);
-            }
-          }}
-          placeholder={`Ask ${name}…`}
-          className="max-h-40 min-h-9 flex-1 resize-none bg-transparent px-2 py-2 text-sm outline-none"
-        />
-
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex items-center gap-2">
           <UsageBarPopover
             messages={messages}
             threads={threads}
@@ -911,6 +922,7 @@ export default function Conversation({
             type="submit"
             size="sm"
             disabled={busy || (!text.trim() && attachments.length === 0)}
+            className="gap-1.5"
           >
             <CornerDownLeft className="size-3.5" />
             Send
