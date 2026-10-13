@@ -679,7 +679,18 @@ export default function Conversation({
     setText("");
     setAttachments([]);
     setBusy(true);
-    setActiveSteps([]);
+    setActiveSteps([
+      {
+        seq: 0,
+        kind: "init",
+        agent: "supervisor",
+        agent_name: name,
+        narrative: "Analyzing question and coordinating specialist team...",
+        badge: "Analysis ›",
+        detail: "Preparing agent orchestration...",
+        at: new Date().toISOString(),
+      },
+    ]);
     try {
       const r = await fetch(`/api/sigap/agents/${code}/ask`, {
         method: "POST",

@@ -25,7 +25,8 @@ async function forward(req: Request, path: string[], method: "GET" | "POST") {
         status: r.status,
         headers: {
           "content-type": "text/event-stream; charset=utf-8",
-          "cache-control": "no-cache",
+          "cache-control": "no-cache, no-transform",
+          "x-accel-buffering": "no",
           connection: "keep-alive",
         },
       });
