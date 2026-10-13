@@ -100,4 +100,6 @@ done
 [[ $healthy == 1 ]] || { echo 'Service health check failed'; false; }
 trap - ERR
 rm -rf "$backup"
+# Keep only the 3 most recent releases to prevent disk exhaustion
+(cd "$root/releases" && ls -dt */ 2>/dev/null | tail -n +4 | xargs -r rm -rf)
 echo "Deployed $release_id"
