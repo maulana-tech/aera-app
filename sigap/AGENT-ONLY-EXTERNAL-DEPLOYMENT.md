@@ -14,13 +14,13 @@ Ensure `sigap-admin-key.pem` is present on your local machine.
 chmod 400 ~/sigap-admin-key.pem
 
 # 2. Connect to the EC2 server
-ssh -i ~/sigap-admin-key.pem ubuntu@13.211.27.194
+ssh -i ~/sigap-admin-key.pem ubuntu@52.62.2.152
 ```
 *(Replace `~/sigap-admin-key.pem` with your local file path, e.g., `~/Downloads/sigap-admin-key.pem`)*.
 
 ### 1.2 Windows (PowerShell)
 ```powershell
-ssh -i "$HOME\Downloads\sigap-admin-key.pem" ubuntu@13.211.27.194
+ssh -i "$HOME\Downloads\sigap-admin-key.pem" ubuntu@52.62.2.152
 ```
 
 ### 1.3 Disconnect
