@@ -118,6 +118,21 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, seq);
 
+CREATE TABLE IF NOT EXISTS reservations (
+  id            TEXT PRIMARY KEY,
+  run_id        TEXT NOT NULL REFERENCES runs(id),
+  action_id     TEXT,                    -- set once the action exists
+  material      TEXT NOT NULL,
+  plant         TEXT NOT NULL,           -- the donor, the plant losing the stock
+  qty           REAL NOT NULL,
+  created_at    TEXT NOT NULL,
+  released_at   TEXT,                    -- NULL means still held
+  released_why  TEXT
+);
+
+CREATE INDEX IF NOT EXISTS reservations_open
+  ON reservations (material, plant) WHERE released_at IS NULL;
+
 CREATE TABLE IF NOT EXISTS contacts (
   id         TEXT PRIMARY KEY,
   name       TEXT NOT NULL,
@@ -218,6 +233,13 @@ def close_run(run_id: str, status: str, decision: Optional[dict] = None,
              json.dumps(decision, ensure_ascii=False) if decision else None,
              error, cost_idr, run_id),
         )
+        if status in ("failed", "held"):
+            # Nothing was carried out, so nothing should stay reserved. A run
+            # that ends 'done' keeps its holds: the stock really is spoken for
+            # until the move is confirmed, and record_outcome lets it go.
+            c.execute("UPDATE reservations SET released_at=?, released_why=?"
+                      " WHERE run_id=? AND released_at IS NULL",
+                      (_now(), f"run {status}", run_id))
 
 
 def save_step(run_id: str, s: dict) -> None:
@@ -252,6 +274,66 @@ def record_action(run_id: str, idempotency_key: str, kind: str,
         return dict(row) | {"repeated": False}
 
 
+# ------------------------------------------------------------- reservations
+def reserve(run_id: str, material: str, plant: str, qty: float,
+            action_id: Optional[str] = None) -> str:
+    """Hold stock at the donor plant so a second handling cannot promise it too.
+
+    Two disruptions running at once both read the same on-hand figure and both
+    conclude SBY1 can spare 55 t. Each is right on its own and they are wrong
+    together. A hold is what makes the second one see the first.
+    """
+    rid = new_id("res")
+    with connect() as c:
+        c.execute("INSERT INTO reservations (id, run_id, action_id, material, plant,"
+                  " qty, created_at) VALUES (?,?,?,?,?,?,?)",
+                  (rid, run_id, action_id, material, plant, float(qty), _now()))
+    return rid
+
+
+def reserved_qty(material: str, plant: str, excluding_run: Optional[str] = None) -> float:
+    """How much of this material at this plant is already spoken for.
+
+    `excluding_run` lets a handling see the world without its own holds, so
+    re-assessing its own transfer does not subtract the stock twice.
+    """
+    sql = ("SELECT COALESCE(SUM(qty), 0) t FROM reservations"
+           " WHERE material=? AND plant=? AND released_at IS NULL")
+    args: List[Any] = [material, plant]
+    if excluding_run:
+        sql += " AND run_id<>?"
+        args.append(excluding_run)
+    with connect() as c:
+        return float(c.execute(sql, args).fetchone()["t"])
+
+
+def release_reservations(why: str, run_id: Optional[str] = None,
+                         action_id: Optional[str] = None) -> int:
+    """Let held stock go. Returns how many holds were lifted."""
+    if not (run_id or action_id):
+        raise ValueError("release what? pass run_id or action_id")
+    sql = "UPDATE reservations SET released_at=?, released_why=? WHERE released_at IS NULL"
+    args: List[Any] = [_now(), why]
+    if action_id:
+        sql += " AND action_id=?"
+        args.append(action_id)
+    else:
+        sql += " AND run_id=?"
+        args.append(run_id)
+    with connect() as c:
+        return c.execute(sql, args).rowcount
+
+
+def open_reservations(material: Optional[str] = None) -> List[dict]:
+    sql = "SELECT * FROM reservations WHERE released_at IS NULL"
+    args: List[Any] = []
+    if material:
+        sql += " AND material=?"
+        args.append(material)
+    with connect() as c:
+        return [dict(r) for r in c.execute(sql + " ORDER BY created_at", args)]
+
+
 OUTCOMES = ("delivered", "late", "short", "failed", "cancelled")
 
 
@@ -279,6 +361,11 @@ def record_outcome(action_id: str, outcome: str, detail: Optional[dict] = None) 
                              "nothing was sent, so nothing can have happened to it")
         c.execute("UPDATE actions SET outcome=?, outcome_at=?, outcome_detail=? WHERE id=?",
                   (outcome, _now(), json.dumps(detail or {}, ensure_ascii=False), action_id))
+        # The move has now either happened or not. Either way SAP's own numbers
+        # are the truth from here, so the hold has nothing left to protect.
+        c.execute("UPDATE reservations SET released_at=?, released_why=?"
+                  " WHERE action_id=? AND released_at IS NULL",
+                  (_now(), f"outcome {outcome}", action_id))
         return dict(c.execute("SELECT * FROM actions WHERE id=?",
                               (action_id,)).fetchone()) | {"repeated": False}
 
@@ -297,6 +384,13 @@ def decide_action(action_id: str, decided_by: str, role: str, decision: str,
         c.execute("INSERT INTO approvals (action_id, decided_by, role, decision, note, at)"
                   " VALUES (?,?,?,?,?,?)", (action_id, decided_by, role, decision, note, _now()))
         c.execute("UPDATE actions SET status=? WHERE id=?", (nxt[decision], action_id))
+        if decision == "rejected":
+            # The move is not happening, so the donor's stock belongs to
+            # whoever needs it next. Held inside this transaction so a
+            # rejection never leaves tonnes locked by an action that died.
+            c.execute("UPDATE reservations SET released_at=?, released_why=?"
+                      " WHERE action_id=? AND released_at IS NULL",
+                      (_now(), "action rejected", action_id))
         return dict(c.execute("SELECT * FROM actions WHERE id=?", (action_id,)).fetchone())
 
 
@@ -576,6 +670,35 @@ def demo() -> None:
                           (cid,)).fetchone()["n"]
     assert left == 0, "messages must go when the conversation goes"
     print("  conversations: owner-scoped ✓ · cascade clean ✓ · titles trimmed ✓")
+    # ---------------------------------------------------------- reservations
+    # Two handlings read the same on-hand figure at the same moment. Each
+    # concludes SBY1 can spare 55 t. Each is right alone; together they promise
+    # 110 t that does not exist. The hold is what makes the second one see the
+    # first.
+    e1 = record_event("port_closure", "Ningbo closes", "test", {}, "check")
+    e2 = record_event("supplier_failure", "Supplier stops", "test", {}, "check")
+    r1, r2 = start_run(e1, "guided"), start_run(e2, "guided")
+
+    assert reserved_qty("M-4471", "SBY1") == 0
+    reserve(r1, "M-4471", "SBY1", 55)
+    assert reserved_qty("M-4471", "SBY1") == 55
+    # The run that placed the hold must not be charged for its own tonnes.
+    assert reserved_qty("M-4471", "SBY1", excluding_run=r1) == 0
+    assert reserved_qty("M-4471", "SBY1", excluding_run=r2) == 55
+    assert reserved_qty("M-4471", "KRW1") == 0, "a hold is per plant"
+
+    reserve(r2, "M-4471", "SBY1", 20)
+    assert reserved_qty("M-4471", "SBY1") == 75
+
+    freed = release_reservations("run failed", run_id=r1)
+    assert freed == 1 and reserved_qty("M-4471", "SBY1") == 20, reserved_qty("M-4471", "SBY1")
+
+    # A run that ends without carrying anything out must not keep the stock.
+    close_run(r2, "failed", error="boom")
+    assert reserved_qty("M-4471", "SBY1") == 0, "a failed run left stock held"
+    assert not open_reservations("M-4471")
+    print("  reservations: donor stock cannot be promised twice ✓ · freed on failure ✓")
+
     print("store ok")
 
 

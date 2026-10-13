@@ -136,6 +136,15 @@ def create_stock_transfer(material: str, from_plant: str, to_plant: str,
     r = _record("stock_transfer", alone,
                 material=material, from_plant=from_plant, to_plant=to_plant,
                 qty=qty, cost_idr=cost_idr)
+
+    # Hold the donor's stock the moment the move is raised, not when it is
+    # approved. The window between raising and approving is exactly when a
+    # second handling would otherwise promise the same tonnes.
+    from core import registry, store
+
+    run_id = registry.current_run()
+    if run_id and isinstance(r.value, dict) and not r.value.get("repeated"):
+        store.reserve(run_id, material, from_plant, qty, action_id=r.value.get("id"))
     # The reason travels with the action. A planner asking why this one waited
     # and that one did not should not have to read the code to find out.
     if isinstance(r.value, dict):

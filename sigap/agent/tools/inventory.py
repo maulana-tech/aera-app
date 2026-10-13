@@ -48,5 +48,26 @@ def assess_transfer(material: str, from_plant: str, to_plant: str, qty: float,
     if not stock.value:
         return Result(None, Origin.MISSING, stock.source, note="no stock records to judge")
     start = date.fromisoformat(profile()["AsOfDate"])
-    t = assess(stock.value, material, from_plant, to_plant, qty, start, floor_days)
-    return Result(t.as_dict(), stock.origin, stock.source, note=t.reason)
+
+    # Stock another open handling has already promised is not available to this
+    # one. Both read the same on-hand figure, so without this each is right
+    # alone and they are wrong together.
+    from core import registry, store
+
+    held = store.reserved_qty(material, from_plant, excluding_run=registry.current_run())
+    rows = stock.value
+    if held:
+        rows = [dict(r) for r in rows]
+        for r in rows:
+            if r.get("Material") == material and r.get("Plant") == from_plant:
+                on_hand = r.get("MatlWrhsStkQtyInMatlBaseUnit")
+                if on_hand is not None:
+                    r["MatlWrhsStkQtyInMatlBaseUnit"] = max(0.0, float(on_hand) - held)
+
+    t = assess(rows, material, from_plant, to_plant, qty, start, floor_days)
+    out = t.as_dict()
+    out["reserved_elsewhere"] = held
+    note = t.reason
+    if held:
+        note = f"{note} ({held:g} already held by another handling)"
+    return Result(out, stock.origin, stock.source, note=note)
