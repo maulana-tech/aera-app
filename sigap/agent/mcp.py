@@ -73,10 +73,13 @@ def handle(req: dict) -> Dict[str, Any]:
     if method == "tools/call":
         name = params.get("name") or ""
         arguments = params.get("arguments") or {}
+        # Resolved before running, not by catching KeyError. A tool that raises
+        # KeyError itself is a broken tool, not a missing one, and conflating
+        # the two reported a live SAP field mismatch as "unknown tool".
+        if name not in registry.all_tools():
+            return fail(-32602, f"unknown tool: {name}")
         try:
             result = registry.run(name, arguments)
-        except KeyError:
-            return fail(-32602, f"unknown tool: {name}")
         except Exception as e:                                       # noqa: BLE001
             # A tool that threw has no Result, so it has no origin either. Say
             # that, in the same shape as every other reply, so a caller never
@@ -141,6 +144,13 @@ def demo() -> None:
             assert body["provenance"]["origin"] in {o.value for o in Origin}
             labelled += 1
     print(f"  tools/call: {len(listed)} tools exercised, {labelled} returned a labelled value ✓")
+
+    # A registered tool that throws must never be reported as a missing one.
+    for t in listed:
+        r = handle({"jsonrpc": "2.0", "id": 6, "method": "tools/call",
+                    "params": {"name": t["name"], "arguments": {}}})
+        assert "error" not in r, \
+            f"{t['name']} is registered but came back as {r['error']}"
 
     unknown = handle({"jsonrpc": "2.0", "id": 4, "method": "tools/call",
                       "params": {"name": "no_such_tool", "arguments": {}}})
