@@ -181,7 +181,11 @@ def _tool_loop(cl, agent: Agent, task: str, board: Board,
     nothing to refer to, and the transcript on screen would be a record of a
     conversation the agent was never actually having.
     """
-    tools = registry.schemas_for_model(agent.code)
+    tools = (
+        (_specialist_tools() + registry.schemas_for_model(agent.code))
+        if agent.code == "supervisor"
+        else registry.schemas_for_model(agent.code)
+    )
     prompt_text = (
         f"{task}\n\n"
         f"What is on the shared board right now:\n{board.summary()}\n\n"
@@ -202,7 +206,7 @@ def _tool_loop(cl, agent: Agent, task: str, board: Board,
 
         req = {
             "model": CFG.model,
-            "max_tokens": 8000,
+            "max_tokens": 16000 if agent.code == "supervisor" else 8000,
             "system": agent.instructions,
             "tools": tools,
             "messages": messages,
@@ -216,7 +220,12 @@ def _tool_loop(cl, agent: Agent, task: str, board: Board,
 
         if r.stop_reason != "tool_use":
             text = "".join(b.text for b in r.content if b.type == "text")
-            report("specialist_done", {"agent": agent.code, "summary": text[:400]})
+            if agent.code == "supervisor":
+                report("summary", {"agent": "supervisor", "name": "Arya",
+                                   "summary": "Merumuskan rekomendasi mitigasi akhir"})
+            else:
+                report("specialist_done", {"agent": agent.code, "name": agent.nickname,
+                                           "summary": text[:400]})
             return text
 
         # every tool_result MUST go back in ONE user message
@@ -224,6 +233,16 @@ def _tool_loop(cl, agent: Agent, task: str, board: Board,
         for b in r.content:
             if b.type != "tool_use":
                 continue
+            if b.name.startswith("ask_") and b.name[len("ask_"):] in ALL:
+                code = b.name[len("ask_"):]
+                specialist = ALL[code]
+                task_text = b.input.get("task", "")
+                report("specialist_start", {"agent": code, "name": specialist.nickname,
+                                            "task": task_text})
+                summary = _tool_loop(cl, specialist, task_text, board, cost, report, deadline)
+                results.append({"type": "tool_result", "tool_use_id": b.id, "content": summary})
+                continue
+
             report("tool", {"agent": agent.code, "name": b.name, "arguments": b.input})
             try:
                 res = registry.run(b.name, dict(b.input))
@@ -373,6 +392,7 @@ def ask_specialist(code: str, question: str,
         "untrusted": board.untrusted_keys(),
         "cost_idr": cost.idr,
         "thinking_time": duration_s,
+        "trail": trail,
         "tokens": {
             "input": cost.input_tokens,
             "output": cost.output_tokens,

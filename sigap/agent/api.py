@@ -29,6 +29,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import queue
 import re
 import threading
 import traceback
@@ -364,8 +365,139 @@ def list_agents(_m, _b, _h) -> Tuple[int, dict]:
     }
 
 
+_AGENT_NICKNAMES = {
+    "supervisor": "Arya", "impact": "Elsa", "demand": "Dara", "inventory": "Iris",
+    "sourcing": "Clint", "procurement": "Prita", "logistics": "Milo", "compliance": "Kira",
+    "simulation": "Tara", "precedent": "Otto", "execution": "Bram", "exposure": "Vega",
+}
+
+_TOOL_LABELS = {
+    "get_materials": "katalog material",
+    "get_open_purchase_orders": "purchase order terbuka",
+    "get_material_stock": "ketersediaan stok material di plant",
+    "get_bom_explosion": "komponen produk (BOM)",
+    "get_sales_order_commitments": "komitmen sales order pelanggan",
+    "get_demand_signal": "sinyal permintaan pasar",
+    "get_production_schedule": "jadwal rencana produksi",
+    "forecast_demand": "proyeksi kebutuhan material",
+    "get_quality_holds": "penahanan kualitas stok",
+    "get_safety_stock_policy": "kebijakan safety stock",
+    "assess_transfer": "kelayakan transfer stok",
+    "find_alternate_sources": "pemasok alternatif",
+    "find_internal_transfers": "stok di plant lain",
+    "get_supplier_master": "data master pemasok",
+    "get_supplier_performance": "performa pemasok",
+    "get_quotations": "penawaran harga pemasok",
+    "compare_quotations": "perbandingan penawaran pemasok",
+    "propose_purchase_order": "draf purchase order",
+    "get_shipment_status": "status pengiriman logistik",
+    "estimate_eta": "estimasi kedatangan (ETA)",
+    "check_local_constraints": "regulasi kepatuhan TKDN/lokal",
+    "simulate_scenario": "biaya skenario mitigasi",
+    "search_past_incidents": "riwayat insiden serupa",
+    "create_stock_transfer": "pengajuan transfer stok",
+    "create_draft_po": "pembuatan draf PO",
+    "notify": "pengiriman notifikasi",
+    "detect_disruption": "deteksi sinyal disrupsi",
+}
+
+_TOOL_BADGES = {
+    "get_material_stock": "Stock Check",
+    "get_open_purchase_orders": "Orders",
+    "get_sales_order_commitments": "Sales",
+    "forecast_demand": "Demand",
+    "check_local_constraints": "Compliance",
+    "simulate_scenario": "Simulation",
+    "find_alternate_sources": "Sourcing",
+    "find_internal_transfers": "Transfers",
+    "get_shipment_status": "Logistics",
+    "detect_disruption": "Trigger",
+}
+
+
+def format_orchestration_step(kind: str, d: dict, seq: int) -> dict:
+    now = store._now()
+    if kind == "specialist_start":
+        target_code = d.get("agent", "")
+        target_name = d.get("name") or _AGENT_NICKNAMES.get(target_code, target_code.title())
+        task = str(d.get("task", "")).strip()
+        first_clause = task.split(".")[0].strip() if task else ""
+        narrative = f"Menugaskan {target_name}: {first_clause}" if first_clause else f"Menugaskan analisis ke {target_name}"
+        return {
+            "seq": seq,
+            "kind": "specialist_start",
+            "agent": "supervisor",
+            "agent_name": "Arya",
+            "target_agent": target_code,
+            "target_name": target_name,
+            "narrative": narrative,
+            "badge": f"{target_name} ›",
+            "detail": f"{task[:110]}…" if len(task) > 110 else (task or f"Delegasi ke {target_name}"),
+            "at": now,
+        }
+    if kind == "tool":
+        agent_code = d.get("agent", "")
+        agent_name = _AGENT_NICKNAMES.get(agent_code, d.get("name", agent_code.title()))
+        tool_name = d.get("name", "")
+        tool_desc = _TOOL_LABELS.get(tool_name, tool_name.replace("_", " "))
+        args = d.get("arguments", {})
+        arg_summary = " · ".join(f"{k}: {v}" for k, v in list(args.items())[:2])
+        badge = _TOOL_BADGES.get(tool_name, "Data Check")
+        narrative = f"{agent_name} memeriksa {tool_desc}"
+        detail = f"{tool_name}{f' ({arg_summary})' if arg_summary else ''} ›"
+        return {
+            "seq": seq,
+            "kind": "tool",
+            "agent": agent_code,
+            "agent_name": agent_name,
+            "narrative": narrative,
+            "badge": f"{badge} ›",
+            "detail": detail,
+            "at": now,
+        }
+    if kind == "specialist_done":
+        agent_code = d.get("agent", "")
+        agent_name = d.get("name") or _AGENT_NICKNAMES.get(agent_code, agent_code.title())
+        summary = str(d.get("summary", "")).strip()
+        first_line = summary.split("\n")[0].split(".")[0].strip()
+        narrative = f"{agent_name} melaporkan: {first_line}" if first_line else f"{agent_name} menyelesaikan temuan"
+        return {
+            "seq": seq,
+            "kind": "specialist_done",
+            "agent": agent_code,
+            "agent_name": agent_name,
+            "target_agent": "supervisor",
+            "target_name": "Arya",
+            "narrative": narrative,
+            "badge": "Finding ›",
+            "detail": f"{summary[:110]}…" if len(summary) > 110 else summary,
+            "at": now,
+        }
+    if kind == "summary":
+        return {
+            "seq": seq,
+            "kind": "summary",
+            "agent": "supervisor",
+            "agent_name": "Arya",
+            "narrative": "Merumuskan rekomendasi mitigasi akhir untuk pengguna",
+            "badge": "Summary ›",
+            "detail": "Formulasi solusi siap disajikan",
+            "at": now,
+        }
+    return {
+        "seq": seq,
+        "kind": kind,
+        "agent": d.get("agent", "-"),
+        "agent_name": d.get("name", "-"),
+        "narrative": d.get("summary", ""),
+        "badge": "Activity ›",
+        "detail": str(d)[:80],
+        "at": now,
+    }
+
+
 @route("POST", r"/agents/([a-z_]+)/ask")
-def ask_agent(m, b: dict, h) -> Tuple[int, dict]:
+def ask_agent(m, b: dict, h):
     """A direct conversation with one specialist."""
     user = _user(h)                                # identity comes from the token
     code = m.group(1)
@@ -400,23 +532,7 @@ def ask_agent(m, b: dict, h) -> Tuple[int, dict]:
         "summarise what it shows, and explain the supply-chain impact or next steps."
     )
 
-    try:
-        import graph
-        reply = graph.ask_specialist(
-            code,
-            effective_question,
-            history=_as_turns(prior),
-            attachments=attachments or None,
-        )
-    except Exception as e:                                          # noqa: BLE001
-        traceback.print_exc()
-        return 500, {"error": f"{type(e).__name__}: {e}"}
-
-    # Written down only once there is something to write down, so a failed ask
-    # does not leave an empty conversation in the list.
-    title_seed = question or str(attachments[0].get("name") or "Attachment")
-    if not cid:
-        cid = store.start_conversation(code, user.id, title_seed)
+    wants_stream = "text/event-stream" in (h.get("Accept") or "") or bool(b.get("stream"))
 
     stored_attachments = [
         {
@@ -432,6 +548,93 @@ def ask_agent(m, b: dict, h) -> Tuple[int, dict]:
     person_body: Dict[str, Any] = {"text": question}
     if stored_attachments:
         person_body["attachments"] = stored_attachments
+
+    if wants_stream:
+        def sse_generator():
+            q: queue.Queue = queue.Queue()
+            sentinel = object()
+            result_holder = {}
+            error_holder = {}
+            seq_counter = {"n": 0}
+
+            def capture_report(kind: str, d: dict) -> None:
+                seq_counter["n"] += 1
+                step = format_orchestration_step(kind, d, seq_counter["n"])
+                q.put(("step", step))
+
+            def worker() -> None:
+                try:
+                    import graph
+                    res = graph.ask_specialist(
+                        code,
+                        effective_question,
+                        report=capture_report,
+                        history=_as_turns(prior),
+                        attachments=attachments or None,
+                    )
+                    result_holder["res"] = res
+                except Exception as e:
+                    traceback.print_exc()
+                    error_holder["err"] = e
+                finally:
+                    q.put(sentinel)
+
+            threading.Thread(target=worker, daemon=True).start()
+
+            steps_collected = []
+            while True:
+                item = q.get()
+                if item is sentinel:
+                    break
+                _, step_data = item
+                steps_collected.append(step_data)
+                yield f"event: step\ndata: {json.dumps(step_data, ensure_ascii=False)}\n\n"
+
+            if "err" in error_holder:
+                err = error_holder["err"]
+                yield f"event: error\ndata: {json.dumps({'error': f'{type(err).__name__}: {err}'})}\n\n"
+                return
+
+            reply = result_holder["res"]
+            reply["steps"] = steps_collected
+
+            nonlocal cid
+            title_seed = question or str(attachments[0].get("name") or "Attachment")
+            if not cid:
+                cid = store.start_conversation(code, user.id, title_seed)
+
+            store.add_message(cid, "person", person_body)
+            store.add_message(cid, "agent", reply)
+            done_payload = reply | {"conversation_id": cid, "usage": _usage_payload(user.id)}
+            yield f"event: done\ndata: {json.dumps(done_payload, ensure_ascii=False, default=str)}\n\n"
+
+        return sse_generator()
+
+    # Non-streaming fallback
+    steps_collected = []
+    seq_counter = {"n": 0}
+
+    def capture_report(kind: str, d: dict) -> None:
+        seq_counter["n"] += 1
+        steps_collected.append(format_orchestration_step(kind, d, seq_counter["n"]))
+
+    try:
+        import graph
+        reply = graph.ask_specialist(
+            code,
+            effective_question,
+            report=capture_report,
+            history=_as_turns(prior),
+            attachments=attachments or None,
+        )
+    except Exception as e:                                          # noqa: BLE001
+        traceback.print_exc()
+        return 500, {"error": f"{type(e).__name__}: {e}"}
+
+    reply["steps"] = steps_collected
+    title_seed = question or str(attachments[0].get("name") or "Attachment")
+    if not cid:
+        cid = store.start_conversation(code, user.id, title_seed)
 
     store.add_message(cid, "person", person_body)
     store.add_message(cid, "agent", reply)
@@ -598,13 +801,17 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Headers", "content-type,authorization")
+        self.send_header("Access-Control-Allow-Headers", "content-type,authorization,accept")
         self.send_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
         self.end_headers()
         self.wfile.write(body)
 
     def do_OPTIONS(self) -> None:          # noqa: N802
-        self._send(204, {})
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Headers", "content-type,authorization,accept")
+        self.send_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+        self.end_headers()
 
     def _dispatch(self, method: str) -> None:
         path = urlparse(self.path).path.rstrip("/") or "/health"
@@ -622,7 +829,24 @@ class Handler(BaseHTTPRequestHandler):
             found = pattern.match(path)
             if found:
                 try:
-                    code, data = fn(found, body, self.headers)
+                    res = fn(found, body, self.headers)
+                    if hasattr(res, "__iter__") and not isinstance(res, (tuple, list, dict, str, bytes)):
+                        self.send_response(200)
+                        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+                        self.send_header("Cache-Control", "no-cache")
+                        self.send_header("Connection", "keep-alive")
+                        self.send_header("Access-Control-Allow-Origin", "*")
+                        self.send_header("Access-Control-Allow-Headers", "content-type,authorization,accept")
+                        self.send_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+                        self.end_headers()
+                        try:
+                            for chunk in res:
+                                self.wfile.write(chunk.encode("utf-8") if isinstance(chunk, str) else chunk)
+                                self.wfile.flush()
+                        except (BrokenPipeError, ConnectionResetError):
+                            pass
+                        return
+                    code, data = res
                 except NotAuthorised as e:
                     return self._send(401, {"error": str(e)})
                 except Exception as e:                               # noqa: BLE001
