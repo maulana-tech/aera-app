@@ -21,7 +21,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ToolActivity } from "@/components/agent-activity";
 import { AgentBadge } from "@/components/agent-card";
 import { Markdown } from "@/components/markdown";
-import { OrchestrationTimeline, type OrchestrationStep } from "@/components/orchestration-timeline";
+import {
+  OrchestrationTimeline,
+  type OrchestrationStep,
+  type OrchestrationTrailEntry,
+} from "@/components/orchestration-timeline";
 import { OriginBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 
@@ -44,6 +48,7 @@ type Reply = {
   conversation_id?: string;
   thinking_time?: number;
   steps?: OrchestrationStep[];
+  trail?: OrchestrationTrailEntry[];
   usage?: UsageOverview;
   tokens?: {
     input: number;
@@ -1125,6 +1130,9 @@ export default function Conversation({
                           steps={m.reply.steps}
                           duration={m.reply.thinking_time}
                           isRunning={false}
+                          trail={m.reply.trail}
+                          board={m.reply.board}
+                          finalAnswer={m.reply.answer}
                         />
                       )}
                       <div className="bg-muted/50 rounded-lg rounded-tl-sm border p-4">
