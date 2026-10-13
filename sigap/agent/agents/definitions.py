@@ -87,9 +87,11 @@ SPECIALISTS = [
           "and how it turned out.",
           ["search_past_incidents"]),
     Agent("execution", "Bram", "Execution",
-          "Writes back to SAP within its authority, tells the affected roles, and watches "
-          "through to receipt.",
+          "Writes back to SAP within its authority, tells the affected roles, watches "
+          "through to receipt, and records what actually happened so the next "
+          "incident can learn from this one.",
           ["create_stock_transfer", "create_draft_po", "notify", "monitor_shipment",
+           "record_outcome",
            "create_sourcing_event", "propose_safety_stock_change"]),   # last two: Prevent mode
     Agent("exposure", "Vega", "Risk Scanner",
           "Prevent mode: hunts risk that has not happened yet. Single sources, concentrated "

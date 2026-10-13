@@ -11,6 +11,7 @@ Endpoints
     GET  /runs                     recent handlings
     GET  /runs/{id}                one handling: steps, actions, approvals
     POST /actions/{id}/decision    {decision, note}
+    POST /actions/{id}/outcome     {outcome, detail}   what actually happened
     POST /login                    {email, password}
     GET  /me
     GET  /agents                   team anatomy
@@ -823,6 +824,20 @@ def list_runs(_m, _b, _h) -> Tuple[int, dict]:
 def one_run(m, _b, _h) -> Tuple[int, dict]:
     d = store.get_run(m.group(1))
     return (200, d) if d else (404, {"error": "not found"})
+
+
+@route("POST", r"/actions/([A-Za-z0-9_]+)/outcome")
+def record_outcome(m, b: dict, h) -> Tuple[int, dict]:
+    """What actually happened. The half of the record that closes the loop."""
+    _user(h)                           # a reading of reality is still attributable
+    if not b.get("outcome"):
+        return 400, {"error": f"'outcome' is required, one of {', '.join(store.OUTCOMES)}"}
+    try:
+        return 200, store.record_outcome(m.group(1), b["outcome"], b.get("detail"))
+    except KeyError:
+        return 404, {"error": "action not found"}
+    except ValueError as e:
+        return 400, {"error": str(e)}
 
 
 @route("POST", r"/actions/([A-Za-z0-9_]+)/decision")

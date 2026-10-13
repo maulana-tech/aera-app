@@ -170,6 +170,33 @@ def monitor_shipment(reference: str) -> Result:
     return _record("monitor", True, reference=reference)
 
 
+@register("record_outcome", "execution",
+          "Close the loop on an action that was sent: what actually happened, and when. "
+          "Writes it to the record so the next incident can learn from this one.",
+          {"action_id": {"type": "string"},
+           "outcome": {"type": "string",
+                       "description": "delivered | late | short | failed | cancelled"},
+           "detail": {"type": "string",
+                      "description": "what was actually seen: real arrival date, real "
+                                     "quantity, real cost. Plain text."}},
+          ["action_id", "outcome"])
+def record_outcome(action_id: str, outcome: str, detail: str = "") -> Result:
+    from core import store
+
+    try:
+        row = store.record_outcome(action_id, outcome, {"note": detail} if detail else None)
+    except KeyError:
+        return Result(None, Origin.MISSING, "actions table",
+                      note=f"no action {action_id}")
+    except ValueError as e:
+        return Result(None, Origin.MISSING, "actions table", note=str(e))
+
+    if row.get("repeated"):
+        return Result(row, Origin.DERIVED, "action record",
+                      note="an outcome was already recorded; it was not overwritten")
+    return Result(row, Origin.DERIVED, "action record")
+
+
 # ------------------------------------------------------- Prevent mode actions
 # Nothing in Prevent mode is urgent, so nothing in it justifies autonomy. Both
 # of these wait for a person regardless of value.

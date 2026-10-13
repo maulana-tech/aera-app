@@ -138,6 +138,20 @@ def new_id(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex[:12]}"
 
 
+# Columns that arrived after a database already existed. CREATE TABLE IF NOT
+# EXISTS will not add a column to a table that is already there, so each one is
+# applied on connect and the duplicate error is the normal outcome.
+ADDED_LATER = [
+    ("uploads", "synthetic", "INTEGER NOT NULL DEFAULT 0"),
+    # What actually happened after the action was sent. Without these the
+    # record says what was decided and never what it cost in the end, so the
+    # memory Otto reads is a memory of intentions.
+    ("actions", "outcome", "TEXT"),
+    ("actions", "outcome_at", "TEXT"),
+    ("actions", "outcome_detail", "TEXT"),
+]
+
+
 @contextmanager
 def connect() -> Iterator[sqlite3.Connection]:
     p = pathlib.Path(CFG.database)
@@ -148,11 +162,11 @@ def connect() -> Iterator[sqlite3.Connection]:
     c.execute("PRAGMA journal_mode = WAL")
     try:
         c.executescript(SCHEMA)
-        # Older databases predate the synthetic flag.
-        try:
-            c.execute("ALTER TABLE uploads ADD COLUMN synthetic INTEGER NOT NULL DEFAULT 0")
-        except sqlite3.OperationalError:
-            pass
+        for table, column, decl in ADDED_LATER:
+            try:
+                c.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+            except sqlite3.OperationalError:
+                pass                      # already there, which is the usual case
         yield c
         c.commit()
     finally:
@@ -238,6 +252,37 @@ def record_action(run_id: str, idempotency_key: str, kind: str,
         return dict(row) | {"repeated": False}
 
 
+OUTCOMES = ("delivered", "late", "short", "failed", "cancelled")
+
+
+def record_outcome(action_id: str, outcome: str, detail: Optional[dict] = None) -> Dict[str, Any]:
+    """What actually happened after the action was sent.
+
+    This is the half of the record that was missing. Everything else here says
+    what was decided and on what evidence; without this nothing says whether
+    the decision worked, so the system could run for a year and learn nothing.
+
+    Written once, like an approval. A correction is a new reading of reality,
+    not an edit of the old one, so a second call is refused rather than
+    silently overwriting what the first one saw.
+    """
+    if outcome not in OUTCOMES:
+        raise ValueError(f"outcome must be one of {', '.join(OUTCOMES)}, not {outcome!r}")
+    with connect() as c:
+        row = c.execute("SELECT * FROM actions WHERE id=?", (action_id,)).fetchone()
+        if not row:
+            raise KeyError(action_id)
+        if row["outcome"]:
+            return dict(row) | {"repeated": True}
+        if row["status"] not in ("sent", "approved"):
+            raise ValueError(f"action {action_id} is {row['status']}: "
+                             "nothing was sent, so nothing can have happened to it")
+        c.execute("UPDATE actions SET outcome=?, outcome_at=?, outcome_detail=? WHERE id=?",
+                  (outcome, _now(), json.dumps(detail or {}, ensure_ascii=False), action_id))
+        return dict(c.execute("SELECT * FROM actions WHERE id=?",
+                              (action_id,)).fetchone()) | {"repeated": False}
+
+
 def decide_action(action_id: str, decided_by: str, role: str, decision: str,
                   note: str = "") -> Dict[str, Any]:
     nxt = {"approved": "approved", "rejected": "rejected", "escalated": "pending"}
@@ -287,13 +332,29 @@ def past_incidents(terms: List[str], limit: int = 5) -> tuple[List[dict], int]:
 
     total = len(rows)
     scored = []
-    for r in rows:
-        hay = f"{r['title']} {r['kind']} {r['trigger']}".lower()
-        hits = sum(1 for t in terms if t in hay)
-        if hits:
+    with connect() as c:
+        for r in rows:
+            hay = f"{r['title']} {r['kind']} {r['trigger']}".lower()
+            hits = sum(1 for t in terms if t in hay)
+            if not hits:
+                continue
+            # What was done, and what came of it. A precedent without its
+            # outcome only says what somebody decided, which is the part the
+            # system already knows it decided.
+            acts = c.execute(
+                "SELECT kind, payload, status, outcome, outcome_at, outcome_detail"
+                " FROM actions WHERE run_id=? ORDER BY created_at", (r["run_id"],)).fetchall()
             scored.append((hits, dict(r) | {
                 "decision": json.loads(r["decision"]) if r["decision"] else None,
                 "matched": hits,
+                "actions": [{
+                    "kind": a["kind"],
+                    "payload": json.loads(a["payload"]),
+                    "status": a["status"],
+                    "outcome": a["outcome"],
+                    "outcome_at": a["outcome_at"],
+                    "outcome_detail": json.loads(a["outcome_detail"]) if a["outcome_detail"] else None,
+                } for a in acts],
             }))
 
     # Most terms matched first; the query already ordered by recency, and

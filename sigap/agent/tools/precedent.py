@@ -83,6 +83,28 @@ def demo() -> None:
     assert hit.value[0]["matched"] == 2, hit.value[0]
     print(f"  found it: {hit.value[0]['title']} -> {hit.value[0]['decision']['chose']}")
 
+    # The loop: an action that was sent, then what came of it. A precedent that
+    # stops at "we decided X" is a diary; the useful part is "and it was late".
+    from core import registry
+    with registry.bind_run(rid):
+        from tools.execution import raise_action
+        act = raise_action("stock_transfer", True, material="M-4471",
+                           from_plant="SBY1", to_plant="KRW1", qty=55, cost_idr=1_000_000)
+    store.record_outcome(act.value["id"], "late",
+                         {"note": "arrived 3 days after the promised date"})
+
+    learned = search_past_incidents("typhoon Ningbo")
+    acts = learned.value[0]["actions"]
+    assert acts and acts[0]["outcome"] == "late", acts
+    assert acts[0]["outcome_detail"]["note"].startswith("arrived 3 days"), acts[0]
+    print(f"  and what came of it: {acts[0]['kind']} -> {acts[0]['outcome']}, "
+          f"{acts[0]['outcome_detail']['note']}")
+
+    # Reality is read once. A second reading does not quietly replace the first.
+    again = store.record_outcome(act.value["id"], "delivered")
+    assert again["repeated"] and again["outcome"] == "late", again
+    print("  a second outcome does not overwrite the first")
+
     none = search_past_incidents("earthquake Surabaya")
     assert none.value == [] and none.origin is Origin.DERIVED, none.brief()
     assert none.trusted, "a search that ran and found nothing is an answer, not a gap"
