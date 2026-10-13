@@ -133,6 +133,73 @@ MATERIALS = [
     ("M-1208", "Impeller blank, investment cast", "PC", "foundry"),
 ]
 
+# ---- supplier quotations ---------------------------------------------------
+# Nothing else in this dataset carries a price. ExtraCost on an alternate source
+# is what an option costs over the baseline, not what a supplier charges for a
+# tonne of it, and there is no price list to fall back on. "Cheapest" cannot be
+# answered without one, so the round of quotations below supplies it, modelled to
+# the same standard as everything else here and saying so in the file header.
+
+#: Unit price in rupiah, by material family and the unit the material is bought
+#: in. Modelled levels, close enough to real ones to be defensible and no closer.
+PRICE_IDR = {
+    ("alloy", "TON"): 41_500_000,
+    ("iron", "TON"): 9_800_000,
+    ("steel", "TON"): 14_800_000,
+    ("steel", "PC"): 38_000,
+    ("copper", "KG"): 152_000,
+    ("copper", "PC"): 46_000,
+    ("rubber", "KG"): 34_500,
+    ("rubber", "PC"): 27_500,
+    ("rubber", "MTR"): 18_500,
+    ("rubber", "SQM"): 96_000,
+    ("fastener", "PC"): 3_800,
+    ("coating", "LTR"): 78_000,
+    ("consumable", "LTR"): 92_000,
+    ("consumable", "PC"): 31_500,
+    ("foundry", "PC"): 24_000,
+    ("foundry", "KG"): 21_500,
+    ("foundry", "TON"): 8_600_000,
+}
+
+#: Who quotes what. A steel foundry bidding on copper wire is a bid no buyer
+#: could act on, so each family names the firms that actually supply it. Every
+#: incumbent holding orders for a material is added to its family's list: a
+#: supplier already being bought from is asked, whatever it is listed as making.
+BIDDERS = {
+    "alloy": ["SUP-2201", "SUP-5501", "SUP-4417", "SUP-3390"],
+    "iron": ["SUP-2209", "SUP-4418", "SUP-7701"],
+    "steel": ["SUP-2209", "SUP-4418", "SUP-6610", "SUP-7701"],
+    "copper": ["SUP-4455", "SUP-2244", "SUP-4431"],
+    "rubber": ["SUP-2207", "SUP-3402", "SUP-4423", "SUP-8801"],
+    "fastener": ["SUP-8815", "SUP-4431", "SUP-2244", "SUP-6610"],
+    "coating": ["SUP-8801", "SUP-6622", "SUP-2207"],
+    "consumable": ["SUP-8815", "SUP-6610", "SUP-2244", "SUP-4455"],
+    "foundry": ["SUP-4418", "SUP-2209", "SUP-3390"],
+}
+
+#: Ocean freight days from each origin, and the band a firm from there prices in.
+#: Local supply is dearer and quicker, the far east cheaper and slower. Those two
+#: pull against each other on purpose: if they agreed, cheapest and fastest would
+#: always be the same offer and there would be no decision left to make.
+LEAD_TIME_DAYS = {
+    "ID": (4, 8), "MY": (10, 15), "TH": (12, 17), "VN": (12, 18),
+    "CN": (18, 26), "KR": (15, 21), "JP": (16, 23),
+}
+PRICE_BAND = {
+    "ID": (1.03, 1.11), "CN": (0.87, 0.96), "VN": (0.89, 0.98),
+    "KR": (0.96, 1.04), "JP": (1.01, 1.09), "TH": (0.93, 1.01),
+    "MY": (0.91, 0.99),
+}
+
+#: The quantity each quote is written for, by purchasing unit. SAP prices per
+#: PriceUnit, and for pieces that unit is a hundred rather than one.
+QUOTE_QTY = {
+    "TON": 100.0, "KG": 500.0, "LTR": 200.0, "MTR": 300.0, "SQM": 100.0,
+    "PC": 5000.0,
+}
+
+
 CUSTOMERS = [
     ("CUS-1001", "Anantara Motor Manufacturing"),
     ("CUS-1002", "Nusa Otomotif Industri"),
@@ -324,11 +391,15 @@ def build() -> dict:
     suppliers = [{"Supplier": c, "SupplierName": n, "Country": ctry,
                   "TkdnCertifiedPct": pct or None} for c, n, ctry, pct in SUPPLIERS]
 
+    # A separate generator, so adding quotations cannot shift a figure any
+    # document already quotes from the rows above.
+    quotations = _quotations(orders, random.Random(SEED + 1))
+
     history = _consumption_history(stock, rnd)
 
     return {"MaterialStock": stock, "PurchaseOrder": orders, "BillOfMaterial": bom,
             "SalesOrder": sales, "AlternateSource": alternates, "Supplier": suppliers,
-            "ConsumptionHistory": history}
+            "Quotation": quotations, "ConsumptionHistory": history}
 
 
 #: Materials whose actual consumption has drifted away from the planned rate in
@@ -337,6 +408,61 @@ def build() -> dict:
 DRIFTING = {"M-4471": 1.13, "M-3308": 1.06, "M-5518": 0.91}
 
 HISTORY_DAYS = 120
+
+
+def _quotations(orders: list, rnd: random.Random) -> list:
+    """A round of quotations for every material the company is actually buying.
+
+    Three things have to hold or the comparison downstream has nothing to decide
+    between: more than one firm quotes each material, the cheapest of them is not
+    also the fastest, and neither the status field nor the validity date may be
+    read on its own. The first two come from BIDDERS pulling against
+    LEAD_TIME_DAYS and PRICE_BAND, which point opposite ways. The third is
+    planted in QtnLifecycleStatus: it records what the round was closed out as,
+    not what is true on the day somebody reads it.
+    """
+    country = {c: t for c, _, t, _ in SUPPLIERS}
+    unit_of = {c: u for c, _, u, _ in MATERIALS}
+    family_of = {c: f for c, _, _, f in MATERIALS}
+
+    buying = {}
+    for o in orders:
+        buying.setdefault(o["Material"], set()).add(o["Supplier"])
+
+    # One price band and one port distance per firm, so a supplier quotes like
+    # itself on every material instead of re-rolling its character per bid.
+    band = {c: rnd.uniform(*PRICE_BAND[t]) for c, _, t, _ in SUPPLIERS}
+    transit = {c: rnd.randrange(*LEAD_TIME_DAYS[t]) for c, _, t, _ in SUPPLIERS}
+
+    rows = []
+    doc = 3_000_000_000
+    for material in sorted(buying):
+        unit = unit_of[material]
+        base = PRICE_IDR[(family_of[material], unit)]
+        # SAP prices per PriceUnit, and for pieces that unit is a hundred.
+        price_unit = 100 if unit == "PC" else 1
+        asked = BIDDERS[family_of[material]] + sorted(buying[material])
+        for sid in list(dict.fromkeys(asked))[:5]:
+            doc += 10
+            raised = AS_OF - timedelta(days=rnd.randrange(5, 75))
+            rows.append({
+                "SupplierQuotation": str(doc),
+                "SupplierQuotationItem": 10,
+                "Supplier": sid,
+                "Material": material,
+                "OrderQuantity": QUOTE_QTY[unit],
+                "PurchaseOrderQuantityUnit": unit,
+                "NetPrice": int(round(base * band[sid] * price_unit, -3)),
+                "PriceUnit": price_unit,
+                "Currency": "IDR",
+                "DeliveryTimeInDays": transit[sid] + rnd.choice([0, 0, 1, -1]),
+                "CreationDate": raised.isoformat(),
+                "QuotationValidityEndDate":
+                    (raised + timedelta(days=rnd.choice([45, 60, 75, 90]))).isoformat(),
+                "QtnLifecycleStatus": "Open" if rnd.random() < 0.72 else "Completed",
+                "PurchasingOrganization": "1000",
+            })
+    return rows
 
 
 def _consumption_history(stock: list, rnd: random.Random) -> list:
@@ -430,6 +556,40 @@ def demo() -> None:
     assert round(sby["MatlWrhsStkQtyInMatlBaseUnit"] / sby["DailyConsumption"], 1) == 18.0
     fg1120 = sum(s["NetAmount"] for s in data["SalesOrder"] if s["Material"] == "FG-1120")
     assert fg1120 == 2_140_000_000, fg1120
+
+    # A comparison needs something to compare. Every material being bought has
+    # several firms quoting it, and cheapest and fastest come apart often enough
+    # to be worth asking about: otherwise "best price and fastest delivery" would
+    # name a single offer and decide nothing.
+    quotes = data["Quotation"]
+    bids: dict = {}
+    for r in quotes:
+        bids[r["Material"]] = bids.get(r["Material"], 0) + 1
+    bought = {o["Material"] for o in data["PurchaseOrder"]}
+    assert set(bids) == bought, sorted(set(bids) ^ bought)
+    assert min(bids.values()) >= 3, min(bids.values())
+
+    split = 0
+    for m in sorted(bids):
+        on = [r for r in quotes if r["Material"] == m]
+        cheapest = min(on, key=lambda r: r["NetPrice"] / r["PriceUnit"])
+        fastest = min(on, key=lambda r: r["DeliveryTimeInDays"])
+        split += cheapest["Supplier"] != fastest["Supplier"]
+    assert split >= len(bids) // 2, (split, len(bids))
+
+    # Neither field may be read on its own: some offers still read Open past
+    # their last valid day, and some read Completed while the price is good.
+    as_of = AS_OF.isoformat()
+    stale = [r for r in quotes if r["QtnLifecycleStatus"] == "Open"
+             and r["QuotationValidityEndDate"] < as_of]
+    fresh = [r for r in quotes if r["QtnLifecycleStatus"] == "Completed"
+             and r["QuotationValidityEndDate"] >= as_of]
+    assert stale and fresh, (len(stale), len(fresh))
+
+    # Nobody bids who is not on the approved list, and a price is quoted per
+    # PriceUnit rather than per piece where that unit is not one.
+    assert {r["Supplier"] for r in quotes} <= {c for c, _, _, _ in SUPPLIERS}
+    assert any(r["PriceUnit"] > 1 for r in quotes), "no price is quoted per hundred"
 
     write(data)
     print(f"generated {sum(counts.values())} rows into {OUT.relative_to(HERE.parent)}")

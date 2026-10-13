@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { StepSummary, stageLabel, stepAgentName } from "@/components/agent-activity";
 import { api, idr } from "@/app/lib";
 import { Empty, PageHeader, Section } from "@/components/shell";
 import { OriginBadge, StatusBadge } from "@/components/status-badge";
@@ -13,7 +14,7 @@ type Step = {
 };
 type Action = {
   id: string; run_id: string; title: string; kind: string; status: string;
-  autonomous: number; payload: Record<string, any>; created_at: string;
+  autonomous: number; payload: Record<string, unknown>; created_at: string;
 };
 type Approval = {
   id: number; action_id: string; run_id: string; action_kind: string;
@@ -129,17 +130,12 @@ export default async function Log() {
               <li key={s.id} className="grid grid-cols-[84px_1fr] gap-4 px-4 py-3">
                 <div>
                   <p className="text-primary font-mono text-[11px] font-semibold tracking-wider">
-                    {s.stage}
+                    {stageLabel(s.stage)}
                   </p>
-                  <p className="text-muted-foreground mt-0.5 text-[11px]">{s.agent_name}</p>
+                  <p className="text-muted-foreground mt-0.5 text-[11px]">{stepAgentName(s)}</p>
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm leading-relaxed">{s.summary}</p>
-                  {s.tools.length > 0 && (
-                    <p className="text-muted-foreground mt-1 break-words font-mono text-[11px]">
-                      {s.tools.join(" · ")}
-                    </p>
-                  )}
+                  <StepSummary step={s} />
                   <div className="mt-1.5 flex flex-wrap items-center gap-2">
                     {s.origin && <OriginBadge origin={s.origin} source={s.source} />}
                     <Link

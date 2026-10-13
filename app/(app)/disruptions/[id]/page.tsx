@@ -2,6 +2,8 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { StepSummary, stageLabel, stepAgentName } from "@/components/agent-activity";
+import { Markdown } from "@/components/markdown";
 import { api, idr, me, type Run } from "@/app/lib";
 import { ActionPayload } from "@/components/action-payload";
 import { AutoRefresh } from "@/components/auto-refresh";
@@ -75,9 +77,7 @@ export default async function DisruptionDetail({ params }: { params: Promise<{ i
       {run.decision?.recommendation && (
         <Section title="Recommendation">
           <div className="max-w-3xl rounded-lg border p-5">
-            <p className="whitespace-pre-line text-sm leading-relaxed">
-              {run.decision.recommendation}
-            </p>
+            <Markdown>{run.decision.recommendation}</Markdown>
             {Array.isArray(run.decision.untrusted_on_board) &&
               run.decision.untrusted_on_board.length > 0 && (
                 <p className="text-muted-foreground mt-4 border-t pt-3 text-xs leading-relaxed">
@@ -168,16 +168,11 @@ export default async function DisruptionDetail({ params }: { params: Promise<{ i
             {steps.map((s) => (
               <li key={s.seq} className="grid grid-cols-[92px_minmax(0,1fr)] gap-4 px-5 py-4">
                 <div>
-                  <p className="text-primary font-mono text-[11px] font-semibold">{s.stage}</p>
-                  <p className="text-muted-foreground mt-1 text-[11px]">{s.agent_name}</p>
+                  <p className="text-primary font-mono text-[11px] font-semibold">{stageLabel(s.stage)}</p>
+                  <p className="text-muted-foreground mt-1 text-[11px]">{stepAgentName(s)}</p>
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm leading-relaxed">{s.summary}</p>
-                  {s.tools.length > 0 && (
-                    <p className="text-muted-foreground mt-1.5 break-words font-mono text-[11px]">
-                      {s.tools.join(", ")}
-                    </p>
-                  )}
+                  <StepSummary step={s} />
                   {s.origin && (
                     <div className="mt-2">
                       <OriginBadge origin={s.origin} source={s.source} />

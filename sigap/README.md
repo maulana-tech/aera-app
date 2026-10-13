@@ -45,7 +45,7 @@ open http://localhost:3000/dashboard
 |---|---|
 | **`PLAN.md`** ⭐ | The plan, the status of each part, the order of work |
 | **`SETUP.md`** | From a clone to a system that reasons. Every step ends with a test |
-| **`AGENT-REFERENCE.md`** | All 11 agents: tools, parameters, limits. **Generated**, `manage.py docs` |
+| **`AGENT-REFERENCE.md`** | All 12 agents: tools, parameters, limits. **Generated**, `manage.py docs` |
 | **`AWS-PLAN.md`** | Getting onto Bedrock and AgentCore, in the order that survives contact with a loop that has never run |
 | `DESIGN.md` | Scenario figures, local rules, the eval suite |
 | `TECHNICAL.md` | Exact function names and parameters |
@@ -75,6 +75,6 @@ If a figure in a document cannot be reproduced by that command, **the document i
 
 **What is blocking, right now**, `PYTHONPATH=. python3 manage.py check` prints this
 live, but in short: `SAP_API_KEY`, `AWS_REGION`, and `references/` (the TKDN & LARTAS
-rules). All 11 prompts are written and all 26 tools are installed. The SAP key is
+rules). All 12 prompts are written and all 31 tools are installed. The SAP key is
 self-service and takes 15 minutes; `references/` needs nobody's permission and is
 domain work, not code. `SETUP.md` is the runbook for the two keys.

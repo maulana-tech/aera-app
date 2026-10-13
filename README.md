@@ -8,7 +8,7 @@ customs, the system investigates the impact itself, assembles the ways out, stri
 ones that break Indonesian regulation or the customer contract, works out which is
 cheapest, and executes it into SAP once someone with the authority approves.
 
-A supervised swarm of eleven agents on Amazon Bedrock, a Next.js interface, and a
+A supervised swarm of twelve agents on Amazon Bedrock, a Next.js interface, and a
 deterministic calculator that refuses to produce a rupiah figure it cannot stand behind.
 
 ---
@@ -44,7 +44,8 @@ Everything lives in [`sigap/`](sigap/):
 | File | What's in it |
 |---|---|
 | [`sigap/PLAN.md`](sigap/PLAN.md) ⭐ | The plan, the status of each part, what to do next |
-| [`sigap/AGENT-REFERENCE.md`](sigap/AGENT-REFERENCE.md) | All 11 agents and their tools, **generated** from the registry |
+| [`sigap/AGENT-REFERENCE.md`](sigap/AGENT-REFERENCE.md) | All 12 agents and their tools, **generated** from the registry |
+| [`ops/CICD.md`](ops/CICD.md) | GitHub Actions: CI on all branches and SSH deployment from main to EC2 |
 | [`sigap/AWS-PLAN.md`](sigap/AWS-PLAN.md) | Getting onto Bedrock and AgentCore, in the order that works |
 | [`sigap/DESIGN.md`](sigap/DESIGN.md) | The scenario and its figures, the constraint rules, the eval suite |
 | [`sigap/TECHNICAL.md`](sigap/TECHNICAL.md) | Bedrock calling conventions, caching, limits |
@@ -70,11 +71,11 @@ Two further things the code enforces rather than asks for:
 
 Working: provenance labelling, the calculator, SAP reads, persistence with idempotent
 actions and one-shot approvals, auth with server-side authority limits, 19 API routes, the
-full interface, and 19 of 23 tools.
+full interface, and all 31 tools.
 
 Not done: `AWS_REGION` is unset, so `graph.py` has never run, the system holds back rather
-than pretending. Nine of eleven agent prompts are unwritten. The four Prevent-mode tools
-and the `references/` rule documents are outstanding. `sigap/PLAN.md` §2 has the detail.
+than pretending. The `references/` rule documents are outstanding. `sigap/PLAN.md` §2 has
+the detail.
 
 ## Stack
 

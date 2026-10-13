@@ -30,6 +30,7 @@ export function ThemeToggle() {
 
   // The theme is only known once we're in the browser. Until then the icon is
   // held back so it doesn't flicker when the page finishes loading.
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration marker for the browser-only theme
   useEffect(() => setMounted(true), []);
 
   return (

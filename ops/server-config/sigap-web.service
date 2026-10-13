@@ -1,0 +1,19 @@
+[Unit]
+Description=SIGAP Next.js Web App
+After=network-online.target sigap-agent.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/sigap-project/standalone
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=SIGAP_API=http://127.0.0.1:8787
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

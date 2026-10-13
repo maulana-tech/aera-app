@@ -8,7 +8,7 @@
 
 ## 1. The uncomfortable starting point
 
-All eleven agents have instructions now, and `graph.py` runs: `python3 graph.py`
+All twelve agents have instructions now, and `graph.py` runs: `python3 graph.py`
 drives one event through the team against a scripted stand-in for Bedrock, which
 exercises the routing, the tool execution, the shared board and the cost
 accounting. That already found one real bug, a registry that was empty unless
@@ -62,7 +62,7 @@ We hand-rolled 745 lines that overlap with AgentCore. Not all of it should go.
 | What we have | AgentCore offers | Verdict |
 |---|---|---|
 | `graph.py`, the supervisor loop | **Runtime** to host it | **Adopt.** This is the whole point of Runtime. |
-| `core/registry.py`, 26 tools with schemas | **Gateway**, tools as MCP | **Adopt.** One registry already feeds the model and the executor, so exposing it over MCP is a shape change, not a rewrite. |
+| `core/registry.py`, 31 tools with schemas | **Gateway**, tools as MCP | **Adopt.** One registry already feeds the model and the executor, so exposing it over MCP is a shape change, not a rewrite. |
 | `core/trace.py`, steps into SQLite | **Observability**, OTEL traces | **Adopt.** Ours records what we chose to record. OTEL records every model call, token count and latency, which is what "trace every agent decision" means. |
 | nothing | **Memory** and **Managed Knowledge Base** | **Adopt, for Otto.** `search_past_incidents` returns MISSING today because there is no store behind it. Otto is a real agent with a real tool and nowhere to look. |
 | nothing | **Evaluation** | **Adopt late.** The 14 scenarios in `DESIGN.md` §5 are unwritten. This is where they go. |

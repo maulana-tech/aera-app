@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function Queue() {
   const [data, health] = await Promise.all([
     api<{ runs: Run[] }>("runs"),
-    api<Record<string, any>>("health"),
+    api<{ env: string; sap_ready: boolean; model_ready: boolean }>("health"),
   ]);
 
   if (!data) {

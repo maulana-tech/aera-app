@@ -1,0 +1,80 @@
+name: CI and deploy EC2
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Do not cancel a deployment while the server is still changing releases.
+concurrency:
+  group: sigap-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci
+      - run: npm run lint
+      - run: node scripts/check-agent-output.mjs
+      - run: npm run build -- --webpack
+      - name: Python self-checks
+        working-directory: sigap/agent
+        env:
+          SIGAP_ENV: dev
+          SIGAP_DB: /tmp/sigap-ci.db
+        run: python manage.py check
+      - run: python3 ops/test_deploy.py
+      - run: python3 ops/test_deploy_ssh.py
+      - name: Package release (tracked backend files only)
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        run: |
+          mkdir -p release/standalone
+          cp -a .next/standalone/. release/standalone/
+          cp -a public release/standalone/
+          cp -a .next/static release/standalone/.next/
+          git archive HEAD sigap | tar -x -C release
+          cp ops/deploy.sh release/deploy.sh
+          tar -czf release.tar.gz -C release .
+      - uses: actions/upload-artifact@v4
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        with:
+          name: release
+          path: release.tar.gz
+          retention-days: 7
+
+  deploy:
+    needs: ci
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      EC2_HOST: ${{ vars.EC2_HOST }}
+      EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+      EC2_KNOWN_HOSTS: ${{ secrets.EC2_KNOWN_HOSTS }}
+      RELEASE_ID: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+      - name: Upload and deploy through SSH
+        run: bash ops/deploy-ssh.sh release.tar.gz

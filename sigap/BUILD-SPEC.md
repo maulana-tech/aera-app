@@ -69,7 +69,7 @@ Ordering, exit tests and cost are in `AWS-PLAN.md` §4 and §5. This is the list
 |---|---|
 | **Bedrock**, `anthropic.claude-opus-5` | Every agent turn. `high` effort for Arya and Kira, `medium` for the rest |
 | **AgentCore Runtime** | Hosts `graph.py`. Chosen over Managed Harness because we own the orchestration loop: the supervisor exposes ten specialists as `ask_<code>` tools and decides the route from the last finding |
-| **AgentCore Gateway** | The 26 tools in `core/registry.py` as MCP. `registry.schemas_for_model()` already emits the shape Gateway wants |
+| **AgentCore Gateway** | The 31 tools in `core/registry.py` as MCP. `registry.schemas_for_model()` already emits the shape Gateway wants |
 | **AgentCore Observability** | OTel traces per specialist call, token count and latency. Replaces the placeholder cost rates in `graph.py` with real ones |
 | **AgentCore Memory + Knowledge Base** | For Otto only. `search_past_incidents` returns `MISSING` today because there is nothing behind it |
 | **AgentCore Evaluation** | The scenario suite in `DESIGN.md` §5, unwritten |

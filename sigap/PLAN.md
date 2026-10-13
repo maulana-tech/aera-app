@@ -163,7 +163,7 @@ Item 4 can start now and **waits on nothing.**
 ```
 sigap/
 ├── PLAN.md              this file, plan & status
-├── AGENT-REFERENCE.md   the 11 agents. GENERATED, run `manage.py docs`
+├── AGENT-REFERENCE.md   the 12 agents. GENERATED, run `manage.py docs`
 ├── AWS-PLAN.md          Bedrock and AgentCore, week by week
 ├── DESIGN.md            scenario figures, local rules
 ├── TECHNICAL.md         exact function names & parameters
@@ -173,7 +173,7 @@ sigap/
     ├── clients/         the SAP connector
     ├── tools/           one file per agent, named after the agent code
     ├── engine/          the calculator, pure Python
-    ├── agents/          the 11 agent definitions
+    ├── agents/          the 12 agent definitions
     ├── prompts/         each agent's instructions
     ├── fixtures/        modelled data, clearly labelled as such
     ├── graph.py         the agent team

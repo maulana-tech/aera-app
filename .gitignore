@@ -53,3 +53,7 @@ sigap/agent/.secrets/
 
 # Joule CLI debug dumps. They can carry credentials.
 sigap/agent/debug-*.json
+
+/data/
+*.db
+.codegraph/

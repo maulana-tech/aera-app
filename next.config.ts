@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   // Next 16 blocks cross-origin requests to dev-only assets, and it treats
   // 127.0.0.1 as a different origin from the localhost it boots on. Opening the
   // app at 127.0.0.1 therefore blocked /_next/hmr, the client bundle never

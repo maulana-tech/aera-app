@@ -111,15 +111,69 @@ def client():
             "Check that the region offers Claude in the Bedrock console."
         )
     # imported here so a dev machine without the SDK can still run the rest
-    from anthropic import AnthropicBedrockMantle
-    return AnthropicBedrockMantle(aws_region=CFG.aws_region)
+    try:
+        from anthropic import AnthropicBedrock
+        return AnthropicBedrock(aws_region=CFG.aws_region)
+    except Exception:
+        from anthropic import AnthropicBedrockMantle
+        return AnthropicBedrockMantle(aws_region=CFG.aws_region)
 
 
 # --------------------------------------------------------------------------- #
+def _build_user_content(prompt_text: str,
+                        attachments: Optional[List[dict]] = None) -> Any:
+    """Build Anthropic message content from prompt text and optional file/image attachments."""
+    if not attachments:
+        return prompt_text
+
+    blocks: List[dict] = []
+    text_parts: List[str] = []
+    allowed_images = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+
+    for att in attachments:
+        if not isinstance(att, dict):
+            continue
+        name = str(att.get("name") or "attachment")
+        mime = str(att.get("mime_type") or "").lower()
+        b64 = att.get("data")
+        txt = att.get("text_content")
+
+        if mime in allowed_images and isinstance(b64, str) and b64:
+            blocks.append({
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": mime,
+                    "data": b64,
+                },
+            })
+        elif mime == "application/pdf" and isinstance(b64, str) and b64:
+            blocks.append({
+                "type": "document",
+                "source": {
+                    "type": "base64",
+                    "media_type": "application/pdf",
+                    "data": b64,
+                },
+            })
+        elif isinstance(txt, str) and txt:
+            text_parts.append(
+                f"Attached file '{name}' ({mime or 'text'}):\n```\n{txt[:30000]}\n```"
+            )
+        else:
+            text_parts.append(f"[Attached file: {name} ({mime or 'binary'})]")
+
+    combined_text = ("\n\n".join(text_parts) + "\n\n" + prompt_text) if text_parts else prompt_text
+    if blocks:
+        return [*blocks, {"type": "text", "text": combined_text}]
+    return combined_text
+
+
 def _tool_loop(cl, agent: Agent, task: str, board: Board,
                cost: Cost, report: Callable[[str, dict], None],
                deadline: Optional[float] = None,
-               history: Optional[List[dict]] = None) -> str:
+               history: Optional[List[dict]] = None,
+               attachments: Optional[List[dict]] = None) -> str:
     """One specialist works to completion. Returns the summary it wrote.
 
     `history` is earlier turns of the same conversation, already trimmed by the
@@ -127,15 +181,20 @@ def _tool_loop(cl, agent: Agent, task: str, board: Board,
     nothing to refer to, and the transcript on screen would be a record of a
     conversation the agent was never actually having.
     """
-    tools = registry.schemas_for_model(agent.code)
+    tools = (
+        (_specialist_tools() + registry.schemas_for_model(agent.code))
+        if agent.code == "supervisor"
+        else registry.schemas_for_model(agent.code)
+    )
+    prompt_text = (
+        f"{task}\n\n"
+        f"What is on the shared board right now:\n{board.summary()}\n\n"
+        "Use your tools as needed, then write up what you found. If data you "
+        "need is unavailable, say what is missing, do not guess."
+    )
     messages: List[dict] = [*(history or []), {
         "role": "user",
-        "content": (
-            f"{task}\n\n"
-            f"What is on the shared board right now:\n{board.summary()}\n\n"
-            "Use your tools as needed, then write up what you found. If data you "
-            "need is unavailable, say what is missing, do not guess."
-        ),
+        "content": _build_user_content(prompt_text, attachments),
     }]
 
     for _ in range(MAX_SPECIALIST_ROUNDS):
@@ -145,21 +204,28 @@ def _tool_loop(cl, agent: Agent, task: str, board: Board,
             raise DeadlineExceeded(
                 f"{agent.title} still working after {MAX_SECONDS_PER_EVENT}s")
 
-        r = cl.messages.create(
-            model=CFG.model,
-            max_tokens=8000,
-            system=agent.instructions,
-            thinking={"type": "adaptive"},
-            output_config={"effort": agent.effort},
-            tools=tools,
-            messages=messages,
-        )
+        req = {
+            "model": CFG.model,
+            "max_tokens": 16000 if agent.code == "supervisor" else 8000,
+            "system": agent.instructions,
+            "tools": tools,
+            "messages": messages,
+        }
+        if "haiku" not in CFG.model.lower():
+            req["thinking"] = {"type": "adaptive"}
+            req["output_config"] = {"effort": agent.effort}
+        r = cl.messages.create(**req)
         cost.add(r.usage)
         messages.append({"role": "assistant", "content": r.content})
 
         if r.stop_reason != "tool_use":
             text = "".join(b.text for b in r.content if b.type == "text")
-            report("specialist_done", {"agent": agent.code, "summary": text[:400]})
+            if agent.code == "supervisor":
+                report("summary", {"agent": "supervisor", "name": "Arya",
+                                   "summary": "Merumuskan rekomendasi mitigasi akhir"})
+            else:
+                report("specialist_done", {"agent": agent.code, "name": agent.nickname,
+                                           "summary": text[:400]})
             return text
 
         # every tool_result MUST go back in ONE user message
@@ -167,6 +233,16 @@ def _tool_loop(cl, agent: Agent, task: str, board: Board,
         for b in r.content:
             if b.type != "tool_use":
                 continue
+            if b.name.startswith("ask_") and b.name[len("ask_"):] in ALL:
+                code = b.name[len("ask_"):]
+                specialist = ALL[code]
+                task_text = b.input.get("task", "")
+                report("specialist_start", {"agent": code, "name": specialist.nickname,
+                                            "task": task_text})
+                summary = _tool_loop(cl, specialist, task_text, board, cost, report, deadline)
+                results.append({"type": "tool_result", "tool_use_id": b.id, "content": summary})
+                continue
+
             report("tool", {"agent": agent.code, "name": b.name, "arguments": b.input})
             try:
                 res = registry.run(b.name, dict(b.input))
@@ -226,15 +302,17 @@ def run(event: dict, report: Callable[[str, dict], None]) -> dict:
         if time.monotonic() > deadline:
             raise DeadlineExceeded(f"handling ran past {MAX_SECONDS_PER_EVENT}s")
 
-        r = cl.messages.create(
-            model=CFG.model,
-            max_tokens=16000,
-            system=SUPERVISOR.instructions,
-            thinking={"type": "adaptive"},
-            output_config={"effort": SUPERVISOR.effort},
-            tools=lead_tools,
-            messages=messages,
-        )
+        lead_req = {
+            "model": CFG.model,
+            "max_tokens": 16000,
+            "system": SUPERVISOR.instructions,
+            "tools": lead_tools,
+            "messages": messages,
+        }
+        if "haiku" not in CFG.model.lower():
+            lead_req["thinking"] = {"type": "adaptive"}
+            lead_req["output_config"] = {"effort": SUPERVISOR.effort}
+        r = cl.messages.create(**lead_req)
         cost.add(r.usage)
         messages.append({"role": "assistant", "content": r.content})
 
@@ -280,7 +358,8 @@ def run(event: dict, report: Callable[[str, dict], None]) -> dict:
 
 def ask_specialist(code: str, question: str,
                    report: Optional[Callable[[str, dict], None]] = None,
-                   history: Optional[List[dict]] = None) -> dict:
+                   history: Optional[List[dict]] = None,
+                   attachments: Optional[List[dict]] = None) -> dict:
     """Ask one specialist directly, outside of disruption handling.
 
     This is what the per-agent conversation page uses. Same specialist, same
@@ -297,8 +376,11 @@ def ask_specialist(code: str, question: str,
         if report:
             report(kind, d)
 
+    start_time = time.monotonic()
     cl = client()
-    answer = _tool_loop(cl, agent, question, board, cost, capture, history=history)
+    answer = _tool_loop(cl, agent, question, board, cost, capture,
+                        history=history, attachments=attachments)
+    duration_s = round(time.monotonic() - start_time, 2)
     return {
         "agent": code,
         "name": agent.nickname,
@@ -309,6 +391,13 @@ def ask_specialist(code: str, question: str,
                   for k in board.findings},
         "untrusted": board.untrusted_keys(),
         "cost_idr": cost.idr,
+        "thinking_time": duration_s,
+        "trail": trail,
+        "tokens": {
+            "input": cost.input_tokens,
+            "output": cost.output_tokens,
+            "total": cost.input_tokens + cost.output_tokens,
+        },
     }
 
 
