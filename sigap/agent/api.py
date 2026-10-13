@@ -419,6 +419,7 @@ _TOOL_BADGES = {
 
 def format_orchestration_step(kind: str, d: dict, seq: int) -> dict:
     now = store._now()
+    thinking = str(d.get("thinking") or "").strip() or None
     if kind == "specialist_start":
         target_code = d.get("agent", "")
         target_name = d.get("name") or _AGENT_NICKNAMES.get(target_code, target_code.title())
@@ -435,6 +436,8 @@ def format_orchestration_step(kind: str, d: dict, seq: int) -> dict:
             "narrative": narrative,
             "badge": f"{target_name} ›",
             "detail": f"{task[:110]}…" if len(task) > 110 else (task or f"Delegating to {target_name}"),
+            "full_detail": task or f"Delegating analysis to {target_name}",
+            "thinking": thinking,
             "at": now,
         }
     if kind == "tool":
@@ -455,12 +458,21 @@ def format_orchestration_step(kind: str, d: dict, seq: int) -> dict:
             "narrative": narrative,
             "badge": f"{badge} ›",
             "detail": detail,
+            "tool_name": tool_name,
+            "tool_label": tool_desc,
+            "arguments": args,
+            "result": d.get("result"),
+            "origin": d.get("origin"),
+            "source": d.get("source"),
+            "error": d.get("error"),
+            "thinking": thinking,
             "at": now,
         }
     if kind == "specialist_done":
         agent_code = d.get("agent", "")
         agent_name = d.get("name") or _AGENT_NICKNAMES.get(agent_code, agent_code.title())
         summary = str(d.get("summary", "")).strip()
+        full_summary = str(d.get("full_summary") or summary).strip()
         first_line = summary.split("\n")[0].split(".")[0].strip()
         narrative = f"{agent_name} reported: {first_line}" if first_line else f"{agent_name} completed findings"
         return {
@@ -473,9 +485,12 @@ def format_orchestration_step(kind: str, d: dict, seq: int) -> dict:
             "narrative": narrative,
             "badge": "Finding ›",
             "detail": f"{summary[:110]}…" if len(summary) > 110 else summary,
+            "full_detail": full_summary,
+            "thinking": thinking,
             "at": now,
         }
     if kind == "summary":
+        full_summary = str(d.get("full_summary") or "").strip()
         return {
             "seq": seq,
             "kind": "summary",
@@ -484,6 +499,8 @@ def format_orchestration_step(kind: str, d: dict, seq: int) -> dict:
             "narrative": "Formulating final mitigation recommendation",
             "badge": "Summary ›",
             "detail": "Synthesizing findings for user",
+            "full_detail": full_summary or "Synthesizing specialist findings into final mitigation recommendation.",
+            "thinking": thinking,
             "at": now,
         }
     return {
@@ -494,6 +511,8 @@ def format_orchestration_step(kind: str, d: dict, seq: int) -> dict:
         "narrative": d.get("summary", ""),
         "badge": "Activity ›",
         "detail": str(d)[:80],
+        "full_detail": str(d),
+        "thinking": thinking,
         "at": now,
     }
 
