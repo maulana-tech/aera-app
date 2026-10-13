@@ -218,14 +218,29 @@ def _tool_loop(cl, agent: Agent, task: str, board: Board,
         cost.add(r.usage)
         messages.append({"role": "assistant", "content": r.content})
 
+        thinking_text = "\n\n".join(
+            getattr(b, "thinking", "")
+            for b in r.content
+            if getattr(b, "type", None) == "thinking" and getattr(b, "thinking", "")
+        ).strip()
+        note_text = "\n\n".join(
+            getattr(b, "text", "")
+            for b in r.content
+            if getattr(b, "type", None) == "text" and getattr(b, "text", "")
+        ).strip()
+
         if r.stop_reason != "tool_use":
             text = "".join(b.text for b in r.content if b.type == "text")
             if agent.code == "supervisor":
                 report("summary", {"agent": "supervisor", "name": "Arya",
-                                   "summary": "Formulating final mitigation recommendation"})
+                                   "summary": "Formulating final mitigation recommendation",
+                                   "full_summary": text,
+                                   "thinking": thinking_text})
             else:
                 report("specialist_done", {"agent": agent.code, "name": agent.nickname,
-                                           "summary": text[:400]})
+                                           "summary": text[:400],
+                                           "full_summary": text,
+                                           "thinking": thinking_text})
             return text
 
         # every tool_result MUST go back in ONE user message
@@ -238,21 +253,38 @@ def _tool_loop(cl, agent: Agent, task: str, board: Board,
                 specialist = ALL[code]
                 task_text = b.input.get("task", "")
                 report("specialist_start", {"agent": code, "name": specialist.nickname,
-                                            "task": task_text})
+                                            "task": task_text,
+                                            "thinking": thinking_text or note_text})
                 summary = _tool_loop(cl, specialist, task_text, board, cost, report, deadline)
                 results.append({"type": "tool_result", "tool_use_id": b.id, "content": summary})
                 continue
 
-            report("tool", {"agent": agent.code, "name": b.name, "arguments": b.input})
             try:
                 res = registry.run(b.name, dict(b.input))
                 board.write(f"{agent.code}.{b.name}", res)
                 body = json.dumps({"value": res.value, **res.brief()},
                                   ensure_ascii=False, default=str)
+                report("tool", {
+                    "agent": agent.code,
+                    "name": b.name,
+                    "arguments": b.input,
+                    "result": res.value,
+                    "origin": res.origin.value,
+                    "source": res.source,
+                    "thinking": thinking_text or note_text,
+                })
                 results.append({"type": "tool_result", "tool_use_id": b.id, "content": body})
             except Exception as e:                                   # noqa: BLE001
+                err_msg = f"{type(e).__name__}: {e}"
+                report("tool", {
+                    "agent": agent.code,
+                    "name": b.name,
+                    "arguments": b.input,
+                    "error": err_msg,
+                    "thinking": thinking_text or note_text,
+                })
                 results.append({"type": "tool_result", "tool_use_id": b.id,
-                                "content": f"{type(e).__name__}: {e}", "is_error": True})
+                                "content": err_msg, "is_error": True})
         messages.append({"role": "user", "content": results})
 
     return f"[{agent.title} stopped: exceeded {MAX_SPECIALIST_ROUNDS} tool rounds]"
