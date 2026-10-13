@@ -20,8 +20,10 @@ from tools.sourcing import find_alternate_sources
 @register(
     "simulate_scenario", "simulation",
     "Compute cost, stockout date, OTIF, and TKDN impact for every supply option that "
-    "cleared the rules, plus their combinations. Deterministic, the same inputs always "
-    "give the same answer. Refuses to emit figures when the inputs are not trustworthy.",
+    "cleared the rules, plus their combinations. Also returns compliance_cost: what "
+    "obeying the rules cost, when an option that was struck out would have been "
+    "cheaper, and which rule struck it. Deterministic, the same inputs always give the "
+    "same answer. Refuses to emit figures when the inputs are not trustworthy.",
     {"material": {"type": "string"},
      "plant": {"type": "string"},
      "allowed_options": {"type": "array", "items": {"type": "string"},
@@ -74,4 +76,7 @@ def simulate_scenario_tool(material: str, plant: str,
         "options": sim.options,
         "combinations": sim.combinations[:8],
         "chosen": sim.chosen,
+        # What the rules cost on this scenario, or None when nothing that was
+        # struck out would have been cheaper anyway.
+        "compliance_cost": sim.compliance_cost,
     }, Origin.DERIVED, "engine/simulate.py")

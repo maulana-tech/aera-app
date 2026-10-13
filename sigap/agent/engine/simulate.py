@@ -68,6 +68,9 @@ class Simulation:
     options: List[dict] = field(default_factory=list)
     combinations: List[dict] = field(default_factory=list)
     chosen: Optional[dict] = None
+    # What obeying the rules cost, when a struck-out option would have been
+    # cheaper. None when nothing blocked was cheaper, which is also an answer.
+    compliance_cost: Optional[dict] = None
 
 
 def simulate_scenario(
@@ -116,41 +119,72 @@ def simulate_scenario(
         }
         (viable if row["allowed"] else blocked).append(row)
 
-    # combinations: each option alone, then every pair
-    candidates: List[dict] = []
-    for i, a in enumerate(viable):
-        candidates.append({"members": [a], "cost": a["extra_cost_idr"]})
-        for b in viable[i + 1:]:
-            candidates.append({"members": [a, b],
-                               "cost": a["extra_cost_idr"] + b["extra_cost_idr"]})
+    def plans(pool: List[dict]) -> List[dict]:
+        """Every option in `pool` alone, then every pair, priced and covered."""
+        candidates: List[dict] = []
+        for i, a in enumerate(pool):
+            candidates.append({"members": [a], "cost": a["extra_cost_idr"]})
+            for b in pool[i + 1:]:
+                candidates.append({"members": [a, b],
+                                   "cost": a["extra_cost_idr"] + b["extra_cost_idr"]})
 
-    scored: List[dict] = []
-    for c in candidates:
-        arrivals = [Arrival(m["id"], date.fromisoformat(m["arrives"]), m["qty"])
-                    for m in c["members"]]
-        cover = project_cover(opening_qty, daily_consumption, start,
-                              list(scheduled_arrivals) + arrivals)
-        tkdn = [m["tkdn_after"] for m in c["members"] if m["tkdn_after"] is not None]
-        safe = (cover.depleted_on is None
-                or (bridge_until is not None and cover.depleted_on > bridge_until))
-        scored.append({
-            "combination": "+".join(m["id"] for m in c["members"]),
-            "members": [m["id"] for m in c["members"]],
-            "cost_idr": c["cost"],
-            "safe": safe,
-            "depleted_on": cover.depleted_on.isoformat() if cover.depleted_on else None,
-            "tkdn_after": max(tkdn) if tkdn else profile["TkdnCurrentPct"],
-        })
+        scored: List[dict] = []
+        for c in candidates:
+            arrivals = [Arrival(m["id"], date.fromisoformat(m["arrives"]), m["qty"])
+                        for m in c["members"]]
+            cover = project_cover(opening_qty, daily_consumption, start,
+                                  list(scheduled_arrivals) + arrivals)
+            tkdn = [m["tkdn_after"] for m in c["members"] if m["tkdn_after"] is not None]
+            safe = (cover.depleted_on is None
+                    or (bridge_until is not None and cover.depleted_on > bridge_until))
+            scored.append({
+                "combination": "+".join(m["id"] for m in c["members"]),
+                "members": [m["id"] for m in c["members"]],
+                "cost_idr": c["cost"],
+                "safe": safe,
+                "depleted_on": cover.depleted_on.isoformat() if cover.depleted_on else None,
+                "tkdn_after": max(tkdn) if tkdn else profile["TkdnCurrentPct"],
+                "blocked_members": [m["id"] for m in c["members"] if not m["allowed"]],
+            })
+        return sorted(scored, key=lambda s: s["cost_idr"])
 
+    scored = plans(viable)
     safe_plans = [s for s in scored if s["safe"]]
     chosen = min(safe_plans, key=lambda s: s["cost_idr"]) if safe_plans else None
+
+    # What the rules cost. The same arithmetic over every option, including the
+    # ones Kira struck out, answers a question the chosen plan cannot: was
+    # there a cheaper way, and what exactly stopped us taking it. Without this
+    # the veto is an assertion; with it the veto has a price on the record.
+    unconstrained = [s for s in plans(viable + blocked) if s["safe"]]
+    cheapest_overall = min(unconstrained, key=lambda s: s["cost_idr"]) if unconstrained else None
+
+    compliance_cost = None
+    if chosen and cheapest_overall and cheapest_overall["blocked_members"]:
+        gap = chosen["cost_idr"] - cheapest_overall["cost_idr"]
+        if gap > 0:
+            by_id = {o["id"]: o for o in blocked}
+            compliance_cost = {
+                "idr": gap,
+                "chosen": chosen["combination"],
+                "chosen_cost_idr": chosen["cost_idr"],
+                "cheaper_but_blocked": cheapest_overall["combination"],
+                "cheaper_cost_idr": cheapest_overall["cost_idr"],
+                "blocked_by": [
+                    {"id": i,
+                     "label": by_id[i]["label"],
+                     "reason": by_id[i]["reason"]}
+                    for i in cheapest_overall["blocked_members"] if i in by_id
+                ],
+            }
 
     return Simulation(
         refused=False,
         depleted_without_action=baseline.depleted_on,
         options=viable + blocked,
-        combinations=sorted(scored, key=lambda s: s["cost_idr"]),
+        combinations=scored,
         chosen=chosen,
+        compliance_cost=compliance_cost,
     )
 
 
@@ -211,6 +245,26 @@ def demo() -> None:
     saved = a["cost_idr"] - sim.chosen["cost_idr"]
     print(f"  vs option A      → Rp {a['cost_idr']:,} · saves Rp {saved:,} "
           f"({saved / a['cost_idr'] * 100:.0f}%)")
+    # The veto with a price on it. Without this the system can say an option
+    # was struck out; it cannot say what obeying the rule actually cost.
+    cc = sim.compliance_cost
+    assert cc, "a blocked option was cheaper, so the price of compliance is not None"
+    assert cc["idr"] == 46_000_000, cc
+    assert cc["cheaper_but_blocked"] == "C+E", cc
+    assert [b["id"] for b in cc["blocked_by"]] == ["E"], cc
+    assert "TKDN" in cc["blocked_by"][0]["reason"], cc
+    print(f"  price of rules   → Rp {cc['idr']:,} "
+          f"({cc['cheaper_but_blocked']} was cheaper, blocked: "
+          f"{cc['blocked_by'][0]['reason']})")
+
+    # And when nothing blocked is cheaper, it says so rather than inventing a
+    # regret: the same scenario with every option allowed has nothing to regret.
+    allowed_all = {o["id"]: Ruling(o["id"], o["label"], True) for o in options.value}
+    none = simulate_scenario(stock, options, allowed_all, fx["Profile"], start,
+                             9.2, 84.0, po)
+    assert none.compliance_cost is None, none.compliance_cost
+    print("  nothing blocked  → no price claimed, rather than a zero")
+
     print("simulate ok")
 
 
