@@ -36,7 +36,7 @@ export default async function Report({ params }: { params: Promise<{ id: string 
   const approvals = run.approvals ?? [];
 
   return (
-    <main className="w-full px-6 py-8">
+    <main className="w-full px-4 py-4 md:px-6 md:py-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Link
           href="/reports"
@@ -50,7 +50,7 @@ export default async function Report({ params }: { params: Promise<{ id: string 
 
       <article className="mt-6 max-w-3xl space-y-8">
         <header>
-          <h1 className="text-2xl font-semibold tracking-tight">{run.title}</h1>
+          <h1 className="text-xl font-semibold tracking-tight md:text-2xl">{run.title}</h1>
           <p className="text-muted-foreground mt-2 text-sm leading-relaxed">{run.trigger}</p>
           <dl className="mt-5 grid gap-x-8 gap-y-3 border-y py-4 sm:grid-cols-3">
             <div>

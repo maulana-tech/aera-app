@@ -9,9 +9,9 @@ export default async function ReportList() {
   const d = await api<{ runs: Run[] }>("runs");
 
   return (
-    <main className="w-full px-6 py-8">
-      <header className="border-b pb-5">
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">Write up a handling</h1>
+    <main className="w-full px-4 py-4 md:px-6 md:py-8">
+      <header className="border-b pb-4 md:pb-5">
+        <h1 className="mt-1 text-xl font-semibold tracking-tight md:mt-2 md:text-2xl">Write up a handling</h1>
         <p className="text-muted-foreground mt-1 max-w-3xl text-sm leading-relaxed">
           Any handling can become a report: what happened, how the system reasoned, the
           actions taken, and who approved them.

@@ -33,11 +33,11 @@ export default async function AuditPage() {
     .filter(([, list]) => list.length > 0);
 
   return (
-    <main className="w-full px-6 py-8">
+    <main className="w-full px-4 py-4 md:px-6 md:py-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="max-w-2xl">
-          <h1 className="text-2xl font-semibold tracking-tight">Supply data audit</h1>
-          <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
+          <h1 className="text-xl font-semibold tracking-tight md:text-2xl">Supply data audit</h1>
+          <p className="text-muted-foreground mt-1.5 text-xs leading-relaxed md:mt-2 md:text-sm">
             Read across {num(c.rows ?? 0)} rows of master and transactional data. Every
             finding below names the rows it rests on, and none of it came from a model,
             so all of it can be recomputed from the same file.
