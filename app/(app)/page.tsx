@@ -28,16 +28,16 @@ export default async function Queue() {
   const needsAttention = runs.filter((r) => r.status === "running" || r.status === "held");
 
   return (
-    <main className="w-full px-6 py-8">
-      <header className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-5">
+    <main className="w-full px-4 py-4 md:px-6 md:py-8">
+      <header className="flex flex-wrap items-end justify-between gap-3 border-b border-border pb-4 md:gap-4 md:pb-5">
         <div>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight">Supply disruptions</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <h1 className="mt-1 text-xl font-semibold tracking-tight md:mt-2 md:text-2xl">Supply disruptions</h1>
+          <p className="mt-1 text-xs text-muted-foreground md:text-sm">
             {runs.length} handlings · {needsAttention.length} need attention
           </p>
         </div>
         {health && (
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
             <AutoRefresh active={runs.some((r) => r.status === "running")} />
             <Badge variant="outline" className="font-mono text-[10px]">{health.env}</Badge>
             <StatusBadge status={health.sap_ready ? "done" : "held"}>
