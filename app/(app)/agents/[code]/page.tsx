@@ -106,7 +106,7 @@ export default async function AgentPage({ params }: { params: Promise<{ code: st
       : []);
 
   return (
-    <main className="w-full px-6 py-8">
+    <main className="w-full px-4 py-4 md:px-6 md:py-8">
       <Link
         href="/agents"
         className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 text-xs"
@@ -115,10 +115,10 @@ export default async function AgentPage({ params }: { params: Promise<{ code: st
         Agent team
       </Link>
 
-      <header className="mt-5 border-b pb-6">
+      <header className="mt-3 border-b pb-4 md:mt-5 md:pb-6">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <AgentBadge nickname={a.nickname} large />
-          <h1 className="text-2xl font-semibold tracking-tight">{a.nickname}</h1>
+          <h1 className="text-xl font-semibold tracking-tight md:text-2xl">{a.nickname}</h1>
           <span className="text-muted-foreground text-sm">{a.title}</span>
           {a.lead && (
             <Badge variant="outline" className="gap-1 font-mono text-[10px]">
