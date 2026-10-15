@@ -2,12 +2,14 @@
 
 import { useMemo, useState } from "react";
 import {
+  ArrowRight,
+  Check,
   ChevronRight,
   Code2,
   Database,
+  Lightbulb,
   Loader2,
   Sparkles,
-  Terminal,
 } from "lucide-react";
 import { AgentBadge } from "@/components/agent-card";
 import { Markdown } from "@/components/markdown";
@@ -113,7 +115,6 @@ export function OrchestrationTimeline({
   finalAnswer?: string;
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
   const specialistsList = useMemo(() => {
     const set = new Set<string>();
@@ -132,6 +133,19 @@ export function OrchestrationTimeline({
     () => steps.filter((s) => s.kind === "tool").length,
     [steps],
   );
+
+  // Group steps by participating agents to show squad overview
+  const squadOverview = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const s of steps) {
+      const name = s.agent_name || (s.agent === "supervisor" ? "Arya" : s.agent);
+      if (name) counts[name] = (counts[name] ?? 0) + 1;
+      if (s.target_name && s.target_name !== name) {
+        counts[s.target_name] = (counts[s.target_name] ?? 0) + 1;
+      }
+    }
+    return Object.entries(counts);
+  }, [steps]);
 
   // Enrich steps with any extra data available in `trail` or `board` (for both new & historical messages)
   const enrichedSteps = useMemo(() => {
@@ -196,14 +210,10 @@ export function OrchestrationTimeline({
         : `Orchestration workflow (${steps.length} steps)`;
 
   const latestStep = enrichedSteps[enrichedSteps.length - 1];
-  const activeStep =
-    selectedIdx !== null && enrichedSteps[selectedIdx]
-      ? enrichedSteps[selectedIdx]
-      : null;
 
   return (
     <>
-      {/* Compact Trigger Bar in Chat — clicking anywhere (or on `>`) pops open the Right Drawer Panel */}
+      {/* Compact Trigger Bar in Chat */}
       <button
         type="button"
         onClick={() => setDrawerOpen(true)}
@@ -214,8 +224,8 @@ export function OrchestrationTimeline({
             {isRunning ? (
               <Loader2 className="text-primary size-3.5 shrink-0 animate-spin" />
             ) : (
-              <span className="bg-primary/20 text-primary flex size-3.5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold">
-                ✓
+              <span className="bg-primary/20 text-primary flex size-3.5 shrink-0 items-center justify-center rounded-full">
+                <Check className="size-2.5 stroke-[2.5]" />
               </span>
             )}
             <span className="text-foreground truncate font-medium">
@@ -249,15 +259,15 @@ export function OrchestrationTimeline({
       <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
         <SheetContent
           side="right"
-          className="flex w-full flex-col gap-0 p-0 data-[side=right]:sm:max-w-[560px]"
+          className="flex w-full data-[side=right]:w-full flex-col gap-0 p-0 sm:data-[side=right]:max-w-[560px]"
         >
           <SheetHeader className="bg-muted/20 shrink-0 border-b px-5 py-4 pr-12">
             <div className="flex items-center gap-2">
               {isRunning ? (
                 <Loader2 className="text-primary size-3.5 shrink-0 animate-spin" />
               ) : (
-                <span className="bg-primary/20 text-primary flex size-4 shrink-0 items-center justify-center rounded-full text-[10px] font-bold">
-                  ✓
+                <span className="bg-primary/20 text-primary flex size-4 shrink-0 items-center justify-center rounded-full">
+                  <Check className="size-2.5 stroke-[2.5]" />
                 </span>
               )}
               <SheetTitle className="text-sm font-medium">
@@ -273,269 +283,241 @@ export function OrchestrationTimeline({
                   · Thought for {duration.toFixed(1)}s
                 </span>
               )}
-              <span className="text-muted-foreground/80">
-                · Click any step&apos;s › badge to inspect details
-              </span>
             </SheetDescription>
+
+            {/* Participating Agent Squad Strip */}
+            {squadOverview.length > 0 && (
+              <div className="border-border/60 mt-3 flex flex-wrap items-center gap-1.5 border-t pt-2.5">
+                <span className="text-muted-foreground/60 mr-1 font-mono text-[10px] uppercase">
+                  Squad:
+                </span>
+                {squadOverview.map(([agentName, count]) => (
+                  <span
+                    key={agentName}
+                    className="bg-background inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium shadow-2xs"
+                  >
+                    <AgentBadge nickname={agentName} size="xs" showTooltip={false} />
+                    <span>{agentName}</span>
+                    <span className="text-muted-foreground font-mono text-[10px]">
+                      ({count})
+                    </span>
+                  </span>
+                ))}
+              </div>
+            )}
           </SheetHeader>
 
-          {/* Drawer Body: Full Orchestration Timeline + Inline Step Inspector */}
-          <div className="flex-1 overflow-y-auto px-5 py-4">
-            <ol className="border-border/80 relative ml-2.5 space-y-4 border-l pl-5">
+          {/* Drawer Body: Full Open Stream (No Hidden Collapsibles, Clean Typography Hierarchy) */}
+          <div className="flex-1 overflow-y-auto px-5 py-5">
+            <ol className="relative ml-3 space-y-7 border-l border-border/80 pl-6">
               {enrichedSteps.map((step, idx) => {
                 const isLast = idx === enrichedSteps.length - 1;
                 const isStepActive = isRunning && isLast;
-                const isExpanded = selectedIdx === idx;
+
+                const cleanBadge = stripTrailingChevron(step.badge);
+                const hasDetailedNarrative =
+                  step.detail &&
+                  step.detail !== step.narrative &&
+                  stripTrailingChevron(step.detail) !== cleanBadge;
+
+                const currentActor =
+                  step.kind === "specialist_start" && step.target_name
+                    ? step.target_name
+                    : step.agent_name || "Arya";
 
                 return (
                   <li key={`${step.seq}-${idx}`} className="group relative">
-                    {/* Node Avatar Icon on the Timeline Rail */}
-                    <span className="bg-background ring-border/80 absolute -left-[27px] top-0 flex size-5.5 items-center justify-center rounded-full ring-1 shadow-2xs">
-                      <AgentBadge
-                        nickname={step.agent_name || "Arya"}
-                        size="xs"
-                        showTooltip={false}
-                      />
+                    {/* Living Agent Avatar on the Timeline Rail */}
+                    <span className="bg-background ring-border absolute -left-[37px] top-0.5 flex size-6.5 items-center justify-center rounded-full ring-1 shadow-xs">
+                      {isStepActive ? (
+                        <div className="relative flex size-full items-center justify-center">
+                          <AgentBadge nickname={currentActor} size="xs" showTooltip={false} />
+                          <span className="bg-background/90 absolute -right-1 -bottom-1 rounded-full p-0.5">
+                            <Loader2 className="text-primary size-2.5 animate-spin" />
+                          </span>
+                        </div>
+                      ) : (
+                        <AgentBadge nickname={currentActor} size="xs" showTooltip={false} />
+                      )}
                     </span>
 
-                    <div className="min-w-0 flex-1">
-                      {/* Top Line: Action Narrative */}
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex min-w-0 items-center gap-1.5">
+                    <div className="min-w-0 flex-1 space-y-2">
+                      {/* Step Header: Actor, Title, and Timestamp */}
+                      <div className="flex items-baseline justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
                           {step.kind === "specialist_start" && step.target_name ? (
                             <span className="text-muted-foreground inline-flex shrink-0 items-center gap-1 text-[11px] font-medium">
-                              <span>{step.agent_name}</span>
-                              <span>➔</span>
-                              <AgentBadge
-                                nickname={step.target_name}
-                                size="xs"
-                                showTooltip={false}
-                              />
+                              <span className="text-foreground font-semibold">
+                                {step.agent_name || "Arya"}
+                              </span>
+                              <ArrowRight className="size-2.5" />
+                              <span className="text-primary font-semibold">
+                                {step.target_name}
+                              </span>
                             </span>
-                          ) : null}
-
-                          <p className="text-foreground text-xs leading-snug">
-                            {step.narrative}
-                          </p>
-
-                          {isStepActive && (
-                            <Loader2 className="text-primary size-3 shrink-0 animate-spin" />
+                          ) : (
+                            <span className="text-foreground text-xs font-semibold">
+                              {currentActor}
+                            </span>
                           )}
+
+                          <span className="text-muted-foreground/40 select-none">·</span>
+
+                          <h3 className="text-foreground text-xs sm:text-sm font-semibold leading-snug">
+                            {step.narrative}
+                          </h3>
                         </div>
 
                         {step.at && (
-                          <span className="text-muted-foreground/60 shrink-0 font-mono text-[10px]">
+                          <span className="text-muted-foreground/50 shrink-0 font-mono text-[10px]">
                             {formatStepTime(step.at)}
                           </span>
                         )}
                       </div>
 
-                      {/* Bottom Line: Interactive Metadata Chip / Detail Trigger (`›`) */}
-                      <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-1 text-[11px]">
-                        <span className="text-muted-foreground/50 select-none">
-                          └─
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setSelectedIdx((cur) => (cur === idx ? null : idx))
-                          }
-                          className="group/chip inline-flex max-w-full cursor-pointer items-center gap-1.5 rounded text-left transition-colors focus-visible:outline-none"
-                        >
-                          <span
-                            className={`inline-flex shrink-0 items-center gap-0.5 rounded border px-1.5 py-0.5 font-mono text-[10px] font-medium transition-colors ${
-                              isExpanded
-                                ? "border-primary/50 bg-primary/10 text-primary"
-                                : "bg-background border-border/60 text-foreground/90 group-hover/chip:border-foreground/40 group-hover/chip:bg-muted"
-                            }`}
-                          >
-                            {stripTrailingChevron(step.badge)}
-                            <ChevronRight
-                              className={`size-3 transition-transform duration-150 ${
-                                isExpanded ? "rotate-90" : ""
-                              }`}
-                            />
+                      {/* Step Badge & Full Descriptive Detail (Placed below, full width without truncation) */}
+                      <div className="space-y-1.5 pt-0.5">
+                        <div>
+                          <span className="text-foreground/90 bg-muted/60 inline-flex items-center rounded px-1.5 py-0.5 font-mono text-[10px] font-medium tracking-wide uppercase">
+                            {cleanBadge}
                           </span>
-                          {step.detail && (
-                            <span className="text-muted-foreground/80 group-hover/chip:text-foreground truncate font-mono text-[10px] underline-offset-2 group-hover/chip:underline">
-                              {step.detail}
-                            </span>
-                          )}
-                        </button>
+                        </div>
+
+                        {hasDetailedNarrative && (
+                          <p className="text-muted-foreground text-xs leading-relaxed">
+                            {stripTrailingChevron(step.detail)}
+                          </p>
+                        )}
                       </div>
 
-                      {/* Expanded Step Detail Card when `›` is clicked inside the Right Drawer */}
-                      {isExpanded && activeStep && (
-                        <div className="bg-muted/30 mt-2.5 space-y-3 rounded-lg border p-3.5 text-xs">
-                          {/* Model Thinking / Reasoning */}
-                          {activeStep.thinking && (
-                            <div className="space-y-1.5">
-                              <div className="text-muted-foreground flex items-center gap-1.5 text-[10px] font-semibold tracking-wider uppercase">
-                                <Sparkles className="text-primary size-3" />
-                                <span>Agent Thinking</span>
-                              </div>
-                              <div className="bg-background rounded-md border p-2.5 text-xs leading-relaxed">
-                                <Markdown>{activeStep.thinking}</Markdown>
-                              </div>
-                            </div>
-                          )}
+                      {/* 1. Agent Thinking Section (Clean Editorial Prose) */}
+                      {step.thinking && (
+                        <div className="space-y-1 pt-1">
+                          <span className="text-muted-foreground/60 flex items-center gap-1 text-[10px] font-semibold tracking-wider uppercase font-mono">
+                            <Sparkles className="size-2.5" />
+                            Thinking
+                          </span>
+                          <div className="text-muted-foreground leading-relaxed text-xs sm:text-sm">
+                            <Markdown>{step.thinking}</Markdown>
+                          </div>
+                        </div>
+                      )}
 
-                          {/* Init step overview */}
-                          {activeStep.kind === "init" && (
-                            <div className="space-y-2">
-                              <p className="text-muted-foreground leading-relaxed">
-                                <strong>Arya</strong> (Supervisor) analyzed the
-                                request and coordinated{" "}
-                                <strong>{specialistsCount}</strong> specialist
-                                {specialistsCount === 1 ? "" : "s"} across{" "}
-                                <strong>{checksCount}</strong> data check
-                                {checksCount === 1 ? "" : "s"}.
-                              </p>
-                              {specialistsList.length > 0 && (
-                                <div className="flex flex-wrap gap-1.5 pt-1">
-                                  {specialistsList.map((sp) => (
-                                    <span
-                                      key={sp}
-                                      className="bg-background inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium"
-                                    >
-                                      <AgentBadge
-                                        nickname={sp}
-                                        size="xs"
-                                        showTooltip={false}
-                                      />
-                                      {sp}
+                      {/* 2. Init Overview (Specialist Team Breakdown) */}
+                      {step.kind === "init" && specialistsList.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {specialistsList.map((sp) => (
+                            <span
+                              key={sp}
+                              className="bg-muted/40 text-muted-foreground inline-flex items-center gap-1 rounded-md border border-border/50 px-2 py-0.5 text-[11px]"
+                            >
+                              <AgentBadge
+                                nickname={sp}
+                                size="xs"
+                                showTooltip={false}
+                              />
+                              <span>{sp}</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* 3. Specialist Delegation / Finding / Synthesis Content */}
+                      {step.kind !== "init" &&
+                        step.kind !== "tool" &&
+                        step.full_detail &&
+                        step.full_detail !== step.detail && (
+                          <div className="space-y-1 pt-1">
+                            <div className="text-foreground/90 leading-relaxed text-xs sm:text-sm">
+                              <Markdown>{step.full_detail}</Markdown>
+                            </div>
+                          </div>
+                        )}
+
+                      {/* 4. Tool Execution: Name, Provenance, Parameters, Output */}
+                      {step.kind === "tool" && (
+                        <div className="space-y-2 pt-1 text-xs">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5">
+                              <Code2 className="text-muted-foreground size-3" />
+                              <code className="text-foreground font-mono text-[11px] font-semibold">
+                                {step.tool_name ||
+                                  stripTrailingChevron(step.detail)}
+                              </code>
+                            </div>
+                            {step.origin && (
+                              <OriginBadge
+                                origin={step.origin}
+                                source={step.source}
+                              />
+                            )}
+                          </div>
+
+                          {/* Arguments / Parameters */}
+                          {step.arguments &&
+                            Object.keys(step.arguments).length > 0 && (
+                              <div className="bg-muted/30 divide-y divide-border/40 rounded border border-border/50 font-mono text-[11px]">
+                                {Object.entries(step.arguments).map(([k, v]) => (
+                                  <div
+                                    key={k}
+                                    className="flex items-start justify-between gap-3 px-2.5 py-1"
+                                  >
+                                    <span className="text-muted-foreground shrink-0">
+                                      {k}
                                     </span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Specialist Delegation Task */}
-                          {activeStep.kind === "specialist_start" && (
-                            <div className="space-y-1.5">
-                              <div className="text-muted-foreground flex items-center gap-1.5 text-[10px] font-semibold tracking-wider uppercase">
-                                <Terminal className="size-3" />
-                                <span>
-                                  Task Delegated to{" "}
-                                  {activeStep.target_name || "Specialist"}
-                                </span>
-                              </div>
-                              <div className="bg-background rounded-md border p-3 leading-relaxed">
-                                <Markdown>
-                                  {activeStep.full_detail ||
-                                    stripTrailingChevron(activeStep.detail)}
-                                </Markdown>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Tool Execution Details */}
-                          {activeStep.kind === "tool" && (
-                            <div className="space-y-3">
-                              <div className="flex flex-wrap items-center justify-between gap-2">
-                                <div className="flex items-center gap-1.5">
-                                  <Code2 className="text-muted-foreground size-3.5" />
-                                  <code className="text-foreground font-mono text-[11px] font-semibold">
-                                    {activeStep.tool_name ||
-                                      stripTrailingChevron(activeStep.detail)}
-                                  </code>
-                                </div>
-                                {activeStep.origin && (
-                                  <OriginBadge
-                                    origin={activeStep.origin}
-                                    source={activeStep.source}
-                                  />
-                                )}
-                              </div>
-
-                              {activeStep.arguments &&
-                                Object.keys(activeStep.arguments).length > 0 && (
-                                  <div className="space-y-1">
-                                    <p className="text-muted-foreground font-mono text-[10px] uppercase">
-                                      Parameters
-                                    </p>
-                                    <div className="bg-background divide-y rounded-md border font-mono text-[11px]">
-                                      {Object.entries(activeStep.arguments).map(
-                                        ([k, v]) => (
-                                          <div
-                                            key={k}
-                                            className="flex items-start justify-between gap-3 px-2.5 py-1.5"
-                                          >
-                                            <span className="text-muted-foreground shrink-0">
-                                              {k}
-                                            </span>
-                                            <span className="text-foreground break-all text-right font-medium">
-                                              {typeof v === "object" && v !== null
-                                                ? JSON.stringify(v)
-                                                : String(v)}
-                                            </span>
-                                          </div>
-                                        ),
-                                      )}
-                                    </div>
+                                    <span className="text-foreground break-all text-right font-medium">
+                                      {typeof v === "object" && v !== null
+                                        ? JSON.stringify(v)
+                                        : String(v)}
+                                    </span>
                                   </div>
-                                )}
-
-                              {activeStep.error ? (
-                                <div className="space-y-1">
-                                  <p className="text-destructive font-mono text-[10px] uppercase">
-                                    Tool Error
-                                  </p>
-                                  <pre className="bg-destructive/10 text-destructive border-destructive/20 overflow-x-auto rounded-md border p-2.5 font-mono text-[11px] whitespace-pre-wrap">
-                                    {activeStep.error}
-                                  </pre>
-                                </div>
-                              ) : activeStep.result !== undefined ? (
-                                <div className="space-y-1">
-                                  <div className="text-muted-foreground flex items-center gap-1 font-mono text-[10px] uppercase">
-                                    <Database className="size-3" />
-                                    <span>Data Returned</span>
-                                  </div>
-                                  <pre className="bg-background text-foreground max-h-60 overflow-auto rounded-md border p-2.5 font-mono text-[11px] leading-relaxed whitespace-pre-wrap">
-                                    {typeof activeStep.result === "string"
-                                      ? activeStep.result
-                                      : JSON.stringify(
-                                          activeStep.result,
-                                          null,
-                                          2,
-                                        )}
-                                  </pre>
-                                </div>
-                              ) : null}
-                            </div>
-                          )}
-
-                          {/* Specialist Finding / Final Summary */}
-                          {(activeStep.kind === "specialist_done" ||
-                            activeStep.kind === "summary" ||
-                            (activeStep.kind !== "init" &&
-                              activeStep.kind !== "specialist_start" &&
-                              activeStep.kind !== "tool")) && (
-                            <div className="space-y-1.5">
-                              <div className="text-muted-foreground flex items-center gap-1.5 text-[10px] font-semibold tracking-wider uppercase">
-                                <Sparkles className="size-3" />
-                                <span>
-                                  {activeStep.kind === "specialist_done"
-                                    ? `${activeStep.agent_name} Finding`
-                                    : "Synthesis"}
-                                </span>
+                                ))}
                               </div>
-                              <div className="bg-background rounded-md border p-3 leading-relaxed">
-                                <Markdown>
-                                  {activeStep.full_detail ||
-                                    stripTrailingChevron(activeStep.detail) ||
-                                    activeStep.narrative}
-                                </Markdown>
-                              </div>
+                            )}
+
+                          {/* Error or Return Data */}
+                          {step.error ? (
+                            <pre className="bg-destructive/10 text-destructive border-destructive/20 overflow-x-auto rounded border p-2 font-mono text-[11px] whitespace-pre-wrap">
+                              {step.error}
+                            </pre>
+                          ) : step.result !== undefined ? (
+                            <div className="space-y-1">
+                              <span className="text-muted-foreground/60 flex items-center gap-1 font-mono text-[10px] uppercase">
+                                <Database className="size-2.5" />
+                                Return Payload
+                              </span>
+                              <pre className="bg-muted/30 text-muted-foreground border-border/50 max-h-48 overflow-auto rounded border p-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap">
+                                {typeof step.result === "string"
+                                  ? step.result
+                                  : JSON.stringify(step.result, null, 2)}
+                              </pre>
                             </div>
-                          )}
+                          ) : null}
                         </div>
                       )}
                     </div>
                   </li>
                 );
               })}
+
+              {/* End of Workflow / Thinking Completed Marker (inside the rail) */}
+              {!isRunning && enrichedSteps.length > 0 && (
+                <li className="relative pt-2 pb-1">
+                  <span className="bg-background text-muted-foreground/70 ring-border/80 absolute -left-[31px] top-2 flex size-3.5 items-center justify-center rounded-full ring-1">
+                    <Lightbulb className="size-2.5 stroke-[2]" />
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-foreground/80 font-medium text-xs sm:text-sm">
+                      End
+                    </span>
+                    {duration !== undefined && (
+                      <span className="text-muted-foreground/60 font-mono text-[11px]">
+                        · {duration.toFixed(1)}s
+                      </span>
+                    )}
+                  </div>
+                </li>
+              )}
             </ol>
           </div>
         </SheetContent>
