@@ -232,20 +232,6 @@ function fromRows(rows: { role: string; body: Record<string, unknown> }[]): Mess
   );
 }
 
-function ThinkingIndicator({
-  seconds,
-}: {
-  seconds?: number;
-}) {
-  if (seconds === undefined) return null;
-
-  return (
-    <div className="mb-2 text-[11px] font-mono text-muted-foreground/80 select-none">
-      <span>Thought for {seconds.toFixed(1)}s</span>
-    </div>
-  );
-}
-
 function UsageBarPopover({
   messages,
   threads,
@@ -1120,11 +1106,20 @@ export default function Conversation({
                 )}
               </div>
             ) : (
-              <div key={i} className="flex gap-3">
-                <AgentBadge nickname={name} />
-                <div className="min-w-0 flex-1 space-y-2">
+              <div key={i} className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <AgentBadge nickname={name} size="xs" showTooltip={false} />
+                  <span className="text-foreground text-xs font-semibold">{name}</span>
+                  {m.from === "agent" && m.reply.thinking_time !== undefined && (
+                    <span className="text-muted-foreground/70 font-mono text-[11px]">
+                      · Thought for {m.reply.thinking_time.toFixed(1)}s
+                    </span>
+                  )}
+                </div>
+
+                <div className="w-full space-y-2">
                   {m.from === "error" ? (
-                    <div className="rounded-lg rounded-tl-sm border p-4">
+                    <div className="rounded-lg border p-4">
                       <p className="text-destructive text-sm">{m.text}</p>
                       {m.hint && (
                         <p className="text-muted-foreground mt-2 text-xs leading-relaxed">
@@ -1134,7 +1129,6 @@ export default function Conversation({
                     </div>
                   ) : (
                     <>
-                      <ThinkingIndicator seconds={m.reply.thinking_time} />
                       {m.reply.steps && m.reply.steps.length > 0 && (
                         <OrchestrationTimeline
                           steps={m.reply.steps}
@@ -1145,7 +1139,7 @@ export default function Conversation({
                           finalAnswer={m.reply.answer}
                         />
                       )}
-                      <div className="bg-muted/50 rounded-lg rounded-tl-sm border p-4">
+                      <div className="bg-muted/50 rounded-lg border p-4">
                         <Markdown>{m.reply.answer}</Markdown>
                       </div>
                       <ToolActivity tools={m.reply.tools_used ?? []} />
@@ -1164,18 +1158,24 @@ export default function Conversation({
           )}
 
           {busy && (
-            <div className="flex gap-3">
-              <AgentBadge nickname={name} />
-              <div className="min-w-0 flex-1">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <AgentBadge nickname={name} size="xs" showTooltip={false} />
+                <span className="text-foreground text-xs font-semibold">{name}</span>
+                <span className="text-muted-foreground/70 flex items-center gap-1 font-mono text-[11px]">
+                  <Loader2 className="size-3 animate-spin" />
+                  thinking…
+                </span>
+              </div>
+              <div className="w-full">
                 {activeSteps.length > 0 ? (
                   <OrchestrationTimeline
                     steps={activeSteps}
                     isRunning={true}
                   />
                 ) : (
-                  <p className="text-muted-foreground flex items-center gap-2 pt-2 text-xs font-mono">
-                    <Loader2 className="size-3.5 animate-spin" />
-                    {name} is thinking…
+                  <p className="text-muted-foreground pt-1 text-xs font-mono">
+                    Preparing response…
                   </p>
                 )}
               </div>
@@ -1185,7 +1185,7 @@ export default function Conversation({
         </div>
       </div>
 
-      <div className="bg-background shrink-0 border-t">
+      <div className="bg-background shrink-0">
         <div className={`${COLUMN} px-3.5 py-2.5 sm:px-5 sm:py-3`}>{composer}</div>
       </div>
     </div>
