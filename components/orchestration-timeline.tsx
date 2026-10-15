@@ -219,29 +219,45 @@ export function OrchestrationTimeline({
         onClick={() => setDrawerOpen(true)}
         className="bg-muted/30 hover:bg-muted/60 hover:border-foreground/25 group mb-3 flex w-full cursor-pointer items-center justify-between gap-3 overflow-hidden rounded-lg border px-3.5 py-2.5 text-left text-xs transition-all"
       >
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            {isRunning ? (
-              <Loader2 className="text-primary size-3.5 shrink-0 animate-spin" />
-            ) : (
-              <span className="bg-primary/20 text-primary flex size-3.5 shrink-0 items-center justify-center rounded-full">
-                <Check className="size-2.5 stroke-[2.5]" />
-              </span>
-            )}
-            <span className="text-foreground truncate font-medium">
-              {summaryTitle}
-              {duration !== undefined && (
-                <span className="text-muted-foreground font-mono font-normal">
-                  {" "}
-                  ({duration.toFixed(1)}s)
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2">
+              {isRunning ? (
+                <Loader2 className="text-primary size-3.5 shrink-0 animate-spin" />
+              ) : (
+                <span className="bg-primary/20 text-primary flex size-3.5 shrink-0 items-center justify-center rounded-full">
+                  <Check className="size-2.5 stroke-[2.5]" />
                 </span>
               )}
-            </span>
+              <span className="text-foreground truncate font-medium">
+                {summaryTitle}
+                {duration !== undefined && (
+                  <span className="text-muted-foreground font-mono font-normal">
+                    {" "}
+                    ({duration.toFixed(1)}s)
+                  </span>
+                )}
+              </span>
+            </div>
+
+            {/* Participating Agent Avatars on Trigger Bar */}
+            {squadOverview.length > 0 && (
+              <div className="hidden items-center -space-x-1 sm:flex shrink-0">
+                {squadOverview.map(([agentName]) => (
+                  <span
+                    key={agentName}
+                    className="ring-background relative rounded-full ring-1"
+                  >
+                    <AgentBadge nickname={agentName} size="xs" showTooltip={false} />
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Live current step preview while running */}
           {isRunning && latestStep && (
-            <div className="text-muted-foreground mt-1 flex items-center gap-1.5 pl-5.5 text-[11px]">
+            <div className="text-muted-foreground flex items-center gap-1.5 pl-5.5 text-[11px]">
               <AgentBadge
                 nickname={latestStep.agent_name || "Arya"}
                 size="xs"
@@ -259,7 +275,7 @@ export function OrchestrationTimeline({
       <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
         <SheetContent
           side="right"
-          className="flex w-full data-[side=right]:w-full flex-col gap-0 p-0 sm:data-[side=right]:max-w-[560px]"
+          className="flex w-full data-[side=right]:w-full flex-col gap-0 p-0 sm:data-[side=right]:max-w-xl md:data-[side=right]:max-w-2xl"
         >
           <SheetHeader className="bg-muted/20 shrink-0 border-b px-5 py-4 pr-12">
             <div className="flex items-center gap-2">
