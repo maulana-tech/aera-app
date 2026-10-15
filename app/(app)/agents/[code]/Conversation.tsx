@@ -712,7 +712,43 @@ export default function Conversation({
         const liveSteps: OrchestrationStep[] = [];
 
         try {
-          while (true) {
+          const parsePart = (part: string): Reply | null => {
+            const trimmed = part.trim();
+            if (!trimmed || trimmed.startsWith(":")) return null; // ignore keepalive comments
+            let event = "message";
+            let dataStr = "";
+            for (const rawLine of trimmed.split("\n")) {
+              const line = rawLine.replace(/\r$/, "");
+              if (line.startsWith("event:")) {
+                event = line.slice(6).trim();
+              } else if (line.startsWith("data:")) {
+                dataStr = line.slice(5).trim();
+              }
+            }
+
+            if (!dataStr) return null;
+            try {
+              const data = JSON.parse(dataStr);
+              if (data.conversation_id && !activeCid) {
+                activeCid = data.conversation_id;
+                setId(data.conversation_id);
+                onOpen?.(data.conversation_id);
+              }
+              if (event === "step") {
+                liveSteps.push(data as OrchestrationStep);
+                setActiveSteps([...liveSteps]);
+              } else if (event === "done") {
+                return data as Reply;
+              } else if (event === "error") {
+                throw new Error(data.error || "failed");
+              }
+            } catch (err) {
+              if (event === "error") throw err;
+            }
+            return null;
+          };
+
+          while (!finalReply) {
             const { done, value } = await reader.read();
             if (done) break;
             buffer += decoder.decode(value, { stream: true });
@@ -720,38 +756,18 @@ export default function Conversation({
             buffer = parts.pop() ?? "";
 
             for (const part of parts) {
-              const trimmed = part.trim();
-              if (!trimmed || trimmed.startsWith(":")) continue; // ignore keepalive comments
-              let event = "message";
-              let dataStr = "";
-              for (const line of trimmed.split("\n")) {
-                if (line.startsWith("event:")) {
-                  event = line.slice(6).trim();
-                } else if (line.startsWith("data:")) {
-                  dataStr = line.slice(5).trim();
-                }
-              }
-
-              if (!dataStr) continue;
-              try {
-                const data = JSON.parse(dataStr);
-                if (data.conversation_id && !activeCid) {
-                  activeCid = data.conversation_id;
-                  setId(data.conversation_id);
-                  onOpen?.(data.conversation_id);
-                }
-                if (event === "step") {
-                  liveSteps.push(data as OrchestrationStep);
-                  setActiveSteps([...liveSteps]);
-                } else if (event === "done") {
-                  finalReply = data as Reply;
-                } else if (event === "error") {
-                  throw new Error(data.error || "failed");
-                }
-              } catch (err) {
-                if (event === "error") throw err;
+              const replyFound = parsePart(part);
+              if (replyFound) {
+                finalReply = replyFound;
+                await reader.cancel().catch(() => {});
+                break;
               }
             }
+          }
+
+          if (!finalReply && buffer.trim()) {
+            const replyFound = parsePart(buffer);
+            if (replyFound) finalReply = replyFound;
           }
         } catch (streamErr) {
           console.warn("SSE stream interrupted, entering auto-recovery polling:", streamErr);
