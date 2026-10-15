@@ -51,6 +51,15 @@ sigap/agent/data/
 # Hackathon service keys. Fetched from the keybroker, never committed.
 sigap/agent/.secrets/
 
+# Any secrets bundle, anywhere. A zip is the shape secrets travel in when
+# somebody is sharing them, and the one that slips past a rule written for
+# .env files. secrets.zip was sitting untracked in the root on 15 Oct 2026,
+# one `git add -A` away from being published.
+secrets.zip
+*secrets*.zip
+*.secrets.zip
+secrets/
+
 # Joule CLI debug dumps. They can carry credentials.
 sigap/agent/debug-*.json
 
