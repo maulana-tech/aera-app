@@ -29,9 +29,9 @@ export default async function AgentTeam() {
   const pct = Math.round((summary.tools_installed / summary.tools_total) * 100);
 
   return (
-    <main className="w-full px-6 py-8">
+    <main className="w-full px-4 py-4 md:px-6 md:py-8">
       <header className="border-b pb-5">
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">
+        <h1 className="mt-1 text-xl font-semibold tracking-tight md:mt-2 md:text-2xl">
           One lead, ten specialists
         </h1>
         <p className="text-muted-foreground mt-1 max-w-3xl text-sm leading-relaxed">

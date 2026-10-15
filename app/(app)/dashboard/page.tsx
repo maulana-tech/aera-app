@@ -101,7 +101,7 @@ export default async function Dashboard() {
   }));
 
   return (
-    <main className="w-full px-6 py-8">
+    <main className="w-full px-4 py-4 md:px-6 md:py-8">
       <PageHeader
         title="Overview"
         lead="What the agents have handled, what is waiting on a person, and where every

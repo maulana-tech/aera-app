@@ -18,11 +18,11 @@ export function PageHeader({
   title, lead, aside,
 }: { title: string; lead?: string; aside?: React.ReactNode }) {
   return (
-    <header className="flex flex-wrap items-start justify-between gap-x-8 gap-y-4 border-b pb-6">
+    <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 border-b pb-4 md:gap-x-8 md:gap-y-4 md:pb-6">
       <div className="min-w-0 max-w-2xl">
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+        <h1 className="text-xl font-semibold tracking-tight md:text-2xl">{title}</h1>
         {lead && (
-          <p className="text-muted-foreground mt-2 text-sm leading-relaxed">{lead}</p>
+          <p className="text-muted-foreground mt-1.5 text-xs leading-relaxed md:mt-2 md:text-sm">{lead}</p>
         )}
       </div>
       {aside && <div className="flex shrink-0 flex-wrap items-center gap-2">{aside}</div>}

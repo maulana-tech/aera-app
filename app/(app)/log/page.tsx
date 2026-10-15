@@ -38,7 +38,7 @@ export default async function Log() {
   const empty = !d.steps.length && !d.actions.length && !d.approvals.length;
 
   return (
-    <main className="w-full px-6 py-8">
+    <main className="w-full px-4 py-4 md:px-6 md:py-8">
       <PageHeader
         title="Log"
         lead="What the system did, what it proposed, and who decided. Rows here are never
