@@ -1,21 +1,24 @@
 "use client";
 
 import {
+  ArrowLeft,
   ArrowRight,
   BarChart3,
   ChevronRight,
   CircleHelp,
-  CornerDownLeft,
   FileText,
+  History,
   ImagePlus,
   Loader2,
+  MessageSquare,
   Paperclip,
   Plus,
+  Send,
   Trash2,
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { Popover as PopoverPrimitive } from "radix-ui";
+import { Dialog as DialogPrimitive, Popover as PopoverPrimitive } from "radix-ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ToolActivity } from "@/components/agent-activity";
@@ -314,11 +317,12 @@ function UsageBarPopover({
       <PopoverPrimitive.Trigger asChild>
         <button
           type="button"
-          className="hover:bg-muted/80 text-muted-foreground hover:text-foreground inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors"
+          className="hover:bg-muted/80 text-muted-foreground hover:text-foreground inline-flex h-8 items-center justify-center gap-1.5 rounded-md border px-2 sm:px-2.5 text-xs font-medium transition-colors"
           title="View usage"
+          aria-label="View usage"
         >
-          <BarChart3 className="size-3.5" />
-          <span>View usage</span>
+          <BarChart3 className="size-4 sm:size-3.5" />
+          <span className="hidden sm:inline">View usage</span>
         </button>
       </PopoverPrimitive.Trigger>
 
@@ -549,6 +553,7 @@ export default function Conversation({
   const [busy, setBusy] = useState(false);
   const [activeSteps, setActiveSteps] = useState<OrchestrationStep[]>([]);
   const [restoring, setRestoring] = useState(!!threadId);
+  const [historyPopupOpen, setHistoryPopupOpen] = useState(false);
   const bottom = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -632,6 +637,7 @@ export default function Conversation({
     setText("");
     setAttachments([]);
     onOpen?.(null);
+    setHistoryPopupOpen(false);
   }
 
   async function addFiles(fileList: FileList | File[]) {
@@ -977,10 +983,11 @@ export default function Conversation({
             type="submit"
             size="sm"
             disabled={busy || (!text.trim() && attachments.length === 0)}
-            className="gap-1.5"
+            className="h-8 gap-1.5 px-3 text-xs"
+            aria-label="Send message"
           >
-            <CornerDownLeft className="size-3.5" />
-            Send
+            <Send className="size-3.5" />
+            <span>Send</span>
           </Button>
         </div>
       </div>
@@ -992,7 +999,10 @@ export default function Conversation({
       {threads.map((t) => (
         <li key={t.id} className="group/row relative">
           <button
-            onClick={() => open(t.id)}
+            onClick={() => {
+              open(t.id);
+              setHistoryPopupOpen(false);
+            }}
             className={`hover:bg-muted/60 w-full rounded-md px-2.5 py-2 pr-8 text-left transition-colors ${
               t.id === id ? "bg-muted" : ""
             }`}
@@ -1006,7 +1016,7 @@ export default function Conversation({
           <button
             onClick={() => remove(t.id)}
             aria-label={`Delete conversation: ${t.title}`}
-            className="text-muted-foreground hover:text-destructive absolute right-1.5 top-1.5 rounded-md p-1 opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100"
+            className="text-muted-foreground hover:text-destructive absolute right-1.5 top-1.5 rounded-md p-1 opacity-60 transition-opacity md:opacity-0 md:group-hover/row:opacity-100 hover:opacity-100 focus-visible:opacity-100"
           >
             <Trash2 className="size-3.5" />
           </button>
@@ -1020,15 +1030,15 @@ export default function Conversation({
    * stays there, which is the only place a reply box belongs.
    */
   const empty = (
-    <div className="flex min-h-0 flex-1 flex-col justify-center overflow-y-auto px-5 py-8">
-      <div className="mx-auto w-full max-w-xl space-y-6">
+    <div className="flex min-h-0 flex-1 flex-col justify-center overflow-y-auto px-4 py-6 sm:px-5 sm:py-8">
+      <div className="mx-auto w-full max-w-xl space-y-4 sm:space-y-6">
         <div className="text-center">
           {/* AgentBadge is display:flex, so text-align does not move it. */}
           <div className="flex justify-center">
             <AgentBadge nickname={name} large />
           </div>
           <h2 className="mt-3 text-lg font-semibold tracking-tight">Ask {name}</h2>
-          <p className="text-muted-foreground mt-1.5 text-sm leading-relaxed">
+          <p className="text-muted-foreground mt-1.5 text-xs sm:text-sm leading-relaxed">
             {work}. Same tools as inside the team, and every figure keeps the
             label of where it came from.
           </p>
@@ -1043,7 +1053,7 @@ export default function Conversation({
                 <button
                   onClick={() => send(ex, [])}
                   disabled={!signedIn}
-                  className="hover:border-foreground/30 hover:bg-muted/50 focus-visible:ring-ring group flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left text-sm outline-none transition-colors focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="hover:border-foreground/30 hover:bg-muted/50 focus-visible:ring-ring group flex w-full items-center gap-3 rounded-lg border px-3.5 py-2.5 sm:px-4 sm:py-3 text-left text-xs sm:text-sm outline-none transition-colors focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <span className="flex-1">{ex}</span>
                   <ArrowRight className="text-muted-foreground group-hover:text-foreground size-3.5 shrink-0 transition-colors" />
@@ -1069,7 +1079,7 @@ export default function Conversation({
   const transcript = (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className={`${COLUMN} space-y-6 px-5 py-6`}>
+        <div className={`${COLUMN} space-y-4 px-3.5 py-4 sm:space-y-6 sm:px-5 sm:py-6`}>
           {messages.map((m, i) =>
             m.from === "person" ? (
               <div key={i} className="flex flex-col items-end gap-2">
@@ -1176,7 +1186,7 @@ export default function Conversation({
       </div>
 
       <div className="bg-background shrink-0 border-t">
-        <div className={`${COLUMN} px-5 py-3`}>{composer}</div>
+        <div className={`${COLUMN} px-3.5 py-2.5 sm:px-5 sm:py-3`}>{composer}</div>
       </div>
     </div>
   );
@@ -1196,6 +1206,7 @@ export default function Conversation({
 
   return (
     <div className="flex min-h-0 flex-1">
+      {/* Desktop aside rail */}
       <aside className="hidden w-64 shrink-0 flex-col border-r md:flex">
         <div className="shrink-0 p-2">
           <Button
@@ -1221,7 +1232,96 @@ export default function Conversation({
           )}
         </div>
       </aside>
-      <div className="flex min-w-0 flex-1 flex-col">{body}</div>
+
+      {/* Full-Screen SPA Popup for Mobile History */}
+      <DialogPrimitive.Root open={historyPopupOpen} onOpenChange={setHistoryPopupOpen}>
+        <DialogPrimitive.Portal>
+          <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 duration-150 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0" />
+          <DialogPrimitive.Content
+            className="bg-background fixed inset-0 z-50 flex h-full w-full flex-col outline-none duration-150 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95"
+            aria-describedby={undefined}
+          >
+            {/* Popup Header */}
+            <div className="flex shrink-0 items-center justify-between border-b px-4 py-3">
+              <div className="flex items-center gap-2">
+                <DialogPrimitive.Close asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="size-8"
+                    aria-label="Back to chat"
+                  >
+                    <ArrowLeft className="size-4" />
+                  </Button>
+                </DialogPrimitive.Close>
+                <DialogPrimitive.Title className="text-sm font-semibold">
+                  Conversations
+                </DialogPrimitive.Title>
+              </div>
+
+              <Button
+                variant="outline"
+                size="icon-sm"
+                onClick={startNew}
+                className="size-8"
+                aria-label="New conversation"
+                title="New conversation"
+              >
+                <Plus className="size-4" />
+              </Button>
+            </div>
+
+            {/* Popup Body */}
+            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+              {threads.length === 0 ? (
+                <div className="flex h-full flex-col items-center justify-center py-16 text-center">
+                  <MessageSquare className="text-muted-foreground/40 mb-2 size-8" />
+                  <p className="text-muted-foreground text-xs leading-relaxed">
+                    {signedIn
+                      ? "Nothing asked yet. What you ask is kept here, against your account."
+                      : "Sign in to keep a history."}
+                  </p>
+                </div>
+              ) : (
+                threadList
+              )}
+            </div>
+          </DialogPrimitive.Content>
+        </DialogPrimitive.Portal>
+      </DialogPrimitive.Root>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Mobile History Trigger Bar */}
+        <div className="bg-muted/20 flex shrink-0 items-center justify-between border-b px-3.5 py-1.5 md:hidden">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setHistoryPopupOpen(true)}
+            className="h-7 gap-1.5 px-2 text-xs"
+            aria-label="Open conversation history popup"
+          >
+            <History className="size-3.5" />
+            <span>History</span>
+            {threads.length > 0 && (
+              <span className="bg-muted text-muted-foreground rounded-full px-1.5 py-0.2 font-mono text-[10px]">
+                {threads.length}
+              </span>
+            )}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={startNew}
+            disabled={!id && messages.length === 0}
+            className="h-7 gap-1 px-2 text-xs"
+            aria-label="Start new conversation"
+          >
+            <Plus className="size-3.5" />
+            <span>New</span>
+          </Button>
+        </div>
+        {body}
+      </div>
     </div>
   );
 }

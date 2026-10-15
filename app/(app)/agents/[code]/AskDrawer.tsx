@@ -39,7 +39,7 @@ export default function AskDrawer({
         * stays at 384px however wide you ask for it. */}
       <SheetContent
         side="right"
-        className="flex w-full flex-col gap-0 p-0 data-[side=right]:sm:max-w-[540px]"
+        className="flex w-full data-[side=right]:w-full flex-col gap-0 p-0 sm:data-[side=right]:max-w-[540px]"
       >
         {/* The drawer names who is on the other end. What to ask is the body's
           * job, so the header stays a label and does not repeat it. */}

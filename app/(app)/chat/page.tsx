@@ -27,7 +27,7 @@ export default async function Chat(
    * that scrolls behind it.
    */
   return (
-    <main className="flex h-[calc(100svh-3.5rem)] flex-col">
+    <main className="flex h-[calc(100dvh-3.5rem)] flex-col">
       <header className="flex shrink-0 items-center justify-between gap-x-4 border-b px-4 py-2.5 md:px-6 md:py-3">
         <div className="min-w-0">
           <h1 className="text-sm font-medium">Ask Arya</h1>
