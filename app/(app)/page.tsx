@@ -60,9 +60,9 @@ export default async function Queue() {
           </pre>
         </div>
       ) : (
-        <ul className="mt-6 grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+        <ul className="mt-6 grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
           {runs.map((r) => (
-            <li key={r.id}>
+            <li key={r.id} className="flex">
               <DisruptionCard r={r} />
             </li>
           ))}
