@@ -1,7 +1,6 @@
-import Link from "next/link";
-
-import { api, idr, type Run } from "@/app/lib";
+import { api, type Run } from "@/app/lib";
 import { AutoRefresh } from "@/components/auto-refresh";
+import { DisruptionCard } from "@/components/disruption-card";
 import { StatusBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
 
@@ -64,42 +63,7 @@ export default async function Queue() {
         <ul className="mt-6 grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
           {runs.map((r) => (
             <li key={r.id}>
-              <Link
-                href={`/disruptions/${r.id}`}
-                className="block rounded-lg border border-border bg-card p-5 transition-colors hover:border-primary/50"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h2 className="font-medium">{r.title}</h2>
-                    <p className="mt-1 text-sm text-muted-foreground">{r.trigger}</p>
-                  </div>
-                  <div className="flex shrink-0 flex-wrap items-center gap-2 font-mono text-[11px]">
-                    {r.mode === "guided" && <StatusBadge status="guided" />}
-                    <StatusBadge status={r.status} />
-                  </div>
-                </div>
-
-                {r.decision?.recommendation && (
-                  <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-muted-foreground">
-                    {r.decision.recommendation}
-                  </p>
-                )}
-                {r.status === "held" && r.decision?.reason && (
-                  <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                    {r.decision.reason}
-                  </p>
-                )}
-                {r.error && (
-                  <p className="mt-3 font-mono text-xs text-destructive">{r.error}</p>
-                )}
-
-                <p className="mt-3 font-mono text-[11px] text-muted-foreground">
-                  {new Date(r.started_at).toLocaleString("en-GB")}
-                  {r.token_cost_idr > 0 && ` · cost ${idr(r.token_cost_idr)}`}
-                  {Array.isArray(r.decision?.agents_called) &&
-                    ` · ${r.decision.agents_called.length} specialists called`}
-                </p>
-              </Link>
+              <DisruptionCard r={r} />
             </li>
           ))}
         </ul>
