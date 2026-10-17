@@ -74,11 +74,12 @@ def check() -> None:
 def seed() -> None:
     """Reproducible demo data: the Ningbo scenario and its two siblings.
 
-    Runs land as 'held' rather than 'done' because AWS_REGION is not set, the
-    system does not pretend an agent reasoned when none did.
+    If the model is ready (AWS_REGION is set), runs the agent team on each event
+    so they are reasoned with live AI. Otherwise lands as 'held'.
     """
-    from core import store
+    from core import config, registry, store
     from tools.execution import idempotency_key
+    import tools  # noqa: F401
 
     events = [
         ("port_closure", "Typhoon closes the Port of Ningbo",
@@ -92,22 +93,55 @@ def seed() -> None:
 
     for kind, title, trigger, payload in events:
         eid = store.record_event(kind, title, trigger, payload, "seed")
-        rid = store.start_run(eid, "guided")
-        store.close_run(rid, "held", decision={
-            "status": "held",
-            "reason": "AWS_REGION is not set - the agent team cannot reason. "
-                      "No decision was made.",
-        })
-        if kind == "port_closure":
-            for k, autonomous, body in (
-                ("stock_transfer", True,
-                 {"material": "M-4471", "from_plant": "SBY1", "to_plant": "KRW1",
-                  "qty": 22.0, "cost_idr": 22_000_000}),
-                ("draft_po", False,
-                 {"supplier": "SUP-4417", "material": "M-4471", "qty": 85.0,
-                  "needed_by": "2026-09-12", "cost_idr": 94_000_000}),
-            ):
-                store.record_action(rid, idempotency_key(k, **body), k, autonomous, body)
+        mode = "autonomous" if config.CFG.model_ready else "guided"
+        rid = store.start_run(eid, mode)
+        event_dict = {"id": eid, "kind": kind, "title": title, "trigger": trigger, **payload}
+
+        if config.CFG.model_ready:
+            print(f"Reasoning on {title}...")
+            seq = {"n": 0}
+
+            def report(k: str, d: dict) -> None:
+                seq["n"] += 1
+                name = d.get("name") or d.get("agent", "-")
+                store.save_step(rid, {
+                    "seq": seq["n"],
+                    "stage": {"specialist_start": "DELEGATE", "specialist_done": "FINDING",
+                              "tool": "TOOL"}.get(k, k.upper()),
+                    "agent": d.get("agent", "supervisor"),
+                    "agent_name": name,
+                    "summary": d.get("summary") or d.get("task") or d.get("name", ""),
+                    "tools": [d["name"]] if k == "tool" else [],
+                    "detail": d,
+                    "at": store._now(),
+                })
+
+            try:
+                import graph
+                with registry.bind_run(rid):
+                    result = graph.run(event_dict, report)
+                store.close_run(rid, "done", result, cost_idr=result.get("cost_idr", 0))
+                print(f"  done: {title} (cost: Rp {result.get('cost_idr', 0):,})")
+            except Exception as e:
+                store.close_run(rid, "failed", error=f"{type(e).__name__}: {e}")
+                print(f"  failed: {title}: {e}")
+        else:
+            store.close_run(rid, "held", decision={
+                "status": "held",
+                "reason": "AWS_REGION is not set - the agent team cannot reason. "
+                          "No decision was made.",
+            })
+            if kind == "port_closure":
+                for k, autonomous, body in (
+                    ("stock_transfer", True,
+                     {"material": "M-4471", "from_plant": "SBY1", "to_plant": "KRW1",
+                      "qty": 22.0, "cost_idr": 22_000_000}),
+                    ("draft_po", False,
+                     {"supplier": "SUP-4417", "material": "M-4471", "qty": 85.0,
+                      "needed_by": "2026-09-12", "cost_idr": 94_000_000}),
+                ):
+                    store.record_action(rid, idempotency_key(k, **body), k, autonomous, body)
+            print(f"  held: {title} (AWS_REGION not set)")
 
     print(f"seeded {len(events)} events with their runs and actions")
 
