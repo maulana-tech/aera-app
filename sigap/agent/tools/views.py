@@ -521,22 +521,36 @@ def exposure() -> dict:
 
 def logistics() -> dict:
     po = get_open_purchase_orders()
-    rows = [{
-        "reference": x["PurchaseOrder"], "material": x["Material"],
-        "plant": x["Plant"], "qty": x["OrderQuantity"],
-        "port": x.get("LoadingPort"), "status": x["Status"],
-        "arrival_original": x["DeliveryDate"], "arrival_revised": x["RevisedDeliveryDate"],
-        "delay_days": (date.fromisoformat(x["RevisedDeliveryDate"])
-                       - date.fromisoformat(x["DeliveryDate"])).days,
-    } for x in (po.value or [])]
+    rows = []
+    for x in (po.value or []):
+        d_orig = x.get("DeliveryDate") or x.get("delivery_date")
+        d_rev = x.get("RevisedDeliveryDate") or x.get("revised_delivery_date")
+        delay = 0
+        if d_orig and d_rev:
+            try:
+                delay = (date.fromisoformat(str(d_rev)) - date.fromisoformat(str(d_orig))).days
+            except ValueError:
+                delay = 0
+        rows.append({
+            "reference": x.get("PurchaseOrder") or x.get("purchase_order") or "-",
+            "material": x.get("Material") or x.get("material") or "-",
+            "plant": x.get("Plant") or x.get("plant") or "-",
+            "qty": x.get("OrderQuantity") or x.get("order_quantity") or 0,
+            "port": x.get("LoadingPort") or x.get("loading_port"),
+            "status": x.get("Status") or x.get("status") or "open",
+            "arrival_original": d_orig or "",
+            "arrival_revised": d_rev or "",
+            "delay_days": delay,
+        })
     for o in (find_alternate_sources("M-4471").value or []):
         e = (estimate_eta(o["id"]).value or {})
         if e:
             rows.append({
-                "reference": f"option {o['id']}", "material": o["Material"],
-                "plant": "-", "qty": o["Quantity"], "port": o["Origin"],
-                "status": "planned", "arrival_original": e["arrival_booked"],
-                "arrival_revised": e["arrival_effective"], "delay_days": e["dwell_days"],
+                "reference": f"option {o['id']}", "material": o.get("Material") or o.get("material") or "-",
+                "plant": "-", "qty": o.get("Quantity") or o.get("quantity") or 0,
+                "port": o.get("Origin") or o.get("origin"),
+                "status": "planned", "arrival_original": e.get("arrival_booked"),
+                "arrival_revised": e.get("arrival_effective"), "delay_days": e.get("dwell_days", 0),
             })
     out = _wrap(rows, [
         {"k": "reference", "l": "Reference"}, {"k": "material", "l": "Material"},
