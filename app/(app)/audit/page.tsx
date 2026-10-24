@@ -1,4 +1,4 @@
-import { api, idr, type AuditReport } from "@/app/lib";
+import { apiResult, idr, type AuditReport } from "@/app/lib";
 import { AuditActions } from "./Actions";
 import { Empty, Metric } from "@/components/shell";
 import { OriginBadge } from "@/components/status-badge";
@@ -16,16 +16,20 @@ const SEVERITY: Record<string, { label: string; rank: string }> = {
 const num = (n: number) => n.toLocaleString("en-US");
 
 export default async function AuditPage() {
-  const a = await api<AuditReport>("audit");
+  const result = await apiResult<AuditReport>("audit");
 
-  if (!a) {
+  if (!result.data) {
     return (
       <main className="w-full px-6 py-16">
-        <h1 className="text-xl font-semibold">The agent service is not responding</h1>
+        <h1 className="text-xl font-semibold">Data audit unavailable</h1>
+        <p className="text-muted-foreground mt-2 max-w-2xl text-sm leading-relaxed">
+          {result.error}
+        </p>
       </main>
     );
   }
 
+  const a = result.data;
   const c = a.coverage;
   const entities = Object.entries(a.origins ?? {});
   const bySeverity = ["critical", "serious", "warning", "note"]

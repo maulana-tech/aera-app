@@ -27,7 +27,9 @@ export const idr = (n: number) => "Rp " + (n ?? 0).toLocaleString("en-US");
 export type Me = { name: string; email: string; role: string; limit_idr: number };
 
 /** Call the agent service, carrying the session token from the httpOnly cookie. */
-export async function api<T>(path: string): Promise<T | null> {
+export async function apiResult<T>(path: string): Promise<
+  { data: T; error: null } | { data: null; error: string }
+> {
   const { cookies } = await import("next/headers");
   const token = (await cookies()).get("sigap_session")?.value;
   try {
@@ -35,10 +37,25 @@ export async function api<T>(path: string): Promise<T | null> {
       cache: "no-store",
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
-    return r.ok ? ((await r.json()) as T) : null;
+    const body = await r.text();
+    if (!r.ok) {
+      let error = `The agent service returned HTTP ${r.status}`;
+      try {
+        const parsed = JSON.parse(body) as { error?: string };
+        if (parsed.error) error = parsed.error;
+      } catch {
+        // An upstream proxy may return HTML. The status is safer to show than it.
+      }
+      return { data: null, error };
+    }
+    return { data: JSON.parse(body) as T, error: null };
   } catch {
-    return null;
+    return { data: null, error: `The agent service is not responding at ${UPSTREAM}` };
   }
+}
+
+export async function api<T>(path: string): Promise<T | null> {
+  return (await apiResult<T>(path)).data;
 }
 
 export async function me(): Promise<Me | null> {
