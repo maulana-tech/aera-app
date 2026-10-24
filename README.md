@@ -15,6 +15,49 @@ deterministic calculator that refuses to produce a rupiah figure it cannot stand
 
 ## Run it
 
+### Option A: Docker Compose (Recommended)
+
+Run all 3 containers (**Next.js Web**, **Python Agent**, and **PostgreSQL Database**) with a single command:
+
+1. **Prepare Environment File:**
+   ```bash
+   cp sigap/agent/.env.example sigap/agent/.env
+   ```
+   *(Fill in any required credentials in `sigap/agent/.env` if testing real LLM / Bedrock)*
+
+2. **Build & Start Containers:**
+   ```bash
+   docker compose up -d --build
+   ```
+
+3. **Check Status & Logs:**
+   ```bash
+   # Check running containers
+   docker compose ps
+
+   # View live logs
+   docker compose logs -f
+
+   # View logs for a specific service (sigap, agents, or database)
+   docker compose logs -f sigap
+   ```
+
+4. **Access the Application:**
+   * **Web UI:** [http://localhost:3000](http://localhost:3000)
+   * **Agent API:** [http://localhost:8787](http://localhost:8787)
+   * **Database:** `localhost:5432`
+
+5. **Stop Containers:**
+   ```bash
+   docker compose down
+   # To stop and remove database volumes (clean reset):
+   docker compose down -v
+   ```
+
+---
+
+### Option B: Manual (Two Processes)
+
 Two processes: the Python agent service, and the Next.js interface.
 
 ```bash
