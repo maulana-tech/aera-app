@@ -208,6 +208,20 @@ export function ExplorationGraph({ graph }: { graph: ExplorationGraph | null }) 
  * their own click (pointerdown on a node does not start a pan). */
 const MIN_S = 0.3;
 const MAX_S = 2.5;
+
+function ZoomBtn({ onClick, label, children }: { onClick: () => void; label: string; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className="bg-card hover:bg-muted text-muted-foreground hover:text-foreground flex size-7 items-center justify-center border-b last:border-b-0"
+    >
+      {children}
+    </button>
+  );
+}
+
 function PanZoom({
   innerW, innerH, onBackgroundClick, children,
 }: {
@@ -215,6 +229,7 @@ function PanZoom({
 }) {
   const vpRef = useRef<HTMLDivElement | null>(null);
   const [view, setView] = useState({ s: 1, x: 24, y: 8 });
+  const [isPanning, setIsPanning] = useState(false);
   const pan = useRef<{ x: number; y: number; ox: number; oy: number; moved: boolean } | null>(null);
 
   const reset = useCallback(() => setView({ s: 1, x: 24, y: 8 }), []);
@@ -251,6 +266,7 @@ function PanZoom({
     if ((e.target as HTMLElement).closest("button")) return; // a node, not the canvas
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     pan.current = { x: e.clientX, y: e.clientY, ox: view.x, oy: view.y, moved: false };
+    setIsPanning(true);
   };
   const onPointerMove = (e: React.PointerEvent) => {
     const p = pan.current;
@@ -263,19 +279,9 @@ function PanZoom({
   const onPointerUp = () => {
     const p = pan.current;
     pan.current = null;
+    setIsPanning(false);
     if (p && !p.moved) onBackgroundClick(); // a click on empty canvas clears selection
   };
-
-  const Btn = ({ onClick, label, children: c }: { onClick: () => void; label: string; children: ReactNode }) => (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      className="bg-card hover:bg-muted text-muted-foreground hover:text-foreground flex size-7 items-center justify-center border-b last:border-b-0"
-    >
-      {c}
-    </button>
-  );
 
   return (
     <div
@@ -285,7 +291,7 @@ function PanZoom({
       onPointerUp={onPointerUp}
       onPointerLeave={onPointerUp}
       className="bg-muted/20 relative h-[480px] w-full touch-none overflow-hidden rounded-lg border"
-      style={{ cursor: pan.current ? "grabbing" : "grab" }}
+      style={{ cursor: isPanning ? "grabbing" : "grab" }}
     >
       <div
         className="absolute left-0 top-0 origin-top-left"
@@ -296,9 +302,9 @@ function PanZoom({
 
       {/* zoom controls */}
       <div className="absolute right-2 top-2 flex flex-col overflow-hidden rounded-md border shadow-sm">
-        <Btn onClick={() => zoomBy(1.2)} label="Zoom in"><Plus className="size-3.5" /></Btn>
-        <Btn onClick={() => zoomBy(1 / 1.2)} label="Zoom out"><Minus className="size-3.5" /></Btn>
-        <Btn onClick={reset} label="Reset view"><Maximize2 className="size-3.5" /></Btn>
+        <ZoomBtn onClick={() => zoomBy(1.2)} label="Zoom in"><Plus className="size-3.5" /></ZoomBtn>
+        <ZoomBtn onClick={() => zoomBy(1 / 1.2)} label="Zoom out"><Minus className="size-3.5" /></ZoomBtn>
+        <ZoomBtn onClick={reset} label="Reset view"><Maximize2 className="size-3.5" /></ZoomBtn>
       </div>
       <p className="text-muted-foreground pointer-events-none absolute bottom-2 left-2 text-[10px]">
         scroll to zoom · drag to pan · {Math.round(view.s * 100)}%
@@ -307,30 +313,30 @@ function PanZoom({
   );
 }
 
-function NodeDetail({
-  node, graph, byId, onSelect, onClose,
-}: {
-  node: Placed | null;
-  graph: ExplorationGraph;
-  byId: Record<string, Placed>;
-  onSelect: (id: string) => void;
-  onClose: () => void;
-}) {
-  // Keep the last selected node while the drawer slides out, so its content
-  // does not blank mid-animation when `node` becomes null on close.
-  const [shownNode, setShownNode] = useState<Placed | null>(node);
-  useEffect(() => { if (node) setShownNode(node); }, [node]);
-  const n = node ?? shownNode;
-
-  const Row = ({ k, children }: { k: string; children: ReactNode }) => (
+function DetailRow({ k, children }: { k: string; children: ReactNode }) {
+  return (
     <div className="grid grid-cols-[72px_minmax(0,1fr)] gap-2 py-1.5 text-xs">
       <span className="text-muted-foreground">{k}</span>
       <span className="min-w-0 break-words">{children}</span>
     </div>
   );
-  const EdgeList = ({ title, edges, dir }: {
-    title: string; edges: GraphEdge[]; dir: "in" | "out";
-  }) => edges.length === 0 ? null : (
+}
+
+function EdgeList({
+  title,
+  edges,
+  dir,
+  byId,
+  onSelect,
+}: {
+  title: string;
+  edges: GraphEdge[];
+  dir: "in" | "out";
+  byId: Record<string, Placed>;
+  onSelect: (id: string) => void;
+}) {
+  if (edges.length === 0) return null;
+  return (
     <div className="mt-3">
       <p className="text-muted-foreground mb-1 text-[11px] font-medium">{title}</p>
       <ul className="space-y-1">
@@ -353,6 +359,28 @@ function NodeDetail({
       </ul>
     </div>
   );
+}
+
+function NodeDetail({
+  node, graph, byId, onSelect, onClose,
+}: {
+  node: Placed | null;
+  graph: ExplorationGraph;
+  byId: Record<string, Placed>;
+  onSelect: (id: string) => void;
+  onClose: () => void;
+}) {
+  // Keep the last selected node while the drawer slides out, so its content
+  // does not blank mid-animation when `node` becomes null on close.
+  const [prevNode, setPrevNode] = useState<Placed | null>(node);
+  const [shownNode, setShownNode] = useState<Placed | null>(node);
+  if (node !== prevNode) {
+    setPrevNode(node);
+    if (node) {
+      setShownNode(node);
+    }
+  }
+  const n = node ?? shownNode;
 
   let payload: unknown = null;
   try { payload = n?.payload ? JSON.parse(n.payload) : null; } catch { payload = null; }
@@ -384,22 +412,22 @@ function NodeDetail({
 
             <div className="px-5 py-4">
               <div className="divide-y">
-                {n.subject && <Row k="subject">{n.subject}</Row>}
-                {n.lead_key && <Row k="lead">{n.lead_key}</Row>}
+                {n.subject && <DetailRow k="subject">{n.subject}</DetailRow>}
+                {n.lead_key && <DetailRow k="lead">{n.lead_key}</DetailRow>}
                 {n.state && (
-                  <Row k="state">
+                  <DetailRow k="state">
                     {n.kind === "lead" ? (
                       <span className="inline-flex items-center gap-1.5">
                         <span className={cn("size-1.5 rounded-full", STATE_DOT[n.state] ?? "bg-zinc-400")} />
                         {n.state}
                       </span>
                     ) : n.state}
-                  </Row>
+                  </DetailRow>
                 )}
                 {n.origin && (
-                  <Row k="origin"><OriginBadge origin={n.origin} source={n.source} /></Row>
+                  <DetailRow k="origin"><OriginBadge origin={n.origin} source={n.source} /></DetailRow>
                 )}
-                {typeof n.priority === "number" && <Row k="priority">{n.priority}</Row>}
+                {typeof n.priority === "number" && <DetailRow k="priority">{n.priority}</DetailRow>}
               </div>
 
               {detail != null && (
@@ -411,8 +439,8 @@ function NodeDetail({
                 </div>
               )}
 
-              <EdgeList title="Comes from" edges={incoming} dir="in" />
-              <EdgeList title="Leads to" edges={outgoing} dir="out" />
+              <EdgeList title="Comes from" edges={incoming} dir="in" byId={byId} onSelect={onSelect} />
+              <EdgeList title="Leads to" edges={outgoing} dir="out" byId={byId} onSelect={onSelect} />
             </div>
           </>
         )}

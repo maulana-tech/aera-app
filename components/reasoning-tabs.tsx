@@ -6,6 +6,30 @@ import { ExplorationGraph } from "@/components/exploration-graph";
 import { cn } from "@/lib/utils";
 import type { ExplorationGraph as Graph } from "@/app/lib";
 
+interface TabProps {
+  id: "graph" | "steps";
+  currentTab: "graph" | "steps";
+  onClick: (id: "graph" | "steps") => void;
+  children: ReactNode;
+}
+
+function Tab({ id, currentTab, onClick, children }: TabProps) {
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(id)}
+      className={cn(
+        "border-b-2 px-1 pb-2 text-sm transition-colors",
+        currentTab === id
+          ? "border-foreground text-foreground font-medium"
+          : "text-muted-foreground hover:text-foreground border-transparent",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
 /* Two views of the same handling, on one tab strip: the step-by-step record
  * (server-rendered, passed in as `reasoning`) and the exploration graph that
  * record filled in. The graph tab leads when the graph was recorded, because it
@@ -23,28 +47,15 @@ export function ReasoningTabs({
   const hasGraph = !!graph && graph.nodes.length > 0;
   const [tab, setTab] = useState<"graph" | "steps">(hasGraph ? "graph" : "steps");
 
-  const Tab = ({ id, children }: { id: "graph" | "steps"; children: ReactNode }) => (
-    <button
-      type="button"
-      onClick={() => setTab(id)}
-      className={cn(
-        "border-b-2 px-1 pb-2 text-sm transition-colors",
-        tab === id
-          ? "border-foreground text-foreground font-medium"
-          : "text-muted-foreground hover:text-foreground border-transparent",
-      )}
-    >
-      {children}
-    </button>
-  );
-
   return (
     <div>
       <div className="mb-5 flex items-center gap-5 border-b">
-        <Tab id="graph">
+        <Tab id="graph" currentTab={tab} onClick={setTab}>
           Exploration graph{hasGraph ? ` (${graph!.nodes.length})` : ""}
         </Tab>
-        <Tab id="steps">How it reasoned ({stepCount})</Tab>
+        <Tab id="steps" currentTab={tab} onClick={setTab}>
+          How it reasoned ({stepCount})
+        </Tab>
       </div>
       <div className={cn(tab !== "graph" && "hidden")}>
         <ExplorationGraph graph={graph} />
