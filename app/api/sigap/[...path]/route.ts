@@ -32,9 +32,15 @@ async function forward(req: Request, path: string[], method: "GET" | "POST") {
       });
     }
 
-    return new Response(await r.text(), {
+    // Bytes, not text: a report comes back as a PDF or a workbook, and decoding
+    // one as UTF-8 would corrupt it. The file name rides on Content-Disposition.
+    const disposition = r.headers.get("content-disposition");
+    return new Response(await r.arrayBuffer(), {
       status: r.status,
-      headers: { "content-type": contentType },
+      headers: {
+        "content-type": contentType,
+        ...(disposition ? { "content-disposition": disposition, "cache-control": "no-store" } : {}),
+      },
     });
   } catch {
     return Response.json(

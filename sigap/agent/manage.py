@@ -5,6 +5,10 @@
     python3 manage.py check             # what is still missing
     python3 manage.py seed              # demo events, runs and actions
     python3 manage.py docs              # regenerate ../AGENT-REFERENCE.md from the registry
+    python3 manage.py models            # which model each agent runs on, and if it can be reached
+    python3 manage.py models --ping     # and make one tiny real call to each (costs a few tokens)
+    python3 manage.py models --catalog  # one real call to every model the Models page offers
+    python3 manage.py ready             # is this install ready to be relied on? (--ping: call the models)
 """
 import os
 import secrets
@@ -17,13 +21,18 @@ from core import identity
 CHECKS = [
     "core/config.py", "core/provenance.py", "core/registry.py", "core/identity.py",
     "core/store.py", "core/exploration.py", "core/admission.py", "core/aux.py", "core/schema.py",
+    "core/llm.py", "core/topology.py", "clients/aicore.py",
     "engine/simulate.py", "engine/audit.py", "engine/matching.py",
     "engine/forecast.py", "engine/planner.py", "engine/dispatch.py",
-    "engine/report.py", "fixtures/generate.py",
-    "tools/compliance.py", "tools/execution.py",
-    "tools/exposure.py", "tools/precedent.py",
+    "engine/report.py", "engine/export.py", "engine/allocate.py", "fixtures/generate.py",
+    "tools/compliance.py", "tools/execution.py", "tools/logistics.py", "tools/sourcing.py",
+    "tools/simulation.py", "tools/exposure.py", "tools/precedent.py",
     "agents/definitions.py", "graph.py", "mcp.py",
     "signals/bmkg.py", "signals/watch.py",
+    "clients/feeds.py", "clients/web_data.py", "clients/sap_map.py",
+    "signals/places.py", "signals/hazards.py", "signals/weather.py",
+    "clients/composio.py", "clients/channels.py", "core/schedule.py", "notify.py --check",
+    "outreach.py --check", "sender.py --check", "jobs.py",
 ]
 
 
@@ -31,7 +40,7 @@ def check() -> None:
     """Run every self-check, then name what is not there yet."""
     failed = []
     for f in CHECKS:
-        r = subprocess.run([sys.executable, f], capture_output=True, text=True,
+        r = subprocess.run([sys.executable, *f.split()], capture_output=True, text=True,
                            env={**os.environ, "PYTHONPATH": "."})
         print(f"  {'ok    ' if r.returncode == 0 else 'FAILED'} {f}")
         if r.returncode:
@@ -62,13 +71,163 @@ def check() -> None:
             print(f"    · {who}: {', '.join(names)}")
 
     cfg = config.CFG
-    absent = [n for n, v in (("SAP_API_KEY", cfg.sap_api_key),
-                             ("AWS_REGION", cfg.aws_region)) if not v]
+    absent = (["SAP_API_KEY"] if not cfg.sap_api_key else []) + \
+             ([] if cfg.model_ready else ["a model the lead can reach (manage.py models)"])
     if absent:
-        print(f"\n  keys not set: {', '.join(absent)}"
+        print(f"\n  not set: {', '.join(absent)}"
               "\n    without these the system refuses to decide anything, by design.")
 
     if failed:
+        sys.exit(1)
+
+
+def models(ping: bool = False, catalog: bool = False) -> None:
+    """Per agent: the model, what set it, whether it can be called from here,
+    the fallback. With --ping, one real call to each distinct model, which is
+    the only way to learn that access was granted (a region and a key prove
+    nothing). With --catalog, one call to every model the Models page offers."""
+    from agents.definitions import ALL
+    from core import llm, store
+
+    llm.choose(store.model_choices())     # what the Models page saved, as api.py runs it
+    rows = llm.describe(ALL.values())
+    width = max(len(r["model"]) for r in rows)
+    def state(ok: bool, fb_ok) -> str:
+        # "fallbk": its own model cannot be called, so the fallback will answer.
+        return "ready " if ok else ("fallbk" if fb_ok else "NOT   ")
+
+    for r in rows:
+        fb = f"  fallback {r['fallback']}" if r["fallback"] else ""
+        why = f"  ({r['why']})" if r["why"] else ""
+        print(f"  {state(r['ready'], r['fallback_ready'])} {r['name']:<6} "
+              f"{r['model']:<{width}}  [{r['source']}]{fb}{why}")
+    aux = llm.aux_spec()
+    ok, why = llm.ready(aux)
+    afb = llm.fallback_for(primary=aux)
+    print(f"  {state(ok, afb and llm.ready(afb)[0])} {'aux':<6} {str(aux):<{width}}"
+          f"{f'  fallback {afb}' if afb else ''}{'' if ok else f'  ({why})'}")
+
+    if not (ping or catalog):
+        return
+    seen = []
+    for r in rows:
+        for m in (r["model"], r["fallback"]):
+            if m and m not in seen:
+                seen.append(m)
+    if str(aux) not in seen:
+        seen.append(str(aux))
+    if catalog:
+        seen = [x.spec for x in llm.CATALOG]
+    print("\n  one real call each:")
+    failed = False
+    for m in seen:
+        spec = llm.parse(m)
+        if not llm.ready(spec)[0]:
+            print(f"    skip   {m}  (not configured here)")
+            continue
+        ok, what, secs = llm.ping(spec)
+        failed |= not ok
+        print(f"    {'ok    ' if ok else 'FAILED'} {m}  {secs:.1f}s  {what}")
+    if failed:
+        sys.exit(1)
+
+
+def ready(ping: bool = False) -> None:
+    """Is this install ready to be relied on? `check` asks whether the code
+    works; this asks whether the deployment around it does. Each line is
+    something a person would otherwise find out during a disruption."""
+    from clients import channels
+    from core import llm, store
+    from core.config import CFG
+
+    llm.choose(store.model_choices())
+    blocking: list = []
+
+    def line(ok: bool, what: str, fix: str = "", block: bool = True) -> None:
+        mark = "ok    " if ok else ("TODO  " if block else "note  ")
+        print(f"  {mark} {what}")
+        if not ok and fix:
+            print(f"         → {fix}")
+        if not ok and block:
+            blocking.append(what)
+
+    print("\n  data")
+    line(CFG.sap_ready, "SAP S/4HANA is connected" if CFG.sap_ready else
+         "SAP is not connected: stock, orders and suppliers come from uploads or fixtures",
+         "SAP_API_KEY (and SAP_BASE_URL) in .env; see ENV.md, SAP")
+    if not CFG.sap_ready:
+        ups = store.list_uploads()
+        line(bool(ups), f"{len({u['entity'] for u in ups})} table(s) uploaded on the Upload data page",
+             "upload the company's CSVs, or connect SAP; until then every figure is a fixture",
+             block=False)
+    line(not CFG.may_use_modelled, f"SIGAP_ENV={CFG.env}"
+         + ("" if not CFG.may_use_modelled else ": modelled data may stand in for live data"),
+         "SIGAP_ENV=prod once SAP is connected; production refuses to decide on modelled data",
+         block=False)
+
+    print("\n  models")
+    lead = llm.spec_for_code("supervisor")
+    ok, why = llm.ready(lead)
+    line(CFG.model_ready, f"the lead can be called: {lead}" + ("" if ok else f" ({why})"),
+         "manage.py models; ENV.md, Models")
+    if ping:
+        seen = []
+        for spec in (lead, llm.spec_for_code("impact"), llm.aux_spec(), llm.fallback_for(primary=lead)):
+            if spec and str(spec) not in seen:
+                seen.append(str(spec))
+                good, said, secs = llm.ping(spec)
+                line(good, f"{spec} answered in {secs:.1f}s" if good else f"{spec}: {said}",
+                     "check access on the Models page (Test)")
+    try:
+        from clients import web_data
+        r = web_data.exchange_rate("USD")
+        live = r.value and r.value["rate"]
+    except Exception:                                                # noqa: BLE001
+        live = None
+    if live:
+        off = abs(llm.IDR_PER_USD - live) / live
+        line(off < 0.05, f"costs are priced at Rp {llm.IDR_PER_USD:,}/USD; ECB says {live:,.0f}"
+             + (f" ({off:.0%} off)" if off >= 0.05 else ""),
+             f"SIGAP_IDR_PER_USD={round(live)} in .env", block=False)
+
+    print("\n  people")
+    with store.connect() as c:
+        roles = dict(c.execute("SELECT role, COUNT(*) FROM users WHERE active=1 GROUP BY role")
+                     .fetchall())
+    line(bool(roles.get("admin") or roles.get("procurement_lead")),
+         "users: " + (", ".join(f"{n} {r}" for r, n in sorted(roles.items())) or "none"),
+         'manage.py user <email> "<Name>" procurement_lead "<password>"')
+    line(bool(roles.get("buyer")), "a buyer can approve the everyday actions",
+         'manage.py user <email> "<Name>" buyer "<password>"', block=False)
+    line(len(identity.SECRET) >= 32, "SIGAP_SECRET signs the session tokens",
+         "manage.py secret, into the service's environment")
+
+    print("\n  alerts")
+    st = channels.status()
+    ready_ch = [c for c, v in st.items() if v["ready"]]
+    line(bool(ready_ch), f"channels set up: {', '.join(ready_ch) or 'none'}",
+         "one of SMTP, Slack, Telegram or a webhook in .secrets/notify.env; see ENV.md, Alerts")
+    contacts = store.list_contacts()
+    line(bool(contacts) or bool([c for c in ready_ch if c != "email"]),
+         f"{len(contacts)} contact(s) on the Contacts page",
+         "add the people who must hear about a disruption")
+    if contacts and "email" not in ready_ch:
+        line(False, "contacts are listed but email is not set up, so they are told nothing",
+             f"set {', '.join(st['email']['missing'])}")
+    line(not CFG.web_url.startswith("http://localhost"), f"links in alerts open {CFG.web_url}",
+         "SIGAP_WEB_URL=https://<where people open SIGAP>", block=False)
+
+    print("\n  schedule")
+    on = os.environ.get("SIGAP_SCHEDULE", "1") != "0"
+    line(on, "the schedule runs (jobs.py)" if on else "nothing runs on its own (SIGAP_SCHEDULE=0)",
+         "unset SIGAP_SCHEDULE")
+    watch = os.environ.get("SIGAP_WATCH", "1") != "0"
+    line(watch, "the watchers raise events on their own" if watch else
+         "the watchers are off (SIGAP_WATCH=0): no feed raises an event by itself",
+         "unset SIGAP_WATCH (each event a watcher raises spends model credit)", block=False)
+
+    print(f"\n  {'ready' if not blocking else f'not ready: {len(blocking)} to do'}")
+    if blocking:
         sys.exit(1)
 
 
@@ -129,8 +288,8 @@ def seed() -> None:
         else:
             store.close_run(rid, "held", decision={
                 "status": "held",
-                "reason": "AWS_REGION is not set - the agent team cannot reason. "
-                          "No decision was made.",
+                "reason": "No model the lead can call (manage.py models) - the agent "
+                          "team cannot reason. No decision was made.",
             })
             if kind == "port_closure":
                 for k, autonomous, body in (
@@ -158,8 +317,7 @@ def docs() -> None:
     from agents.definitions import ALL
     from core import registry
     from core.identity import ROLE_LIMITS
-    import tools.impact, tools.demand, tools.inventory, tools.sourcing, tools.logistics  # noqa: F401
-    import tools.compliance, tools.simulation, tools.precedent, tools.execution, tools.supervisor  # noqa: F401
+    import tools  # noqa: F401  (registers every tool; a hand-kept list here dropped Vega's and Prita's)
 
     installed = registry.all_tools()
     declared = sum(len(a.tools) for a in ALL.values())
@@ -232,6 +390,10 @@ def main() -> None:
         seed()
     elif cmd == "docs":
         docs()
+    elif cmd == "models":
+        models(ping="--ping" in sys.argv[2:], catalog="--catalog" in sys.argv[2:])
+    elif cmd == "ready":
+        ready(ping="--ping" in sys.argv[2:])
     elif cmd == "secret":
         print(f'export SIGAP_SECRET="{secrets.token_hex(32)}"')
     elif cmd == "user":

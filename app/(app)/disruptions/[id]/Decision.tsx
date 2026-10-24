@@ -7,13 +7,16 @@ import { Button } from "@/components/ui/button";
 
 type Verdict = "approved" | "rejected" | "escalated";
 
-export default function Decision({ actionId, valueIdr, limitIdr }: {
+export default function Decision({ actionId, valueIdr, limitIdr, role, approvers }: {
   actionId: string; valueIdr: number; limitIdr: number;
+  /** For a message that leaves the company: the roles that may approve it. */
+  role?: string; approvers?: string[];
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<Verdict | null>(null);
   const [error, setError] = useState("");
-  const beyondAuthority = limitIdr <= 0 || valueIdr > limitIdr;
+  const notYours = !!approvers && !approvers.includes(role ?? "");
+  const beyondAuthority = limitIdr <= 0 || valueIdr > limitIdr || notYours;
 
   async function send(decision: Verdict) {
     setBusy(decision);
@@ -58,7 +61,12 @@ export default function Decision({ actionId, valueIdr, limitIdr }: {
           Reject
         </Button>
       </div>
-      {beyondAuthority && (
+      {notYours ? (
+        <p className="text-muted-foreground mt-2 text-[11px] leading-relaxed">
+          This goes outside the company, so a {approvers![0].replace("_", " ")} approves it.
+          Use Escalate.
+        </p>
+      ) : beyondAuthority && (
         <p className="text-muted-foreground mt-2 text-[11px] leading-relaxed">
           Beyond your authority{limitIdr > 0 && ` (limit Rp ${limitIdr.toLocaleString("en-US")})`}.
           Use Escalate.

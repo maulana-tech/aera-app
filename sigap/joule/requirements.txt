@@ -1,0 +1,4 @@
+# A2A SDK with HTTP server support, the version the organisers' sample uses
+a2a-sdk[http-server]==0.3.25
+# ASGI server for running the FastAPI app
+uvicorn[standard]

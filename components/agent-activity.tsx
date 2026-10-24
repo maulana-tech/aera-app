@@ -33,6 +33,20 @@ const toolLabels: Record<string, string> = {
   propose_safety_stock_change: "Proposing a safety stock adjustment",
   scan_supply_exposure: "Checking supply risks",
   get_supplier_certifications: "Checking supplier certifications",
+  rank_po_slip_risk: "Ranking purchase orders by slip risk",
+  scan_live_hazards: "Checking live hazards near ports and plants",
+  get_port_conditions: "Checking port conditions",
+  search_news: "Searching the news",
+  get_public_holidays: "Checking the holiday calendar",
+  web_brief: "Asking a web search",
+  get_exchange_rate: "Checking the exchange rate",
+  record_outcome: "Recording what actually happened",
+  get_customs_status: "Checking customs status",
+  find_substitute_materials: "Looking for substitute materials",
+  allocate_short_supply: "Deciding which customer orders to serve first",
+  get_rule_pack: "Reading the rule pack",
+  draft_customer_notice: "Drafting a customer notice",
+  request_supplier_update: "Drafting a request to the supplier",
 };
 
 const agentNames: Record<string, string> = {

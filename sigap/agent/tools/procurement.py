@@ -19,7 +19,7 @@ from typing import Dict, List, Optional
 from core.provenance import Origin, Result
 from core.registry import register
 from tools.execution import raise_action
-from tools.fetcher import profile, pull
+from tools.fetcher import as_of as _today, read
 
 #: Words that are legal form rather than identity. "PT Logam Andalan" and
 #: "PT Logam Andalan Tbk" are one company carrying two supplier codes, and every
@@ -37,11 +37,9 @@ def _identity(name: str) -> str:
 
 
 def _book() -> Result:
-    """Every purchase order line — the denominator of every share in this file."""
-    return pull(
-        "PurchaseOrder", "API_PURCHASEORDER_PROCESS_SRV", "A_PurchaseOrder",
-        {"$top": "500"},
-    )
+    """Every purchase order line — the denominator of every share in this file.
+    Delivered lines included: whether a supplier kept its dates is on them."""
+    return read("PurchaseOrder", open_only=False)
 
 
 def _slip(order: dict) -> Optional[int]:
@@ -64,7 +62,7 @@ def _slip(order: dict) -> Optional[int]:
 
 def _master() -> Dict[str, dict]:
     """Supplier id -> supplier record, so two tools cannot disagree on identity."""
-    rows = pull("Supplier", "API_BUSINESS_PARTNER", "A_Supplier", {"$top": "500"}).value or []
+    rows = read("Supplier").value or []
     return {str(s.get("Supplier")): s for s in rows}
 
 
@@ -80,7 +78,7 @@ def _master() -> Dict[str, dict]:
     [],
 )
 def get_supplier_master() -> Result:
-    suppliers = pull("Supplier", "API_BUSINESS_PARTNER", "A_Supplier", {"$top": "500"})
+    suppliers = read("Supplier")
     if not suppliers.value:
         return Result(None, suppliers.origin, suppliers.source,
                       note=suppliers.note or "no supplier master to read")
@@ -212,10 +210,7 @@ def get_supplier_performance(supplier: Optional[str] = None) -> Result:
 # "Cheapest" had no answer until this file existed.
 
 def _quotes(material: Optional[str] = None) -> Result:
-    return pull(
-        "Quotation", "API_QTN_PROCESS_SRV", "A_SupplierQuotation", {"$top": "500"},
-        keep=(lambda r: r.get("Material") == material) if material else None,
-    )
+    return read("Quotation", material=material)
 
 
 def _unit_price(q: dict) -> float:
@@ -243,11 +238,11 @@ def _as_of() -> date:
 
     An offer's validity is judged here rather than against today's calendar, so
     a fixture dated 4 September 2026 is not read as expired by whoever runs it
-    in a later month.
+    in a later month. With SAP connected it is today.
     """
     try:
-        return date.fromisoformat(str(profile().get("AsOfDate"))[:10])
-    except (TypeError, ValueError):
+        return _today()
+    except (KeyError, TypeError, ValueError):
         return date.today()
 
 
@@ -549,3 +544,18 @@ def propose_purchase_order(material: str, supplier: str, qty: float,
          "action_status": (raised.value or {}).get("status")},
         quotes.origin, quotes.source, note=note,
     )
+
+
+@register(
+    "get_exchange_rate", "procurement",
+    "The latest European Central Bank reference rate between two currencies: how many "
+    "`quote` one `base` buys, and the date the rate was set. Use it to put a supplier's "
+    "price in a foreign currency next to a rupiah one. A reference rate, not the rate a "
+    "bank deals at. The ECB publishes no VND.",
+    {"base": {"type": "string", "description": "ISO 4217 code, e.g. USD, CNY, JPY"},
+     "quote": {"type": "string", "description": "ISO 4217 code, default IDR"}},
+    ["base"],
+)
+def get_exchange_rate(base: str, quote: str = "IDR") -> Result:
+    from clients.web_data import exchange_rate
+    return exchange_rate(base, quote)

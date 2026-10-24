@@ -1,0 +1,12 @@
+{
+  "_note": "An example, not a rule pack: nothing here is verified. Copy to rule-pack.json, replace each value with the one in your contract or regulation, cite its source, and set verified only once someone has checked it there.",
+  "version": "example",
+  "rules": {
+    "tkdn_contract_floor_pct": {"value": 40.0, "source": "", "verified": false},
+    "tkdn_current_pct": {"value": 38.2, "source": "", "verified": false},
+    "lartas_new_origin_working_days": {"value": 10, "source": "", "verified": false},
+    "default_port_dwell_days": {"value": 4, "source": "", "verified": false}
+  },
+  "collective_leave": [],
+  "certificates": []
+}

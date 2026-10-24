@@ -5,9 +5,15 @@ export type Step = {
   summary: string; tools: string[]; origin: string | null; source: string | null;
   detail: Record<string, unknown>; at: string;
 };
+export type Delivery = {
+  to: string | null; status: string; why?: string; error?: string | null;
+  reference?: string | null; sent_at?: string | null; meant_for?: string | null;
+};
 export type Action = {
   id: string; kind: string; autonomous: number; status: string;
   payload: Record<string, unknown>; sap_reference: string | null; created_at: string;
+  /** Where an approved message to a supplier or a customer goes, or went. */
+  delivery?: Delivery;
 };
 export type Approval = {
   id: number; action_id: string; decided_by: string; role: string;
@@ -206,6 +212,59 @@ export type Upload = {
 };
 export type Contact = {
   id: string; name: string; role: string; email: string; notify_for: string;
+  phone?: string | null; title?: string | null; department?: string | null;
+  notes?: string | null; created_at?: string; updated_at?: string | null;
+};
+
+export type ChannelState = {
+  ready: boolean; missing: string[];
+  /** Email only: smtp or composio, the address it leaves from, and whether a
+   * Gmail mailbox can be connected from here. */
+  via?: "smtp" | "composio"; sender?: string | null; connectable?: boolean;
+};
+export type Notification = {
+  id: string; run_id: string | null; kind: string; channel: string; address: string;
+  subject: string; status: "pending" | "sent" | "failed" | "skipped"; attempts: number;
+  error: string | null; created_at: string; sent_at: string | null;
+  attachments?: { report: string; format: "pdf" | "xlsx" }[];
+  action_id?: string | null; reference?: string | null;
+};
+export type NotificationsPayload = {
+  channels: Record<"email" | "slack" | "telegram" | "webhook", ChannelState>;
+  recent: Notification[]; web_url: string; may_change: boolean;
+};
+
+export type ScheduledJob = {
+  name: string; what: string; cadence: string; signal: boolean; enabled: boolean;
+  off: string | null; running: boolean; next_at: string | null;
+  last_started: string | null; last_finished: string | null;
+  last_status: "ok" | "failed" | null; last_detail: string | null;
+  runs: number; failures: number;
+};
+export type SchedulePayload = {
+  jobs: ScheduledJob[]; enabled: boolean; watch: boolean; may_change: boolean;
+};
+
+export type ModelListing = {
+  model: string; label: string; vendor: string | null; note: string | null; via: string;
+  usd_per_mtok: [number, number]; ready: boolean; why: string | null;
+};
+export type TeamModel = {
+  agent: string; name: string; model: string; source: string; ready: boolean;
+  why: string | null; fallback: string | null; fallback_ready: boolean | null;
+};
+export type ModelTest = { ok: boolean; said: string; seconds: number; at: string; by: string };
+export type ModelsPayload = {
+  catalog: ModelListing[];
+  team: TeamModel[];
+  fallback: string | null;
+  aux: string;
+  roles: { lead: string; specialists: string; fallback: string | null; aux: string };
+  chosen: Record<string, { value: string; updated_by: string; updated_at: string }>;
+  env: { lead: string; specialists: string | null; fallback: string | null; aux: string };
+  tested: Record<string, ModelTest>;
+  may_change: boolean;
+  idr_per_usd: number;
 };
 
 export type Finding = {
@@ -247,3 +306,56 @@ export type GraphEdge = {
   dst: string;
 };
 export type ExplorationGraph = { nodes: GraphNode[]; edges: GraphEdge[] };
+
+/* ---- trace: one handling as a topology (GET /runs/{id}/trace) ---- */
+export type TraceNodeKind = "event" | "agent" | "tool" | "source" | "action";
+export type TraceNode = {
+  id: string; kind: TraceNodeKind; label: string; sub?: string;
+  calls: number; errors: number; ms: number;
+  agent?: string; tool?: string; origin?: string | null; state?: string;
+  source?: string; source_kind?: string; tasks?: number;
+  status?: string; autonomous?: boolean; cost_idr?: number | null; action_id?: string;
+  stats?: TraceStats;
+  /** agent: its role, from agents/definitions.py */
+  brief?: string | null;
+  /** event */
+  trigger?: string | null; started_at?: string | null;
+  /** action: what is being approved, and who has ruled on it */
+  title?: string | null; payload?: Record<string, unknown>; created_at?: string | null;
+  sap_reference?: string | null;
+  approvals?: { decision: string; decided_by: string; role: string; note?: string | null; at: string }[];
+};
+export type TraceEdge = {
+  id: string; from: string; to: string;
+  rel: "triggers" | "delegates" | "calls" | "reads" | "raises";
+  count: number; seqs: number[]; origin?: string | null;
+};
+export type TraceStats = {
+  model?: string; models?: string[]; rounds?: number; input_tokens?: number;
+  output_tokens?: number; idr?: number; seconds?: number;
+  by_model?: Record<string, { input: number; output: number; idr: number; calls: number }>;
+};
+export type TraceCall = {
+  seq: number; kind: "delegate" | "tool" | "finding" | "summary" | "fallback" | string;
+  at: string | null; agent: string; agent_name?: string | null;
+  node_ids: string[]; parent_seq?: number | null; thinking?: string | null;
+  task?: string; by?: string; summary?: string; tool_calls?: number | null;
+  tool?: string; arguments?: Record<string, unknown>; origin?: string | null;
+  source?: string | null; note?: string | null; fetched_at?: string | null;
+  ms?: number | null; rows?: number | null; rows_shown?: number | null;
+  error?: string | boolean | null; result?: unknown; truncated?: boolean;
+  round?: number | null; stats?: TraceStats | null;
+};
+export type Trace = {
+  run: {
+    id: string; title: string; kind: string; trigger: string; status: string; mode: string;
+    started_at: string; finished_at: string | null; error: string | null;
+    cost_idr: number | null; cost_by_model?: TraceStats["by_model"] | null;
+  };
+  totals: {
+    steps: number; tool_calls: number; errors: number; agents: number; sources: number;
+    actions: number; tool_ms: number; by_origin: Record<string, number>;
+  };
+  nodes: TraceNode[]; edges: TraceEdge[]; calls: TraceCall[];
+};
+export type RunRow = Run & { step_count: number; tool_count: number; action_count?: number };

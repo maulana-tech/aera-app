@@ -25,17 +25,28 @@ def _value(raw: str) -> str:
     return v.split(" #", 1)[0].split("\t#", 1)[0].strip()
 
 
+#: Read in this order; the first to set a key wins, and a real environment
+#: variable beats both. `.secrets/bedrock.env` holds a Bedrock API key
+#: (AWS_BEARER_TOKEN_BEDROCK) in the gitignored, mode-700 secrets folder, so a
+#: credential that is not an AWS access key still never sits in `.env`.
+#: `.secrets/notify.env` holds the alert channels' secrets (SMTP password, bot
+#: token, webhook URLs; clients/channels.py).
+_ENV_FILES = (".env", ".secrets/bedrock.env", ".secrets/notify.env")
+
+
 def _load_env() -> None:
     """Read .env when present. Convenient in dev; production uses real env vars."""
-    f = pathlib.Path(__file__).resolve().parent.parent / ".env"
-    if not f.exists():
-        return
-    for line in f.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
+    root = pathlib.Path(__file__).resolve().parent.parent
+    for name in _ENV_FILES:
+        f = root / name
+        if not f.exists():
             continue
-        k, v = line.split("=", 1)
-        os.environ.setdefault(k.strip(), _value(v))
+        for line in f.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k.strip(), _value(v))
 
 
 _load_env()
@@ -56,6 +67,11 @@ class Config:
     autonomous_limit_idr: int
     cost_cap_per_event_idr: int
     database: str
+    #: Where people open SIGAP. Every alert links to the handling it is about.
+    web_url: str = "http://localhost:3000"
+    #: The rule pack Kira rules from (sigap/references/README.md). Company
+    #: terms and certificates, so it is installed per deployment, not committed.
+    rule_pack: str = ""
 
     @property
     def production(self) -> bool:
@@ -67,7 +83,21 @@ class Config:
 
     @property
     def model_ready(self) -> bool:
-        return bool(self.aws_region)
+        """The lead's model, or its fallback, can be called from here. It used
+        to mean only "AWS_REGION is set", which stopped being the whole story
+        once a model could also live on SAP AI Core (core/llm.py)."""
+        from core import llm
+        return llm.team_ready(self)
+
+    @property
+    def autonomous_limit_text(self) -> str:
+        """The autonomy limit the way a prompt or a tool description says it."""
+        n = self.autonomous_limit_idr
+        if n and n % 1_000_000_000 == 0:
+            return f"Rp {n // 1_000_000_000:,} billion"
+        if n and n % 1_000_000 == 0:
+            return f"Rp {n // 1_000_000:,} million"
+        return f"Rp {n:,}"
 
     @property
     def may_use_modelled(self) -> bool:
@@ -89,10 +119,13 @@ def load() -> Config:
         autonomous_limit_idr=int(os.environ.get("SIGAP_AUTONOMOUS_LIMIT_IDR", "50000000")),
         cost_cap_per_event_idr=int(os.environ.get("SIGAP_COST_CAP_IDR", "500000")),
         database=os.environ.get("SIGAP_DB", "data/sigap.db"),
+        web_url=(os.environ.get("SIGAP_WEB_URL", "").strip() or "http://localhost:3000").rstrip("/"),
+        rule_pack=os.environ.get("SIGAP_RULE_PACK", "").strip()
+        or str(pathlib.Path(__file__).resolve().parents[2] / "references" / "rule-pack.json"),
     )
     if c.production:
-        missing = [n for n, v in (("SAP_API_KEY", c.sap_api_key),
-                                  ("AWS_REGION", c.aws_region)) if not v]
+        from core import llm
+        missing = (["SAP_API_KEY"] if not c.sap_api_key else []) + llm.production_gaps(c)
         if missing:
             raise InvalidConfig(
                 "SIGAP_ENV=prod but incomplete: " + ", ".join(missing) +
@@ -130,7 +163,7 @@ def fixtures_only(script: str, flag: str) -> None:
     scratch = pathlib.Path(tempfile.mkdtemp(prefix="sigap-check-")) / "check.db"
     env = {**os.environ, "SAP_API_KEY": "", "SIGAP_DB": str(scratch), flag: "1",
            "PYTHONPATH": os.environ.get("PYTHONPATH", ".")}
-    sys.exit(subprocess.call([sys.executable, script], env=env))
+    sys.exit(subprocess.call([sys.executable, script, *sys.argv[1:]], env=env))
 
 
 def bind_target(env: Mapping[str, str]) -> Tuple[str, int]:
@@ -161,6 +194,13 @@ def demo() -> None:
     assert _value("'p#ssw0rd'") == "p#ssw0rd"
     assert _value("sk-abc#123") == "sk-abc#123", "only ' #' starts a comment, not any hash"
     print("  .env values: comments stripped ✓ · quotes respected ✓ · bare # kept ✓")
+
+    from dataclasses import replace
+    said = {n: replace(CFG, autonomous_limit_idr=n).autonomous_limit_text
+            for n in (50_000_000, 20_500_000, 1_000_000_000)}
+    assert said == {50_000_000: "Rp 50 million", 20_500_000: "Rp 20,500,000",
+                    1_000_000_000: "Rp 1 billion"}, said
+    print(f"  autonomy limit {CFG.autonomous_limit_text}, from SIGAP_AUTONOMOUS_LIMIT_IDR ✓")
     print("config ok")
 
 

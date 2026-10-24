@@ -11,6 +11,8 @@ from __future__ import annotations
 import gzip
 import json
 import os
+import threading
+import time
 import urllib.parse
 import urllib.request
 from typing import Any, Dict, Optional, Tuple
@@ -23,6 +25,13 @@ from core.config import CFG
 # by luck of import order, and failed the moment anything imported this module
 # on its own.
 TIMEOUT = int(os.environ.get("SAP_TIMEOUT", "30"))
+
+#: Seconds to stop calling SAP after it says the rate quota is spent. The
+#: sandbox answers every call with the same 500 until the quota resets, and
+#: each one still counts against it, so asking again only delays the reset.
+QUOTA_COOLDOWN = int(os.environ.get("SAP_QUOTA_COOLDOWN", "300"))
+_quota = {"until": 0.0, "since": ""}
+_quota_lock = threading.Lock()
 
 
 def base_url() -> str:
@@ -71,6 +80,12 @@ def get(service: str, entity: str, params: Optional[Dict[str, Any]] = None) -> d
             "(sign in with an SAP ID, open the API page, click Show API Key)."
         )
 
+    with _quota_lock:
+        if time.monotonic() < _quota["until"]:
+            left = round(_quota["until"] - time.monotonic())
+            raise SapError(f"SAP rate quota exceeded at {_quota['since']}; not calling "
+                           f"{service}/{entity} again for {left}s")
+
     q = dict(params or {})
     q.setdefault("$format", "json")
     url = (f"{base_url()}/s4hanacloud/sap/opu/odata/sap/{service}/{entity}"
@@ -82,8 +97,12 @@ def get(service: str, entity: str, params: Optional[Dict[str, Any]] = None) -> d
         with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
             return json.loads(_body(r))
     except urllib.error.HTTPError as e:
-        raise SapError(f"HTTP {e.code} from {service}/{entity}: "
-                       f"{e.read()[:200].decode(errors='replace')}") from e
+        body = e.read()[:200].decode(errors="replace")
+        if e.code == 429 or "QuotaViolation" in body or "Rate limit" in body:
+            with _quota_lock:
+                _quota.update(until=time.monotonic() + QUOTA_COOLDOWN,
+                              since=time.strftime("%H:%M:%S"))
+        raise SapError(f"HTTP {e.code} from {service}/{entity}: {body}") from e
 
 
 def rows(response: dict) -> list:

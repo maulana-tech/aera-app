@@ -143,6 +143,50 @@ CREATE TABLE IF NOT EXISTS contacts (
   created_at TEXT NOT NULL
 );
 
+-- Which model each role runs on, as picked on the Models page (core/llm.py,
+-- choose()). Key is model.<lead|specialists|fallback|aux|agent code>. A key
+-- that is absent hands that choice back to the environment.
+CREATE TABLE IF NOT EXISTS settings (
+  key        TEXT PRIMARY KEY,
+  value      TEXT NOT NULL,
+  updated_by TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+-- Who was told what, over which channel, and whether it arrived. Written
+-- before anything is sent (an outbox), so a crash between deciding to tell
+-- someone and telling them leaves a row to retry, and dedup_key stops a
+-- retry, or a second handling of the same run, telling them twice.
+CREATE TABLE IF NOT EXISTS notifications (
+  id         TEXT PRIMARY KEY,
+  dedup_key  TEXT NOT NULL UNIQUE,
+  run_id     TEXT,
+  kind       TEXT NOT NULL,              -- handling | digest | test | report | outreach
+  channel    TEXT NOT NULL,              -- email | slack | telegram | webhook
+  address    TEXT NOT NULL,              -- an email, or the channel's name
+  subject    TEXT NOT NULL,
+  body       TEXT NOT NULL,
+  status     TEXT NOT NULL,              -- pending | sent | failed | skipped
+  attempts   INTEGER NOT NULL DEFAULT 0,
+  error      TEXT,
+  created_at TEXT NOT NULL,
+  sent_at    TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_status ON notifications(status, created_at);
+
+-- The schedule's memory. A job's next run is worked out from when it last
+-- started, so a restart does not re-run a weekly scan that ran yesterday.
+CREATE TABLE IF NOT EXISTS jobs (
+  name         TEXT PRIMARY KEY,
+  enabled      INTEGER NOT NULL DEFAULT 1,
+  last_started TEXT,
+  last_finished TEXT,
+  last_status  TEXT,                     -- ok | failed
+  last_detail  TEXT,
+  runs         INTEGER NOT NULL DEFAULT 0,
+  failures     INTEGER NOT NULL DEFAULT 0
+);
+
 -- The exploration graph. A persisted, typed DAG of one event's handling: the
 -- disruption, the lines of investigation it opened, the facts each one
 -- surfaced (every fact keeps its origin, SIGAP's house rule), the candidate
@@ -215,6 +259,21 @@ ADDED_LATER = [
     ("actions", "outcome", "TEXT"),
     ("actions", "outcome_at", "TEXT"),
     ("actions", "outcome_detail", "TEXT"),
+    # What a message carries and what it answers to. Attachments are named, as
+    # JSON ({"report": run_id | "portfolio", "format": "pdf"}), and rendered
+    # when sent, so the outbox holds no copies of reports. action_id ties an
+    # outreach message to the approved action it delivers; reference is the
+    # id the mail server gave it, the proof it went.
+    ("notifications", "attachments", "TEXT"),
+    ("notifications", "action_id", "TEXT"),
+    ("notifications", "reference", "TEXT"),
+    # Who a contact is beyond an inbox: how to reach them when an alert needs
+    # an answer now, and what they do. None of it is sent anywhere by SIGAP.
+    ("contacts", "phone", "TEXT"),
+    ("contacts", "title", "TEXT"),
+    ("contacts", "department", "TEXT"),
+    ("contacts", "notes", "TEXT"),
+    ("contacts", "updated_at", "TEXT"),
 ]
 
 
@@ -313,8 +372,15 @@ def save_step(run_id: str, s: dict) -> None:
 
 # -------------------------------------------------------------------- actions
 def record_action(run_id: str, idempotency_key: str, kind: str,
-                  autonomous: bool, payload: dict) -> Dict[str, Any]:
-    """Idempotent: the same key never produces a second action."""
+                  autonomous: bool, payload: dict,
+                  status: Optional[str] = None) -> Dict[str, Any]:
+    """Idempotent: the same key never produces a second action.
+
+    `status` is what it starts as. By default `pending`, waiting for a person,
+    or `sent` for an autonomous record that is done once written. An
+    autonomous action that still has to reach SAP starts `approved` instead
+    (tools/execution.raise_action), and only SAP taking it makes it `sent`.
+    """
     with connect() as c:
         existing = c.execute("SELECT * FROM actions WHERE idempotency_key=?",
                              (idempotency_key,)).fetchone()
@@ -326,7 +392,7 @@ def record_action(run_id: str, idempotency_key: str, kind: str,
             " status, created_at) VALUES (?,?,?,?,?,?,?,?)",
             (aid, run_id, idempotency_key, kind, int(autonomous),
              json.dumps(payload, ensure_ascii=False),
-             "sent" if autonomous else "pending", _now()),
+             status or ("sent" if autonomous else "pending"), _now()),
         )
         row = c.execute("SELECT * FROM actions WHERE id=?", (aid,)).fetchone()
         return dict(row) | {"repeated": False}
@@ -456,8 +522,11 @@ def decide_action(action_id: str, decided_by: str, role: str, decision: str,
 def list_runs(limit: int = 50) -> List[dict]:
     with connect() as c:
         rows = c.execute(
-            "SELECT r.*, e.title, e.kind, e.trigger FROM runs r"
-            " JOIN events e ON e.id = r.event_id"
+            "SELECT r.*, e.title, e.kind, e.trigger,"
+            " (SELECT count(*) FROM steps s WHERE s.run_id = r.id) AS step_count,"
+            " (SELECT count(*) FROM steps s WHERE s.run_id = r.id AND s.stage = 'TOOL') AS tool_count,"
+            " (SELECT count(*) FROM actions a WHERE a.run_id = r.id) AS action_count"
+            " FROM runs r JOIN events e ON e.id = r.event_id"
             " ORDER BY r.started_at DESC LIMIT ?", (limit,)).fetchall()
     return [dict(r) | {"decision": json.loads(r["decision"]) if r["decision"] else None}
             for r in rows]
@@ -594,18 +663,159 @@ def list_contacts() -> List[dict]:
     return [dict(r) for r in rows]
 
 
-def add_contact(name: str, role: str, email: str, notify_for: str = "*") -> dict:
+#: What a contact carries besides name, role, email and the kinds they follow.
+CONTACT_DETAILS = ("phone", "title", "department", "notes")
+
+
+def add_contact(name: str, role: str, email: str, notify_for: str = "*",
+                **details: Optional[str]) -> dict:
     cid = new_id("cnt")
+    extra = [details.get(k) or None for k in CONTACT_DETAILS]
     with connect() as c:
-        c.execute("INSERT INTO contacts (id,name,role,email,notify_for,created_at)"
-                  " VALUES (?,?,?,?,?,?)", (cid, name, role, email.lower(), notify_for, _now()))
+        c.execute("INSERT INTO contacts (id,name,role,email,notify_for,created_at,"
+                  + ",".join(CONTACT_DETAILS) + ") VALUES (?,?,?,?,?,?,"
+                  + ",".join("?" * len(CONTACT_DETAILS)) + ")",
+                  (cid, name, role, email.lower(), notify_for, _now(), *extra))
         return dict(c.execute("SELECT * FROM contacts WHERE id=?", (cid,)).fetchone())
+
+
+def get_contact(cid: str) -> Optional[dict]:
+    with connect() as c:
+        r = c.execute("SELECT * FROM contacts WHERE id=? AND active=1", (cid,)).fetchone()
+    return dict(r) if r else None
+
+
+def update_contact(cid: str, **fields: Optional[str]) -> Optional[dict]:
+    """Change what is given; an empty string clears a detail."""
+    allowed = ("name", "role", "email", "notify_for") + CONTACT_DETAILS
+    sets = {k: (v.lower() if k == "email" and v else (v or None))
+            for k, v in fields.items() if k in allowed and v is not None}
+    if sets:
+        with connect() as c:
+            c.execute("UPDATE contacts SET " + ", ".join(f"{k}=?" for k in sets)
+                      + ", updated_at=? WHERE id=? AND active=1", (*sets.values(), _now(), cid))
+    return get_contact(cid)
+
+
+def notifications_to(address: str, limit: int = 20) -> List[dict]:
+    """What was sent to one email address, newest first."""
+    with connect() as c:
+        rows = c.execute("SELECT id, run_id, kind, channel, address, subject, status, attempts,"
+                         " error, created_at, sent_at, attachments, action_id, reference"
+                         " FROM notifications WHERE channel='email' AND address=?"
+                         " ORDER BY created_at DESC LIMIT ?", (address.lower(), limit)).fetchall()
+    return [_notification(r) for r in rows]
 
 
 def delete_contact(cid: str) -> bool:
     with connect() as c:
         n = c.execute("UPDATE contacts SET active=0 WHERE id=?", (cid,)).rowcount
     return n > 0
+
+
+# ------------------------------------------------------------- model choice
+def model_choices(detail: bool = False) -> Dict[str, Any]:
+    """key → model, or key → {value, updated_by, updated_at} with detail."""
+    with connect() as c:
+        rows = c.execute("SELECT * FROM settings WHERE key LIKE 'model.%'").fetchall()
+    return {r["key"][len("model."):]: ({"value": r["value"], "updated_by": r["updated_by"],
+                                        "updated_at": r["updated_at"]} if detail else r["value"])
+            for r in rows}
+
+
+def save_model_choices(changes: Dict[str, Optional[str]], by: str) -> None:
+    """Set each key, in one transaction. None or '' clears it."""
+    with connect() as c:
+        for key, value in changes.items():
+            if value:
+                c.execute("INSERT INTO settings (key, value, updated_by, updated_at)"
+                          " VALUES (?,?,?,?) ON CONFLICT(key) DO UPDATE SET"
+                          " value=excluded.value, updated_by=excluded.updated_by,"
+                          " updated_at=excluded.updated_at", (f"model.{key}", value, by, _now()))
+            else:
+                c.execute("DELETE FROM settings WHERE key=?", (f"model.{key}",))
+
+
+# -------------------------------------------------------------- notifications
+def enqueue_notification(dedup_key: str, kind: str, channel: str, address: str,
+                         subject: str, body: str, run_id: Optional[str] = None,
+                         attachments: Optional[List[dict]] = None,
+                         action_id: Optional[str] = None) -> bool:
+    """Queue one message. False when that exact message was already queued."""
+    with connect() as c:
+        n = c.execute(
+            "INSERT OR IGNORE INTO notifications (id, dedup_key, run_id, kind, channel, address,"
+            " subject, body, status, created_at, attachments, action_id)"
+            " VALUES (?,?,?,?,?,?,?,?,'pending',?,?,?)",
+            (new_id("ntf"), dedup_key, run_id, kind, channel, address, subject, body, _now(),
+             json.dumps(attachments) if attachments else None, action_id),
+        ).rowcount
+    return n > 0
+
+
+def _notification(r: sqlite3.Row) -> dict:
+    d = dict(r)
+    if "attachments" in d:
+        d["attachments"] = json.loads(d["attachments"]) if d["attachments"] else []
+    return d
+
+
+def pending_notifications(limit: int = 50) -> List[dict]:
+    with connect() as c:
+        rows = c.execute("SELECT * FROM notifications WHERE status='pending'"
+                         " ORDER BY created_at LIMIT ?", (limit,)).fetchall()
+    return [_notification(r) for r in rows]
+
+
+def mark_notification(nid: str, status: str, error: Optional[str] = None,
+                      reference: Optional[str] = None) -> None:
+    """sent | failed | skipped, or back to pending with the error kept."""
+    with connect() as c:
+        c.execute("UPDATE notifications SET status=?, error=?, attempts=attempts+1,"
+                  " reference=COALESCE(?, reference),"
+                  " sent_at=CASE WHEN ?='sent' THEN ? ELSE sent_at END WHERE id=?",
+                  (status, error, reference, status, _now(), nid))
+
+
+def list_notifications(limit: int = 100) -> List[dict]:
+    with connect() as c:
+        rows = c.execute("SELECT id, run_id, kind, channel, address, subject, status, attempts,"
+                         " error, created_at, sent_at, attachments, action_id, reference"
+                         " FROM notifications ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
+    return [_notification(r) for r in rows]
+
+
+def notification_for_action(action_id: str) -> Optional[dict]:
+    """The outreach message that delivers an approved action, if one was queued."""
+    with connect() as c:
+        r = c.execute("SELECT * FROM notifications WHERE action_id=? ORDER BY created_at DESC"
+                      " LIMIT 1", (action_id,)).fetchone()
+    return _notification(r) if r else None
+
+
+# ----------------------------------------------------------------------- jobs
+def job_states() -> Dict[str, dict]:
+    with connect() as c:
+        return {r["name"]: dict(r) for r in c.execute("SELECT * FROM jobs").fetchall()}
+
+
+def job_started(name: str) -> None:
+    with connect() as c:
+        c.execute("INSERT INTO jobs (name, last_started) VALUES (?, ?) ON CONFLICT(name)"
+                  " DO UPDATE SET last_started=excluded.last_started", (name, _now()))
+
+
+def job_finished(name: str, ok: bool, detail: str) -> None:
+    with connect() as c:
+        c.execute("UPDATE jobs SET last_finished=?, last_status=?, last_detail=?, runs=runs+1,"
+                  " failures=failures+? WHERE name=?",
+                  (_now(), "ok" if ok else "failed", detail[:2000], 0 if ok else 1, name))
+
+
+def set_job_enabled(name: str, enabled: bool) -> None:
+    with connect() as c:
+        c.execute("INSERT INTO jobs (name, enabled) VALUES (?, ?) ON CONFLICT(name)"
+                  " DO UPDATE SET enabled=excluded.enabled", (name, int(enabled)))
 
 
 # ------------------------------------------------------------- conversations
@@ -756,6 +966,37 @@ def demo() -> None:
     assert reserved_qty("M-4471", "SBY1") == 0, "a failed run left stock held"
     assert not open_reservations("M-4471")
     print("  reservations: donor stock cannot be promised twice ✓ · freed on failure ✓")
+
+    save_model_choices({"lead": "aicore:gpt-5.4", "specialists": "deepseek.v3.2"}, "a@x")
+    save_model_choices({"specialists": "zai.glm-5", "lead": None}, "b@x")
+    assert model_choices() == {"specialists": "zai.glm-5"}, model_choices()
+    assert model_choices(detail=True)["specialists"]["updated_by"] == "b@x"
+    print("  model choice: set, replaced, cleared back to the environment ✓")
+
+    assert enqueue_notification("run:r1:done:a@x", "handling", "email", "a@x", "s", "b", "r1")
+    assert not enqueue_notification("run:r1:done:a@x", "handling", "email", "a@x", "s", "b", "r1"), \
+        "the same message is queued once, however many times it is asked for"
+    (n,) = pending_notifications()
+    mark_notification(n["id"], "sent")
+    assert not pending_notifications() and list_notifications()[0]["status"] == "sent"
+    print("  notifications: queued once ✓ · marked sent ✓")
+
+    k = add_contact("Rina", "buyer", "Rina@X", "*", phone="+62 812 0000 1111", title="Buyer, steel")
+    assert k["email"] == "rina@x" and k["phone"] == "+62 812 0000 1111" and k["notes"] is None
+    k = update_contact(k["id"], department="Procurement", phone="", notes="Mornings only")
+    assert k["department"] == "Procurement" and k["phone"] is None and k["notes"] == "Mornings only"
+    assert k["updated_at"] and update_contact(k["id"], role=None)["role"] == "buyer", "None keeps"
+    assert enqueue_notification("to:rina", "test", "email", "rina@x", "hello", "b")
+    assert [n["subject"] for n in notifications_to("Rina@x")] == ["hello"]
+    assert delete_contact(k["id"]) and get_contact(k["id"]) is None
+    print("  contacts: phone, title, department, notes kept and cleared ✓ · what was sent to them ✓")
+
+    job_started("probe")
+    job_finished("probe", False, "boom")
+    set_job_enabled("probe", False)
+    j = job_states()["probe"]
+    assert (j["runs"], j["failures"], j["last_status"], j["enabled"]) == (1, 1, "failed", 0)
+    print("  jobs: a run, a failure and a switch-off are remembered ✓")
 
     print("store ok")
 

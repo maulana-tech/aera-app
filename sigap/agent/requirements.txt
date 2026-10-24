@@ -1,3 +1,12 @@
 # The agent service runs on the standard library alone. This is only needed
-# once AWS_REGION is set and the agents talk to a real model.
-anthropic>=0.40
+# once a Bedrock model is configured (core/llm.py). SAP AI Core needs nothing:
+# clients/aicore.py is urllib.
+#
+# [bedrock] brings boto3/botocore: the AWS credential chain and SigV4 signing,
+# for Claude on Mantle and for MiniMax on Mantle's Chat Completions endpoint.
+# Without the extra, the SDK imports and every call fails on a missing signer.
+#
+# Pinned on purpose. Later SDKs send API version 2026-10-21 by default, which
+# the ARN-versioned Bedrock models (`global.anthropic...-v1:0`, what EC2 runs
+# today) reject with a 400. Move the pin only after a call against Bedrock.
+anthropic[bedrock]==0.125.0

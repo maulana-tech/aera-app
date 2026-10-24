@@ -54,7 +54,10 @@ class Transfer:
     reason: str
 
     def as_dict(self) -> dict:
-        return self.__dict__.copy()
+        # A plant that uses none has unending cover. Infinity is not JSON, and
+        # a browser refuses the whole reply over one field, so it goes out as None.
+        return {k: (None if isinstance(v, float) and v == float("inf") else v)
+                for k, v in self.__dict__.items()}
 
 
 def _cover(qty: float, daily: float) -> float:
@@ -110,6 +113,10 @@ def assess(
         reason = (f"{from_plant} falls from {d_before} to {d_after} days of cover, "
                   f"under its own {floor_days} day floor"
                   + (f", and empties on {depleted_after}" if depleted_after else ""))
+    elif d_after == float("inf"):
+        verdict = "available"
+        reason = (f"{from_plant} has no goods issues of {material} on record, so it uses "
+                  "none of what it would send")
     else:
         verdict = "available"
         reason = (f"{from_plant} keeps {d_after} days of cover, above its "

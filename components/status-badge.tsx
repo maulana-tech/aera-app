@@ -4,11 +4,14 @@ import { cn } from "@/lib/utils";
 const COLOURS: Record<string, string> = {
   done:     "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
   sent:     "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  ok:       "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
   approved: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
   running:  "border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-400",
   held:     "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400",
   pending:  "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400",
   guided:   "border-border bg-muted text-muted-foreground",
+  skipped:  "border-border bg-muted text-muted-foreground",
+  off:      "border-border bg-muted text-muted-foreground",
   failed:   "border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-400",
   rejected: "border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-400",
 };

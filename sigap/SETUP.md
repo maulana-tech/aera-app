@@ -143,6 +143,8 @@ cd sigap/agent && python3 -m pip install -r requirements.txt
 ### 2d. Set the region
 
 Put the region in `sigap/agent/.env` as `AWS_REGION`, then restart `api.py`.
+`ENV.md`, under **Models**, has the full Bedrock setup and the model split;
+`python3 manage.py models --ping` confirms each model answers.
 
 **Test.**
 
@@ -366,7 +368,7 @@ Honest list, so nothing is discovered during a demo.
 
 | | Why |
 |---|---|
-| `references/tkdn-rules.md`, `references/lartas-procedure.md` | Absent. Kira judges from parameters and labels the result `MODELLED`. Domain work, not code, and it waits on nobody |
+| Rule pack (`references/rule-pack.json`) | Not installed. Kira judges from built-in parameters and labels the result `MODELLED`. Format in `references/README.md`. Domain work, not code, and it waits on nobody |
 | Scenario eval suite | Absent. `RESEARCH-AWS-SAP.md` §6 has the four-level shape to build it against |
 | Foreign typhoon signal | BMKG covers Indonesia only, so the Ningbo trigger has no live source. `DATA-SOURCES.md` §5 |
 | AgentCore deployment | Local only so far. `AWS-PLAN.md` week 2, and deliberately not before §3 above passes |
@@ -381,6 +383,6 @@ Honest list, so nothing is discovered during a demo.
 | Every figure still reads `modelled` after setting the key | `api.py` was not restarted. `.env` is read once, at import |
 | SAP returns 401 with a key that looks right | The value picked up a trailing comment. `core/config.py` strips these now; run `PYTHONPATH=. python3 core/config.py` to confirm |
 | Buttons do nothing, the theme toggle is dead | The app was opened at an origin the dev server does not allow, so the client bundle never hydrated. Use `localhost` |
-| `ModelNotReady` | `AWS_REGION` is empty or the region does not carry Claude |
+| `ModelNotReady` | Neither the lead's model nor `SIGAP_MODEL_FALLBACK` can be called. `manage.py models` says which and why |
 | `400` from Bedrock on the first call | Usually `thinking` or `effort` in the wrong place. `TECHNICAL.md` has the four common mistakes |
 | `PromptMissing` | An agent has no file in `prompts/`. By design: a missing prompt raises rather than sending the model a placeholder |

@@ -254,7 +254,7 @@ def _finalize(event, report, board, called, cost, client_factory, run_id) -> dic
     recommendation with its trade-offs and residual risk. Fail-open — if the
     model is unavailable, hand back a labelled evidence summary (never a guess),
     the same non-lossy posture as the deadline path."""
-    from graph import SUPERVISOR, _graph_frontier
+    from graph import SUPERVISOR, _graph_frontier, _model_request
     from core import store
 
     with store.connect() as c:
@@ -270,7 +270,7 @@ def _finalize(event, report, board, called, cost, client_factory, run_id) -> dic
     try:
         cl = client_factory()
         r = cl.messages.create(
-            model=CFG.model, max_tokens=16000, system=SUPERVISOR.instructions,
+            **_model_request(SUPERVISOR), max_tokens=16000, system=SUPERVISOR.instructions,
             messages=[{"role": "user", "content":
                        "The specialists have finished. Here is the settled exploration "
                        f"graph for this event:\n\n{graph_digest}\n\nWrite the final "
@@ -287,7 +287,8 @@ def _finalize(event, report, board, called, cost, client_factory, run_id) -> dic
     with store.connect() as c:
         frontier = _graph_frontier(run_id)
     return {"status": "done", "recommendation": text, "agents_called": called,
-            "cost_idr": cost.idr, "untrusted_on_board": board.untrusted_keys(),
+            "cost_idr": cost.idr, "cost_by_model": cost.split(),
+            "untrusted_on_board": board.untrusted_keys(),
             "graph": frontier, "mode": "async"}
 
 

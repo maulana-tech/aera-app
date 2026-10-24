@@ -71,8 +71,23 @@ def all_tools() -> Dict[str, Tool]:
     return dict(_REGISTRY)
 
 
+#: Argument name → a check that returns the canonical value or raises
+#: ValueError. The tools package installs them (tools/__init__.py), because
+#: what counts as a real material id is a question about the data, not about
+#: the registry. They run on every call, from any model and from MCP alike.
+_ARGUMENT_CHECKS: Dict[str, Callable[[str], str]] = {}
+
+
+def check_argument(name: str, fn: Callable[[str], str]) -> None:
+    _ARGUMENT_CHECKS[name] = fn
+
+
 def run(name: str, arguments: Dict[str, Any]) -> Result:
-    return get(name).fn(**arguments)
+    args = dict(arguments)
+    for key, fn in _ARGUMENT_CHECKS.items():
+        if isinstance(args.get(key), str):
+            args[key] = fn(args[key])
+    return get(name).fn(**args)
 
 
 _CURRENT_RUN: ContextVar[Optional[str]] = ContextVar("sigap_run_id", default=None)
@@ -139,6 +154,25 @@ def demo() -> None:
     assert spec["input_schema"] is t.schema
 
     assert run("probe", {"material": "M-4471"}).value["material"] == "M-4471"
+
+    # An argument check runs before the tool, on a copy: it can correct a value
+    # or refuse it, and the caller's arguments are left as they were.
+    def only_known(v: str) -> str:
+        if "M-4471" not in v:
+            raise ValueError(f"no material '{v}' on record")
+        return "M-4471"
+    check_argument("material", only_known)
+    try:
+        args = {"material": "KRW1 M-4471 resin"}
+        assert run("probe", args).value["material"] == "M-4471"
+        assert args == {"material": "KRW1 M-4471 resin"}
+        try:
+            run("probe", {"material": "steel"})
+            raise AssertionError("a refused argument must not reach the tool")
+        except ValueError:
+            pass
+    finally:
+        _ARGUMENT_CHECKS.pop("material")
 
     # The run in force reaches a tool, and does not outlive its scope: an action
     # recorded after a handling has ended must not attach itself to that run.

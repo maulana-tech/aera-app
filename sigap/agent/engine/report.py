@@ -22,9 +22,12 @@ reasoning; writing it up for a human is a chore, and the cheap model does it.
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional
+import re
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Tuple
 
 from core import aux, store
+from engine import export
 
 
 def _rp(n: Optional[float]) -> str:
@@ -151,7 +154,7 @@ def build_report(run_id: str) -> Optional[Dict[str, Any]]:
 
     body = _deterministic_markdown(run)
 
-    summary = aux.generate(_SUMMARY_SYSTEM, _facts_digest(run), max_tokens=256, temperature=0.3)
+    summary = _summary(run)
     if summary:
         # Insert the summary just under the title, labelled so a reader knows a
         # model phrased it (the figures below it did not come from the model).
@@ -163,7 +166,34 @@ def build_report(run_id: str) -> Optional[Dict[str, Any]]:
         "title": run["title"],
         "markdown": body,
         "summary_by": "aux" if summary else None,
+        "summary": summary or None,
+        # What the workbook will hold, so the page can say so before the download.
+        "sheets": _sheet_list(run_sheets(run)),
     }
+
+
+def _sheet_list(sheets: List[export.Sheet]) -> List[Dict[str, Any]]:
+    return [{"name": n, "rows": len(sh.rows)}
+            for n, sh in zip(export.sheet_names([x.name for x in sheets]), sheets)]
+
+
+# The summary is the one part a model writes. It is asked for once per state of
+# the run (status and each action's status and outcome), not on every page view
+# or download. A failed call is not remembered, so the next view tries again.
+_SUMMARIES: Dict[str, str] = {}
+
+
+def _summary(run: dict) -> Optional[str]:
+    key = json.dumps([run["id"], run.get("status"), run.get("finished_at"),
+                      [(a["id"], a.get("status"), a.get("outcome")) for a in run.get("actions") or []]])
+    if key not in _SUMMARIES:
+        text = aux.generate(_SUMMARY_SYSTEM, _facts_digest(run), max_tokens=256)
+        if not text:
+            return None
+        if len(_SUMMARIES) > 256:
+            _SUMMARIES.clear()
+        _SUMMARIES[key] = text
+    return _SUMMARIES[key]
 
 
 _PORTFOLIO_SYSTEM = (
@@ -280,16 +310,460 @@ def build_portfolio() -> Dict[str, Any]:
     facts = (f"runs: {m['runs_total']} ({m['by_status']}); kinds: {m['by_kind']}; "
              f"actions raised: {m['actions_total']}, sent {m['actions_sent']}, "
              f"pending {m['actions_pending']}; predicted total {_rp(m['predicted_idr_total'])}; "
-             f"settled {m['settled_actions']}, predicted {_rp(m['settled_predicted_idr'])}, "
-             f"actual {_rp(m['settled_actual_idr'])}, delta {_rp(m['settled_delta_idr'])}; "
-             f"decisions on trusted evidence {m['decided_on_trusted']}, "
+             + (f"settled {m['settled_actions']}, predicted {_rp(m['settled_predicted_idr'])}, "
+                f"actual {_rp(m['settled_actual_idr'])}, delta {_rp(m['settled_delta_idr'])}; "
+                if m["settled_actions"] else
+                # Zeros here read as "came in on budget". There is no outcome, so say that.
+                "no action has a recorded outcome yet, so the realized cost is NOT known; "
+                "do not state or compare a realized cost; ")
+             + f"decisions on trusted evidence {m['decided_on_trusted']}, "
              f"with a caveat {m['decided_with_untrusted']}")
-    summary = aux.generate(_PORTFOLIO_SYSTEM, facts, max_tokens=256, temperature=0.3)
+    # Asked once per set of figures, like a run's summary.
+    if facts not in _SUMMARIES:
+        text = aux.generate(_PORTFOLIO_SYSTEM, facts, max_tokens=256)
+        if text:
+            _SUMMARIES[facts] = text
+    summary = _SUMMARIES.get(facts)
     if summary:
         head, _, rest = body.partition("\n\n")
         body = f"{head}\n\n## Summary\n\n{summary}\n\n{rest}"
+    sheets = portfolio_sheets(m)
+    runs, actions = _all_runs(), _all_actions()
     return {"title": "Operations report", "markdown": body,
-            "metrics": m, "summary_by": "aux" if summary else None}
+            "metrics": m, "summary_by": "aux" if summary else None,
+            "summary": summary or None,
+            "handlings": [{k: r[k] for k in ("id", "title", "kind", "status", "mode", "started_at",
+                                             "finished_at", "steps", "tools", "actions", "token_cost_idr")}
+                          for r in runs],
+            "actions": [{"id": a["id"], "run_id": a["run_id"], "title": a["title"], "kind": a["kind"],
+                         "status": a["status"], "autonomous": bool(a.get("autonomous")),
+                         "what": _payload_text(a["payload"]), "cost_idr": a["payload"].get("cost_idr"),
+                         "created_at": a.get("created_at"), "outcome": a.get("outcome")}
+                        for a in actions],
+            "sheets": _sheet_list(sheets)}
+
+
+# ===================================================== files to take away
+#
+# The same record, as a PDF to read or send and a workbook to work in. Both are
+# built from the run itself (never from the page), so a download says exactly
+# what the log says. The workbook carries every table the handling produced:
+# the actions, the steps, any table in the decision, and every row each tool
+# read, one sheet per tool.
+
+_STAGE = {"DELEGATE": "Delegation", "TOOL": "Data check", "FINDING": "Finding",
+          "SUMMARY": "Answer", "FALLBACK": "Fallback", "START": "Trigger", "DONE": "Completed"}
+WIB = timezone(timedelta(hours=7))
+
+
+def _when(t: Optional[str]) -> str:
+    """A stored UTC time, as Jakarta reads it."""
+    if not t:
+        return ""
+    try:
+        return datetime.fromisoformat(t.replace("Z", "+00:00")).astimezone(WIB).strftime("%d %b %Y %H:%M WIB")
+    except ValueError:
+        return t
+
+
+def _nicknames() -> Dict[str, str]:
+    from agents.definitions import ALL
+    return {code: a.nickname for code, a in ALL.items()}
+
+
+def slug(title: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", (title or "").lower()).strip("-")[:80] or "report"
+
+
+def _args(d: dict) -> str:
+    return ", ".join(f"{k}={v if isinstance(v, str) else json.dumps(v, default=str)}"
+                     for k, v in (d.get("arguments") or {}).items())
+
+
+def _what(s: dict) -> str:
+    """One step, in a sentence: the call it made, the task it got, what it found."""
+    d = s.get("detail") or {}
+    if s["stage"] == "TOOL":
+        name = d.get("name") or (s.get("tools") or ["?"])[0]
+        tail = f" -> error: {d['error']}" if d.get("error") else ""
+        return f"{name}({_args(d)}){tail}"
+    if s["stage"] == "DELEGATE":
+        return d.get("task") or s.get("summary") or ""
+    return d.get("full_summary") or d.get("summary") or s.get("summary") or ""
+
+
+def _excerpt(text: str) -> str:
+    """A model's markdown as one run of plain text, for a table cell."""
+    out = []
+    for line in (text or "").split("\n"):
+        line = line.strip()
+        if not line or re.match(r"^(-{3,}|\*{3,}|_{3,}|\|?\s*:?-{2,}.*)$", line):
+            continue
+        line = re.sub(r"^#+\s*|^>\s*|^[-*+]\s+|\*\*|__|`", "", line).replace("|", " ").strip()
+        if line:
+            out.append(line if line[-1] in ".:;!?" else line + ".")
+    return re.sub(r"\s+", " ", " ".join(out))
+
+
+def _payload_text(p: dict) -> str:
+    """An action's payload as a reader would say it."""
+    bits = []
+    if p.get("material"):
+        bits.append(str(p["material"]))
+    if p.get("from_plant") or p.get("to_plant"):
+        bits.append(f"{p.get('from_plant', '?')} -> {p.get('to_plant', '?')}")
+    if p.get("supplier"):
+        bits.append(f"supplier {p['supplier']}")
+    if isinstance(p.get("qty"), (int, float)):
+        bits.append(f"qty {p['qty']:,}")
+    if p.get("needed_by"):
+        bits.append(f"by {p['needed_by']}")
+    if p.get("role"):
+        bits.append(f"to {p['role']}")
+    text = " · ".join(bits)
+    for k in ("message", "rationale"):
+        if p.get(k):
+            text += (": " if text else "") + str(p[k])
+            break
+    return text
+
+
+def _rows_of(result: Any) -> List[dict]:
+    """A tool's result as table rows: a list of records as they are, one record
+    as one row, a record holding a list of records as that list (with the
+    record's own plain fields on every row). Anything else is not a table."""
+    if isinstance(result, list):
+        return [r for r in result if isinstance(r, dict)]
+    if not isinstance(result, dict) or "idempotency_key" in result:   # an action record
+        return []
+    lists = [(k, v) for k, v in result.items()
+             if isinstance(v, list) and v and all(isinstance(x, dict) for x in v)]
+    plain = {k: v for k, v in result.items() if not isinstance(v, (list, dict))}
+    if lists:
+        _, longest = max(lists, key=lambda kv: len(kv[1]))
+        return [{**plain, **row} for row in longest]
+    return [result]
+
+
+def _cell(v: Any) -> Any:
+    return v if v is None or isinstance(v, (str, int, float, bool)) else json.dumps(v, default=str, ensure_ascii=False)
+
+
+def data_tables(run: dict) -> List[Tuple[str, List[str], List[List[Any]]]]:
+    """Every row every tool read during the handling, one table per tool, each
+    row saying which step read it, with what arguments, from where."""
+    names = _nicknames()
+    by_tool: Dict[str, List[dict]] = {}
+    for s in run.get("steps") or []:
+        if s["stage"] != "TOOL":
+            continue
+        d = s.get("detail") or {}
+        rows = _rows_of(d.get("result"))
+        if not rows or d.get("error"):
+            continue
+        tool = d.get("name") or (s.get("tools") or ["?"])[0]
+        lead = {"Step": s["seq"], "Agent": names.get(s.get("agent"), s.get("agent")), "Arguments": _args(d)}
+        tail = {"Origin": d.get("origin") or s.get("origin"), "Source": d.get("source") or s.get("source")}
+        by_tool.setdefault(tool, []).extend({**lead, **r, **tail} for r in rows)
+    out = []
+    for tool, rows in by_tool.items():
+        cols: List[str] = []
+        for r in rows:
+            cols += [k for k in r if k not in cols and k not in ("Origin", "Source")]
+        cols += ["Origin", "Source"]
+        out.append((tool, cols, [[_cell(r.get(c)) for c in cols] for r in rows]))
+    return out
+
+
+def run_sheets(run: dict) -> List[export.Sheet]:
+    names = _nicknames()
+    d = run.get("decision") or {}
+    actions = run.get("actions") or []
+    steps = run.get("steps") or []
+    tools = [s for s in steps if s["stage"] == "TOOL"]
+    summary = [
+        ["Handling", run["title"]], ["Run", run["id"]], ["Kind", run["kind"]],
+        ["Trigger", run.get("trigger")], ["Status", run["status"]], ["Mode", run.get("mode")],
+        ["Started", _when(run.get("started_at"))], ["Finished", _when(run.get("finished_at"))],
+        ["Steps", len(steps)], ["Tool calls", len(tools)], ["Actions", len(actions)],
+        ["Model cost (IDR)", run.get("token_cost_idr") or 0],
+        ["Decision", d.get("recommendation") or d.get("reason") or "not recorded"],
+    ]
+    if isinstance(d.get("untrusted_on_board"), list) and d["untrusted_on_board"]:
+        summary.append(["Not yet trustworthy", ", ".join(d["untrusted_on_board"])])
+    sheets = [export.Sheet("Summary", ["Field", "Value"], summary, pairs=True)]
+
+    if actions:
+        keys: List[str] = []
+        for a in actions:
+            keys += [k for k in a["payload"] if k not in keys and not k.startswith("_")]
+        cols = ["Action ID", "Action", "Status", "Autonomous"] + keys + \
+               ["Created", "SAP reference", "Outcome", "Actual IDR"]
+        sheets.append(export.Sheet("Actions", cols, [
+            [a["id"], a["kind"], a["status"], bool(a.get("autonomous"))]
+            + [_cell(a["payload"].get(k)) for k in keys]
+            + [_when(a.get("created_at")), a.get("sap_reference"), a.get("outcome"), _actual_cost(a)]
+            for a in actions]))
+    approvals = run.get("approvals") or []
+    if approvals:
+        sheets.append(export.Sheet("Approvals", ["Action ID", "Decision", "By", "Role", "Note", "At"], [
+            [p.get("action_id"), p["decision"], p["decided_by"], p["role"], p.get("note"), _when(p["at"])]
+            for p in approvals]))
+    if steps:
+        sheets.append(export.Sheet("Steps", ["#", "At", "Stage", "Agent", "What", "Rows", "Origin", "Source"], [
+            [s["seq"], _when(s.get("at")), _STAGE.get(s["stage"], s["stage"].title()),
+             names.get(s.get("agent"), s.get("agent")), _what(s),
+             (s.get("detail") or {}).get("rows") if s["stage"] == "TOOL" else None,
+             s.get("origin") or (s.get("detail") or {}).get("origin"),
+             s.get("source") or (s.get("detail") or {}).get("source")]
+            for s in steps]))
+    for i, (heading, cols, rows) in enumerate(export.md_tables(d.get("recommendation") or ""), start=1):
+        sheets.append(export.Sheet(f"Decision - {heading or f'table {i}'}", cols, rows))
+    for tool, cols, rows in data_tables(run):
+        sheets.append(export.Sheet(tool, cols, rows))
+    return sheets
+
+
+def run_pdf(run: dict) -> bytes:
+    names = _nicknames()
+    d = run.get("decision") or {}
+    actions = run.get("actions") or []
+    steps = run.get("steps") or []
+    tools = [s for s in steps if s["stage"] == "TOOL"]
+    status = run["status"] + (" (guided)" if run.get("mode") == "guided" else "")
+
+    doc = export.Doc(run["title"], kicker="SIGAP · Disruption report", subtitle=run.get("trigger") or "",
+                     footer=f"SIGAP · {run['title']} · {run['id']}")
+    doc.facts([("Kind", run["kind"]), ("Status", status), ("Model cost", _rp(run.get("token_cost_idr") or 0)),
+               ("Started", _when(run.get("started_at"))),
+               ("Finished", _when(run.get("finished_at")) or "still running"),
+               ("Steps · tool calls", f"{len(steps)} · {len(tools)}")])
+
+    summary = _summary(run)
+    if summary:
+        doc.h2("Summary").md(summary)
+        doc.p("Phrased by the auxiliary model from the figures below; it was given no number to invent.",
+              size=7.5, muted=True)
+    doc.h2("Decision").md(d.get("recommendation") or d.get("reason") or "No decision was recorded.")
+    if isinstance(d.get("untrusted_on_board"), list) and d["untrusted_on_board"]:
+        doc.note("Not yet trustworthy: " + ", ".join(d["untrusted_on_board"]))
+
+    settled = [a for a in actions if a.get("outcome")]
+    if settled:
+        doc.h2("Outcome: realized vs predicted")
+        rows = []
+        for a in settled:
+            pred, act = a["payload"].get("cost_idr"), _actual_cost(a)
+            delta = act - pred if isinstance(pred, (int, float)) and isinstance(act, (int, float)) else None
+            rows.append([f"{a['kind']} ({a['outcome']})", _rp(pred), _rp(act), _rp(delta)])
+        doc.table(["Action", "Predicted", "Actual", "Delta"], rows, align=["l", "r", "r", "r"])
+
+    doc.h2(f"Actions ({len(actions)})")
+    if actions:
+        doc.table(["Action", "What it does", "Value", "Status", "Authority"], [
+            [a["kind"], _payload_text(a["payload"]), _rp(a["payload"].get("cost_idr")), a["status"],
+             "own authority" if a.get("autonomous") else "needs approval"] for a in actions],
+            align=["l", "l", "r", "l", "l"], widths=[1.3, 3.2, 1.2, 0.9, 1.2])
+    else:
+        doc.p("None were raised.", muted=True)
+
+    approvals = run.get("approvals") or []
+    if approvals:
+        doc.h2(f"Approvals ({len(approvals)})")
+        doc.table(["Decision", "By", "Role", "At", "Note"], [
+            [p["decision"], p["decided_by"], p["role"], _when(p["at"]), p.get("note") or ""] for p in approvals])
+
+    read = data_tables(run)
+    by_tool: Dict[str, dict] = {}
+    for s in tools:
+        dd = s.get("detail") or {}
+        name = dd.get("name") or (s.get("tools") or ["?"])[0]
+        t = by_tool.setdefault(name, {"agent": names.get(s.get("agent"), s.get("agent")), "calls": 0,
+                                      "failed": 0, "rows": 0, "origins": set(), "sources": set()})
+        t["calls"] += 1
+        t["failed"] += 1 if dd.get("error") else 0
+        t["rows"] += dd.get("rows") if isinstance(dd.get("rows"), int) else len(_rows_of(dd.get("result")))
+        if dd.get("origin") or s.get("origin"):
+            t["origins"].add(dd.get("origin") or s.get("origin"))
+        if dd.get("source") or s.get("source"):
+            t["sources"].add(dd.get("source") or s.get("source"))
+    if by_tool:
+        doc.h2("What the decision rests on")
+        doc.p("Every tool the team called, how much it read and where from. The rows themselves are in "
+              f"the Excel download, one sheet per tool ({len(read)} with rows).", size=8.5, muted=True)
+        doc.table(["Tool", "Agent", "Calls", "Rows", "Origin", "Source"], [
+            [k, v["agent"], v["calls"] - v["failed"] if not v["failed"] else f"{v['calls']} ({v['failed']} failed)",
+             v["rows"], ", ".join(sorted(v["origins"])), "; ".join(sorted(v["sources"]))]
+            for k, v in by_tool.items()],
+            align=["l", "l", "r", "r", "l", "l"], widths=[2.2, 0.9, 0.8, 0.7, 1.0, 2.6])
+
+    if steps:
+        doc.h2(f"How the system reasoned ({len(steps)} steps)")
+        rows = []
+        for s in steps:
+            what = _what(s)
+            if s["stage"] in ("FINDING", "SUMMARY"):
+                plain = _excerpt(what)
+                what = plain[:260].rstrip() + "... (in full below)" if len(plain) > 280 else plain
+            rows.append([s["seq"], _STAGE.get(s["stage"], s["stage"].title()),
+                         names.get(s.get("agent"), s.get("agent")), what,
+                         s.get("origin") or (s.get("detail") or {}).get("origin") or ""])
+        doc.table(["#", "Stage", "Agent", "What", "Origin"], rows, align=["r", "l", "l", "l", "l"],
+                  widths=[0.4, 0.9, 0.8, 5.0, 0.9], size=7.5, max_lines=8)
+
+    findings = [s for s in steps if s["stage"] in ("FINDING", "SUMMARY")
+                and ((s.get("detail") or {}).get("full_summary") or (s.get("detail") or {}).get("summary"))]
+    if findings:
+        doc.h2("Findings in full")
+        for s in findings:
+            dd = s.get("detail") or {}
+            who = names.get(s.get("agent"), s.get("agent"))
+            doc.h3(f"{who} · {_STAGE.get(s['stage'], s['stage'].title())} #{s['seq']}")
+            doc.md(dd.get("full_summary") or dd.get("summary"))
+
+    doc.rule().p("Assembled from the stored record, not re-summarised by a model, so it says exactly "
+                 f"what the log says. Generated by SIGAP on {_when(store._now())}.", size=7.5, muted=True)
+    return doc.render()
+
+
+def run_file(run_id: str, fmt: str) -> Optional[Tuple[bytes, str, str]]:
+    """(content, filename, media type) for one handling as a PDF or a workbook."""
+    run = store.get_run(run_id)
+    if not run:
+        return None
+    name = f"sigap-{slug(run['title'])}-{run_id[-6:]}"
+    if fmt == "xlsx":
+        return export.xlsx(run_sheets(run), title=run["title"]), f"{name}.xlsx", export.XLSX_MIME
+    return run_pdf(run), f"{name}.pdf", export.PDF_MIME
+
+
+def _all_runs() -> List[dict]:
+    with store.connect() as c:
+        return [dict(r) for r in c.execute(
+            "SELECT r.id, r.status, r.mode, r.started_at, r.finished_at, r.token_cost_idr, r.decision,"
+            "       e.title, e.kind, e.trigger,"
+            " (SELECT count(*) FROM steps s WHERE s.run_id = r.id) AS steps,"
+            " (SELECT count(*) FROM steps s WHERE s.run_id = r.id AND s.stage = 'TOOL') AS tools,"
+            " (SELECT count(*) FROM actions a WHERE a.run_id = r.id) AS actions"
+            " FROM runs r JOIN events e ON e.id = r.event_id ORDER BY r.started_at DESC")]
+
+
+def _all_actions() -> List[dict]:
+    with store.connect() as c:
+        rows = [dict(a) for a in c.execute(
+            "SELECT a.*, e.title FROM actions a JOIN runs r ON r.id = a.run_id"
+            " JOIN events e ON e.id = r.event_id ORDER BY a.created_at DESC")]
+    for a in rows:
+        try:
+            a["payload"] = json.loads(a["payload"]) if isinstance(a["payload"], str) else a["payload"]
+        except Exception:                 # noqa: BLE001
+            a["payload"] = {}
+    return rows
+
+
+def _decision_line(raw: Optional[str]) -> str:
+    try:
+        d = json.loads(raw) if raw else {}
+    except Exception:                     # noqa: BLE001
+        return ""
+    text = d.get("recommendation") or d.get("reason") or ""
+    for line in text.split("\n"):
+        line = re.sub(r"[#*_>`|]", "", line).strip()
+        if len(line) > 30:
+            return line[:300]
+    return text[:300]
+
+
+def portfolio_sheets(m: Optional[Dict[str, Any]] = None) -> List[export.Sheet]:
+    m = m or portfolio_metrics()
+    runs, actions = _all_runs(), _all_actions()
+    dist = lambda d: ", ".join(f"{k} {v}" for k, v in sorted(d.items(), key=lambda x: -x[1]))  # noqa: E731
+    sheets = [export.Sheet("Summary", ["Figure", "Value"], [
+        ["Handlings", m["runs_total"]], ["By status", dist(m["by_status"])], ["By kind", dist(m["by_kind"])],
+        ["Decided on fully-trusted evidence", m["decided_on_trusted"]],
+        ["Decided with a trust caveat", m["decided_with_untrusted"]],
+        ["Actions raised", m["actions_total"]], ["Actions sent", m["actions_sent"]],
+        ["Actions awaiting approval", m["actions_pending"]],
+        ["Committed value, predicted (IDR)", m["predicted_idr_total"]],
+        ["Settled actions", m["settled_actions"]],
+        ["Settled, predicted (IDR)", m["settled_predicted_idr"]],
+        ["Settled, actual (IDR)", m["settled_actual_idr"]],
+        ["Settled, delta (IDR)", m["settled_delta_idr"]],
+        ["Generated", _when(store._now())],
+    ], pairs=True)]
+    if runs:
+        sheets.append(export.Sheet("Handlings", [
+            "Run ID", "Handling", "Kind", "Status", "Mode", "Started", "Finished", "Steps", "Tool calls",
+            "Actions", "Model cost IDR", "Decision"], [
+            [r["id"], r["title"], r["kind"], r["status"], r["mode"], _when(r["started_at"]),
+             _when(r["finished_at"]), r["steps"], r["tools"], r["actions"], r["token_cost_idr"] or 0,
+             _decision_line(r["decision"])] for r in runs]))
+    if actions:
+        keys: List[str] = []
+        for a in actions:
+            keys += [k for k in a["payload"] if k not in keys and not k.startswith("_")]
+        sheets.append(export.Sheet("Actions", [
+            "Run ID", "Handling", "Action ID", "Action", "Status", "Autonomous"] + keys
+            + ["Created", "Outcome", "Actual IDR"], [
+            [a["run_id"], a["title"], a["id"], a["kind"], a["status"], bool(a.get("autonomous"))]
+            + [_cell(a["payload"].get(k)) for k in keys]
+            + [_when(a.get("created_at")), a.get("outcome"), _actual_cost(a)] for a in actions]))
+    return sheets
+
+
+def portfolio_pdf() -> bytes:
+    rep = build_portfolio()
+    m = rep["metrics"]
+    runs, actions = _all_runs(), _all_actions()
+    doc = export.Doc("Operations report", kicker="SIGAP · Every handling rolled up",
+                     subtitle="How much was handled, what it was predicted to cost and, once outcomes "
+                              "are recorded, what it actually cost.",
+                     footer="SIGAP · Operations report")
+    doc.facts([
+        ("Handlings", f"{m['runs_total']}  ({', '.join(f'{v} {k}' for k, v in m['by_status'].items())})"),
+        ("Actions raised", f"{m['actions_total']}  ({m['actions_sent']} sent, {m['actions_pending']} awaiting)"),
+        ("Committed (predicted)", _rp(m["predicted_idr_total"])),
+        ("Realized vs predicted", (("+" if m["settled_delta_idr"] > 0 else "") + _rp(m["settled_delta_idr"])
+                                   + f"  ({m['settled_actions']} settled)") if m["settled_actions"]
+         else "no outcome recorded yet"),
+        ("Decided on trusted evidence", m["decided_on_trusted"]),
+        ("Decided with a caveat", m["decided_with_untrusted"]),
+    ])
+    if rep.get("summary"):
+        doc.h2("Summary").md(rep["summary"])
+    doc.h2(f"Handlings ({len(runs)})")
+    if runs:
+        doc.table(["Handling", "Kind", "Status", "Started", "Steps", "Actions", "Model cost"], [
+            [r["title"], r["kind"], r["status"], _when(r["started_at"]), r["steps"], r["actions"],
+             _rp(r["token_cost_idr"] or 0)] for r in runs],
+            align=["l", "l", "l", "l", "r", "r", "r"], widths=[3.2, 1.3, 0.8, 1.6, 0.6, 0.7, 1.1])
+    else:
+        doc.p("No handling on record.", muted=True)
+    doc.h2(f"Actions ({len(actions)})")
+    if actions:
+        doc.table(["Handling", "Action", "What it does", "Value", "Status"], [
+            [a["title"], a["kind"], _payload_text(a["payload"]), _rp(a["payload"].get("cost_idr")), a["status"]]
+            for a in actions], align=["l", "l", "l", "r", "l"], widths=[2.2, 1.2, 3.0, 1.2, 0.9])
+    else:
+        doc.p("No action has been raised.", muted=True)
+    doc.h2("Realized vs predicted")
+    if m["settled_actions"]:
+        doc.table(["", "Predicted", "Actual", "Delta"], [[
+            f"{m['settled_actions']} settled action(s)", _rp(m["settled_predicted_idr"]),
+            _rp(m["settled_actual_idr"]), _rp(m["settled_delta_idr"])]], align=["l", "r", "r", "r"])
+    else:
+        doc.p("No action has a recorded outcome yet, so realized cost cannot be stated. The predicted "
+              "figures above stand alone.", muted=True)
+    doc.rule().p(f"Computed from the record. Generated by SIGAP on {_when(store._now())}.", size=7.5, muted=True)
+    return doc.render()
+
+
+def portfolio_file(fmt: str) -> Tuple[bytes, str, str]:
+    day = datetime.now(WIB).strftime("%Y-%m-%d")
+    if fmt == "xlsx":
+        return export.xlsx(portfolio_sheets(), title="Operations report"), \
+            f"sigap-operations-report-{day}.xlsx", export.XLSX_MIME
+    return portfolio_pdf(), f"sigap-operations-report-{day}.pdf", export.PDF_MIME
 
 
 def demo() -> None:
@@ -343,6 +817,17 @@ def demo() -> None:
     if not aux.ready():
         assert port["summary_by"] is None and "## Summary" not in port["markdown"]
 
+    # The files: a PDF that opens, a workbook whose sheets carry the action and the steps.
+    pdf, name, mime = run_file(rid, "pdf")
+    assert pdf.startswith(b"%PDF") and name.endswith(".pdf") and mime == export.PDF_MIME
+    book, name, _ = run_file(rid, "xlsx")
+    assert book[:2] == b"PK" and name.endswith(".xlsx")
+    sheets = {s["name"]: s["rows"] for s in rep["sheets"]}
+    assert sheets.get("Actions") == 1 and sheets.get("Steps") == 1, sheets
+    assert portfolio_file("pdf")[0].startswith(b"%PDF") and portfolio_file("xlsx")[0][:2] == b"PK"
+    assert _rows_of({"query": "q", "headlines": [{"t": 1}, {"t": 2}]}) == [{"query": "q", "t": 1}, {"query": "q", "t": 2}]
+    assert _rows_of({"id": "act", "idempotency_key": "k"}) == [], "an action record is not data read"
+
     with store.connect() as c:
         c.execute("DELETE FROM approvals WHERE action_id IN (SELECT id FROM actions WHERE run_id=?)", (rid,))
         c.execute("DELETE FROM actions WHERE run_id=?", (rid,))
@@ -351,7 +836,7 @@ def demo() -> None:
         c.execute("DELETE FROM events WHERE id=?", (eid,))
 
     print("report ok, figures deterministic ✓ · realized-vs-predicted ✓ "
-          "· delta computed ✓ · portfolio rollup ✓ · aux summary fail-open ✓")
+          "· delta computed ✓ · portfolio rollup ✓ · aux summary fail-open ✓ · pdf + xlsx ✓")
 
 
 if __name__ == "__main__":

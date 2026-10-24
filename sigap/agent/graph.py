@@ -11,18 +11,20 @@ import json
 import os
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from agents.definitions import ALL, SPECIALISTS, SUPERVISOR, Agent
 import tools  # noqa: F401  (registers every tool; see tools/__init__.py)
 from core import exploration as ex
-from core import registry
+from core import llm, registry
 from core.config import CFG
 from core.provenance import Result
 from engine import dispatch, planner
 
-# Reference rates for the cost cap. Bedrock has its own pricing, replace these
-# from aws.amazon.com/bedrock/pricing before going to production.
+# The rate for tokens whose model is not known, which in practice means the
+# self-checks below that set token counts by hand. Opus 5's list price at
+# 16,400 IDR/USD. Every real call is priced at its own model's rate instead,
+# from the table in core/llm.py.
 INPUT_IDR_PER_MILLION = 82_000
 OUTPUT_IDR_PER_MILLION = 410_000
 MAX_SPECIALIST_ROUNDS = 8
@@ -32,6 +34,12 @@ MAX_LEAD_ROUNDS = 14
 #: specialist inside the round budget still blocks the queue behind it, so the
 #: whole handling carries a deadline as well.
 MAX_SECONDS_PER_EVENT = 600
+
+#: Rows of one tool result a model is shown. A live tenant answers a broad
+#: question with thousands of lines (the SAP sandbox holds over 2,000 open
+#: order lines for one material), which is more than a context holds. Past
+#: this the model gets the first rows, the total, and a request to narrow.
+MODEL_ROWS = 50
 
 
 class BudgetExhausted(RuntimeError):
@@ -94,18 +102,50 @@ class Board:
 
 @dataclass
 class Cost:
+    """Tokens and rupiah for one handling.
+
+    With one model for the whole team a single rate was enough. With a model
+    per agent it is not: a million MiniMax tokens cost a fifteenth of a million
+    Opus ones. So each call is priced when it is added, at the rate of the
+    model that actually answered (the fallback's, if it was the fallback), and
+    `by_model` keeps the split, which is the figure that says whether the
+    cheaper specialists were in fact cheaper.
+    """
     input_tokens: int = 0
     output_tokens: int = 0
+    priced_idr: float = 0.0
+    priced_input: int = 0
+    priced_output: int = 0
+    by_model: Dict[str, Dict[str, float]] = field(default_factory=dict)
 
     @property
     def idr(self) -> int:
-        return round(self.input_tokens / 1e6 * INPUT_IDR_PER_MILLION
-                     + self.output_tokens / 1e6 * OUTPUT_IDR_PER_MILLION)
+        # Tokens added without a model (set by hand) are priced at the default
+        # rate: high, so a count of unknown origin can only trip the cap early.
+        unpriced_in = self.input_tokens - self.priced_input
+        unpriced_out = self.output_tokens - self.priced_output
+        return round(self.priced_idr + unpriced_in / 1e6 * INPUT_IDR_PER_MILLION
+                     + unpriced_out / 1e6 * OUTPUT_IDR_PER_MILLION)
 
     def add(self, usage) -> None:
-        self.input_tokens += getattr(usage, "input_tokens", 0) or 0
-        self.input_tokens += getattr(usage, "cache_read_input_tokens", 0) or 0
-        self.output_tokens += getattr(usage, "output_tokens", 0) or 0
+        inp = ((getattr(usage, "input_tokens", 0) or 0)
+               + (getattr(usage, "cache_read_input_tokens", 0) or 0)
+               + (getattr(usage, "cache_creation_input_tokens", 0) or 0))
+        out = getattr(usage, "output_tokens", 0) or 0
+        self.input_tokens += inp
+        self.output_tokens += out
+        spec = getattr(usage, "spec", None)
+        if spec is None:
+            return                         # a stand-in client: default rate applies
+        idr = llm.price_idr(usage)
+        self.priced_input += inp
+        self.priced_output += out
+        self.priced_idr += idr
+        m = self.by_model.setdefault(str(spec), {"input": 0, "output": 0, "idr": 0.0, "calls": 0})
+        m["input"] += inp
+        m["output"] += out
+        m["idr"] += idr
+        m["calls"] += 1
 
     def add_cost(self, other: "Cost") -> None:
         """Fold a specialist's own Cost into this one. The async dispatcher gives
@@ -113,21 +153,70 @@ class Cost:
         and sums them here, on the single dispatcher thread."""
         self.input_tokens += other.input_tokens
         self.output_tokens += other.output_tokens
+        self.priced_idr += other.priced_idr
+        self.priced_input += other.priced_input
+        self.priced_output += other.priced_output
+        for k, v in other.by_model.items():
+            m = self.by_model.setdefault(k, {"input": 0, "output": 0, "idr": 0.0, "calls": 0})
+            for f in m:
+                m[f] += v[f]
+
+    def split(self) -> Dict[str, dict]:
+        """`by_model` rounded, for a run's record."""
+        return {k: {**v, "idr": round(v["idr"])} for k, v in self.by_model.items()}
 
 
-def client():
-    if not CFG.model_ready:
+def client(agent: Optional[Agent] = None) -> llm.Router:
+    """The model client for one handling (or one conversation, for `agent`).
+
+    It routes each request to the model named in it, so one client serves an
+    Opus lead and MiniMax specialists alike (core/llm.py). Checked against the
+    agent that has to run first, the lead by default: if neither its model nor
+    the fallback can be called, nothing is started and nothing is guessed."""
+    agent = agent or SUPERVISOR
+    spec = llm.spec_for(agent)
+    if not llm.usable(spec):
+        why = llm.ready(spec)[1]
         raise ModelNotReady(
-            "AWS_REGION is not set. The agent team cannot run without model access. "
-            "Check that the region offers Claude in the Bedrock console."
+            f"{agent.title}'s model {spec} cannot be called: {why}. The agent team "
+            "cannot run without model access. ENV.md, under Models, has the setup."
         )
-    # imported here so a dev machine without the SDK can still run the rest
-    try:
-        from anthropic import AnthropicBedrock
-        return AnthropicBedrock(aws_region=CFG.aws_region)
-    except Exception:
-        from anthropic import AnthropicBedrockMantle
-        return AnthropicBedrockMantle(aws_region=CFG.aws_region)
+    return llm.Router()
+
+
+def _shown(res) -> Tuple[Any, dict]:
+    """The value a model sees, and the provenance it travels with."""
+    value, brief = res.value, res.brief()
+    if isinstance(value, list) and len(value) > MODEL_ROWS:
+        brief["rows_total"] = len(value)
+        brief["note"] = "; ".join(x for x in (
+            brief["note"], f"showing the first {MODEL_ROWS} of {len(value)} rows; ask again "
+                           "with a narrower filter (a plant, a port, a material) for the rest") if x)
+        value = value[:MODEL_ROWS]
+    return value, brief
+
+
+def _model_request(agent: Agent, **req) -> dict:
+    """The fields every model request carries, named for this agent. Thinking
+    and effort are always asked for; core/llm.py drops them for a model that
+    cannot take them, which is what the old `"haiku" in model` test did for one
+    model by name."""
+    spec = llm.spec_for(agent)
+    fb = llm.fallback_for(agent, spec)
+    return {"model": str(spec), **({"fallback": str(fb)} if fb else {}),
+            "thinking": {"type": "adaptive"}, "output_config": {"effort": agent.effort},
+            **req}
+
+
+def _note_fallback(r, agent: Agent, report: Callable[[str, dict], None],
+                   noted: List[bool]) -> None:
+    """Write it to the trail, once per loop, when another model answered."""
+    gone = getattr(r, "fell_back_from", None)
+    if gone and not noted:
+        noted.append(True)
+        report("fallback", {"agent": agent.code, "name": agent.nickname,
+                            "summary": f"{gone[0]} failed, so {getattr(r, 'model', '?')} "
+                                       f"answered instead ({gone[1]})"})
 
 
 # --------------------------------------------------------------------------- #
@@ -180,6 +269,34 @@ def _build_user_content(prompt_text: str,
     return combined_text
 
 
+def _run_tool(agent: Agent, b, board: Board, report: Callable[[str, dict], None],
+              round_no: int, thinking: str) -> dict:
+    """Run one tool call, record it on the trail, and return its tool_result.
+
+    The trail keeps the whole result, with what it needs to be traced: its
+    provenance, how long it took, which model turn asked for it. Only the
+    model's copy is cut to MODEL_ROWS."""
+    t0 = time.monotonic()
+    step = {"agent": agent.code, "name": b.name, "arguments": b.input,
+            "call_id": b.id, "round": round_no, "thinking": thinking}
+    try:
+        res = registry.run(b.name, dict(b.input))
+    except Exception as e:                                           # noqa: BLE001
+        err_msg = f"{type(e).__name__}: {e}"
+        report("tool", {**step, "error": err_msg, "ms": round((time.monotonic() - t0) * 1000)})
+        return {"type": "tool_result", "tool_use_id": b.id, "content": err_msg, "is_error": True}
+    ms = round((time.monotonic() - t0) * 1000)
+    board.write(f"{agent.code}.{b.name}", res)
+    shown, brief = _shown(res)
+    report("tool", {**step, "result": res.value, "origin": res.origin.value,
+                    "source": res.source, "note": res.note, "fetched_at": brief["fetched_at"],
+                    "rows": len(res.value) if isinstance(res.value, list) else None,
+                    "rows_shown": len(shown) if isinstance(shown, list) else None,
+                    "ms": ms})
+    return {"type": "tool_result", "tool_use_id": b.id,
+            "content": json.dumps({"value": shown, **brief}, ensure_ascii=False, default=str)}
+
+
 def _tool_loop(cl, agent: Agent, task: str, board: Board,
                cost: Cost, report: Callable[[str, dict], None],
                deadline: Optional[float] = None,
@@ -207,26 +324,41 @@ def _tool_loop(cl, agent: Agent, task: str, board: Board,
         "role": "user",
         "content": _build_user_content(prompt_text, attachments),
     }]
+    noted: List[bool] = []
+    called = 0
+    # What this loop spent, for the trace. The lead's figures include the
+    # specialists it ran, since they share its Cost.
+    began = time.monotonic()
+    spent_from = (cost.input_tokens, cost.output_tokens, cost.idr)
+    answered_by: List[str] = []
 
-    for _ in range(MAX_SPECIALIST_ROUNDS):
+    def stats(rounds: int) -> dict:
+        return {"model": answered_by[-1] if answered_by else str(llm.spec_for(agent)),
+                "models": sorted(set(answered_by)), "rounds": rounds,
+                "input_tokens": cost.input_tokens - spent_from[0],
+                "output_tokens": cost.output_tokens - spent_from[1],
+                "idr": cost.idr - spent_from[2],
+                "seconds": round(time.monotonic() - began, 1)}
+
+    for round_no in range(1, MAX_SPECIALIST_ROUNDS + 1):
         if cost.idr > CFG.cost_cap_per_event_idr:
             raise BudgetExhausted(f"over Rp {CFG.cost_cap_per_event_idr:,} per event")
         if deadline and time.monotonic() > deadline:
             raise DeadlineExceeded(
                 f"{agent.title} still working after {MAX_SECONDS_PER_EVENT}s")
 
-        req = {
-            "model": CFG.model,
-            "max_tokens": 16000 if agent.code == "supervisor" else 8000,
-            "system": agent.instructions,
-            "tools": tools,
-            "messages": messages,
-        }
-        if "haiku" not in CFG.model.lower():
-            req["thinking"] = {"type": "adaptive"}
-            req["output_config"] = {"effort": agent.effort}
+        req = _model_request(
+            agent,
+            max_tokens=16000 if agent.code == "supervisor" else 8000,
+            system=agent.instructions,
+            tools=tools,
+            messages=messages,
+        )
         r = cl.messages.create(**req)
         cost.add(r.usage)
+        answered_by.append(str(getattr(r.usage, "spec", None) or getattr(r, "model", None)
+                               or req["model"]))
+        _note_fallback(r, agent, report, noted)
         messages.append({"role": "assistant", "content": r.content})
 
         thinking_text = "\n\n".join(
@@ -246,12 +378,24 @@ def _tool_loop(cl, agent: Agent, task: str, board: Board,
                 report("summary", {"agent": "supervisor", "name": "Arya",
                                    "summary": "Formulating final mitigation recommendation",
                                    "full_summary": text,
-                                   "thinking": thinking_text})
+                                   "thinking": thinking_text,
+                                   "tool_calls": called, "stats": stats(round_no)})
             else:
                 report("specialist_done", {"agent": agent.code, "name": agent.nickname,
                                            "summary": text[:400],
                                            "full_summary": text,
-                                           "thinking": thinking_text})
+                                           "thinking": thinking_text,
+                                           "tool_calls": called,
+                                           "stats": stats(round_no)})
+                if tools and not called:
+                    # Seen on a small model: Bram wrote "here's what I'm
+                    # executing" and called nothing, and the lead reported the
+                    # transfers as done. The lead cannot tell prose from a
+                    # recorded action, so code tells it.
+                    return (f"[SIGAP: {agent.nickname} called no tool in this turn. Nothing "
+                            "below was read from a source or carried out; no action was "
+                            "recorded. Treat any figure in it, and any claim that something "
+                            f"was done, as unverified.]\n\n{text}")
             return text
 
         # every tool_result MUST go back in ONE user message
@@ -259,47 +403,30 @@ def _tool_loop(cl, agent: Agent, task: str, board: Board,
         for b in r.content:
             if b.type != "tool_use":
                 continue
+            called += 1
             if b.name.startswith("ask_") and b.name[len("ask_"):] in ALL:
                 code = b.name[len("ask_"):]
                 specialist = ALL[code]
                 task_text = b.input.get("task", "")
                 report("specialist_start", {"agent": code, "name": specialist.nickname,
-                                            "task": task_text,
+                                            "task": task_text, "call_id": b.id,
+                                            "by": agent.code, "round": round_no,
                                             "thinking": thinking_text or note_text})
                 summary = _run_specialist_isolated(cl, specialist, task_text, board,
                                                    cost, report, deadline)
                 results.append({"type": "tool_result", "tool_use_id": b.id, "content": summary})
                 continue
 
-            try:
-                res = registry.run(b.name, dict(b.input))
-                board.write(f"{agent.code}.{b.name}", res)
-                body = json.dumps({"value": res.value, **res.brief()},
-                                  ensure_ascii=False, default=str)
-                report("tool", {
-                    "agent": agent.code,
-                    "name": b.name,
-                    "arguments": b.input,
-                    "result": res.value,
-                    "origin": res.origin.value,
-                    "source": res.source,
-                    "thinking": thinking_text or note_text,
-                })
-                results.append({"type": "tool_result", "tool_use_id": b.id, "content": body})
-            except Exception as e:                                   # noqa: BLE001
-                err_msg = f"{type(e).__name__}: {e}"
-                report("tool", {
-                    "agent": agent.code,
-                    "name": b.name,
-                    "arguments": b.input,
-                    "error": err_msg,
-                    "thinking": thinking_text or note_text,
-                })
-                results.append({"type": "tool_result", "tool_use_id": b.id,
-                                "content": err_msg, "is_error": True})
+            results.append(_run_tool(agent, b, board, report, round_no,
+                                     thinking_text or note_text))
         messages.append({"role": "user", "content": results})
 
-    return f"[{agent.title} stopped: exceeded {MAX_SPECIALIST_ROUNDS} tool rounds]"
+    stopped = f"[{agent.title} stopped: exceeded {MAX_SPECIALIST_ROUNDS} tool rounds]"
+    if agent.code != "supervisor":
+        report("specialist_done", {"agent": agent.code, "name": agent.nickname,
+                                   "summary": stopped, "full_summary": stopped, "error": True,
+                                   "tool_calls": called, "stats": stats(MAX_SPECIALIST_ROUNDS)})
+    return stopped
 
 
 def _specialist_tools() -> List[dict]:
@@ -476,7 +603,7 @@ def _salvage(board: Board, called: List[str], cost: Cost, reason: str) -> dict:
         "reason": reason,
         "recommendation": "\n".join(lines),
         "agents_called": called,
-        "cost_idr": cost.idr,
+        "cost_idr": cost.idr, "cost_by_model": cost.split(),
         "trusted_on_board": trusted,
         "untrusted_on_board": untrusted,
         "graph": _graph_frontier(registry.current_run()),
@@ -527,34 +654,51 @@ def _handle_event(event: dict, report: Callable[[str, dict], None], board: Board
             "enough to decide."
         ),
     }]
+    noted: List[bool] = []
+    began = time.monotonic()
+    answered_by: List[str] = []
 
-    for _ in range(MAX_LEAD_ROUNDS):
+    for round_no in range(1, MAX_LEAD_ROUNDS + 1):
         if cost.idr > CFG.cost_cap_per_event_idr:
             raise BudgetExhausted(f"over Rp {CFG.cost_cap_per_event_idr:,}")
         if time.monotonic() > deadline:
             raise DeadlineExceeded(f"handling ran past {MAX_SECONDS_PER_EVENT}s")
 
-        lead_req = {
-            "model": CFG.model,
-            "max_tokens": 16000,
-            "system": SUPERVISOR.instructions,
-            "tools": lead_tools,
-            "messages": messages,
-        }
-        if "haiku" not in CFG.model.lower():
-            lead_req["thinking"] = {"type": "adaptive"}
-            lead_req["output_config"] = {"effort": SUPERVISOR.effort}
+        lead_req = _model_request(
+            SUPERVISOR,
+            max_tokens=16000,
+            system=SUPERVISOR.instructions,
+            tools=lead_tools,
+            messages=messages,
+        )
         r = cl.messages.create(**lead_req)
         cost.add(r.usage)
+        answered_by.append(str(getattr(r.usage, "spec", None) or getattr(r, "model", None)
+                               or lead_req["model"]))
+        _note_fallback(r, SUPERVISOR, report, noted)
         messages.append({"role": "assistant", "content": r.content})
+        thinking_text = "\n\n".join(
+            getattr(b, "thinking", "") for b in r.content
+            if getattr(b, "type", None) == "thinking" and getattr(b, "thinking", "")).strip()
 
         if r.stop_reason != "tool_use":
             text = "".join(b.text for b in r.content if b.type == "text")
+            # The whole handling's spend: the lead's turns and every specialist's.
+            report("summary", {"agent": "supervisor", "name": "Arya",
+                               "summary": "Formulating final mitigation recommendation",
+                               "full_summary": text, "thinking": thinking_text,
+                               "stats": {"model": answered_by[-1],
+                                         "models": sorted(set(answered_by)),
+                                         "rounds": round_no,
+                                         "input_tokens": cost.input_tokens,
+                                         "output_tokens": cost.output_tokens,
+                                         "idr": cost.idr, "by_model": cost.split(),
+                                         "seconds": round(time.monotonic() - began, 1)}})
             return {
                 "status": "done",
                 "recommendation": text,
                 "agents_called": called,
-                "cost_idr": cost.idr,
+                "cost_idr": cost.idr, "cost_by_model": cost.split(),
                 "untrusted_on_board": board.untrusted_keys(),
                 "graph": _graph_frontier(registry.current_run()),
             }
@@ -568,25 +712,19 @@ def _handle_event(event: dict, report: Callable[[str, dict], None], board: Board
                 specialist = ALL[code]
                 called.append(code)
                 report("specialist_start", {"agent": code, "name": specialist.nickname,
-                                            "task": b.input.get("task", "")})
+                                            "task": b.input.get("task", ""), "call_id": b.id,
+                                            "by": "supervisor", "round": round_no,
+                                            "thinking": thinking_text})
                 summary = _run_specialist_isolated(cl, specialist, b.input["task"],
                                                    board, cost, report, deadline)
                 results.append({"type": "tool_result", "tool_use_id": b.id,
                                 "content": summary})
             else:
-                try:
-                    res = registry.run(b.name, dict(b.input))
-                    board.write(f"supervisor.{b.name}", res)
-                    results.append({"type": "tool_result", "tool_use_id": b.id,
-                                    "content": json.dumps({"value": res.value, **res.brief()},
-                                                          ensure_ascii=False, default=str)})
-                except Exception as e:                               # noqa: BLE001
-                    results.append({"type": "tool_result", "tool_use_id": b.id,
-                                    "content": f"{type(e).__name__}: {e}", "is_error": True})
+                results.append(_run_tool(SUPERVISOR, b, board, report, round_no, thinking_text))
         messages.append({"role": "user", "content": results})
 
     return {"status": "stopped", "reason": f"exceeded {MAX_LEAD_ROUNDS} lead rounds",
-            "agents_called": called, "cost_idr": cost.idr,
+            "agents_called": called, "cost_idr": cost.idr, "cost_by_model": cost.split(),
             "graph": _graph_frontier(registry.current_run())}
 
 
@@ -611,7 +749,7 @@ def ask_specialist(code: str, question: str,
             report(kind, d)
 
     start_time = time.monotonic()
-    cl = client()
+    cl = client(agent)
     answer = _tool_loop(cl, agent, question, board, cost, capture,
                         history=history, attachments=attachments)
     duration_s = round(time.monotonic() - start_time, 2)
@@ -624,7 +762,7 @@ def ask_specialist(code: str, question: str,
         "board": {k: {"origin": board.origin[k], "source": board.source[k]}
                   for k in board.findings},
         "untrusted": board.untrusted_keys(),
-        "cost_idr": cost.idr,
+        "cost_idr": cost.idr, "cost_by_model": cost.split(),
         "thinking_time": duration_s,
         "trail": trail,
         "tokens": {

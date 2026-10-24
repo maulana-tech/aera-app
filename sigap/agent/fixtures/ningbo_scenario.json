@@ -596,7 +596,7 @@
       "Status": "in_transit"
     },
     {
-      "PurchaseOrder": "4500018901",
+      "PurchaseOrder": "4500019311",
       "Material": "M-7722",
       "Plant": "KRW1",
       "OrderQuantity": 2104.5,
@@ -985,169 +985,175 @@
       "Material": "M-2228",
       "FinishedGood": "FG-1120",
       "Description": "Brake caliper assembly",
-      "ComponentQuantity": 1
+      "ComponentQuantity": 0.35
     },
     {
       "Material": "M-1154",
       "FinishedGood": "FG-1120",
       "Description": "Brake caliper assembly",
-      "ComponentQuantity": 2
+      "ComponentQuantity": 2.0
     },
     {
       "Material": "M-9910",
       "FinishedGood": "FG-1120",
       "Description": "Brake caliper assembly",
-      "ComponentQuantity": 1
+      "ComponentQuantity": 0.05
     },
     {
       "Material": "M-1130",
       "FinishedGood": "FG-1120",
       "Description": "Brake caliper assembly",
-      "ComponentQuantity": 4
+      "ComponentQuantity": 4.0
     },
     {
       "Material": "M-2222",
       "FinishedGood": "FG-1145",
       "Description": "Brake disc, ventilated",
-      "ComponentQuantity": 4
+      "ComponentQuantity": 4.0
     },
     {
       "Material": "M-1136",
       "FinishedGood": "FG-1145",
       "Description": "Brake disc, ventilated",
-      "ComponentQuantity": 1
+      "ComponentQuantity": 1.0
     },
     {
       "Material": "M-5518",
       "FinishedGood": "FG-1145",
       "Description": "Brake disc, ventilated",
-      "ComponentQuantity": 2
+      "ComponentQuantity": 0.0042
     },
     {
       "Material": "M-1148",
       "FinishedGood": "FG-2040",
       "Description": "Transmission housing",
-      "ComponentQuantity": 4
+      "ComponentQuantity": 4.0
     },
     {
       "Material": "M-1178",
       "FinishedGood": "FG-2040",
       "Description": "Transmission housing",
-      "ComponentQuantity": 2
+      "ComponentQuantity": 2.0
     },
     {
       "Material": "M-1118",
       "FinishedGood": "FG-2040",
       "Description": "Transmission housing",
-      "ComponentQuantity": 6
+      "ComponentQuantity": 6.0
     },
     {
       "Material": "M-1130",
       "FinishedGood": "FG-2040",
       "Description": "Transmission housing",
-      "ComponentQuantity": 1
+      "ComponentQuantity": 1.0
     },
     {
       "Material": "M-1124",
       "FinishedGood": "FG-2040",
       "Description": "Transmission housing",
-      "ComponentQuantity": 8
+      "ComponentQuantity": 8.0
     },
     {
       "Material": "M-5512",
       "FinishedGood": "FG-2075",
       "Description": "Clutch bell housing",
-      "ComponentQuantity": 2
+      "ComponentQuantity": 0.0042
     },
     {
       "Material": "M-6648",
       "FinishedGood": "FG-2075",
       "Description": "Clutch bell housing",
-      "ComponentQuantity": 1
+      "ComponentQuantity": 1.0
     },
     {
       "Material": "M-1142",
       "FinishedGood": "FG-2075",
       "Description": "Clutch bell housing",
-      "ComponentQuantity": 1
+      "ComponentQuantity": 1.0
     },
     {
       "Material": "M-8836",
       "FinishedGood": "FG-3310",
       "Description": "Steering knuckle",
-      "ComponentQuantity": 1
+      "ComponentQuantity": 0.05
     },
     {
       "Material": "M-1196",
       "FinishedGood": "FG-3310",
       "Description": "Steering knuckle",
-      "ComponentQuantity": 8
+      "ComponentQuantity": 8.0
     },
     {
       "Material": "M-9922",
       "FinishedGood": "FG-3310",
       "Description": "Steering knuckle",
-      "ComponentQuantity": 1
+      "ComponentQuantity": 1.0
     },
     {
       "Material": "M-1142",
       "FinishedGood": "FG-3310",
       "Description": "Steering knuckle",
-      "ComponentQuantity": 1
+      "ComponentQuantity": 1.0
     },
     {
       "Material": "M-1148",
       "FinishedGood": "FG-3355",
       "Description": "Control arm, lower",
-      "ComponentQuantity": 8
+      "ComponentQuantity": 8.0
     },
     {
       "Material": "M-1160",
       "FinishedGood": "FG-3355",
       "Description": "Control arm, lower",
-      "ComponentQuantity": 2
+      "ComponentQuantity": 2.0
     },
     {
       "Material": "M-1124",
       "FinishedGood": "FG-3355",
       "Description": "Control arm, lower",
-      "ComponentQuantity": 6
+      "ComponentQuantity": 6.0
     },
     {
       "Material": "M-2222",
       "FinishedGood": "FG-4420",
       "Description": "Water pump housing",
-      "ComponentQuantity": 2
+      "ComponentQuantity": 2.0
     },
     {
       "Material": "M-9910",
       "FinishedGood": "FG-4420",
       "Description": "Water pump housing",
-      "ComponentQuantity": 2
+      "ComponentQuantity": 0.1
     },
     {
       "Material": "M-7710",
       "FinishedGood": "FG-4420",
       "Description": "Water pump housing",
-      "ComponentQuantity": 1
+      "ComponentQuantity": 1.0
     },
     {
       "Material": "M-4478",
       "FinishedGood": "FG-4480",
       "Description": "Oil pump body",
-      "ComponentQuantity": 2
+      "ComponentQuantity": 0.0042
     },
     {
       "Material": "M-1172",
       "FinishedGood": "FG-4480",
       "Description": "Oil pump body",
-      "ComponentQuantity": 1
+      "ComponentQuantity": 1.0
     },
     {
       "Material": "M-1208",
       "FinishedGood": "FG-4420",
       "Description": "Water pump housing",
-      "ComponentQuantity": 1
+      "ComponentQuantity": 1.0
+    },
+    {
+      "Material": "M-4471",
+      "FinishedGood": "FG-1120",
+      "Description": "Brake caliper assembly",
+      "ComponentQuantity": 0.0042
     }
   ],
   "SalesOrder": [
@@ -1160,7 +1166,8 @@
       "Currency": "IDR",
       "RequestedDeliveryDate": "2026-10-30",
       "LatePenaltyPctPerDay": 0.5,
-      "LatePenaltyCapPct": 10.0
+      "LatePenaltyCapPct": 10.0,
+      "Quantity": 1233
     },
     {
       "SalesOrder": "0000104468",
@@ -1171,7 +1178,8 @@
       "Currency": "IDR",
       "RequestedDeliveryDate": "2026-09-26",
       "LatePenaltyPctPerDay": 0.5,
-      "LatePenaltyCapPct": 10.0
+      "LatePenaltyCapPct": 10.0,
+      "Quantity": 1826
     },
     {
       "SalesOrder": "0000104476",
@@ -1182,7 +1190,8 @@
       "Currency": "IDR",
       "RequestedDeliveryDate": "2026-10-03",
       "LatePenaltyPctPerDay": 0.5,
-      "LatePenaltyCapPct": 10.0
+      "LatePenaltyCapPct": 10.0,
+      "Quantity": 382
     },
     {
       "SalesOrder": "0000104495",
@@ -1193,7 +1202,8 @@
       "Currency": "IDR",
       "RequestedDeliveryDate": "2026-11-03",
       "LatePenaltyPctPerDay": 0.5,
-      "LatePenaltyCapPct": 10.0
+      "LatePenaltyCapPct": 10.0,
+      "Quantity": 405
     },
     {
       "SalesOrder": "0000104502",
@@ -1204,7 +1214,8 @@
       "Currency": "IDR",
       "RequestedDeliveryDate": "2026-09-28",
       "LatePenaltyPctPerDay": 0.5,
-      "LatePenaltyCapPct": 10.0
+      "LatePenaltyCapPct": 10.0,
+      "Quantity": 421
     },
     {
       "SalesOrder": "0000104507",
@@ -1215,7 +1226,8 @@
       "Currency": "IDR",
       "RequestedDeliveryDate": "2026-10-01",
       "LatePenaltyPctPerDay": 0.5,
-      "LatePenaltyCapPct": 10.0
+      "LatePenaltyCapPct": 10.0,
+      "Quantity": 728
     },
     {
       "SalesOrder": "0000104522",
@@ -1226,7 +1238,8 @@
       "Currency": "IDR",
       "RequestedDeliveryDate": "2026-09-22",
       "LatePenaltyPctPerDay": 0.5,
-      "LatePenaltyCapPct": 10.0
+      "LatePenaltyCapPct": 10.0,
+      "Quantity": 552
     },
     {
       "SalesOrder": "0000104536",
@@ -1237,7 +1250,8 @@
       "Currency": "IDR",
       "RequestedDeliveryDate": "2026-11-18",
       "LatePenaltyPctPerDay": 0.5,
-      "LatePenaltyCapPct": 10.0
+      "LatePenaltyCapPct": 10.0,
+      "Quantity": 715
     },
     {
       "SalesOrder": "0000104541",
@@ -1248,7 +1262,8 @@
       "Currency": "IDR",
       "RequestedDeliveryDate": "2026-09-28",
       "LatePenaltyPctPerDay": 0.5,
-      "LatePenaltyCapPct": 10.0
+      "LatePenaltyCapPct": 10.0,
+      "Quantity": 135
     },
     {
       "SalesOrder": "0000104550",
@@ -1259,7 +1274,8 @@
       "Currency": "IDR",
       "RequestedDeliveryDate": "2026-10-20",
       "LatePenaltyPctPerDay": 0.5,
-      "LatePenaltyCapPct": 10.0
+      "LatePenaltyCapPct": 10.0,
+      "Quantity": 442
     },
     {
       "SalesOrder": "0000104560",
@@ -1270,7 +1286,8 @@
       "Currency": "IDR",
       "RequestedDeliveryDate": "2026-10-15",
       "LatePenaltyPctPerDay": 0.5,
-      "LatePenaltyCapPct": 10.0
+      "LatePenaltyCapPct": 10.0,
+      "Quantity": 583
     },
     {
       "SalesOrder": "0000104576",
@@ -1281,7 +1298,8 @@
       "Currency": "IDR",
       "RequestedDeliveryDate": "2026-10-25",
       "LatePenaltyPctPerDay": 0.5,
-      "LatePenaltyCapPct": 10.0
+      "LatePenaltyCapPct": 10.0,
+      "Quantity": 553
     },
     {
       "SalesOrder": "0000104579",
@@ -1292,7 +1310,8 @@
       "Currency": "IDR",
       "RequestedDeliveryDate": "2026-09-19",
       "LatePenaltyPctPerDay": 0.5,
-      "LatePenaltyCapPct": 10.0
+      "LatePenaltyCapPct": 10.0,
+      "Quantity": 1798
     },
     {
       "SalesOrder": "0000104582",
@@ -1303,7 +1322,8 @@
       "Currency": "IDR",
       "RequestedDeliveryDate": "2026-11-09",
       "LatePenaltyPctPerDay": 0.5,
-      "LatePenaltyCapPct": 10.0
+      "LatePenaltyCapPct": 10.0,
+      "Quantity": 1892
     },
     {
       "SalesOrder": "0000104592",
@@ -1314,7 +1334,8 @@
       "Currency": "IDR",
       "RequestedDeliveryDate": "2026-10-10",
       "LatePenaltyPctPerDay": 0.5,
-      "LatePenaltyCapPct": 10.0
+      "LatePenaltyCapPct": 10.0,
+      "Quantity": 2677
     },
     {
       "SalesOrder": "0000104606",
@@ -1325,7 +1346,8 @@
       "Currency": "IDR",
       "RequestedDeliveryDate": "2026-11-16",
       "LatePenaltyPctPerDay": 0.5,
-      "LatePenaltyCapPct": 10.0
+      "LatePenaltyCapPct": 10.0,
+      "Quantity": 1504
     },
     {
       "SalesOrder": "0000104622",
@@ -1336,7 +1358,8 @@
       "Currency": "IDR",
       "RequestedDeliveryDate": "2026-10-30",
       "LatePenaltyPctPerDay": 0.5,
-      "LatePenaltyCapPct": 10.0
+      "LatePenaltyCapPct": 10.0,
+      "Quantity": 742
     },
     {
       "SalesOrder": "0000104634",
@@ -1347,7 +1370,8 @@
       "Currency": "IDR",
       "RequestedDeliveryDate": "2026-10-15",
       "LatePenaltyPctPerDay": 0.5,
-      "LatePenaltyCapPct": 10.0
+      "LatePenaltyCapPct": 10.0,
+      "Quantity": 1232
     },
     {
       "SalesOrder": "0000104651",
@@ -1358,7 +1382,8 @@
       "Currency": "IDR",
       "RequestedDeliveryDate": "2026-10-14",
       "LatePenaltyPctPerDay": 0.5,
-      "LatePenaltyCapPct": 10.0
+      "LatePenaltyCapPct": 10.0,
+      "Quantity": 483
     },
     {
       "SalesOrder": "0000105990",
@@ -1369,7 +1394,8 @@
       "Currency": "IDR",
       "RequestedDeliveryDate": "2026-11-05",
       "LatePenaltyPctPerDay": 0.5,
-      "LatePenaltyCapPct": 10.0
+      "LatePenaltyCapPct": 10.0,
+      "Quantity": 344
     },
     {
       "SalesOrder": "0000104411",
@@ -1380,7 +1406,8 @@
       "Currency": "IDR",
       "RequestedDeliveryDate": "2026-09-30",
       "LatePenaltyPctPerDay": 0.5,
-      "LatePenaltyCapPct": 10.0
+      "LatePenaltyCapPct": 10.0,
+      "Quantity": 784
     },
     {
       "SalesOrder": "0000104427",
@@ -1391,7 +1418,8 @@
       "Currency": "IDR",
       "RequestedDeliveryDate": "2026-09-30",
       "LatePenaltyPctPerDay": 0.5,
-      "LatePenaltyCapPct": 10.0
+      "LatePenaltyCapPct": 10.0,
+      "Quantity": 572
     },
     {
       "SalesOrder": "0000104455",
@@ -1402,7 +1430,8 @@
       "Currency": "IDR",
       "RequestedDeliveryDate": "2026-09-30",
       "LatePenaltyPctPerDay": 0.5,
-      "LatePenaltyCapPct": 10.0
+      "LatePenaltyCapPct": 10.0,
+      "Quantity": 356
     }
   ],
   "AlternateSource": [
@@ -4152,6 +4181,554 @@
       "QuotationValidityEndDate": "2026-10-10",
       "QtnLifecycleStatus": "Open",
       "PurchasingOrganization": "1000"
+    }
+  ],
+  "CustomsDeclaration": [
+    {
+      "DeclarationNumber": "PIB-2605-0001",
+      "PurchaseOrder": "4500017428",
+      "Material": "M-4471",
+      "Supplier": "SUP-7701",
+      "OriginCountry": "KR",
+      "Port": "IDTPP",
+      "ArrivalDate": "2026-05-13",
+      "SubmittedDate": "2026-05-13",
+      "Lane": "green",
+      "Status": "released",
+      "ReleasedDate": "2026-05-14",
+      "HoldReason": null
+    },
+    {
+      "DeclarationNumber": "PIB-2605-0002",
+      "PurchaseOrder": "4500017491",
+      "Material": "M-1202",
+      "Supplier": "SUP-5501",
+      "OriginCountry": "CN",
+      "Port": "IDTPP",
+      "ArrivalDate": "2026-05-13",
+      "SubmittedDate": "2026-05-13",
+      "Lane": "yellow",
+      "Status": "released",
+      "ReleasedDate": "2026-05-16",
+      "HoldReason": null
+    },
+    {
+      "DeclarationNumber": "PIB-2605-0003",
+      "PurchaseOrder": "4500017526",
+      "Material": "M-7716",
+      "Supplier": "SUP-2209",
+      "OriginCountry": "CN",
+      "Port": "IDTPP",
+      "ArrivalDate": "2026-05-13",
+      "SubmittedDate": "2026-05-13",
+      "Lane": "green",
+      "Status": "released",
+      "ReleasedDate": "2026-05-16",
+      "HoldReason": null
+    },
+    {
+      "DeclarationNumber": "PIB-2605-0004",
+      "PurchaseOrder": "4500017421",
+      "Material": "M-8830",
+      "Supplier": "SUP-8801",
+      "OriginCountry": "TH",
+      "Port": "IDTPP",
+      "ArrivalDate": "2026-05-17",
+      "SubmittedDate": "2026-05-17",
+      "Lane": "green",
+      "Status": "released",
+      "ReleasedDate": "2026-05-20",
+      "HoldReason": null
+    },
+    {
+      "DeclarationNumber": "PIB-2605-0005",
+      "PurchaseOrder": "4500017414",
+      "Material": "M-1112",
+      "Supplier": "SUP-7701",
+      "OriginCountry": "KR",
+      "Port": "IDTPP",
+      "ArrivalDate": "2026-05-21",
+      "SubmittedDate": "2026-05-21",
+      "Lane": "green",
+      "Status": "released",
+      "ReleasedDate": "2026-05-22",
+      "HoldReason": null
+    },
+    {
+      "DeclarationNumber": "PIB-2605-0006",
+      "PurchaseOrder": "4500017484",
+      "Material": "M-2222",
+      "Supplier": "SUP-8801",
+      "OriginCountry": "TH",
+      "Port": "IDTPP",
+      "ArrivalDate": "2026-05-22",
+      "SubmittedDate": "2026-05-22",
+      "Lane": "red",
+      "Status": "released",
+      "ReleasedDate": "2026-05-31",
+      "HoldReason": null
+    },
+    {
+      "DeclarationNumber": "PIB-2605-0007",
+      "PurchaseOrder": "4500017512",
+      "Material": "M-5512",
+      "Supplier": "SUP-2209",
+      "OriginCountry": "CN",
+      "Port": "IDTPP",
+      "ArrivalDate": "2026-05-28",
+      "SubmittedDate": "2026-05-28",
+      "Lane": "green",
+      "Status": "released",
+      "ReleasedDate": "2026-05-30",
+      "HoldReason": null
+    },
+    {
+      "DeclarationNumber": "PIB-2605-0008",
+      "PurchaseOrder": "4500017568",
+      "Material": "M-1166",
+      "Supplier": "SUP-2209",
+      "OriginCountry": "CN",
+      "Port": "IDTPP",
+      "ArrivalDate": "2026-05-29",
+      "SubmittedDate": "2026-05-29",
+      "Lane": "green",
+      "Status": "released",
+      "ReleasedDate": "2026-05-30",
+      "HoldReason": null
+    },
+    {
+      "DeclarationNumber": "PIB-2605-0009",
+      "PurchaseOrder": "4500017575",
+      "Material": "M-7710",
+      "Supplier": "SUP-8815",
+      "OriginCountry": "MY",
+      "Port": "IDTPP",
+      "ArrivalDate": "2026-05-29",
+      "SubmittedDate": "2026-05-29",
+      "Lane": "green",
+      "Status": "released",
+      "ReleasedDate": "2026-06-01",
+      "HoldReason": null
+    },
+    {
+      "DeclarationNumber": "PIB-2606-0010",
+      "PurchaseOrder": "4500017540",
+      "Material": "M-6648",
+      "Supplier": "SUP-2207",
+      "OriginCountry": "CN",
+      "Port": "IDTPP",
+      "ArrivalDate": "2026-06-02",
+      "SubmittedDate": "2026-06-02",
+      "Lane": "green",
+      "Status": "released",
+      "ReleasedDate": "2026-06-03",
+      "HoldReason": null
+    },
+    {
+      "DeclarationNumber": "PIB-2606-0011",
+      "PurchaseOrder": "4500017561",
+      "Material": "M-4471",
+      "Supplier": "SUP-2207",
+      "OriginCountry": "CN",
+      "Port": "IDTPP",
+      "ArrivalDate": "2026-06-04",
+      "SubmittedDate": "2026-06-04",
+      "Lane": "green",
+      "Status": "released",
+      "ReleasedDate": "2026-06-06",
+      "HoldReason": null
+    },
+    {
+      "DeclarationNumber": "PIB-2606-0012",
+      "PurchaseOrder": "4500017470",
+      "Material": "M-1160",
+      "Supplier": "SUP-6610",
+      "OriginCountry": "JP",
+      "Port": "IDTPP",
+      "ArrivalDate": "2026-06-11",
+      "SubmittedDate": "2026-06-11",
+      "Lane": "green",
+      "Status": "released",
+      "ReleasedDate": "2026-06-14",
+      "HoldReason": null
+    },
+    {
+      "DeclarationNumber": "PIB-2606-0013",
+      "PurchaseOrder": "4500017435",
+      "Material": "M-1112",
+      "Supplier": "SUP-7701",
+      "OriginCountry": "KR",
+      "Port": "IDTPP",
+      "ArrivalDate": "2026-06-16",
+      "SubmittedDate": "2026-06-16",
+      "Lane": "red",
+      "Status": "released",
+      "ReleasedDate": "2026-06-23",
+      "HoldReason": null
+    },
+    {
+      "DeclarationNumber": "PIB-2606-0014",
+      "PurchaseOrder": "4500017533",
+      "Material": "M-1142",
+      "Supplier": "SUP-6622",
+      "OriginCountry": "JP",
+      "Port": "IDTPP",
+      "ArrivalDate": "2026-06-24",
+      "SubmittedDate": "2026-06-24",
+      "Lane": "green",
+      "Status": "released",
+      "ReleasedDate": "2026-06-25",
+      "HoldReason": null
+    },
+    {
+      "DeclarationNumber": "PIB-2606-0015",
+      "PurchaseOrder": "4500017442",
+      "Material": "M-1184",
+      "Supplier": "SUP-8815",
+      "OriginCountry": "MY",
+      "Port": "IDTPP",
+      "ArrivalDate": "2026-06-26",
+      "SubmittedDate": "2026-06-26",
+      "Lane": "green",
+      "Status": "released",
+      "ReleasedDate": "2026-06-28",
+      "HoldReason": null
+    },
+    {
+      "DeclarationNumber": "PIB-2606-0016",
+      "PurchaseOrder": "4500017407",
+      "Material": "M-1160",
+      "Supplier": "SUP-6610",
+      "OriginCountry": "JP",
+      "Port": "IDTPP",
+      "ArrivalDate": "2026-06-28",
+      "SubmittedDate": "2026-06-28",
+      "Lane": "yellow",
+      "Status": "released",
+      "ReleasedDate": "2026-07-04",
+      "HoldReason": null
+    },
+    {
+      "DeclarationNumber": "PIB-2606-0017",
+      "PurchaseOrder": "4500017519",
+      "Material": "M-4471",
+      "Supplier": "SUP-2207",
+      "OriginCountry": "CN",
+      "Port": "IDTPP",
+      "ArrivalDate": "2026-06-30",
+      "SubmittedDate": "2026-06-30",
+      "Lane": "green",
+      "Status": "released",
+      "ReleasedDate": "2026-07-03",
+      "HoldReason": null
+    },
+    {
+      "DeclarationNumber": "PIB-2607-0018",
+      "PurchaseOrder": "4500017477",
+      "Material": "M-7710",
+      "Supplier": "SUP-8815",
+      "OriginCountry": "MY",
+      "Port": "IDTPP",
+      "ArrivalDate": "2026-07-04",
+      "SubmittedDate": "2026-07-04",
+      "Lane": "red",
+      "Status": "released",
+      "ReleasedDate": "2026-07-13",
+      "HoldReason": null
+    },
+    {
+      "DeclarationNumber": "PIB-2607-0019",
+      "PurchaseOrder": "4500017449",
+      "Material": "M-1184",
+      "Supplier": "SUP-8815",
+      "OriginCountry": "MY",
+      "Port": "IDTPP",
+      "ArrivalDate": "2026-07-12",
+      "SubmittedDate": "2026-07-12",
+      "Lane": "green",
+      "Status": "released",
+      "ReleasedDate": "2026-07-14",
+      "HoldReason": null
+    },
+    {
+      "DeclarationNumber": "PIB-2607-0020",
+      "PurchaseOrder": "4500017400",
+      "Material": "M-1184",
+      "Supplier": "SUP-8815",
+      "OriginCountry": "MY",
+      "Port": "IDTPP",
+      "ArrivalDate": "2026-07-22",
+      "SubmittedDate": "2026-07-22",
+      "Lane": "green",
+      "Status": "released",
+      "ReleasedDate": "2026-07-23",
+      "HoldReason": null
+    },
+    {
+      "DeclarationNumber": "PIB-2607-0021",
+      "PurchaseOrder": "4500017554",
+      "Material": "M-7710",
+      "Supplier": "SUP-6610",
+      "OriginCountry": "JP",
+      "Port": "IDTPP",
+      "ArrivalDate": "2026-07-23",
+      "SubmittedDate": "2026-07-23",
+      "Lane": "green",
+      "Status": "released",
+      "ReleasedDate": "2026-07-24",
+      "HoldReason": null
+    },
+    {
+      "DeclarationNumber": "PIB-2607-0022",
+      "PurchaseOrder": "4500017463",
+      "Material": "M-1124",
+      "Supplier": "SUP-5501",
+      "OriginCountry": "CN",
+      "Port": "IDTPP",
+      "ArrivalDate": "2026-07-27",
+      "SubmittedDate": "2026-07-27",
+      "Lane": "mita",
+      "Status": "released",
+      "ReleasedDate": "2026-07-28",
+      "HoldReason": null
+    },
+    {
+      "DeclarationNumber": "PIB-2607-0023",
+      "PurchaseOrder": "4500017505",
+      "Material": "M-1148",
+      "Supplier": "SUP-8801",
+      "OriginCountry": "TH",
+      "Port": "IDTPP",
+      "ArrivalDate": "2026-07-27",
+      "SubmittedDate": "2026-07-27",
+      "Lane": "green",
+      "Status": "released",
+      "ReleasedDate": "2026-07-28",
+      "HoldReason": null
+    },
+    {
+      "DeclarationNumber": "PIB-2607-0024",
+      "PurchaseOrder": "4500017547",
+      "Material": "M-9910",
+      "Supplier": "SUP-2201",
+      "OriginCountry": "CN",
+      "Port": "IDTPP",
+      "ArrivalDate": "2026-07-30",
+      "SubmittedDate": "2026-07-30",
+      "Lane": "mita",
+      "Status": "released",
+      "ReleasedDate": "2026-07-31",
+      "HoldReason": null
+    },
+    {
+      "DeclarationNumber": "PIB-2608-0025",
+      "PurchaseOrder": "4500017456",
+      "Material": "M-1184",
+      "Supplier": "SUP-8815",
+      "OriginCountry": "MY",
+      "Port": "IDTPP",
+      "ArrivalDate": "2026-08-08",
+      "SubmittedDate": "2026-08-08",
+      "Lane": "green",
+      "Status": "released",
+      "ReleasedDate": "2026-08-10",
+      "HoldReason": null
+    },
+    {
+      "DeclarationNumber": "PIB-2608-0026",
+      "PurchaseOrder": "4500017498",
+      "Material": "M-9916",
+      "Supplier": "SUP-8815",
+      "OriginCountry": "MY",
+      "Port": "IDTPP",
+      "ArrivalDate": "2026-08-09",
+      "SubmittedDate": "2026-08-09",
+      "Lane": "yellow",
+      "Status": "released",
+      "ReleasedDate": "2026-08-14",
+      "HoldReason": null
+    },
+    {
+      "DeclarationNumber": "PIB-2609-0027",
+      "PurchaseOrder": "4500018876",
+      "Material": "M-5512",
+      "Supplier": "SUP-2209",
+      "OriginCountry": "CN",
+      "Port": "IDTPP",
+      "ArrivalDate": "2026-09-01",
+      "SubmittedDate": "2026-09-01",
+      "Lane": "red",
+      "Status": "held",
+      "ReleasedDate": null,
+      "HoldReason": "certificate of origin disputed; the preferential tariff claim is under verification"
+    },
+    {
+      "DeclarationNumber": "PIB-2609-0028",
+      "PurchaseOrder": "4500018915",
+      "Material": "M-2216",
+      "Supplier": "SUP-3402",
+      "OriginCountry": "VN",
+      "Port": "IDTPP",
+      "ArrivalDate": "2026-09-03",
+      "SubmittedDate": "2026-09-03",
+      "Lane": "yellow",
+      "Status": "inspection",
+      "ReleasedDate": null,
+      "HoldReason": "document check"
+    }
+  ],
+  "MaterialSubstitute": [
+    {
+      "Material": "M-5518",
+      "Substitute": "M-5512",
+      "FinishedGood": "FG-1145",
+      "Ratio": 1.0,
+      "Approved": true,
+      "QualificationDays": 0,
+      "Basis": "approved upgrade: SCM440 meets the S45C drawing for the disc hub (ECN-2025-118)"
+    },
+    {
+      "Material": "M-4471",
+      "Substitute": "M-4472",
+      "FinishedGood": "FG-1120",
+      "Ratio": 1.0,
+      "Approved": false,
+      "QualificationDays": 21,
+      "Basis": "casting trial passed; the OEM has not approved A356 for this caliper (part approval resubmission pending)"
+    }
+  ],
+  "PartnerContact": [
+    {
+      "Partner": "SUP-2201",
+      "PartnerName": "Ningbo Yongtai Metals",
+      "Role": "supplier",
+      "Email": "sales@sup-2201.example"
+    },
+    {
+      "Partner": "SUP-2207",
+      "PartnerName": "Hangzhou Sealtech",
+      "Role": "supplier",
+      "Email": "sales@sup-2207.example"
+    },
+    {
+      "Partner": "SUP-2209",
+      "PartnerName": "Qingdao Baowu Steel",
+      "Role": "supplier",
+      "Email": "sales@sup-2209.example"
+    },
+    {
+      "Partner": "SUP-2244",
+      "PartnerName": "Suzhou Precision Casting",
+      "Role": "supplier",
+      "Email": "sales@sup-2244.example"
+    },
+    {
+      "Partner": "SUP-3390",
+      "PartnerName": "Hai Phong Alloy",
+      "Role": "supplier",
+      "Email": "sales@sup-3390.example"
+    },
+    {
+      "Partner": "SUP-3402",
+      "PartnerName": "Dong Nai Rubberworks",
+      "Role": "supplier",
+      "Email": "sales@sup-3402.example"
+    },
+    {
+      "Partner": "SUP-4417",
+      "PartnerName": "PT Logam Andalan",
+      "Role": "supplier",
+      "Email": "sales@sup-4417.example"
+    },
+    {
+      "Partner": "SUP-4418",
+      "PartnerName": "PT Cipta Baja Nusantara",
+      "Role": "supplier",
+      "Email": "sales@sup-4418.example"
+    },
+    {
+      "Partner": "SUP-4423",
+      "PartnerName": "PT Karet Prima Sejahtera",
+      "Role": "supplier",
+      "Email": "sales@sup-4423.example"
+    },
+    {
+      "Partner": "SUP-4431",
+      "PartnerName": "PT Sinar Tempa Presisi",
+      "Role": "supplier",
+      "Email": "sales@sup-4431.example"
+    },
+    {
+      "Partner": "SUP-4455",
+      "PartnerName": "PT Anugerah Kawat Tembaga",
+      "Role": "supplier",
+      "Email": "sales@sup-4455.example"
+    },
+    {
+      "Partner": "SUP-5501",
+      "PartnerName": "Guangzhou Lowcost Alloy",
+      "Role": "supplier",
+      "Email": "sales@sup-5501.example"
+    },
+    {
+      "Partner": "SUP-6610",
+      "PartnerName": "Yokohama Fineblank",
+      "Role": "supplier",
+      "Email": "sales@sup-6610.example"
+    },
+    {
+      "Partner": "SUP-6622",
+      "PartnerName": "Nagoya Heat Treat",
+      "Role": "supplier",
+      "Email": "sales@sup-6622.example"
+    },
+    {
+      "Partner": "SUP-7701",
+      "PartnerName": "Busan Forging",
+      "Role": "supplier",
+      "Email": "sales@sup-7701.example"
+    },
+    {
+      "Partner": "SUP-8801",
+      "PartnerName": "Rayong Polymer",
+      "Role": "supplier",
+      "Email": "sales@sup-8801.example"
+    },
+    {
+      "Partner": "SUP-8815",
+      "PartnerName": "Port Klang Fasteners",
+      "Role": "supplier",
+      "Email": "sales@sup-8815.example"
+    },
+    {
+      "Partner": "SUP-4417B",
+      "PartnerName": "PT Logam Andalan Tbk",
+      "Role": "supplier",
+      "Email": "sales@sup-4417b.example"
+    },
+    {
+      "Partner": "CUS-1001",
+      "PartnerName": "Anantara Motor Manufacturing",
+      "Role": "customer",
+      "Email": "purchasing@cus-1001.example"
+    },
+    {
+      "Partner": "CUS-1002",
+      "PartnerName": "Nusa Otomotif Industri",
+      "Role": "customer",
+      "Email": "purchasing@cus-1002.example"
+    },
+    {
+      "Partner": "CUS-1003",
+      "PartnerName": "Pratama Kendaraan Niaga",
+      "Role": "customer",
+      "Email": "purchasing@cus-1003.example"
+    },
+    {
+      "Partner": "CUS-1004",
+      "PartnerName": "Wijaya Auto Components",
+      "Role": "customer",
+      "Email": "purchasing@cus-1004.example"
     }
   ],
   "Profile": {

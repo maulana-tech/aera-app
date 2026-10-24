@@ -55,6 +55,8 @@ const SETTINGS: NavItem[] = [
     children: [
       { title: "Upload data", href: "/uploads" },
       { title: "Contacts", href: "/contacts" },
+      { title: "Models", href: "/models" },
+      { title: "Schedule", href: "/schedule" },
     ],
   },
 ];

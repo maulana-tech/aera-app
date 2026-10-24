@@ -21,8 +21,15 @@ Two rules carried straight from SmartX's hard-won experience:
     `max_tokens` is set by each caller to what that one output needs, not a
     global default inflated for the worst case.
 
-No `thinking`/effort config is sent — the aux model is meant to be quick. Any
-leaked chain-of-thought is stripped before the text is returned.
+The aux model is meant to be quick, so it is asked not to think, where the
+model allows that to be asked (Haiku 5.5 does; core/llm.py knows which do).
+Without it Haiku 5.5 thinks by default and can spend a 120-token budget before
+writing a word. Any leaked chain-of-thought is stripped before the text is
+returned.
+
+No `temperature` is sent. Haiku 5.5 refuses a non-default value with a 400,
+and because this helper is fail-open, that refusal used to turn every summary
+into a silent None.
 """
 from __future__ import annotations
 
@@ -30,23 +37,17 @@ import re
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from typing import Optional
 
-from core.config import CFG
+from core import llm
 
 
 def ready() -> bool:
-    """The aux model needs the same Bedrock access as the agents."""
-    return CFG.model_ready
-
-
-def _client():
-    # Built here, not imported from graph, because core must not depend on graph
-    # (graph depends on core). It is the same small builder graph.client() uses.
-    from anthropic import AnthropicBedrock
+    """The aux model (SIGAP_AUX_MODEL), or SIGAP_MODEL_FALLBACK, can be called
+    from here. It is its own model, so it can be ready when the agents' is not,
+    and the other way round."""
     try:
-        return AnthropicBedrock(aws_region=CFG.aws_region)
-    except Exception:                     # noqa: BLE001
-        from anthropic import AnthropicBedrockMantle
-        return AnthropicBedrockMantle(aws_region=CFG.aws_region)
+        return llm.usable(llm.aux_spec())
+    except ValueError:                    # a malformed SIGAP_AUX_MODEL
+        return False
 
 
 _THINK = re.compile(r"<think>[\s\S]*?</think>", re.I)
@@ -65,7 +66,6 @@ def strip_reasoning(text: str) -> str:
 
 def generate(system: str, user: str, *,
              max_tokens: int = 512,
-             temperature: float = 0.2,
              timeout_s: float = 30.0) -> Optional[str]:
     """One-shot aux generation. Returns the trimmed text, or None on any
     failure (model not ready, timeout, transport error). Never raises — the
@@ -74,11 +74,13 @@ def generate(system: str, user: str, *,
         return None
 
     def _call() -> Optional[str]:
-        cl = _client()
-        r = cl.messages.create(
-            model=CFG.aux_model,
+        spec = llm.aux_spec()
+        fb = llm.fallback_for(primary=spec)
+        r = llm.Router().create(
+            model=spec,
+            **({"fallback": fb} if fb else {}),
             max_tokens=max_tokens,
-            temperature=temperature,
+            thinking={"type": "disabled"},
             system=system,
             messages=[{"role": "user", "content": user}],
         )
@@ -105,13 +107,12 @@ def demo() -> None:
 
     # Fail-open: with no model configured, aux returns None rather than raising,
     # so a caller (engine/report.py) falls back to its deterministic output.
-    import os
-    if not CFG.model_ready:
+    if not ready():
         assert ready() is False
         assert generate("sys", "write something", max_tokens=32) is None, \
             "aux must fail-open to None when the model is not ready"
     print("aux ok, strip_reasoning ✓ · fail-open to None when model unset ✓"
-          + ("" if CFG.model_ready else " (model not configured, fallback path verified)"))
+          + ("" if ready() else " (model not configured, fallback path verified)"))
 
 
 if __name__ == "__main__":

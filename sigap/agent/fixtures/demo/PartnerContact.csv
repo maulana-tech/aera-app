@@ -1,0 +1,23 @@
+Partner,PartnerName,Role,Email
+SUP-2201,Ningbo Yongtai Metals,supplier,sales@sup-2201.example
+SUP-2207,Hangzhou Sealtech,supplier,sales@sup-2207.example
+SUP-2209,Qingdao Baowu Steel,supplier,sales@sup-2209.example
+SUP-2244,Suzhou Precision Casting,supplier,sales@sup-2244.example
+SUP-3390,Hai Phong Alloy,supplier,sales@sup-3390.example
+SUP-3402,Dong Nai Rubberworks,supplier,sales@sup-3402.example
+SUP-4417,PT Logam Andalan,supplier,sales@sup-4417.example
+SUP-4418,PT Cipta Baja Nusantara,supplier,sales@sup-4418.example
+SUP-4423,PT Karet Prima Sejahtera,supplier,sales@sup-4423.example
+SUP-4431,PT Sinar Tempa Presisi,supplier,sales@sup-4431.example
+SUP-4455,PT Anugerah Kawat Tembaga,supplier,sales@sup-4455.example
+SUP-5501,Guangzhou Lowcost Alloy,supplier,sales@sup-5501.example
+SUP-6610,Yokohama Fineblank,supplier,sales@sup-6610.example
+SUP-6622,Nagoya Heat Treat,supplier,sales@sup-6622.example
+SUP-7701,Busan Forging,supplier,sales@sup-7701.example
+SUP-8801,Rayong Polymer,supplier,sales@sup-8801.example
+SUP-8815,Port Klang Fasteners,supplier,sales@sup-8815.example
+SUP-4417B,PT Logam Andalan Tbk,supplier,sales@sup-4417b.example
+CUS-1001,Anantara Motor Manufacturing,customer,purchasing@cus-1001.example
+CUS-1002,Nusa Otomotif Industri,customer,purchasing@cus-1002.example
+CUS-1003,Pratama Kendaraan Niaga,customer,purchasing@cus-1003.example
+CUS-1004,Wijaya Auto Components,customer,purchasing@cus-1004.example

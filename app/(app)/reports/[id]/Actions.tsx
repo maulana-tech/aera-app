@@ -1,10 +1,11 @@
 "use client";
 
-import { Check, Copy, Download } from "lucide-react";
+import { Check, Copy, FileDown } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 
+/** The report's text, to paste into a message or keep as Markdown. */
 export function ReportActions({ markdown, title }: { markdown: string; title: string }) {
   const [copied, setCopied] = useState(false);
 
@@ -24,15 +25,15 @@ export function ReportActions({ markdown, title }: { markdown: string; title: st
   }
 
   return (
-    <div className="flex gap-2">
-      <Button variant="outline" size="sm" onClick={copy}>
+    <>
+      <Button variant="outline" size="sm" onClick={download} title="Download as Markdown">
+        <FileDown className="size-3.5" />
+        Markdown
+      </Button>
+      <Button variant="ghost" size="sm" onClick={copy} title="Copy the report as text">
         {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
         {copied ? "Copied" : "Copy"}
       </Button>
-      <Button variant="outline" size="sm" onClick={download}>
-        <Download className="size-3.5" />
-        Download
-      </Button>
-    </div>
+    </>
   );
 }

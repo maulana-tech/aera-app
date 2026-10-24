@@ -397,9 +397,137 @@ def build() -> dict:
 
     history = _consumption_history(stock, rnd)
 
+    # ---- after the draws ---------------------------------------------------
+    # Nothing below calls `rnd`, so no row above moves and every figure the
+    # documents quote from them still reproduces.
+    _unique_order_numbers(orders)
+    _per_piece(bom)
+    # The link the documented scenario rests on: ADC12 ingot is cast into the
+    # FG-1120 caliper housing. Without it the chain from the Ningbo closure to
+    # the Rp 2.14 billion of FG-1120 orders broke at the bill of materials,
+    # and Impact rightly reported no customer exposure at all.
+    bom.append({"Material": "M-4471", "FinishedGood": "FG-1120",
+                "Description": "Brake caliper assembly", "ComponentQuantity": 0.0042})
+    for s in sales:
+        s["Quantity"] = round(s["NetAmount"] / FG_PRICE_IDR[s["Material"]])
+
+    customs = _customs(orders, random.Random(SEED + 2))
+
     return {"MaterialStock": stock, "PurchaseOrder": orders, "BillOfMaterial": bom,
             "SalesOrder": sales, "AlternateSource": alternates, "Supplier": suppliers,
-            "Quotation": quotations, "ConsumptionHistory": history}
+            "Quotation": quotations, "CustomsDeclaration": customs,
+            "MaterialSubstitute": [dict(r) for r in SUBSTITUTES],
+            "PartnerContact": _partner_contacts(),
+            "ConsumptionHistory": history}
+
+
+def _partner_contacts() -> list:
+    """Where a supplier request or a customer notice is addressed, offline. In
+    S/4HANA it is the business partner's address. Every one here is under
+    .example, a name reserved so that no mail to it can ever be delivered
+    (RFC 2606): the demo company's suppliers are invented, their inboxes must
+    not be somebody's real one."""
+    rows = [{"Partner": c, "PartnerName": n, "Role": "supplier",
+             "Email": f"sales@{c.lower()}.example"} for c, n, _, _ in SUPPLIERS]
+    rows += [{"Partner": c, "PartnerName": n, "Role": "customer",
+              "Email": f"purchasing@{c.lower()}.example"} for c, n in CUSTOMERS]
+    return rows
+
+
+def _unique_order_numbers(orders: list) -> None:
+    """One number, one order. The pinned scenario orders are appended after the
+    random ones and could land on a number the sequence already used: 4500018901
+    named an M-7722 order from Rayong and the SBY1 replenishment DESIGN.md quotes.
+    The pinned row keeps its number; the random one moves past the last."""
+    last = max(int(o["PurchaseOrder"]) for o in orders)
+    seen = set()
+    for o in reversed(orders):
+        if o["PurchaseOrder"] in seen:
+            last += 1
+            o["PurchaseOrder"] = str(last)
+        seen.add(o["PurchaseOrder"])
+
+
+#: What one piece of a finished good takes of a component, per unit the
+#: component is counted in: a factor on the 1 to 8 the BOM draw produced. Read
+#: raw, that draw had a brake disc consuming two tonnes of steel bar.
+PER_PIECE = {"PC": 1.0, "TON": 0.0021, "KG": 0.35, "LTR": 0.05, "MTR": 0.3, "SQM": 0.02}
+
+
+def _per_piece(bom: list) -> None:
+    unit = {code: u for code, _, u, _ in MATERIALS}
+    for b in bom:
+        b["ComponentQuantity"] = round(b["ComponentQuantity"] * PER_PIECE[unit[b["Material"]]], 4)
+
+
+#: Selling price per piece, so an order's value turns into the pieces it asks
+#: for, and the pieces into the material it needs. Modelled levels.
+FG_PRICE_IDR = {
+    "FG-1120": 1_250_000, "FG-1145": 420_000, "FG-2040": 2_900_000, "FG-2075": 1_650_000,
+    "FG-3310": 780_000, "FG-3355": 640_000, "FG-4420": 520_000, "FG-4480": 690_000,
+    "FG-9099": 900_000,
+}
+
+#: Customs lanes (jalur) at an Indonesian port: the share of declarations each
+#: one takes, and the days from discharge to release. Modelled, like the rest:
+#: the point is a history to measure dwell from, not a claim about Priok.
+LANES = {"mita": (0.05, (1, 1)), "green": (0.55, (1, 3)),
+         "yellow": (0.25, (3, 6)), "red": (0.15, (5, 10))}
+
+
+def _customs(orders: list, rnd: random.Random) -> list:
+    """Import declarations at Tanjung Priok: four months released, two on the quay.
+
+    The history is what dwell time is measured from, instead of a default of
+    four days typed into a tool. The two open ones are the customs hold the
+    seed event describes, and a document check that has not yet become one.
+    """
+    country = {c: ctry for c, _, ctry, _ in SUPPLIERS}
+    imported = sorted({(o["Material"], o["Supplier"]) for o in orders
+                       if o["LoadingPort"] != "IDTPP" and country.get(o["Supplier"]) != "ID"})
+    rows = []
+    for i in range(26):
+        material, supplier = rnd.choice(imported)
+        lane = rnd.choices(list(LANES), weights=[w for w, _ in LANES.values()])[0]
+        arrived = AS_OF - timedelta(days=rnd.randint(6, 118))
+        rows.append({
+            "PurchaseOrder": str(4500017400 + 7 * i), "Material": material,
+            "Supplier": supplier, "OriginCountry": country[supplier], "Port": "IDTPP",
+            "ArrivalDate": arrived.isoformat(), "SubmittedDate": arrived.isoformat(),
+            "Lane": lane, "Status": "released",
+            "ReleasedDate": (arrived + timedelta(days=rnd.randint(*LANES[lane][1]))).isoformat(),
+            "HoldReason": None,
+        })
+    rows.sort(key=lambda r: (r["ArrivalDate"], r["PurchaseOrder"]))
+    for number, arrived, lane, status, why in (
+        ("4500018876", "2026-09-01", "red", "held",
+         "certificate of origin disputed; the preferential tariff claim is under verification"),
+        ("4500018915", "2026-09-03", "yellow", "inspection", "document check"),
+    ):
+        o = next(o for o in orders if o["PurchaseOrder"] == number)
+        rows.append({
+            "PurchaseOrder": number, "Material": o["Material"], "Supplier": o["Supplier"],
+            "OriginCountry": country[o["Supplier"]], "Port": "IDTPP",
+            "ArrivalDate": arrived, "SubmittedDate": arrived, "Lane": lane, "Status": status,
+            "ReleasedDate": None, "HoldReason": why,
+        })
+    for i, r in enumerate(rows, 1):
+        r["DeclarationNumber"] = f"PIB-{r['ArrivalDate'][2:4]}{r['ArrivalDate'][5:7]}-{i:04d}"
+    return [{"DeclarationNumber": r.pop("DeclarationNumber"), **r} for r in rows]
+
+
+#: Substitutes engineering has ruled on. One is approved and one is not, because
+#: the gap between "the stock is there" and "the part may be made from it" is
+#: the whole question: an automotive OEM approves the material, not the plant.
+SUBSTITUTES = [
+    {"Material": "M-5518", "Substitute": "M-5512", "FinishedGood": "FG-1145", "Ratio": 1.0,
+     "Approved": True, "QualificationDays": 0,
+     "Basis": "approved upgrade: SCM440 meets the S45C drawing for the disc hub (ECN-2025-118)"},
+    {"Material": "M-4471", "Substitute": "M-4472", "FinishedGood": "FG-1120", "Ratio": 1.0,
+     "Approved": False, "QualificationDays": 21,
+     "Basis": "casting trial passed; the OEM has not approved A356 for this caliper "
+              "(part approval resubmission pending)"},
+]
 
 
 #: Materials whose actual consumption has drifted away from the planned rate in
@@ -585,6 +713,23 @@ def demo() -> None:
     fresh = [r for r in quotes if r["QtnLifecycleStatus"] == "Completed"
              and r["QuotationValidityEndDate"] >= as_of]
     assert stale and fresh, (len(stale), len(fresh))
+
+    # The scenario's chain has to hold end to end: the Ningbo material feeds the
+    # product whose orders the documents put at risk.
+    assert any(b["Material"] == "M-4471" and b["FinishedGood"] == "FG-1120"
+               for b in data["BillOfMaterial"]), "M-4471 must feed FG-1120"
+    numbers = [o["PurchaseOrder"] for o in data["PurchaseOrder"]]
+    assert len(numbers) == len(set(numbers)), "two orders share a number"
+    assert next(o for o in data["PurchaseOrder"]
+                if o["PurchaseOrder"] == "4500018901")["Material"] == "M-4471"
+    assert all(s["Quantity"] > 0 for s in data["SalesOrder"]), "an order for no pieces"
+    customs = data["CustomsDeclaration"]
+    released = [c for c in customs if c["Status"] == "released"]
+    assert len(released) >= 20 and all(c["ReleasedDate"] >= c["ArrivalDate"] for c in released)
+    assert [c["PurchaseOrder"] for c in customs if c["Status"] == "held"] == ["4500018876"]
+    assert {r["Approved"] for r in data["MaterialSubstitute"]} == {True, False}
+    assert all(r["Email"].endswith(".example") for r in data["PartnerContact"]), \
+        "an invented partner's address must be undeliverable"
 
     # Nobody bids who is not on the approved list, and a price is quoted per
     # PriceUnit rather than per piece where that unit is not one.

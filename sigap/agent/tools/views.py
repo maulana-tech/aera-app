@@ -11,12 +11,13 @@ from __future__ import annotations
 
 import json
 from datetime import date
-from typing import List
+from typing import List, Optional, Tuple
 
+from clients import sap_s4
 from core.provenance import Origin, Result
 from engine.simulate import project_cover
 from tools.compliance import check_local_constraints
-from tools.fetcher import fixture, profile
+from tools.fetcher import as_of, profile
 from tools.impact import (get_bom_explosion, get_material_stock,
                           get_open_purchase_orders, get_sales_order_commitments)
 from tools.logistics import estimate_eta
@@ -35,6 +36,31 @@ SAFETY_FLOOR_DAYS = 14
 CHART_LINES = 12
 
 
+#: On SAP, how many material and plant pairs the demand view forecasts. Each
+#: is its own reads, and the sandbox's rate limit is spent long before 1,000.
+DEMAND_PAIRS = 12
+
+
+def _focus() -> Tuple[str, str, Optional[str]]:
+    """The material, plant and port the single-scenario views are drawn for.
+
+    The fixture is written around one: M-4471 at KRW1, through Ningbo. A live
+    tenant has no such scenario, so there it is the pair that consumes most,
+    and the port most of its open orders load at, when any names one.
+    """
+    if not sap_s4.available():
+        return "M-4471", "KRW1", "CNNGB"
+    from clients import sap_map
+    from tools.fetcher import read
+    rate, _, _ = sap_map.consumption()
+    if not rate:
+        return "", "", None
+    material, plant = max(rate, key=rate.get)
+    ports = [o["LoadingPort"] for o in read("PurchaseOrder", material=material).value or []
+             if o.get("LoadingPort")]
+    return material, plant, max(set(ports), key=ports.count) if ports else None
+
+
 def _wrap(rows: List[dict], columns: List[dict], r: Result, note: str = "") -> dict:
     return {
         "columns": columns,
@@ -47,13 +73,13 @@ def _wrap(rows: List[dict], columns: List[dict], r: Result, note: str = "") -> d
 
 def inventory() -> dict:
     r = get_material_stock()
-    p = profile()
-    start = date.fromisoformat(p["AsOfDate"])
+    start = as_of()
     rows = []
     for x in (r.value or []):
         qty = x.get("MatlWrhsStkQtyInMatlBaseUnit", 0)
         daily = x.get("DailyConsumption", 0)
-        cover = project_cover(float(qty), float(daily), start)
+        # Consumption SAP could not supply is unknown, not zero: no cover date.
+        cover = project_cover(float(qty), float(daily), start) if daily is not None else None
         rows.append({
             "material": x.get("Material"),
             "description": x.get("Description"),
@@ -61,7 +87,7 @@ def inventory() -> dict:
             "qty": qty,
             "unit": x.get("BaseUnit"),
             "daily_consumption": daily,
-            "depleted_on": cover.depleted_on.isoformat() if cover.depleted_on else None,
+            "depleted_on": cover.depleted_on.isoformat() if cover and cover.depleted_on else None,
             "days_left": round(float(qty) / float(daily), 1) if daily else None,
         })
     rows.sort(key=lambda b: b["days_left"] if b["days_left"] is not None else 9999)
@@ -99,8 +125,12 @@ def demand() -> dict:
     from tools.demand import forecast_demand
 
     r = get_material_stock()
+    pairs = r.value or []
+    if sap_s4.available():
+        pairs = sorted((x for x in pairs if x.get("DailyConsumption")),
+                       key=lambda x: -x["DailyConsumption"])[:DEMAND_PAIRS]
     rows = []
-    for x in (r.value or []):
+    for x in pairs:
         f = forecast_demand(x["Material"], x["Plant"]).value or {}
         drift = f.get("drift_pct")
         rows.append({
@@ -121,12 +151,16 @@ def demand() -> dict:
             "compares what was actually withdrawn against the plan; the last column is "
             "where the forecast expects it to go next.")
 
+    if sap_s4.available():
+        note += (f" From SAP: the {len(rows)} pairs that consume most, and 'planned' is "
+                 "the 90-day average, since SAP holds no planned rate.")
     # The flagship material carries the chart, because its drift moves the answer.
-    lead = forecast_demand("M-4471", "KRW1").value or {}
+    material, plant, _ = _focus()
+    lead = forecast_demand(material, plant).value or {} if material else {}
     # Daily withdrawals swing between a full shift and a Sunday, and that swing
     # buries the question the chart is asked: is the rate above plan. A trailing
     # weekly mean answers it, and the daily series stays as context behind it.
-    raw = _recent_history("M-4471", "KRW1", 35)
+    raw = _recent_history(material, plant, 35) if material else []
     points = lead.get("points", [])
 
     def trailing(values, i, n=7):
@@ -158,7 +192,7 @@ def demand() -> dict:
     if lead.get("points"):
         out["chart"] = {
             "kind": "demand",
-            "material": "M-4471", "plant": "KRW1",
+            "material": material, "plant": plant,
             "unit": lead.get("unit", ""), "confidence": lead.get("confidence", 90),
             "planned_rate": lead.get("planned_rate"),
             "observed": history, "points": smoothed,
@@ -174,14 +208,13 @@ def _recent_history(material: str, plant: str, days: int):
 
 
 def sourcing() -> dict:
-    from datetime import date as _date
-
     from engine.matching import assess
     from tools.impact import get_material_stock
 
-    r = find_alternate_sources("M-4471")
-    stock = get_material_stock()
-    start = _date.fromisoformat(profile()["AsOfDate"])
+    material, plant, _ = _focus()
+    r = find_alternate_sources(material)
+    stock = get_material_stock(material=material)
+    start = as_of()
     rows = []
     for o in (r.value or []):
         v = (check_local_constraints(o["id"]).value or {})
@@ -192,7 +225,7 @@ def sourcing() -> dict:
             source_plant = next((p for p in {x["Plant"] for x in stock.value}
                                  if p in o["label"]), None)
             if source_plant:
-                t = assess(stock.value, o["Material"], source_plant, "KRW1",
+                t = assess(stock.value, o["Material"], source_plant, plant,
                            float(o["Quantity"]), start)
                 donor = t.verdict if t.verdict != "available" else None
         rows.append({
@@ -423,7 +456,7 @@ def procurement() -> dict:
 
 def compliance() -> dict:
     """Kira's rulings. The one view where the reason matters more than the number."""
-    r = find_alternate_sources("M-4471")
+    r = find_alternate_sources(_focus()[0])
     p = profile()
     rows = []
     for o in (r.value or []):
@@ -448,8 +481,10 @@ def compliance() -> dict:
     # The line worth making is when a blocked option undercuts an allowed one,
     # because that is exactly the trade a pure cost model would take.
     if blocked and allowed:
-        cheapest_blocked = min(blocked, key=lambda x: x["cost_idr"])
-        dearest_beaten = [a for a in allowed if a["cost_idr"] > cheapest_blocked["cost_idr"]]
+        priced = [x for x in blocked if x["cost_idr"] is not None]
+        cheapest_blocked = min(priced, key=lambda x: x["cost_idr"]) if priced else None
+        dearest_beaten = [a for a in allowed if cheapest_blocked and a["cost_idr"] is not None
+                          and a["cost_idr"] > cheapest_blocked["cost_idr"]]
         if dearest_beaten:
             note += (f" {cheapest_blocked['option']} costs Rp {cheapest_blocked['cost_idr']:,}"
                      f" and is still out, while {min(dearest_beaten, key=lambda x: x['cost_idr'])['option']}"
@@ -465,15 +500,17 @@ def compliance() -> dict:
 
 def impact() -> dict:
     """Elsa's trace: a disruption followed through to the money at risk."""
-    po = get_open_purchase_orders(port="CNNGB")
-    stock = get_material_stock()
-    bom = get_bom_explosion("M-4471")
+    material, _, port = _focus()
+    po = (get_open_purchase_orders(port=port) if port else
+          get_open_purchase_orders(material=material))
+    stock = get_material_stock(material=material) if sap_s4.available() else get_material_stock()
+    bom = get_bom_explosion(material)
     finished = [x["FinishedGood"] for x in (bom.value or []) if x.get("FinishedGood")]
     orders = get_sales_order_commitments(finished)
     exposed = sum(float(x.get("NetAmount") or 0) for x in (orders.value or []))
 
     rows = [{
-        "stage": "Purchase orders through Ningbo",
+        "stage": f"Purchase orders through {port}" if port else f"Open purchase orders for {material}",
         "count": len(po.value or []),
         "detail": ", ".join(x.get("PurchaseOrder", "") for x in (po.value or [])[:4]),
         "value_idr": None,
@@ -483,7 +520,7 @@ def impact() -> dict:
         "detail": ", ".join(sorted({x.get("Material") for x in (stock.value or []) if x.get("Material")})),
         "value_idr": None,
     }, {
-        "stage": "Finished goods that consume M-4471",
+        "stage": f"Finished goods that consume {material}",
         "count": len(finished),
         "detail": ", ".join(finished) or "none",
         "value_idr": None,
@@ -542,7 +579,7 @@ def logistics() -> dict:
             "arrival_revised": d_rev or "",
             "delay_days": delay,
         })
-    for o in (find_alternate_sources("M-4471").value or []):
+    for o in (find_alternate_sources(_focus()[0]).value or []):
         e = (estimate_eta(o["id"]).value or {})
         if e:
             rows.append({
@@ -567,7 +604,7 @@ def logistics() -> dict:
         out["chart"] = {
             "kind": "arrival",
             "total": len(rows),
-            "today": profile()["AsOfDate"],
+            "today": as_of().isoformat(),
             "items": [{
                 "reference": x["reference"], "material": x["material"],
                 "port": x["port"] or "-", "status": x["status"],
@@ -580,7 +617,8 @@ def logistics() -> dict:
 
 def simulation() -> dict:
     from tools.simulation import simulate_scenario_tool
-    r = simulate_scenario_tool("M-4471", "KRW1")
+    material, plant, _ = _focus()
+    r = simulate_scenario_tool(material, plant)
     v = r.value or {}
     if v.get("refused") or not v.get("combinations"):
         return _wrap([], [], r, v.get("reason") or r.note)

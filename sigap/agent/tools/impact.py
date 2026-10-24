@@ -7,35 +7,40 @@ from __future__ import annotations
 
 from typing import Optional
 
-from core.provenance import Result
+from core.provenance import Origin, Result
 from core.registry import register
-from tools.fetcher import bom, pull
+from tools.fetcher import bom, read
 
 
 @register("get_open_purchase_orders", "impact",
-          "Open purchase orders, filterable by loading port or material.",
+          "Open purchase orders, filterable by loading port, material or supplier. When a "
+          "supplier is what failed, filter by supplier: its orders are the ones at risk, "
+          "whichever port they load at.",
           {"port": {"type": ["string", "null"], "description": "port code, e.g. CNNGB"},
-           "material": {"type": ["string", "null"]}})
-def get_open_purchase_orders(port: Optional[str] = None,
-                             material: Optional[str] = None) -> Result:
-    def keep(r: dict) -> bool:
-        return ((port is None or r.get("LoadingPort") == port)
-                and (material is None or r.get("Material") == material))
-
-    params = {"$filter": f"LoadingPort eq '{port}'", "$top": "50"} if port else {"$top": "50"}
-    return pull("PurchaseOrder", "API_PURCHASEORDER_PROCESS_SRV", "A_PurchaseOrder", params, keep)
+           "material": {"type": ["string", "null"]},
+           "supplier": {"type": ["string", "null"], "description": "supplier id, e.g. SUP-2201"}})
+def get_open_purchase_orders(port: Optional[str] = None, material: Optional[str] = None,
+                             supplier: Optional[str] = None) -> Result:
+    r = read("PurchaseOrder", port=port, material=material, supplier=supplier)
+    if supplier and r.value == []:
+        # No orders for a supplier nobody has heard of reads exactly like "no
+        # exposure". Ask the supplier master which of the two it is.
+        known = read("Supplier", ids=[supplier])
+        if known.value == []:
+            return Result(None, Origin.MISSING, known.source,
+                          note=f"no supplier {supplier} on record; pass a supplier id as the "
+                               "supplier master writes it")
+        r.note = "; ".join(x for x in (r.note, f"{supplier} has no open purchase order"
+                                       + (f" loading at {port}" if port else "")
+                                       + (f" for {material}" if material else "")) if x)
+    return r
 
 
 @register("get_material_stock", "impact",
           "Material stock per plant together with its daily consumption rate.",
           {"material": {"type": ["string", "null"]}, "plant": {"type": ["string", "null"]}})
 def get_material_stock(material: Optional[str] = None, plant: Optional[str] = None) -> Result:
-    def keep(r: dict) -> bool:
-        return ((material is None or r.get("Material") == material)
-                and (plant is None or r.get("Plant") == plant))
-
-    return pull("MaterialStock", "API_MATERIAL_STOCK_SRV", "A_MatlStkInAcctMod",
-                {"$top": "100"}, keep)
+    return read("MaterialStock", material=material, plant=plant)
 
 
 @register("get_bom_explosion", "impact",
@@ -53,6 +58,4 @@ def get_bom_explosion(material: str) -> Result:
           {"finished_goods": {"type": "array", "items": {"type": "string"}}},
           ["finished_goods"])
 def get_sales_order_commitments(finished_goods: list) -> Result:
-    fg = set(finished_goods)
-    return pull("SalesOrder", "API_SALES_ORDER_SRV", "A_SalesOrder",
-                {"$top": "100"}, lambda r: r.get("Material") in fg)
+    return read("SalesOrder", materials=finished_goods)

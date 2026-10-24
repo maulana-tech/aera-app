@@ -1,0 +1,22 @@
+# Cloud Foundry manifest for the SIGAP A2A shim. No secrets here: the SIGAP
+# service user's credentials are set with `cf set-env` (see README.md).
+applications:
+  # The route is <name>.cfapps.<region>: on a shared space, suffix the name
+  # with your team (sigap-a2a-shim-<team>) if `cf push` says the route is taken.
+  - name: sigap-a2a-shim
+    memory: 256M
+    disk_quota: 1024M
+    instances: 1
+    buildpacks:
+      - https://github.com/cloudfoundry/python-buildpack/releases/download/v1.8.43/python-buildpack-cflinuxfs4-v1.8.43.zip
+    health-check-type: http
+    health-check-http-endpoint: /health
+    timeout: 180
+    command: python -m uvicorn server:app --host 0.0.0.0 --port $PORT --workers 1
+    env:
+      BP_PYTHON_VERSION: "3.13.11"
+      # The public SIGAP web app. Calls go through its /api/sigap bridge, with
+      # the session in the sigap_session cookie.
+      SIGAP_API: https://sigap.lumbungstack.dev
+      SIGAP_API_MODE: bridge
+      SHIM_MAX_EVENTS_PER_HOUR: "10"

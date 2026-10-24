@@ -5,11 +5,10 @@ This file answers the 'may use' half: quality holds and safety stock.
 """
 from __future__ import annotations
 
-from datetime import date
-
+from clients import sap_s4
 from core.provenance import Origin, Result
 from core.registry import register
-from tools.fetcher import profile, pull
+from tools.fetcher import as_of, read
 
 
 @register("get_quality_holds", "inventory",
@@ -17,8 +16,23 @@ from tools.fetcher import profile, pull
           {"material": {"type": "string"}, "plant": {"type": "string"}},
           ["material", "plant"])
 def get_quality_holds(material: str, plant: str) -> Result:
-    return Result([], Origin.MODELLED, "API_INSPECTIONLOT_SRV",
-                  note="the fixture carries no quality holds for this scenario")
+    if not sap_s4.available():
+        return Result([], Origin.MODELLED, "API_INSPECTIONLOT_SRV",
+                      note="the fixture carries no quality holds for this scenario")
+    # SAP keeps held stock as its own stock type beside the unrestricted kind.
+    stock = read("MaterialStock", material=material, plant=plant)
+    if stock.value is None:
+        return stock
+    holds = [{"material": r["Material"], "plant": r["Plant"], "kind": kind, "qty": r[field],
+              "unit": r.get("BaseUnit") or ""}
+             for r in stock.value
+             for kind, field in (("quality inspection", "QualityInspectionQty"),
+                                 ("blocked", "BlockedQty"),
+                                 ("special stock (promised elsewhere)", "SpecialStockQty"))
+             if r.get(field)]
+    return Result(holds, Origin.LIVE, stock.source,
+                  note="stock types 02 (quality inspection) and 07 (blocked), and special "
+                       "stock; none of it is in the usable figure")
 
 
 @register("get_safety_stock_policy", "inventory",
@@ -26,6 +40,9 @@ def get_quality_holds(material: str, plant: str) -> Result:
           {"material": {"type": "string"}, "plant": {"type": "string"}},
           ["material", "plant"])
 def get_safety_stock_policy(material: str, plant: str) -> Result:
+    if sap_s4.available():
+        from clients import sap_map
+        return sap_map.safety_stock(material, plant)
     return Result(None, Origin.MISSING, "API_PRODUCT_SRV (MARC)",
                   note="not in the fixture. It needs the customer's own master data")
 
@@ -43,11 +60,17 @@ def assess_transfer(material: str, from_plant: str, to_plant: str, qty: float,
                     floor_days: int = 14) -> Result:
     from engine.matching import assess
 
-    stock = pull("MaterialStock", "API_MATERIAL_STOCK_SRV", "A_MatlStkInAcctMod",
-                 {"$top": "500"})
+    stock = read("MaterialStock", material=material)
     if not stock.value:
         return Result(None, Origin.MISSING, stock.source, note="no stock records to judge")
-    start = date.fromisoformat(profile()["AsOfDate"])
+    unknown = sorted(r["Plant"] for r in stock.value
+                     if r.get("Plant") in (from_plant, to_plant) and r.get("DailyConsumption") is None)
+    if unknown:
+        # Unknown use would read as none, and the donor would look able to give everything.
+        return Result(None, Origin.MISSING, stock.source,
+                      note=f"daily consumption of {material} could not be read at "
+                           f"{', '.join(unknown)} ({stock.note})")
+    start = as_of()
 
     # Stock another open handling has already promised is not available to this
     # one. Both read the same on-hand figure, so without this each is right

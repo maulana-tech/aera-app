@@ -14,6 +14,7 @@ import os
 from datetime import date
 
 from agents.definitions import ALL
+from core.config import CFG
 from core.provenance import Origin, Result
 from core.trace import Trace
 from engine.simulate import Arrival, Ruling, simulate_scenario
@@ -118,7 +119,7 @@ def run_ningbo(treat_as_live: bool = False) -> Trace:
     t.record("ACT", A["execution"],
              "The stock transfer goes ahead on its own; the purchase order stops as a draft",
              ["create_stock_transfer", "create_draft_po", "notify"], None,
-             autonomous="create_stock_transfer (< Rp 50 million)",
+             autonomous=f"create_stock_transfer (< {CFG.autonomous_limit_text})",
              needs_approval="create_draft_po")
 
     t.decision = {
