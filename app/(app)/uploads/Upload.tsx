@@ -12,6 +12,8 @@ const ENTITIES = [
   { v: "SalesOrder", l: "Customer orders", columns: "SalesOrder, Material, Customer, NetAmount, RequestedDeliveryDate" },
   { v: "BillOfMaterial", l: "Product structure", columns: "Material, FinishedGood, Description, ComponentQuantity" },
   { v: "AlternateSource", l: "Supply options", columns: "id, label, Supplier, Material, Quantity, ArrivalDate, ExtraCostIDR, TkdnAfterPct, Origin, NewOrigin" },
+  { v: "Supplier", l: "Suppliers", columns: "Supplier, SupplierName, Country, TkdnCertifiedPct" },
+  { v: "Quotation", l: "Quotations", columns: "SupplierQuotation, Supplier, Material, OrderQuantity, NetPrice, DeliveryTimeInDays, Currency, QtnLifecycleStatus" },
 ];
 
 export default function Upload({ signedIn }: { signedIn: boolean }) {
@@ -43,7 +45,18 @@ export default function Upload({ signedIn }: { signedIn: boolean }) {
         }),
       });
       const d = await res.json();
-      if (!res.ok) throw new Error(d.error ?? "failed");
+      if (!res.ok) {
+        // A schema rejection (422) names the exact columns/rows at fault, so
+        // the uploader can fix the file instead of guessing.
+        const lines: string[] = [d.error ?? "failed"];
+        if (Array.isArray(d.problems)) lines.push(...d.problems);
+        if (Array.isArray(d.rows)) {
+          for (const rp of d.rows.slice(0, 5)) {
+            lines.push(`row ${rp.row}: ${(rp.problems ?? []).join("; ")}`);
+          }
+        }
+        throw new Error(lines.join("\n"));
+      }
       setMessage({
         ok: true,
         text: `${d.rows} rows saved as ${d.entity}, labelled ${
@@ -119,7 +132,7 @@ export default function Upload({ signedIn }: { signedIn: boolean }) {
       />
 
       {message && (
-        <p className={`text-xs ${message.ok ? "text-emerald-700 dark:text-emerald-400" : "text-destructive"}`}>
+        <p className={`text-xs whitespace-pre-line ${message.ok ? "text-emerald-700 dark:text-emerald-400" : "text-destructive"}`}>
           {message.text}
         </p>
       )}

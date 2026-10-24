@@ -18,6 +18,19 @@ export default async function ReportList() {
         </p>
       </header>
 
+      <Link
+        href="/reports/portfolio"
+        className="hover:border-foreground/30 mt-6 flex items-center justify-between gap-3 rounded-lg border border-dashed p-4 transition-colors"
+      >
+        <div>
+          <p className="font-medium">Operations report</p>
+          <p className="text-muted-foreground mt-0.5 text-sm">
+            Every handling rolled up — committed value, and realized vs predicted cost.
+          </p>
+        </div>
+        <span className="text-muted-foreground shrink-0 text-xs">View →</span>
+      </Link>
+
       {!d?.runs.length ? (
         <p className="text-muted-foreground mt-6 rounded-lg border border-dashed p-6 text-sm">
           No handlings to report on yet.

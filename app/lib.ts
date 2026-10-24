@@ -225,3 +225,25 @@ export type AuditReport = {
   weakest_origin: string;
   note: string;
 };
+
+/* The exploration graph (core/exploration.py): a persisted, typed DAG of one
+ * run's handling. Served by GET /runs/:id/graph. Nodes carry their kind and,
+ * for facts, the provenance SIGAP never lets go unlabelled. */
+export type GraphNode = {
+  node_id: string;
+  kind: "event" | "lead" | "fact" | "option" | "ruling";
+  state: string | null;
+  label: string | null;
+  subject: string | null;
+  lead_key: string | null;
+  origin: string | null;   // fact nodes: live | cached | derived | modelled | missing
+  source: string | null;
+  payload: string | null;  // JSON string
+  priority: number | null;
+};
+export type GraphEdge = {
+  src: string;
+  rel: "spawns" | "derived_from" | "yields" | "rules_on" | "covers";
+  dst: string;
+};
+export type ExplorationGraph = { nodes: GraphNode[]; edges: GraphEdge[] };

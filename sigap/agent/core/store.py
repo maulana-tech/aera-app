@@ -142,6 +142,57 @@ CREATE TABLE IF NOT EXISTS contacts (
   active     INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL
 );
+
+-- The exploration graph. A persisted, typed DAG of one event's handling: the
+-- disruption, the lines of investigation it opened, the facts each one
+-- surfaced (every fact keeps its origin, SIGAP's house rule), the candidate
+-- options, and Kira's rulings on them. The supervisor and the specialists read
+-- and write this ONE graph together, so it is the shared record of how a
+-- decision was reached, not three parallel dicts that can drift.
+--
+-- A node's identity is (run_id, dedup_key): two specialists that surface the
+-- same fact collapse to ONE node, which is what makes the multi-parent DAG hold
+-- (a priced option that two leads both point at is one option, not two). The
+-- whole feature is flag-gated (SIGAP_GRAPH) and written through fail-open, so a
+-- graph error can never break a handling that already works without it.
+CREATE TABLE IF NOT EXISTS graph_nodes (
+  node_id    TEXT PRIMARY KEY,
+  run_id     TEXT NOT NULL REFERENCES runs(id),
+  kind       TEXT NOT NULL,            -- event | lead | fact | option | ruling
+  state      TEXT,                     -- lead: open|claimed|worked|capped|blocked|stopped
+  label      TEXT,
+  subject    TEXT,                     -- the material / option id / supplier a node is about
+  lead_key   TEXT,                     -- kind='lead' mirrors the claimable frontier key
+  origin     TEXT,                     -- kind='fact' carries provenance: live|cached|derived|modelled|missing
+  source     TEXT,                     -- where the fact came from ("API_MATERIAL_STOCK_SRV", "references/")
+  dedup_key  TEXT NOT NULL,            -- canonical identity for multi-parent DAG dedup
+  payload    TEXT,                     -- JSON: the node's value / detail
+  priority   INTEGER,
+  -- Claim bookkeeping so a 'lead' node can BE the atomic claimable frontier.
+  -- owner = the specialist that CAS-claimed it; the counters bound the chain so
+  -- a recursive spawn can never loop forever.
+  owner        TEXT,
+  attempts     INTEGER NOT NULL DEFAULT 0,
+  dispatches   INTEGER NOT NULL DEFAULT 0,
+  revived_once INTEGER NOT NULL DEFAULT 0,
+  claimed_at   TEXT,
+  created_at   TEXT NOT NULL,
+  updated_at   TEXT NOT NULL,
+  UNIQUE(run_id, dedup_key)
+);
+CREATE INDEX IF NOT EXISTS idx_graph_nodes_run ON graph_nodes(run_id, kind);
+-- the atomic claim + frontier-depth queries filter by (run_id, kind, state).
+CREATE INDEX IF NOT EXISTS idx_graph_nodes_claim ON graph_nodes(run_id, kind, state);
+
+CREATE TABLE IF NOT EXISTS graph_edges (
+  run_id     TEXT NOT NULL REFERENCES runs(id),
+  src        TEXT NOT NULL,            -- ancestor node_id
+  rel        TEXT NOT NULL,            -- spawns | derived_from | yields | rules_on | covers
+  dst        TEXT NOT NULL,            -- descendant node_id
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (run_id, src, rel, dst)
+);
+CREATE INDEX IF NOT EXISTS idx_graph_edges_run ON graph_edges(run_id);
 """
 
 

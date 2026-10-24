@@ -8,15 +8,18 @@ summary along with the origin labels of the data behind it.
 from __future__ import annotations
 
 import json
+import os
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
 from agents.definitions import ALL, SPECIALISTS, SUPERVISOR, Agent
 import tools  # noqa: F401  (registers every tool; see tools/__init__.py)
+from core import exploration as ex
 from core import registry
 from core.config import CFG
 from core.provenance import Result
+from engine import dispatch, planner
 
 # Reference rates for the cost cap. Bedrock has its own pricing, replace these
 # from aws.amazon.com/bedrock/pricing before going to production.
@@ -65,6 +68,7 @@ class Board:
     def write(self, key: str, r: Result) -> None:
         self.entries[key] = Entry(r.value, r.origin.value, r.source,
                                   r.fetched_at.isoformat(timespec="seconds"))
+        _mirror_to_graph(key, r)
 
     # Read shapes the rest of the system already expects.
     @property
@@ -102,6 +106,13 @@ class Cost:
         self.input_tokens += getattr(usage, "input_tokens", 0) or 0
         self.input_tokens += getattr(usage, "cache_read_input_tokens", 0) or 0
         self.output_tokens += getattr(usage, "output_tokens", 0) or 0
+
+    def add_cost(self, other: "Cost") -> None:
+        """Fold a specialist's own Cost into this one. The async dispatcher gives
+        each lead its own Cost (so concurrent threads never race on one counter)
+        and sums them here, on the single dispatcher thread."""
+        self.input_tokens += other.input_tokens
+        self.output_tokens += other.output_tokens
 
 
 def client():
@@ -255,7 +266,8 @@ def _tool_loop(cl, agent: Agent, task: str, board: Board,
                 report("specialist_start", {"agent": code, "name": specialist.nickname,
                                             "task": task_text,
                                             "thinking": thinking_text or note_text})
-                summary = _tool_loop(cl, specialist, task_text, board, cost, report, deadline)
+                summary = _run_specialist_isolated(cl, specialist, task_text, board,
+                                                   cost, report, deadline)
                 results.append({"type": "tool_result", "tool_use_id": b.id, "content": summary})
                 continue
 
@@ -309,6 +321,168 @@ def _specialist_tools() -> List[dict]:
     } for a in SPECIALISTS]
 
 
+# --------------------------------------------------------------------------- #
+# Exploration-graph write-through (SIGAP_GRAPH, default off; fail-open).
+#
+# The in-memory Board is the live workspace; the persisted graph is its durable,
+# typed mirror. Every tool result that lands on the board also lands on the
+# graph as a fact carrying its provenance, and the two results that drive the
+# mitigation chain — found options and Kira's rulings — become typed option and
+# ruling nodes. The planner then grows the lead frontier off them (option →
+# rule → price), so the graph records not just what was found but the shape of
+# the reasoning that reached it.
+#
+# This is the SmartX "Phase 1" mirror: the graph is populated alongside the
+# existing LLM loop WITHOUT changing its control flow. Flipping the frontier
+# authoritative (claim-based dispatch) is a later phase; landing the mirror
+# first is what their own phasing prescribes, and it keeps this non-breaking.
+# Everything here is wrapped so a graph error can never disturb a handling.
+def _mirror_to_graph(key: str, r: Result) -> None:
+    if not ex.enabled():
+        return
+    run_id = registry.current_run()
+    if not run_id:
+        return                            # a chat question opens no run → no graph
+    try:
+        from core import store
+        with store.connect() as c:
+            fact_id = ex.write_fact(c, run_id, key, r)
+
+            # Found options: a list of AlternateSource rows, each with an id.
+            if key.endswith("find_alternate_sources") and isinstance(r.value, list):
+                for opt in r.value:
+                    if not isinstance(opt, dict) or "id" not in opt:
+                        continue
+                    oid = str(opt["id"])
+                    node = ex.upsert_node(c, run_id, "option", f"option:{oid}",
+                                          subject=oid, label=opt.get("label"),
+                                          payload=opt)
+                    ex.add_edge(c, run_id, fact_id, "yields", node)
+
+            # A ruling: check_local_constraints returns {option_id, allowed, reason}.
+            elif key.endswith("check_local_constraints") and isinstance(r.value, dict):
+                oid = str(r.value.get("option_id", "")).strip()
+                if oid:
+                    state = "allowed" if r.value.get("allowed") else "blocked"
+                    ruling = ex.upsert_node(c, run_id, "ruling", f"ruling:{oid}",
+                                            subject=oid, state=state,
+                                            label=r.value.get("reason"), payload=r.value)
+                    opt = ex.find_node_by_dedup(c, run_id, f"option:{oid}")
+                    if opt:
+                        ex.add_edge(c, run_id, ruling, "rules_on", opt)
+
+            # Grow the frontier: open the next leads newly enabled by the above.
+            planner.plan_next_leads(c, run_id)
+    except Exception as _e:               # noqa: BLE001  — the mirror must never break a handling
+        if os.environ.get("SIGAP_DEBUG"):
+            import traceback; traceback.print_exc()
+        pass
+
+
+def _seed_graph(event: dict) -> None:
+    """Open the event root + the impact lead on the graph (flag-gated, fail-open)."""
+    if not ex.enabled():
+        return
+    run_id = registry.current_run()
+    if not run_id:
+        return
+    try:
+        from core import store
+        eid = str(event.get("id") or event.get("event_id") or run_id)
+        with store.connect() as c:
+            planner.seed_from_event(c, run_id, eid)
+    except Exception:                     # noqa: BLE001
+        pass
+
+
+def _graph_frontier(run_id: Optional[str]) -> dict:
+    """A read-only snapshot of the graph's frontier for the run result, so a
+    handling can report whether the lead frontier has drained (converged) and
+    how deep the graph grew. Fail-open to an empty snapshot."""
+    if not ex.enabled() or not run_id:
+        return {}
+    try:
+        from core import store
+        with store.connect() as c:
+            g = ex.get_graph(c, run_id)
+            return {
+                "nodes": len(g["nodes"]),
+                "open_leads": ex.count_open_leads(c, run_id),
+                "active_leads": ex.count_active_leads(c, run_id),
+                "converged": ex.converged(c, run_id),
+            }
+    except Exception:                     # noqa: BLE001
+        return {}
+
+
+# --------------------------------------------------------------------------- #
+# Fail-open specialist isolation (#3) and non-lossy termination (#1).
+#
+# Before: one specialist raising, or the per-event budget/deadline tripping,
+# propagated out and the whole handling was recorded `failed` — every finding
+# already on the board discarded. SmartX's swarm never loses a verdict that
+# way: a cancelled or timed-out run still harvests what it has. These two
+# helpers bring that discipline to SIGAP, flag-gated so the default is
+# unchanged.
+def _run_specialist_isolated(cl, specialist: Agent, task: str, board: Board,
+                             cost: Cost, report, deadline) -> str:
+    """Run one specialist, isolating it. A BUDGET or DEADLINE stop is global and
+    re-raised (it ends the whole handling, where the salvage below catches it).
+    Any OTHER exception is this specialist's alone: it is reported, its lead is
+    settled 'failed' on the graph, and an error note goes back to Arya so she
+    carries on with the rest — one specialist does not take the handling down."""
+    try:
+        return _tool_loop(cl, specialist, task, board, cost, report, deadline)
+    except (BudgetExhausted, DeadlineExceeded):
+        raise
+    except Exception as e:                                           # noqa: BLE001
+        err = f"{specialist.title} could not complete: {type(e).__name__}: {e}"
+        report("specialist_done", {"agent": specialist.code, "name": specialist.nickname,
+                                   "summary": err, "full_summary": err, "error": True})
+        if ex.enabled():
+            try:
+                from core import store
+                run_id = registry.current_run()
+                if run_id:
+                    with store.connect() as c:
+                        ex.settle_lead(c, run_id, ex.canonical_lead_key(specialist.code, "task"),
+                                       "failed")
+            except Exception:                                        # noqa: BLE001
+                pass
+        return f"[{err}. Continue with the other specialists; do not retry this one.]"
+
+
+def _salvage(board: Board, called: List[str], cost: Cost, reason: str) -> dict:
+    """Assemble the best honest statement from the evidence already on the board
+    when a handling is stopped early — instead of failing and discarding it.
+
+    It does NOT invent a recommendation (no model runs here, and guessing is the
+    one thing SIGAP never does). It states plainly that the handling stopped,
+    why, and exactly what was established and how trustworthy each piece is —
+    the same provenance discipline the calculator enforces. A person reads this
+    and decides, rather than being told nothing because the clock ran out."""
+    trusted = [k for k, e in board.entries.items()
+               if e.origin in ("live", "cached", "derived")]
+    untrusted = board.untrusted_keys()
+    lines = [f"Handling stopped early: {reason}.",
+             "No final recommendation was produced. What was established so far, "
+             "labelled by how far it can be trusted:"]
+    for k, e in board.entries.items():
+        lines.append(f"  - {k}: {e.origin} (from {e.source})")
+    if not board.entries:
+        lines.append("  (nothing was gathered before the stop)")
+    return {
+        "status": "partial",
+        "reason": reason,
+        "recommendation": "\n".join(lines),
+        "agents_called": called,
+        "cost_idr": cost.idr,
+        "trusted_on_board": trusted,
+        "untrusted_on_board": untrusted,
+        "graph": _graph_frontier(registry.current_run()),
+    }
+
+
 def run(event: dict, report: Callable[[str, dict], None]) -> dict:
     """Handle one event. `report` is called on every piece of progress."""
     board = Board()
@@ -316,14 +490,31 @@ def run(event: dict, report: Callable[[str, dict], None]) -> dict:
     # lets a tool ask how trustworthy the ground under it is without having to
     # be handed the board through every call: tools/execution.py refuses to act
     # on its own authority when anything under the decision is not trusted.
-    with registry.bind_board(board):
-        return _handle_event(event, report, board)
-
-
-def _handle_event(event: dict, report: Callable[[str, dict], None], board: Board) -> dict:
-    cl = client()
-    cost = Cost()
     called: List[str] = []
+    cost = Cost()
+    with registry.bind_board(board):
+        try:
+            if dispatch.async_enabled():
+                # SmartX's Phase 2: fire leads over the claimable frontier and
+                # harvest them as they finish, several at once. The frontier,
+                # planner and convergence are the graph's; Arya writes the final
+                # recommendation from the settled graph. (The dispatcher seeds
+                # the frontier itself, so _seed_graph is the sync path's only.)
+                return dispatch.handle_event_async(event, report, board, called, cost)
+            # Seed the graph's root + first lead (flag-gated, fail-open). The
+            # impact lead always opens; option/rule/price leads grow from what
+            # the specialists find, via the write-through mirror.
+            _seed_graph(event)
+            return _handle_event(event, report, board, called, cost)
+        except (BudgetExhausted, DeadlineExceeded) as e:
+            # Non-lossy: a handling that hits its budget or deadline concludes on
+            # the evidence it has, labelled — it is not thrown away.
+            return _salvage(board, called, cost, str(e))
+
+
+def _handle_event(event: dict, report: Callable[[str, dict], None], board: Board,
+                  called: List[str], cost: Cost) -> dict:
+    cl = client()
     deadline = time.monotonic() + MAX_SECONDS_PER_EVENT
 
     lead_tools = _specialist_tools() + registry.schemas_for_model("supervisor")
@@ -365,6 +556,7 @@ def _handle_event(event: dict, report: Callable[[str, dict], None], board: Board
                 "agents_called": called,
                 "cost_idr": cost.idr,
                 "untrusted_on_board": board.untrusted_keys(),
+                "graph": _graph_frontier(registry.current_run()),
             }
 
         results: List[dict] = []
@@ -377,8 +569,8 @@ def _handle_event(event: dict, report: Callable[[str, dict], None], board: Board
                 called.append(code)
                 report("specialist_start", {"agent": code, "name": specialist.nickname,
                                             "task": b.input.get("task", "")})
-                summary = _tool_loop(cl, specialist, b.input["task"], board, cost,
-                                     report, deadline)
+                summary = _run_specialist_isolated(cl, specialist, b.input["task"],
+                                                   board, cost, report, deadline)
                 results.append({"type": "tool_result", "tool_use_id": b.id,
                                 "content": summary})
             else:
@@ -394,7 +586,8 @@ def _handle_event(event: dict, report: Callable[[str, dict], None], board: Board
         messages.append({"role": "user", "content": results})
 
     return {"status": "stopped", "reason": f"exceeded {MAX_LEAD_ROUNDS} lead rounds",
-            "agents_called": called, "cost_idr": cost.idr}
+            "agents_called": called, "cost_idr": cost.idr,
+            "graph": _graph_frontier(registry.current_run())}
 
 
 def ask_specialist(code: str, question: str,
@@ -655,6 +848,52 @@ def _check_failure_paths() -> None:
         raise AssertionError("an unknown agent must raise")
     except KeyError:
         pass
+
+    _check_resilience()
+
+
+def _check_resilience() -> None:
+    """#1 non-lossy termination and #3 fail-open specialist isolation."""
+    # --- #1: a stopped handling salvages a labelled statement, not nothing. ---
+    board = Board()
+    from core.provenance import Origin, Result
+    board.write("impact.get_material_stock",
+                Result({"qty": 84.0}, Origin.MODELLED, "fixture:MaterialStock"))
+    board.write("logistics.estimate_eta",
+                Result({"eta": "2026-09-19"}, Origin.DERIVED, "engine/forecast.py"))
+    out = _salvage(board, ["impact", "logistics"], Cost(input_tokens=5000), "deadline reached")
+    assert out["status"] == "partial", out
+    assert "deadline reached" in out["recommendation"]
+    assert out["untrusted_on_board"] == ["impact.get_material_stock"], out
+    assert out["trusted_on_board"] == ["logistics.estimate_eta"], out
+    # it never invents a recommendation — it reports evidence + provenance only
+    assert "modelled" in out["recommendation"] and "derived" in out["recommendation"]
+
+    # --- #3: a specialist that raises is isolated; Arya is told to continue. ---
+    class _Raises:
+        def __init__(self, exc): self._exc = exc
+        class _M:
+            def __init__(self, exc): self._exc = exc
+            def create(self, **_): raise self._exc
+        @property
+        def messages(self): return _Raises._M(self._exc)
+
+    seen: List[str] = []
+    note = _run_specialist_isolated(_Raises(RuntimeError("SAP 500")), ALL["impact"],
+                                    "trace it", Board(), Cost(),
+                                    lambda k, d: seen.append(k), deadline=None)
+    assert "could not complete" in note and "Continue with the other" in note, note
+    assert "specialist_done" in seen, "a failed specialist must still report"
+
+    # A global stop (budget/deadline) is NOT isolated — it re-raises so the
+    # salvage path above can conclude on the whole board.
+    for exc in (BudgetExhausted("cap"), DeadlineExceeded("clock")):
+        try:
+            _run_specialist_isolated(_Raises(exc), ALL["impact"], "go", Board(),
+                                     Cost(), lambda k, d: None, deadline=None)
+            raise AssertionError(f"{type(exc).__name__} must propagate, not be isolated")
+        except (BudgetExhausted, DeadlineExceeded):
+            pass
 
 
 if __name__ == "__main__":

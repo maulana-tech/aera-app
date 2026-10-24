@@ -4,9 +4,10 @@ import { notFound } from "next/navigation";
 
 import { StepSummary, stageLabel, stepAgentName } from "@/components/agent-activity";
 import { Markdown } from "@/components/markdown";
-import { api, idr, me, type Run } from "@/app/lib";
+import { api, idr, me, type ExplorationGraph, type Run } from "@/app/lib";
 import { ActionPayload } from "@/components/action-payload";
 import { AutoRefresh } from "@/components/auto-refresh";
+import { ReasoningTabs } from "@/components/reasoning-tabs";
 import { Empty, Section } from "@/components/shell";
 import { OriginBadge, StatusBadge } from "@/components/status-badge";
 import Decision from "./Decision";
@@ -16,9 +17,12 @@ export const dynamic = "force-dynamic";
 const when = (t: string) => new Date(t).toLocaleString("en-GB");
 
 export default async function DisruptionDetail({ params }: { params: Promise<{ id: string }> }) {
-  const run = await api<Run>(`runs/${(await params).id}`);
+  const id = (await params).id;
+  const run = await api<Run>(`runs/${id}`);
   if (!run) notFound();
   const user = await me();
+  // The exploration graph for this run (empty unless SIGAP_GRAPH was on).
+  const graph = await api<ExplorationGraph>(`runs/${id}/graph`);
 
   const steps = run.steps ?? [];
   const actions = run.actions ?? [];
@@ -153,8 +157,8 @@ export default async function DisruptionDetail({ params }: { params: Promise<{ i
         )}
       </Section>
 
-      <Section title={`How the system reasoned (${steps.length} steps)`}>
-        {steps.length === 0 ? (
+      <Section title="How the system reasoned">
+        {steps.length === 0 && !(graph && graph.nodes.length) ? (
           <Empty
             what="No reasoning to show."
             why={
@@ -164,24 +168,34 @@ export default async function DisruptionDetail({ params }: { params: Promise<{ i
             }
           />
         ) : (
-          <ol className="max-w-4xl divide-y rounded-lg border">
-            {steps.map((s) => (
-              <li key={s.seq} className="grid grid-cols-[92px_minmax(0,1fr)] gap-4 px-5 py-4">
-                <div>
-                  <p className="text-primary font-mono text-[11px] font-semibold">{stageLabel(s.stage)}</p>
-                  <p className="text-muted-foreground mt-1 text-[11px]">{stepAgentName(s)}</p>
-                </div>
-                <div className="min-w-0">
-                  <StepSummary step={s} />
-                  {s.origin && (
-                    <div className="mt-2">
-                      <OriginBadge origin={s.origin} source={s.source} />
-                    </div>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ol>
+          <ReasoningTabs
+            graph={graph}
+            stepCount={steps.length}
+            reasoning={
+              steps.length === 0 ? (
+                <Empty what="No step was recorded." why="The graph above holds what was found." />
+              ) : (
+                <ol className="max-w-4xl divide-y rounded-lg border">
+                  {steps.map((s) => (
+                    <li key={s.seq} className="grid grid-cols-[92px_minmax(0,1fr)] gap-4 px-5 py-4">
+                      <div>
+                        <p className="text-primary font-mono text-[11px] font-semibold">{stageLabel(s.stage)}</p>
+                        <p className="text-muted-foreground mt-1 text-[11px]">{stepAgentName(s)}</p>
+                      </div>
+                      <div className="min-w-0">
+                        <StepSummary step={s} />
+                        {s.origin && (
+                          <div className="mt-2">
+                            <OriginBadge origin={s.origin} source={s.source} />
+                          </div>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              )
+            }
+          />
         )}
       </Section>
     </main>

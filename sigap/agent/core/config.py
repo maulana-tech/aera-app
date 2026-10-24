@@ -52,6 +52,7 @@ class Config:
     sap_api_key: str
     aws_region: str
     model: str
+    aux_model: str
     autonomous_limit_idr: int
     cost_cap_per_event_idr: int
     database: str
@@ -81,6 +82,10 @@ def load() -> Config:
         sap_api_key=os.environ.get("SAP_API_KEY", ""),
         aws_region=os.environ.get("AWS_REGION", ""),
         model=os.environ.get("SIGAP_MODEL", "anthropic.claude-opus-5"),
+        # The auxiliary model: a cheap, fast model for one-shot narration,
+        # summaries and titles, so the expensive agent model is not spent on
+        # boilerplate. Never sits on a decision or a figure (see core/aux.py).
+        aux_model=os.environ.get("SIGAP_AUX_MODEL", "anthropic.claude-haiku-5-5"),
         autonomous_limit_idr=int(os.environ.get("SIGAP_AUTONOMOUS_LIMIT_IDR", "50000000")),
         cost_cap_per_event_idr=int(os.environ.get("SIGAP_COST_CAP_IDR", "500000")),
         database=os.environ.get("SIGAP_DB", "data/sigap.db"),
