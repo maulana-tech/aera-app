@@ -54,6 +54,7 @@ export default async function Queue() {
           <p className="text-sm text-muted-foreground">No events yet. Send one:</p>
           <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-card p-4 font-mono text-xs">
 {`curl -X POST localhost:8787/events \\
+  -H "Authorization: Bearer $TOKEN" \\
   -H 'content-type: application/json' \\
   -d '{"kind":"port_closure","title":"Ningbo closed 6 days",
        "trigger":"maritime advisory","payload":{"port":"CNNGB"}}'`}

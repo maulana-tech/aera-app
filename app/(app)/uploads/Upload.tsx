@@ -9,11 +9,14 @@ import { Button } from "@/components/ui/button";
 const ENTITIES = [
   { v: "MaterialStock", l: "Material stock", columns: "Material, Plant, MatlWrhsStkQtyInMatlBaseUnit, BaseUnit, DailyConsumption, Description" },
   { v: "PurchaseOrder", l: "Purchase orders", columns: "PurchaseOrder, Material, Plant, OrderQuantity, Supplier, LoadingPort, DeliveryDate, RevisedDeliveryDate, Status" },
-  { v: "SalesOrder", l: "Customer orders", columns: "SalesOrder, Material, Customer, NetAmount, RequestedDeliveryDate" },
+  { v: "SalesOrder", l: "Customer orders", columns: "SalesOrder, Material, Customer, NetAmount, RequestedDeliveryDate, Quantity, LatePenaltyPctPerDay, LatePenaltyCapPct" },
   { v: "BillOfMaterial", l: "Product structure", columns: "Material, FinishedGood, Description, ComponentQuantity" },
   { v: "AlternateSource", l: "Supply options", columns: "id, label, Supplier, Material, Quantity, ArrivalDate, ExtraCostIDR, TkdnAfterPct, Origin, NewOrigin" },
   { v: "Supplier", l: "Suppliers", columns: "Supplier, SupplierName, Country, TkdnCertifiedPct" },
   { v: "Quotation", l: "Quotations", columns: "SupplierQuotation, Supplier, Material, OrderQuantity, NetPrice, DeliveryTimeInDays, Currency, QtnLifecycleStatus" },
+  { v: "CustomsDeclaration", l: "Customs declarations", columns: "DeclarationNumber, PurchaseOrder, Material, Supplier, OriginCountry, Port, ArrivalDate, SubmittedDate, Lane, Status, ReleasedDate, HoldReason" },
+  { v: "MaterialSubstitute", l: "Substitute materials", columns: "Material, Substitute, FinishedGood, Ratio, Approved, QualificationDays, Basis" },
+  { v: "PartnerContact", l: "Supplier and customer emails", columns: "Partner, PartnerName, Role, Email" },
 ];
 
 export default function Upload({ signedIn }: { signedIn: boolean }) {

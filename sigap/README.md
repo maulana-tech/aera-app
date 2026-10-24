@@ -31,6 +31,7 @@ open http://localhost:3000/dashboard
 | Set it up, key by key | `SETUP.md` |
 | Understand the product | `PLAN.md` §1 and §3 |
 | See how far along it is | `PLAN.md` §2, or `manage.py check` |
+| See how the parts fit together | `architecture/README.md` |
 | Start writing code | `agent/README.md`, then `TECHNICAL.md` |
 | Know what happens before Demo Day | `AWS-PLAN.md` |
 | Meet the agents one by one | `AGENT-REFERENCE.md` |
@@ -48,6 +49,7 @@ open http://localhost:3000/dashboard
 | **`AGENT-REFERENCE.md`** | All 12 agents: tools, parameters, limits. **Generated**, `manage.py docs` |
 | **`AWS-PLAN.md`** | Getting onto Bedrock and AgentCore, in the order that survives contact with a loop that has never run |
 | `DESIGN.md` | Scenario figures, local rules, the eval suite |
+| `architecture/` | How the system is built: the web app, the agents, the tools, the workers and the data, with diagrams |
 | `TECHNICAL.md` | Exact function names and parameters |
 | `DATA-SOURCES.md` | What was verified about each data source |
 | `BUILD-SPEC.md` | The wiring: every AWS and SAP service, and the three request paths |
@@ -74,7 +76,7 @@ cd agent && PYTHONPATH=. python3 engine/simulate.py
 If a figure in a document cannot be reproduced by that command, **the document is wrong.**
 
 **What is blocking, right now**, `PYTHONPATH=. python3 manage.py check` prints this
-live, but in short: `SAP_API_KEY`, `AWS_REGION`, and `references/` (the TKDN & LARTAS
-rules). All 12 prompts are written and all 31 tools are installed. The SAP key is
-self-service and takes 15 minutes; `references/` needs nobody's permission and is
-domain work, not code. `SETUP.md` is the runbook for the two keys.
+live, but in short: `SAP_API_KEY`, `AWS_REGION`, and the rule pack (the TKDN & LARTAS
+rules, `references/README.md`). All 12 prompts are written and all 45 tools are
+installed. The SAP key is self-service and takes 15 minutes; the rule pack needs
+nobody's permission and is domain work, not code. `SETUP.md` is the runbook for the two keys.

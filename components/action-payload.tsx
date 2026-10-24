@@ -20,28 +20,48 @@ const LABELS: Record<string, string> = {
   role: "Told",
   message: "Message",
   reference: "Reference",
+  plant: "Plant",
+  new_level: "New floor",
+  sales_order: "Customer order",
+  customer: "Customer",
+  customer_name: "Customer name",
+  finished_good: "Product",
+  requested_date: "Requested",
+  new_date: "Now expected",
+  purchase_order: "Purchase order",
+  delivery_date: "Promised",
+  revised_date: "Revised",
+  question: "Question",
 };
 
+// An outward message carries the email itself. Those fields are shown as the
+// email, once, rather than as a row each beside the text they were made from.
+const EMAIL = new Set(["to", "to_source", "to_origin", "subject", "body", "message", "question"]);
+
 // Order matters: money last, so the eye lands on it.
-const ORDER = ["material", "supplier", "from_plant", "to_plant", "qty",
-               "needed_by", "unit_price_idr", "quotation", "lead_time_days",
-               "tkdn_certified_pct", "role", "message", "reference", "cost_idr"];
+const ORDER = ["sales_order", "customer", "customer_name", "purchase_order", "material",
+               "finished_good", "supplier", "plant", "from_plant", "to_plant", "qty",
+               "new_level", "needed_by", "requested_date", "delivery_date", "revised_date",
+               "new_date", "unit_price_idr", "quotation", "lead_time_days",
+               "tkdn_certified_pct", "role", "message", "question", "reference", "cost_idr"];
 
 // Fields that are a sentence rather than a fact. Truncating one would cut the
 // only part the approver has to read, so they take the whole row instead.
-const PROSE = new Set(["rationale", "message"]);
+const PROSE = new Set(["rationale", "message", "question"]);
 
 const idr = (n: number) => "Rp " + n.toLocaleString("en-US");
 
 export function ActionPayload({ payload }: { payload: Record<string, unknown> }) {
+  const email = typeof payload.subject === "string" && typeof payload.body === "string";
   const keys = Object.keys(payload)
-    .filter((k) => !k.startsWith("_"))
+    .filter((k) => !k.startsWith("_") && !(email && EMAIL.has(k)))
     .sort((a, b) => {
       const ia = ORDER.indexOf(a), ib = ORDER.indexOf(b);
       return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
     });
 
   return (
+    <>
     <dl className="mt-3 grid gap-x-8 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">
       {keys.map((k) => {
         const money = k === "cost_idr" || k === "unit_price_idr";
@@ -62,5 +82,17 @@ export function ActionPayload({ payload }: { payload: Record<string, unknown> })
         );
       })}
     </dl>
+    {email && (
+      <div className="bg-muted/40 mt-3 rounded-md border px-4 py-3">
+        <p className="text-muted-foreground text-xs">
+          To{" "}
+          <span className="text-foreground font-mono">{payload.to ? String(payload.to) : "no address on record"}</span>
+          {payload.to_source ? <span> · from {String(payload.to_source)}</span> : null}
+        </p>
+        <p className="mt-1 text-sm font-medium">{String(payload.subject)}</p>
+        <p className="mt-2 text-sm leading-relaxed break-words whitespace-pre-wrap">{String(payload.body)}</p>
+      </div>
+    )}
+    </>
   );
 }

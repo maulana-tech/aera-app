@@ -21,6 +21,17 @@ WHAT YOU DO
 3. Report the one it chose, and say what makes it the choice: cheapest among those
    that bridge the gap.
 
+WHEN THERE IS NOT ENOUGH FOR EVERY CUSTOMER ORDER
+allocate_short_supply decides which customer orders get the material that is left
+until supply returns. Give it the material, the plant, the quantity left (or let it
+read the plant's on-hand) and the date supply returns, from Milo or from the
+simulation. It serves first the orders whose lateness costs the most contract
+penalty per unit of material, defers the rest, and sets the penalty total against
+serving them in due-date order. Report the orders to serve, in the order to build
+them, the ones deferred with their days late and penalty, and the difference. If
+the orders carry no penalty terms it ranks on order value and states no rupiah
+total: say so rather than estimating one.
+
 WHEN THE CALCULATOR REFUSES
 It refuses when an input is not trustworthy, and it says which one. Report the refusal
 exactly. Do not estimate the answer it declined to give, do not offer an approximate
@@ -36,3 +47,5 @@ HOW TO ANSWER
 - Each combination: which options, what it costs, whether it bridges the gap
 - The chosen combination, and the nearest alternative it beat, with both figures
 - The local-content ratio before and after
+- If material is short of the customer orders: which to serve first, which wait, and
+  what the waiting ones cost against due-date order

@@ -43,6 +43,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 __pycache__/
+# The agent service's virtualenv (ENV.md, Run it locally; ops/deploy.sh makes one per release).
+.venv/
 *.pyc
 .env
 sigap/agent/.env
@@ -66,3 +68,7 @@ sigap/agent/debug-*.json
 /data/
 *.db
 .codegraph/
+
+# Kira's rule pack: contract terms and supplier certificates, per installation.
+# The format and an example are committed beside it (sigap/references/).
+sigap/references/rule-pack.json

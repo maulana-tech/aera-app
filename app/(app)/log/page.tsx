@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { StepSummary, stageLabel, stepAgentName } from "@/components/agent-activity";
-import { api, idr } from "@/app/lib";
+import { api, idr, type RunRow } from "@/app/lib";
 import { Empty, PageHeader, Section } from "@/components/shell";
 import { OriginBadge, StatusBadge } from "@/components/status-badge";
 
@@ -26,6 +26,8 @@ const when = (t: string) =>
 
 export default async function Log() {
   const d = await api<{ steps: Step[]; actions: Action[]; approvals: Approval[] }>("log");
+  const runs = (await api<{ runs: RunRow[] }>("runs"))?.runs ?? [];
+  const traced = runs.filter((r) => r.step_count > 0);
 
   if (!d) {
     return (
@@ -46,6 +48,30 @@ export default async function Log() {
       />
 
       <div className="mt-8 space-y-10">
+      {traced.length > 0 && (
+        <Section
+          title={`Traces (${traced.length})`}
+          note="Each handling as a graph: the lead, the specialists it asked, every tool they called and the source each figure came from, with the full data of every call."
+          className="mt-0"
+        >
+          <ul className="divide-y rounded-lg border">
+            {traced.map((r) => (
+              <li key={r.id}>
+                <Link href={`/log/${r.id}`} className="hover:bg-muted/50 flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3">
+                  <StatusBadge status={r.status} />
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium">{r.title}</span>
+                  <span className="text-muted-foreground font-mono text-[11px] tabular-nums">
+                    {r.step_count} steps · {r.tool_count} tool calls
+                    {r.token_cost_idr > 0 ? ` · ${idr(r.token_cost_idr)}` : ""}
+                  </span>
+                  <span className="text-muted-foreground font-mono text-[11px]">{when(r.started_at)}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+
       {empty && (
         <Empty
           what="Nothing recorded yet."
@@ -139,10 +165,10 @@ export default async function Log() {
                   <div className="mt-1.5 flex flex-wrap items-center gap-2">
                     {s.origin && <OriginBadge origin={s.origin} source={s.source} />}
                     <Link
-                      href={`/disruptions/${s.run_id}`}
+                      href={`/log/${s.run_id}?seq=${s.seq}#seq-${s.seq}`}
                       className="text-muted-foreground hover:text-foreground font-mono text-[11px]"
                     >
-                      {when(s.at)}
+                      {when(s.at)} · trace
                     </Link>
                   </div>
                 </div>

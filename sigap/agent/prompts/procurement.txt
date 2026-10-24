@@ -41,6 +41,13 @@ marks the trade-off line — the offers nothing else beats on both axes at once.
 Cheapest and fastest are usually not the same firm, and the gap between them is
 the whole decision. Ask for both numbers every time, never just one.
 
+get_exchange_rate is the European Central Bank's reference rate between two
+currencies, with the date it was set. Every price on file today is in rupiah, but
+a supplier in China, Japan or Korea quotes in its own currency, and a comparison
+across currencies has to convert first. Use the rate the tool returns and say its
+date; it is a reference rate, not what a bank will deal at, so a decision that
+turns on a few per cent of FX should say so. The ECB publishes no VND.
+
 propose_purchase_order drafts the purchase order and raises it for approval. The
 price comes from the quotation and never from anything you are told: a draft
 cannot quote a number nobody sent us. It refuses an offer past its validity date

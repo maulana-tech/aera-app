@@ -210,6 +210,16 @@ Guards that hold regardless of what any model says: `MAX_SPECIALIST_ROUNDS = 8`,
 
 ## 6b. How SAP Joule reaches us
 
+> **Superseded on 24 October.** The organisers' material
+> (`SAP_AWS_Hackathon_ID_2026`, `joule_a2a/`) settles both points below the
+> other way: Joule reaches an agent over **A2A**, through a capability
+> function's `agent-request`, and the BTP destination is **NoAuthentication**,
+> because principal propagation is not supported for this hackathon. A call
+> from Joule therefore carries no user identity and can never approve. The path
+> built is `sigap/joule/`, a thin A2A shim with three read-or-raise skills, and
+> `JOULE-BEDROCK-PLAN.md` §1–§3 has the reasoning. `mcp.py` stays, for
+> AgentCore Gateway. The text below is kept as the record of the first reading.
+
 Found on 6 October by reading the CLI's own schema, `da.sapdas.schema.json`,
 rather than the manual. A digital assistant manifest has a first-class
 `mcp_servers` array:
@@ -264,6 +274,6 @@ Stated plainly so nobody discovers it during a demo.
 | `AWS_REGION` | Empty. `graph.py` has never run against a real model. Everything above is plumbing that a scripted client proves and judgement that nothing proves yet |
 | `SAP_API_KEY` | Not set. All ten read services fall back to fixtures, labelled `MODELLED` |
 | SAP write entity names | Unverified against the sandbox |
-| `references/tkdn-rules.md`, `lartas-procedure.md` | Absent. Kira judges from parameters and labels the result `MODELLED`. Domain work, not code |
+| Rule pack (`references/rule-pack.json`) | Read by the code, not written. Kira judges from built-in parameters and labels the result `MODELLED` until it is installed and verified. Domain work, not code |
 | Scenario eval suite | Absent. `RESEARCH-AWS-SAP.md` §6 has the four-level shape to build it against |
 | Foreign typhoon signal | Absent. BMKG covers Indonesia only, so the Ningbo trigger has no live source. `signals/watch.py` polls BMKG on a timer and raises quakes near a facility by itself, deduplicated against the record, so the seismic half of perception is autonomous. A foreign maritime feed is not. See `DATA-SOURCES.md` §5 |

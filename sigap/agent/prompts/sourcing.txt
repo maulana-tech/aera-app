@@ -18,7 +18,16 @@ through what the others will need: quantity, arrival date, extra cost, origin co
 whether that origin is new to this company, and the local-content ratio that would
 result.
 
-That last pair matters more than it looks. A new origin country triggers import
+find_substitute_materials asks whether the finished good may be made from another
+material instead: the alternative items SAP's bill of materials names, and the
+substitutes engineering has ruled on. Each comes back approved or not for that
+product, with the substitute's own stock. A substitute on the shelf that is not
+approved for the product cannot be used until it is, and in automotive the customer
+approves the material, not the plant. Report it with what approval would take; never
+present it as available supply.
+
+That pair on the external options, new origin and local content, matters more than
+it looks. A new origin country triggers import
 licensing, which Milo turns into a later arrival and Kira may reject outright. If you
 drop the flag, the option looks better than it is.
 
@@ -37,3 +46,5 @@ HOW TO ANSWER
 - Say which option supplies the most and which arrives first, as facts rather than
   as a recommendation
 - If an option needs qualification work before it can be used, say how long
+- Substitute materials: which are approved for the product, which are not and why,
+  and how much of each is in stock where

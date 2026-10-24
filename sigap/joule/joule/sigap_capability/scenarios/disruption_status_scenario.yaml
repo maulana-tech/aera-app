@@ -1,0 +1,18 @@
+description: >-
+  This skill reports how a SIGAP investigation of a supply disruption is going:
+  whether the run is still working, done, held or stopped, which specialist
+  agents worked on it, the recommendation with its trade-offs and residual
+  risk, which findings are not yet trusted, and which actions are waiting for
+  approval on SIGAP web. Use it when the user asks for the status, progress,
+  result or recommendation of an investigation or a run id such as run_1a2b3c.
+target:
+  name: disruption_status_function
+  type: function
+visibility_condition:
+  objects:
+    - type: ias_attributes
+      attributes:
+        - attribute: groups
+          match: "ANY"
+          values:
+            - __TEAM_IAS_GROUP_ID__

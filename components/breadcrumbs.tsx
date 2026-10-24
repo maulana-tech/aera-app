@@ -24,6 +24,8 @@ const LABELS: Record<string, string> = {
   reports: "Reports",
   uploads: "Upload data",
   contacts: "Contacts",
+  models: "Models",
+  schedule: "Schedule",
   disruptions: "Handling",
 };
 

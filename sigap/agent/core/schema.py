@@ -49,6 +49,23 @@ ENTITIES: Dict[str, Dict[str, List[str]]] = {
         "required": ["SupplierQuotation", "Supplier", "Material", "OrderQuantity", "NetPrice", "DeliveryTimeInDays"],
         "numeric": ["OrderQuantity", "NetPrice", "DeliveryTimeInDays"],
     },
+    # Neither of these is held in S/4HANA. A customs declaration lives in the
+    # customs authority's system (CEISA in Indonesia); an engineering-approved
+    # substitute in a change record. An upload is how SIGAP gets to see them.
+    "CustomsDeclaration": {
+        "required": ["PurchaseOrder", "Port", "ArrivalDate", "Status"],
+        "numeric": [],
+    },
+    "MaterialSubstitute": {
+        "required": ["Material", "Substitute", "Approved"],
+        "numeric": ["Ratio", "QualificationDays"],
+    },
+    # Where a supplier request or a customer notice is sent when the business
+    # partner in SAP carries no email. SAP's address wins when it has one.
+    "PartnerContact": {
+        "required": ["Partner", "Email"],
+        "numeric": [],
+    },
 }
 
 # A realistic one-row example per entity, so the template a user downloads shows
@@ -60,9 +77,10 @@ EXAMPLES: Dict[str, Dict[str, Any]] = {
     "PurchaseOrder": {"PurchaseOrder": "4500000123", "Material": "M-4471", "Plant": "KRW1",
                       "OrderQuantity": 85.0, "Supplier": "SUP-2201", "LoadingPort": "CNNGB",
                       "DeliveryDate": "2026-09-12", "Status": "open"},
-    "SalesOrder": {"SalesOrder": "10001", "Material": "M-4471", "Customer": "OEM-01",
+    "SalesOrder": {"SalesOrder": "10001", "Material": "FG-9001", "Customer": "OEM-01",
                    "CustomerName": "Astra OEM", "NetAmount": 2_000_000_000, "Currency": "IDR",
-                   "RequestedDeliveryDate": "2026-09-20"},
+                   "RequestedDeliveryDate": "2026-09-20", "Quantity": 1600,
+                   "LatePenaltyPctPerDay": 0.5, "LatePenaltyCapPct": 10.0},
     "BillOfMaterial": {"Material": "M-4471", "FinishedGood": "FG-9001",
                        "ComponentQuantity": 1.4, "Description": "bracket"},
     "AlternateSource": {"id": "B", "Material": "M-4471", "Supplier": "SUP-4417",
@@ -74,6 +92,16 @@ EXAMPLES: Dict[str, Dict[str, Any]] = {
     "Quotation": {"SupplierQuotation": "6000000045", "Supplier": "SUP-4417", "Material": "M-4471",
                   "OrderQuantity": 60.0, "NetPrice": 1_560_000, "DeliveryTimeInDays": 9,
                   "Currency": "IDR", "QtnLifecycleStatus": "A"},
+    "CustomsDeclaration": {"DeclarationNumber": "PIB-2609-0027", "PurchaseOrder": "4500018876",
+                           "Material": "M-5512", "Supplier": "SUP-2209", "OriginCountry": "CN",
+                           "Port": "IDTPP", "ArrivalDate": "2026-09-01",
+                           "SubmittedDate": "2026-09-01", "Lane": "red", "Status": "held",
+                           "ReleasedDate": "", "HoldReason": "certificate of origin disputed"},
+    "MaterialSubstitute": {"Material": "M-4471", "Substitute": "M-4472", "FinishedGood": "FG-1120",
+                           "Ratio": 1.0, "Approved": "false", "QualificationDays": 21,
+                           "Basis": "casting trial passed; OEM approval pending"},
+    "PartnerContact": {"Partner": "SUP-2209", "PartnerName": "Qingdao Baowu Steel",
+                       "Role": "supplier", "Email": "export.sales@supplier.example"},
 }
 
 

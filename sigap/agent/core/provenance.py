@@ -23,6 +23,14 @@ class Origin(str, Enum):
 #: Origins that may back a rupiah figure shown to a user.
 TRUSTED = frozenset({Origin.LIVE, Origin.CACHED, Origin.DERIVED})
 
+#: Weakest first. A finding is never more trustworthy than the weakest thing it rests on.
+STRENGTH = (Origin.MISSING, Origin.MODELLED, Origin.CACHED, Origin.DERIVED, Origin.LIVE)
+
+
+def weakest(*origins: Origin) -> Origin:
+    """The weakest of several origins: what a figure built from all of them is worth."""
+    return min(origins, key=STRENGTH.index)
+
 
 @dataclass
 class Result:
@@ -58,6 +66,8 @@ def demo() -> None:
     assert not modelled.trusted, "modelled data must never count as trusted"
 
     assert {o.value for o in Origin} == {"live", "cached", "derived", "modelled", "missing"}
+    assert weakest(Origin.LIVE, Origin.MODELLED, Origin.DERIVED) is Origin.MODELLED
+    assert weakest(Origin.DERIVED) is Origin.DERIVED
     print("provenance ok")
 
 

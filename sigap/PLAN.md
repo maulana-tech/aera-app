@@ -3,7 +3,7 @@
 > Context: **application development.** Not a competition entry.
 > Jargon is decoded in §8 if a word is unfamiliar.
 >
-> Updated: 22 September 2026
+> Updated: 24 October 2026
 
 ---
 
@@ -30,16 +30,20 @@ interface is where you inspect and approve, not where the work starts.
 | Data-origin label | ✅ **working** | On every tool. A failure → `MISSING`, never a guess |
 | Cost calculator | ✅ **working** | Pure Python. Refuses figures when inputs aren't trustworthy |
 | SAP connector (read) | ✅ **ready** | Uses the sandbox automatically once `SAP_API_KEY` is set |
-| Live disruption signal | ✅ **working** | `signals/bmkg.py` polls BMKG quakes and raises events. The only live external source in the product |
+| Live disruption signal | ✅ **working** | `signals/bmkg.py` polls BMKG quakes and raises events. `signals/hazards.py` (GDACS + NASA EONET + USGS) and `signals/weather.py` (Open-Meteo) are written and verified live on 24 Oct, Champi caught at 588 km from Ningbo; each needs a slot in the scheduler. `DATA-SOURCES.md` §10 |
 | SAP connector (write) | ⚠️ **path complete, untested** | CSRF handled; entity names need checking |
 | Persistence | ✅ **working** | SQLite. Idempotent actions, one-shot approvals |
 | Auth & authority | ✅ **working** | Identity from the token; value limits checked server-side |
-| API service | ✅ **working** | 19 routes |
+| API service | ✅ **working** | `POST /events` needs a session since 24 Oct. Several reads (`/summary`, `/runs`, `/log`) still answer without one |
 | Interface | ✅ **working** | Dashboard with charts, queue, detail, approval, per-domain tables, conversations. shadcn-ui |
-| Tools | ✅ **23 of 23** | Every declared tool exists |
-| Agent prompts | ✅ **11 of 11** | Every agent can be invoked |
-| Agent team (`graph.py`) | 🔶 **runs, not yet against Bedrock** | Routing, tool execution and the board are exercised by `python3 graph.py`. Waiting on `AWS_REGION` for the real model |
-| Rule documents (`references/`) | ❌ **absent** | The main blocker. Domain work |
+| Tools | ✅ **39 of 39** | Every declared tool exists. Six read the open web: hazards, port weather, news, holidays, FX, a cited web answer |
+| Agent prompts | ✅ **12 of 12** | Every agent can be invoked |
+| Agent team (`graph.py`) | ✅ **runs end to end on AI Core** | Ningbo handled on `gpt-5.4` on 24 Oct, 10 model calls, 86 s. Not yet against Bedrock: waiting on credentials |
+| Model per agent (`core/llm.py`) | ✅ **working** | Claude on Bedrock Mantle, MiniMax on Mantle Chat Completions, `gpt-5.4` on AI Core, with a fallback. `manage.py models --ping` |
+| Joule (`sigap/joule/`) | 🔶 **built, tested against a stub** | A2A shim, three skills, capability YAML. Waiting on CF push and a BTP destination |
+| RPT-1.6 slip ranking | ✅ **working** | Vega's `rank_po_slip_risk`, live on AI Core. Labelled modelled, never priced |
+| Rule pack (`references/`) | 🔶 **read, not written** | `tools/compliance.py` reads `rule-pack.json`, each rule with its source and whether it was verified; `get_rule_pack` shows what is in force. The pack itself, the company's terms and certificates, is domain work and is not committed |
+| Supply-chain coverage | ✅ **supplier, customs, substitution, allocation** | Orders by supplier, customs status and measured dwell, substitute materials with their approval, short supply allocated to customer orders by penalty, customer and supplier messages as drafts |
 | Scenario eval suite | ❌ **absent** | |
 | Inter-plant transfers | ✅ **judged from both ends** | `engine/matching.py`. Iris rules on whether the donor plant can afford a transfer, the way Kira rules on regulation |
 | Data audit | ✅ **working** | `engine/audit.py` reads whatever the system can see and reports what is wrong with it. Deterministic, every finding carries its evidence |
@@ -52,11 +56,12 @@ this table.
 
 1. **`SAP_API_KEY`**, free, 15 minutes. Once set, five read tools use real data and the
    origin label flips from `modelled` to `live`.
-2. **`AWS_REGION`**, `graph.py` has never been executed, not once. Until it is set, the
-   system honestly holds back and makes no decisions at all.
-3. **`references/tkdn-rules.md` and `lartas-procedure.md`**, Kira reads them when they
-   exist; without them she judges from parameters and labels the result `modelled`.
-   **This is knowledge work, not code.** A programmer cannot write it.
+2. **Bedrock credentials.** The team has run end to end on AI Core, not yet on Bedrock.
+   `ENV.md`, under Models, has the steps. Until a model is reachable the system honestly
+   holds back and makes no decisions at all.
+3. **The rule pack** (`sigap/references/README.md`). Kira reads it when it is installed;
+   without it she judges from built-in parameters and the company profile, and labels the
+   result `modelled`. **This is knowledge work, not code.** A programmer cannot write it.
 
 ---
 
@@ -81,7 +86,7 @@ a disruption arrives
 **The order is not written in advance.** If moving stock between plants solves it, the
 sourcing specialist is never called at all.
 
-### Eleven agents
+### Twelve agents
 
 | Agent | The question it owns |
 |---|---|
@@ -94,6 +99,7 @@ sourcing specialist is never called at all.
 | **Kira, Rules** ⭐ | May we use that supplier at all? **Has veto** |
 | Tara, Costing | What does it cost, which is cheapest? |
 | Otto, Precedent | Has this happened before? How did it end? |
+| Prita, Procurement | Who do we buy from, did they keep their dates, what does a quote really cost? |
 | Bram, Execution | Carry it out, then watch until the goods arrive |
 | Vega, Risk Scanner | What is **about** to break? *(Prevent mode)* |
 
@@ -112,7 +118,7 @@ Decisions that are locked in:
 
 | Thing | Choice |
 |---|---|
-| Model | `anthropic.claude-opus-5` via Bedrock |
+| Model | Per agent (`core/llm.py`), picked in `.env` or on the Models page: Claude Opus 4.6 for Arya and Kira, MiniMax M2.5 for the other ten, `gpt-5.4` on AI Core as fallback. `JOULE-BEDROCK-PLAN.md` §4 |
 | Languages | Python (agents) · TypeScript (interface) |
 | Persistence | SQLite, move to Postgres once this is multi-tenant |
 | Interface | Next.js 16 + React 19 + Tailwind v4 + shadcn-ui |
@@ -149,7 +155,8 @@ The full list, with the reasoning, is in `agent/README.md`.
 | 1 | Get `SAP_API_KEY` at api.sap.com | anyone | 15 min |
 | 2 | Enable Bedrock, confirm the region. `AWS-PLAN.md` has the rest | backend | 1 hour |
 | 3 | Run `graph.py` against Bedrock, fix what breaks | backend | 1-2 days |
-| 4 | Write `references/tkdn-rules.md` + `lartas-procedure.md` | **domain** | 2 days |
+| 4 | Write the rule pack: TKDN floor and certificates, LARTAS licensing time, collective leave, each sourced and verified | **domain** | 2 days |
+| 5 | Upload customs declarations and engineering's substitute list | whoever holds them | 1 hour each |
 | 6 | Verify SAP write entity names in `sender.py` | backend | 1 day |
 | 7 | A 10-scenario eval suite | data | 2 days |
 | 8 | Schedule Vega weekly, wire her findings into the queue | backend | 2 days |

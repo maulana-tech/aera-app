@@ -11,6 +11,7 @@ import { ReasoningTabs } from "@/components/reasoning-tabs";
 import { Empty, Section } from "@/components/shell";
 import { OriginBadge, StatusBadge } from "@/components/status-badge";
 import Decision from "./Decision";
+import { OUTWARD, Outbound } from "./Outbound";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,12 @@ export default async function DisruptionDetail({ params }: { params: Promise<{ i
           {run.mode === "guided" && <StatusBadge status="guided">guided mode</StatusBadge>}
           <span className="text-muted-foreground font-mono text-xs">{run.kind}</span>
           <AutoRefresh active={run.status === "running"} />
+          <Link
+            href={`/log/${run.id}`}
+            className="text-muted-foreground hover:text-foreground font-mono text-xs underline underline-offset-2"
+          >
+            trace
+          </Link>
           {run.token_cost_idr > 0 && (
             <span className="text-muted-foreground font-mono text-xs tabular-nums">
               {idr(run.token_cost_idr)} of model time
@@ -124,12 +131,17 @@ export default async function DisruptionDetail({ params }: { params: Promise<{ i
                     )}
                     {a.sap_reference && (
                       <span className="text-muted-foreground ml-auto font-mono text-xs">
-                        SAP {a.sap_reference}
+                        {a.sap_reference.startsWith("email") ? a.sap_reference : `SAP ${a.sap_reference}`}
                       </span>
                     )}
                   </div>
 
                   <ActionPayload payload={a.payload} />
+
+                  {a.delivery && (
+                    <Outbound actionId={a.id} status={a.status} delivery={a.delivery}
+                      mayResend={!!user && (OUTWARD[a.kind] ?? []).includes(user.role)} />
+                  )}
 
                   {history.map((p) => (
                     <p key={p.id} className="text-muted-foreground mt-3 text-xs">
@@ -144,6 +156,8 @@ export default async function DisruptionDetail({ params }: { params: Promise<{ i
                         actionId={a.id}
                         valueIdr={value}
                         limitIdr={user.limit_idr}
+                        role={user.role}
+                        approvers={OUTWARD[a.kind]}
                       />
                     ) : (
                       <p className="text-muted-foreground mt-4 border-t pt-3 text-xs">

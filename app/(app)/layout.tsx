@@ -4,12 +4,18 @@ import { ThemeToggle } from "@/components/theme";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { api, me } from "@/app/lib";
+import { redirect } from "next/navigation";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const [user, health] = await Promise.all([
     me(),
     api<{ env: string; sap_ready: boolean; model_ready: boolean }>("health"),
   ]);
+  // Every route but /health needs a session now, so a page without one shows
+  // nothing but errors. When the service answers and says who you are not,
+  // the login page is the only useful thing to show. When it does not answer
+  // at all, stay: the pages say the service is down, which is the real news.
+  if (health && !user) redirect("/login");
 
   return (
     <SidebarProvider>

@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 
 export function PageHeader({
   title, lead, aside,
-}: { title: string; lead?: string; aside?: React.ReactNode }) {
+}: { title: string; lead?: React.ReactNode; aside?: React.ReactNode }) {
   return (
     <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 border-b pb-4 md:gap-x-8 md:gap-y-4 md:pb-6">
       <div className="min-w-0 max-w-2xl">

@@ -167,18 +167,20 @@ vs option A      → Rp 186,000,000 · saves Rp 70,000,000 (38%)
 
 ## 2. The constraint engine
 
-Four rules, run by `check_local_constraints`. These are what `references/` contains.
+Four rules. The first three run in `check_local_constraints`, with their values from the
+rule pack (`references/README.md`); the fourth in `estimate_eta`.
 
 | Rule | Logic | Effect |
 |---|---|---|
 | **TKDN** | Recompute the portfolio local-content ratio if this supplier is used | Block anything that worsens the position, or drops it below the 40% contract floor from above |
 | **LARTAS** | A new origin country → add 10 working days for the import licence | Shifts the ETA; often makes an option arrive too late |
-| **Holiday calendar** | Collective leave and national holidays freeze customs and logistics | Add calendar days to every ETA that crosses them |
-| **Priok dwell time** | A variable, not a constant, use the historical distribution | An import ETA is a range, not a single date |
+| **Holiday calendar** | Collective leave and national holidays freeze customs and logistics | The LARTAS count skips Indonesian public holidays (live) and the pack's collective leave |
+| **Priok dwell time** | A variable, not a constant, use the historical distribution | Median and 80th percentile of past customs releases: an import ETA is a range, not a single date |
 
-⚠️ `references/tkdn-rules.md` and `lartas-procedure.md` are **not written yet**. Until they
-exist, Kira judges from fixture parameters and labels the result `modelled`. Writing them
-is domain work, not programming.
+⚠️ The rule pack is **not written yet**. Until it is installed, Kira judges from built-in
+parameters and the company profile and labels the result `modelled`; a rule in the pack
+counts only once it carries a source and someone verified it there. Writing it is domain
+work, not programming.
 
 ### A note on the TKDN rule direction
 

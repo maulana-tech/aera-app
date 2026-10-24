@@ -106,7 +106,7 @@ def upsert_node(
     """Create or merge one knowledge node, returning its node_id."""
     now = _now()
     payload_json = None if payload is None else json.dumps(payload, ensure_ascii=False, default=str)
-    row = c.execute(
+    c.execute(
         """INSERT INTO graph_nodes
              (node_id, run_id, kind, state, label, subject, lead_key, origin, source,
               dedup_key, payload, priority, created_at, updated_at)
@@ -120,11 +120,16 @@ def upsert_node(
              source   = COALESCE(excluded.source, source),
              payload  = COALESCE(excluded.payload, payload),
              priority = COALESCE(excluded.priority, priority),
-             updated_at = excluded.updated_at
-           RETURNING node_id""",
+             updated_at = excluded.updated_at""",
         (new_id("node"), run_id, kind, state, label, subject, lead_key, origin, source,
          dedup_key, payload_json, priority, now, now),
-    ).fetchone()
+    )
+    # Read the id back rather than `RETURNING node_id`, which needs SQLite 3.35.
+    # Servers still ship 3.34 (RHEL 9 does), and there the statement failed
+    # outright, taking the planner and the async dispatcher down with it. Same
+    # connection, same transaction, so this reads the row the upsert just wrote.
+    row = c.execute("SELECT node_id FROM graph_nodes WHERE run_id=? AND dedup_key=?",
+                    (run_id, dedup_key)).fetchone()
     return row["node_id"]
 
 

@@ -1,0 +1,18 @@
+description: >-
+  This skill scans the supply chain for risk that has not happened yet:
+  materials with a single source, lanes concentrated on one port, stock cover
+  falling below policy, certificates about to lapse, and the open purchase
+  orders most likely to arrive late. Use it when the user asks what is about to
+  break, where the supply risk or exposure is, which suppliers are single
+  sourced, or which purchase orders are likely to slip.
+target:
+  name: risk_scan_function
+  type: function
+visibility_condition:
+  objects:
+    - type: ias_attributes
+      attributes:
+        - attribute: groups
+          match: "ANY"
+          values:
+            - __TEAM_IAS_GROUP_ID__

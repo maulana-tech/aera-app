@@ -13,7 +13,8 @@ BMKG covers Indonesian territory. It is not a source for the East China Sea,
 which is where the Ningbo typhoon sits. See DATA-SOURCES.md section 5.
 
     python3 signals/bmkg.py           # show what the feed says right now
-    python3 signals/bmkg.py --raise   # and POST anything worth handling
+    python3 signals/bmkg.py --raise   # and POST anything worth handling, as the
+                                      # user whose session is in SIGAP_TOKEN
 """
 from __future__ import annotations
 
@@ -113,7 +114,8 @@ def as_event(hit: dict) -> dict:
     }
 
 
-def poll(raise_events: bool = False, api: str = "http://127.0.0.1:8787") -> dict:
+def poll(raise_events: bool = False, api: str = "http://127.0.0.1:8787",
+         token: str = "") -> dict:
     r = recent_quakes()
     if r.value is None:
         return {"origin": r.origin.value, "note": r.note, "quakes": 0, "hits": []}
@@ -123,8 +125,13 @@ def poll(raise_events: bool = False, api: str = "http://127.0.0.1:8787") -> dict
     if raise_events:
         for h in hits:
             body = json.dumps(as_event(h)).encode()
+            # POST /events needs a session. The service's own watcher does not
+            # come this way (it raises in-process); this is the `--raise` CLI.
+            headers = {"content-type": "application/json"}
+            if token:
+                headers["Authorization"] = f"Bearer {token}"
             req = urllib.request.Request(f"{api}/events", data=body, method="POST",
-                                         headers={"content-type": "application/json"})
+                                         headers=headers)
             with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
                 raised.append(json.loads(resp.read().decode())["run_id"])
 
@@ -163,7 +170,10 @@ def demo() -> None:
 
 if __name__ == "__main__":
     if "--raise" in sys.argv:
-        out = poll(raise_events=True)
+        import os
+        out = poll(raise_events=True,
+                   api=os.environ.get("SIGAP_API", "http://127.0.0.1:8787"),
+                   token=os.environ.get("SIGAP_TOKEN", ""))
         print(f"{len(out['raised'])} events raised: {', '.join(out['raised']) or 'none'}")
     else:
         demo()

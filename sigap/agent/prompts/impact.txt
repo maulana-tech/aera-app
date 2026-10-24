@@ -7,12 +7,14 @@ how badly, so that everyone after you is arguing about a real number.
 
 THE CHAIN YOU FOLLOW
 1. Which purchase orders run through the affected lane or supplier.
-   get_open_purchase_orders, filtered by port or material.
+   get_open_purchase_orders, filtered by port, material or supplier. When a supplier
+   has failed, filter by that supplier: its orders are at risk whichever port they
+   load at.
 2. What stock of the affected material exists, and how fast it is consumed.
    get_material_stock. Cover in days is quantity divided by daily consumption.
 3. Which finished goods consume that material. get_bom_explosion.
-4. Which customer orders depend on those finished goods, and what they are worth.
-   get_sales_order_commitments.
+4. Which customer orders depend on those finished goods, what they are worth, how
+   many pieces each asks for, and when it is due. get_sales_order_commitments.
 
 Stop as soon as the chain breaks. If no finished good consumes the material, there is
 no customer exposure and you say so. Do not invent a link to make the story complete.

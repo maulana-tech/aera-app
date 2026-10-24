@@ -1,6 +1,7 @@
 import { api, me, type Upload as UploadRecord } from "@/app/lib";
 import Upload from "./Upload";
 import { DeleteUpload } from "./Delete";
+import { PageHeader } from "@/components/shell";
 
 export const dynamic = "force-dynamic";
 
@@ -11,20 +12,21 @@ export default async function UploadsPage() {
   ]);
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-4 md:px-6 md:py-8">
-      <header className="border-b pb-4 md:pb-5">
-        <h1 className="mt-1 text-xl font-semibold tracking-tight md:mt-2 md:text-2xl">Upload data</h1>
-        <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
+    <main className="w-full px-4 py-4 md:px-6 md:py-8">
+      <PageHeader title="Upload data" lead={<>
           Until SAP is connected, company data can come in as CSV. This is not a substitute
           for the SAP connection. Once <span className="font-mono">SAP_API_KEY</span> is set,
-          the tools read live data and uploads are ignored.
-        </p>
-      </header>
+          the tools read live data and an upload of anything SAP holds is ignored. What S/4HANA
+          does not hold is still read from here: customs declarations, approved substitutes,
+          and a partner&apos;s email where its business partner has none.
+        </>} />
 
-      <div className="mt-8 space-y-10">
-        <Upload signedIn={!!user} />
+      <div className="mt-8 grid gap-10 xl:grid-cols-2 xl:gap-12">
+        <div className="min-w-0">
+          <Upload signedIn={!!user} />
+        </div>
 
-        <section>
+        <section className="min-w-0">
           <h2 className="text-sm font-medium">
             Uploaded so far ({d?.uploads.length ?? 0})
           </h2>

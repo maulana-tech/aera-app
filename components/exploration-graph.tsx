@@ -222,17 +222,35 @@ function ZoomBtn({ onClick, label, children }: { onClick: () => void; label: str
   );
 }
 
-function PanZoom({
-  innerW, innerH, onBackgroundClick, children,
+export function PanZoom({
+  innerW, innerH, onBackgroundClick, children, height = 480, fit = false,
 }: {
   innerW: number; innerH: number; onBackgroundClick: () => void; children: ReactNode;
+  /** The viewport's height in CSS pixels. */
+  height?: number;
+  /** Start (and reset) zoomed out until the whole canvas is in view. */
+  fit?: boolean;
 }) {
   const vpRef = useRef<HTMLDivElement | null>(null);
   const [view, setView] = useState({ s: 1, x: 24, y: 8 });
   const [isPanning, setIsPanning] = useState(false);
   const pan = useRef<{ x: number; y: number; ox: number; oy: number; moved: boolean } | null>(null);
 
-  const reset = useCallback(() => setView({ s: 1, x: 24, y: 8 }), []);
+  const home = useCallback(() => {
+    const el = vpRef.current;
+    if (!fit || !el) return { s: 1, x: 24, y: 8 };
+    const s = Math.max(MIN_S, Math.min(1, (el.clientWidth - 48) / innerW, (height - 24) / innerH));
+    return { s, x: Math.max(24, (el.clientWidth - innerW * s) / 2), y: Math.max(8, (height - innerH * s) / 2) };
+  }, [fit, innerW, innerH, height]);
+  const reset = useCallback(() => setView(home()), [home]);
+  // Fitted once the viewport has a size, which the observer's first report gives.
+  useEffect(() => {
+    const el = vpRef.current;
+    if (!fit || !el) return;
+    const ro = new ResizeObserver(() => { setView(home()); ro.disconnect(); });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [fit, home]);
   const zoomBy = useCallback((factor: number) => setView((v) => {
     const el = vpRef.current;
     const cx = el ? el.clientWidth / 2 : 0;
@@ -290,8 +308,8 @@ function PanZoom({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerLeave={onPointerUp}
-      className="bg-muted/20 relative h-[480px] w-full touch-none overflow-hidden rounded-lg border"
-      style={{ cursor: isPanning ? "grabbing" : "grab" }}
+      className="bg-muted/20 relative w-full touch-none overflow-hidden rounded-lg border"
+      style={{ height, cursor: isPanning ? "grabbing" : "grab" }}
     >
       <div
         className="absolute left-0 top-0 origin-top-left"
