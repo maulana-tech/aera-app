@@ -9,7 +9,7 @@ from typing import Optional
 
 from core.provenance import Result
 from core.registry import register
-from tools.fetcher import pull
+from tools.fetcher import bom, pull
 
 
 @register("get_open_purchase_orders", "impact",
@@ -42,8 +42,10 @@ def get_material_stock(material: Optional[str] = None, plant: Optional[str] = No
           "Which finished goods consume this material.",
           {"material": {"type": "string"}}, ["material"])
 def get_bom_explosion(material: str) -> Result:
-    return pull("BillOfMaterial", "API_BILL_OF_MATERIAL_SRV", "A_BillOfMaterial",
-                {"$top": "100"}, lambda r: r.get("Material") == material)
+    r = bom()
+    if r.value is not None:
+        r.value = [row for row in r.value if row.get("Material") == material]
+    return r
 
 
 @register("get_sales_order_commitments", "impact",

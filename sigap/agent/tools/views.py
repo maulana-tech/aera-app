@@ -468,19 +468,19 @@ def impact() -> dict:
     po = get_open_purchase_orders(port="CNNGB")
     stock = get_material_stock()
     bom = get_bom_explosion("M-4471")
-    finished = [x["FinishedGood"] for x in (bom.value or [])]
+    finished = [x["FinishedGood"] for x in (bom.value or []) if x.get("FinishedGood")]
     orders = get_sales_order_commitments(finished)
-    exposed = sum(x["NetAmount"] for x in (orders.value or []))
+    exposed = sum(float(x.get("NetAmount") or 0) for x in (orders.value or []))
 
     rows = [{
         "stage": "Purchase orders through Ningbo",
         "count": len(po.value or []),
-        "detail": ", ".join(x["PurchaseOrder"] for x in (po.value or [])[:4]),
+        "detail": ", ".join(x.get("PurchaseOrder", "") for x in (po.value or [])[:4]),
         "value_idr": None,
     }, {
         "stage": "Materials affected",
-        "count": len({x["Material"] for x in (stock.value or [])}),
-        "detail": ", ".join(sorted({x["Material"] for x in (stock.value or [])})),
+        "count": len({x.get("Material") for x in (stock.value or []) if x.get("Material")}),
+        "detail": ", ".join(sorted({x.get("Material") for x in (stock.value or []) if x.get("Material")})),
         "value_idr": None,
     }, {
         "stage": "Finished goods that consume M-4471",
@@ -490,7 +490,7 @@ def impact() -> dict:
     }, {
         "stage": "Customer orders at risk",
         "count": len(orders.value or []),
-        "detail": ", ".join(x["SalesOrder"] for x in (orders.value or [])),
+        "detail": ", ".join(x.get("SalesOrder", "") for x in (orders.value or [])),
         "value_idr": exposed,
     }]
     return _wrap(rows, [

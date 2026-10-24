@@ -81,18 +81,36 @@ def run(data: Dict[str, list], profile: dict, as_of: Optional[date] = None,
 
     findings: List[Finding] = []
 
-    stocked = {r["Material"] for r in stock}
+    stocked = {r["Material"] for r in stock if r.get("Material")}
+    malformed_bom = [
+        str(b.get("BillOfMaterial") or b.get("BillOfMaterialHeaderUUID") or f"row {i + 1}")
+        for i, b in enumerate(bom)
+        if not b.get("Material") or not b.get("FinishedGood")
+    ]
+    bom = [b for b in bom if b.get("Material") and b.get("FinishedGood")]
+    if malformed_bom:
+        findings.append(Finding(
+            "serious", "integrity", "Bill of materials row cannot be traced",
+            f"{len(malformed_bom)} bill-of-material row(s) do not name both a component "
+            "and a finished good. They were excluded from relationship checks instead of "
+            "being treated as complete product structures.",
+            malformed_bom,
+            None,
+            "Correct the product-structure mapping before planning relies on these rows.",
+        ))
+
     finished_for: Dict[str, set] = defaultdict(set)
     for b in bom:
         finished_for[b["Material"]].add(b["FinishedGood"])
-    sold_goods = {s["Material"] for s in sales}
+    sold_goods = {s["Material"] for s in sales if s.get("Material")}
     bom_goods = {b["FinishedGood"] for b in bom}
 
     def committed(materials) -> Optional[int]:
         goods: set = set()
         for m in materials:
             goods |= finished_for.get(m, set())
-        matched = [int(_num(s["NetAmount"])) for s in sales if s["Material"] in goods]
+        matched = [int(_num(s.get("NetAmount"))) for s in sales
+                   if s.get("Material") in goods]
         return sum(matched) if matched else None
 
     # ---------------------------------------------------------- integrity --
@@ -118,7 +136,8 @@ def run(data: Dict[str, list], profile: dict, as_of: Optional[date] = None,
             "structure behind them. Nothing can trace a disruption from a raw material "
             "to these orders.",
             orphan_sold,
-            sum(int(_num(s["NetAmount"])) for s in sales if s["Material"] in orphan_sold),
+            sum(int(_num(s.get("NetAmount"))) for s in sales
+                if s.get("Material") in orphan_sold),
             "Build the structure, or confirm the product is bought in finished.",
         ))
 
@@ -161,9 +180,13 @@ def run(data: Dict[str, list], profile: dict, as_of: Optional[date] = None,
 
     by_name: Dict[str, List[str]] = defaultdict(list)
     for s in suppliers:
-        key = "".join(ch for ch in s["SupplierName"].lower() if ch.isalnum())
+        supplier = s.get("Supplier")
+        name = s.get("SupplierName") or s.get("SupplierFullName")
+        if not supplier or not name:
+            continue
+        key = "".join(ch for ch in name.lower() if ch.isalnum())
         key = key.replace("tbk", "").replace("pt", "")
-        by_name[key].append(s["Supplier"])
+        by_name[key].append(supplier)
     dupes = {k: v for k, v in by_name.items() if len(v) > 1}
     if dupes:
         flat = sorted(c for codes in dupes.values() for c in codes)
@@ -179,9 +202,13 @@ def run(data: Dict[str, list], profile: dict, as_of: Optional[date] = None,
     # --------------------------------------------------------- continuity --
     sourced: Dict[str, set] = defaultdict(set)
     for o in orders:
-        sourced[o["Material"]].add(o["Supplier"])
+        material, supplier = o.get("Material"), o.get("Supplier")
+        if material and supplier:
+            sourced[material].add(supplier)
     for a in alternates:
-        sourced[a["Material"]].add(a["Supplier"])
+        material, supplier = a.get("Material"), a.get("Supplier")
+        if material and supplier:
+            sourced[material].add(supplier)
 
     single = sorted(m for m, s in sourced.items() if len(s) == 1)
     priced_single = [m for m in single if committed([m])]
@@ -228,23 +255,25 @@ def run(data: Dict[str, list], profile: dict, as_of: Optional[date] = None,
     # ------------------------------------------------------ concentration --
     lanes: Dict[str, set] = defaultdict(set)
     for o in orders:
-        if o.get("LoadingPort"):
-            lanes[o["LoadingPort"]].add(o["Material"])
+        port, material = o.get("LoadingPort"), o.get("Material")
+        if port and material:
+            lanes[port].add(material)
     busiest = max(lanes.items(), key=lambda kv: len(kv[1]), default=None)
     if busiest and len(busiest[1]) > 1:
         port, mats = busiest
-        share = len(mats) / max(len({o["Material"] for o in orders}), 1)
+        purchased_materials = {o.get("Material") for o in orders if o.get("Material")}
+        share = len(mats) / max(len(purchased_materials), 1)
         findings.append(Finding(
             "serious" if share > 0.3 else "warning", "concentration",
             "Inbound lane concentrated on one port",
-            f"{len(mats)} of {len({o['Material'] for o in orders})} purchased materials "
+            f"{len(mats)} of {len(purchased_materials)} purchased materials "
             f"route through {port}, which is {share:.0%} of the inbound book. One closure "
             "takes out all of them on the same day.",
             sorted(mats)[:12], committed(mats),
             "Split the lane, or hold buffer on the far side of the chokepoint.",
         ))
 
-    spend = Counter(o["Supplier"] for o in orders)
+    spend = Counter(o["Supplier"] for o in orders if o.get("Supplier"))
     if spend:
         top, lines = spend.most_common(1)[0]
         if lines / sum(spend.values()) > 0.15:
@@ -274,7 +303,8 @@ def run(data: Dict[str, list], profile: dict, as_of: Optional[date] = None,
         ))
 
     uncertified = [s["Supplier"] for s in suppliers
-                   if s.get("Country") == "ID" and not s.get("TkdnCertifiedPct")]
+                   if s.get("Supplier") and s.get("Country") == "ID"
+                   and not s.get("TkdnCertifiedPct")]
     if uncertified:
         findings.append(Finding(
             "note", "compliance", "Domestic supplier with no TKDN figure on record",
@@ -298,7 +328,7 @@ def run(data: Dict[str, list], profile: dict, as_of: Optional[date] = None,
             "Confirm the rate, then write off or redeploy what is genuinely dead.",
         ))
 
-    total_committed = sum(int(_num(s["NetAmount"])) for s in sales)
+    total_committed = sum(int(_num(s.get("NetAmount"))) for s in sales)
     for f in findings:
         # The same guard the exposure scan carries. A figure above the whole
         # order book means something was counted twice.
@@ -313,9 +343,9 @@ def run(data: Dict[str, list], profile: dict, as_of: Optional[date] = None,
 
     counts = Counter(f.severity for f in findings)
     coverage = {
-        "materials": len({r["Material"] for r in stock}),
-        "plants": len({r["Plant"] for r in stock}),
-        "suppliers": len({o["Supplier"] for o in orders}),
+        "materials": len({r.get("Material") for r in stock if r.get("Material")}),
+        "plants": len({r.get("Plant") for r in stock if r.get("Plant")}),
+        "suppliers": len({o.get("Supplier") for o in orders if o.get("Supplier")}),
         "purchase_orders": len(orders),
         "customer_orders": len(sales),
         "finished_goods": len(bom_goods | sold_goods),
