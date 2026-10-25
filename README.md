@@ -224,6 +224,150 @@ a signal arrives (BMKG · GDACS · Open-Meteo · POST /events)
 
 ## Architecture
 
+> The long form lives in [`sigap/architecture/`](sigap/architecture/) — one concern per
+> file: [`app.md`](sigap/architecture/app.md), [`agents.md`](sigap/architecture/agents.md),
+> [`tools.md`](sigap/architecture/tools.md), [`workers.md`](sigap/architecture/workers.md),
+> [`data.md`](sigap/architecture/data.md). Paths below are relative to `sigap/agent/`
+> unless they begin with `app/`, `components/` or `lib/`.
+
+### System context
+
+Two processes, one record.
+
+```mermaid
+flowchart LR
+    B[Browser] --> N["Next.js :3000<br/>the app pages"]
+    N -->|proxy attaches the session token| A["Agent service :8787<br/>api.py"]
+    A --> DB[(SQLite)]
+    A --> M["Models<br/>Bedrock · AI Core · Mantle"]
+    A --> S["SAP S/4HANA<br/>or fixtures"]
+    A --> F["Feeds<br/>BMKG · GDACS · EONET · USGS · Open-Meteo"]
+    A --> O["Outbox<br/>email · Slack · Telegram · webhook"]
+    A -.->|SIGAP_GRAPH=1| G["graph_nodes · graph_edges"]
+```
+
+| Process | Where | Job |
+|---|---|---|
+| Web app | `app/(app)/**`, `app/lib.ts`, `app/api/sigap/[...path]` | Server components read the agent service at render time; buttons POST through the proxy, which attaches the token. **The app holds no data and makes no decision** |
+| Agent service | `sigap/agent/api.py` | Routes matched by regex from the `@route` table, one thread per request, runs the schedule, starts each handling on its own daemon thread |
+
+Every route but `GET /health` and `POST /login` needs a bearer token. With `SIGAP_ENV=prod`
+the service refuses to start without `SAP_API_KEY` and a lead model it can call, and
+`POST /events` answers `503` while either is missing.
+
+### The agent team
+
+```mermaid
+flowchart TB
+    EVT["Event: POST /events, or a watcher"] --> ARYA
+
+    subgraph DECIDE["Deciders: SIGAP_MODEL"]
+        ARYA["Arya · supervisor · effort high"]
+        KIRA["Kira · compliance · holds the veto"]
+    end
+
+    subgraph GATHER["Specialists: SIGAP_MODEL_SPECIALISTS"]
+        ELSA["Elsa · Impact"]
+        DARA["Dara · Demand"]
+        IRIS["Iris · Stock Validity"]
+        CLINT["Clint · Sourcing"]
+        PRITA["Prita · Procurement"]
+        MILO["Milo · Logistics"]
+        TARA["Tara · Costing"]
+        OTTO["Otto · Precedent"]
+        BRAM["Bram · Execution"]
+        VEGA["Vega · Risk Scanner"]
+    end
+
+    ARYA -->|"ask_impact · ask_demand · ask_inventory"| ELSA
+    ARYA -->|"ask_sourcing · ask_procurement"| CLINT
+    ARYA -->|"ask_logistics · ask_precedent"| MILO
+    ARYA -->|"ask_compliance"| KIRA
+    ARYA -->|"ask_simulation"| TARA
+    ARYA -->|"ask_execution · ask_exposure"| BRAM
+
+    KIRA -.->|"rulings Tara costs against"| TARA
+    BRAM -->|"raise_action"| ACT["actions: pending for a person, or autonomous"]
+    PRITA -->|"propose_purchase_order"| ACT
+
+    BOARD["Shared board: every tool result with its origin and source"]
+    GATHER --- BOARD
+    DECIDE --- BOARD
+```
+
+**Delegation has no fixed pipeline.** Each specialist is offered to the lead as one tool,
+`ask_<code>`, described by its nickname, title and brief ("HAS VETO." for Kira). A
+specialist sees only its own tools, so specialists cannot call one another — every hand-off
+goes through the lead.
+
+**The board is the evidence of one handling.** Every tool result is written under
+`<agent>.<tool>` with its origin, source and fetch time, so no value can exist on the board
+without saying where it came from. `Board.untrusted_keys()` — everything that is not
+`live`, `cached` or `derived` — travels into the run's decision, the alert, the report and
+Bram's autonomy check.
+
+Inside the loop: at most **14 lead rounds**, **8 rounds per specialist**, **600 seconds** and
+a spend cap (`SIGAP_COST_CAP_IDR`, default Rp 500,000). Progress is written as `steps` rows:
+`DELEGATE`, `TOOL` (arguments, result, origin, source, milliseconds), `FINDING`, `SUMMARY`,
+`FALLBACK`. One specialist failing does not end the handling — the lead is told to carry on
+without it.
+
+| How a handling ends | `decision.status` | Cause |
+|---|---|---|
+| The lead writes its answer | `done` | `end_turn` |
+| A limit is hit | `partial` | spend over the cap, or 600 s elapsed — salvage lists what is on the board and writes no recommendation |
+| Out of lead rounds | `stopped` | more than 14 rounds |
+| Anything else raised | `failed` | the error is stored on the run |
+| No model the lead can call | `held` | closed at once; nothing runs |
+
+### Kira's veto, held in four places
+
+1. **`tools/compliance.py`** — `check_local_constraints` rules one option at a time from
+   the rule pack, the company profile and the holiday calendar, naming the rule and the
+   numbers. The ruling is Python, whatever model Kira runs on
+2. **`engine/simulate.py`** — costs only options that cleared. `allowed_options` can narrow
+   the rulings, never widen them, and an option the rules struck out stays out even when a
+   list names it. It also reports `compliance_cost`: what obeying the rules cost
+3. **The prompts** — `supervisor.txt` never recommends an option Kira rejected,
+   `execution.txt` never acts on one, not at a lower quantity, not partially
+4. **The exploration graph** — Kira's ruling is a `ruling` node, and the planner
+   (`engine/planner.py`) opens a price lead only for an option ruled `allowed`
+
+### Models per agent
+
+A model is named `provider:model`, resolved per call:
+
+| Provider | Wire format | Where |
+|---|---|---|
+| `bedrock` | Anthropic Messages | Claude on Amazon Bedrock |
+| `bedrock-openai` | OpenAI Chat Completions | other models on Bedrock (MiniMax, DeepSeek, Kimi, Qwen, GLM…) |
+| `aicore` | Chat Completions | SAP AI Core, e.g. `gpt-5.4` |
+
+Resolution order, most specific first — a choice saved on the **Models** page beats the
+variable at the same level:
+
+1. one agent — `<code>` / `SIGAP_MODEL_<CODE>`
+2. the ten specialists — `specialists` / `SIGAP_MODEL_SPECIALISTS`
+3. the lead and everyone else — `lead` / `SIGAP_MODEL` (default `anthropic.claude-opus-5`)
+4. **fallback**, tried once when an agent's own model fails — `SIGAP_MODEL_FALLBACK`
+5. **aux**, which writes report prose from figures it is handed and never a number
+
+Arya and Kira skip level 2: the agent that decides what to do, and the one that decides what
+may be done, stay on the strong model unless set one by one. `GET /models` lists every
+agent's model and whether it answers.
+
+### The autonomy limit
+
+`SIGAP_AUTONOMOUS_LIMIT_IDR` (default Rp 50,000,000) is the ceiling for an action taken
+without a person. `tools/execution.py autonomy_check` lets one go alone only when all four
+hold: under the limit · raised inside a handling (there is a board) · nothing on the board
+is `modelled` or `missing` · something was read before deciding.
+
+Only `create_stock_transfer` asks that question. Every other change to the outside world —
+`create_draft_po`, `propose_purchase_order`, `create_sourcing_event`,
+`propose_safety_stock_change`, `draft_customer_notice`, `request_supplier_update` — is
+recorded `pending` and waits for a person whatever its value.
+
 ### One handling, end to end
 
 ```mermaid
@@ -275,6 +419,166 @@ flowchart LR
 
 Every path ends in the decision log. There is no route to SAP or to an outside party that does
 not pass through a person's approval first.
+
+### The tools and the data path
+
+`core/registry.py` holds one `Tool` per name: owner, description, JSON schema and the
+function that runs. The schema the model sees is the schema that runs (`strict: true`,
+`additionalProperties: false`), and **every tool returns a `Result`, never a bare value**.
+An argument naming a material or a plant is checked before the tool runs — an id on record
+passes, an ambiguous phrase raises back to the model rather than returning "nothing found".
+
+Reads fall through three sources, and the label says which:
+
+```
+tools/fetcher.py   →  SAP OData (live)  →  an uploaded CSV (cached)  →  fixtures/ (modelled)
+                                                                            a failed fetch → missing
+```
+
+| Agent | Tools | What it reads |
+|---|---|---|
+| Arya `supervisor` | 1 | the `events` table |
+| Elsa `impact` | 4 | purchase orders, material stock, BOM explosion, sales-order commitments |
+| Dara `demand` | 3 | production schedule, 90 days of goods issues → `engine/forecast.py` |
+| Iris `inventory` | 3 | quality holds, safety-stock policy, open reservations → `engine/matching.py` |
+| Clint `sourcing` | 3 | alternate sources, internal transfers, substitute materials |
+| Prita `procurement` | 6 | supplier book, quotations, exchange rates (ECB), drafts a `draft_po` action |
+| Milo `logistics` | 7 | shipment status, ETA from measured customs dwell, port weather, news, holidays, a cited web brief |
+| Kira `compliance` | 2 | the rule pack, the company profile, the holiday calendar |
+| Tara `simulation` | 2 | `engine/simulate.py`, `engine/allocate.py` — arithmetic with no model in it |
+| Otto `precedent` | 1 | past incidents, their outcomes, what was done |
+| Bram `execution` | 9 | raises actions, drafts outward messages, records outcomes, watches through to receipt |
+| Vega `exposure` | 4 | single sources, concentrated lanes, certificate lapse, live hazards, PO slip (SAP RPT-1.6, labelled `modelled`) |
+
+**The rule pack** (`sigap/references/`) is what Kira rules from: each rule carries its source
+and whether it was verified. It is read by `tools/compliance.py` and shown by `get_rule_pack`.
+The pack itself is knowledge work written per company, not code.
+
+### Workers: what runs without a person
+
+One Python process. `core/schedule.py` ticks every 15 seconds and starts whatever is due; a
+job never overlaps itself, its next run is remembered in the `jobs` table, and a daily job
+missed by more than two hours is skipped rather than delivered late.
+
+| Job | Cadence | Effect |
+|---|---|---|
+| `bmkg` | 5 min | a quake of M5.0+ within 300 km of a facility becomes an event |
+| `hazards` | 30 min | cyclone, flood, quake, eruption, fire or drought within radius of a plant or loading port |
+| `weather` | 3 h | a forecast day over threshold at a port or plant (gusts 62 km/h, waves 4 m, rain 100 mm/day) |
+| `exposure` | weekly | Vega's scan with **no model**: the top three findings by committed value |
+| `notify` | 30 s | delivers the outbox — alerts, digests, reports, outreach |
+| `sap_send` | 10 min | approved actions posted to SAP, retried until they land |
+| `digest` | daily 07:30 WIB | the morning summary to every contact who chose it, and the team channels |
+
+Every watcher dedupes against the record (`store.event_exists`) and raises the event through
+the same call a person's `POST /events` makes, so a restart never replays a feed. Every
+outside GET goes through `clients/feeds.py`: a cache that keeps the real fetch time, a
+timeout, and a short memory of a failure — a feed that is down costs one timeout and becomes
+`missing`, never a quiet day.
+
+**Approve, then send.** An action is a row in `actions`, and its status only moves forward:
+
+```
+tool raises it → pending (decision queue) → approved (role limit checked server-side)
+                → sender.py → SAP, with an Idempotency-Key
+                → or outreach → the outbox → email, as written, never composed here
+                → outcome recorded once
+```
+
+A failed write keeps the status and is retried next pass; a decided action cannot be decided
+again; a rejection releases the stock the action was holding in the same transaction. Outreach
+needs a buyer above for a supplier request and a procurement lead above for a customer notice,
+on top of the money limit — and outside `prod` nothing reaches a real partner, it goes to
+`SIGAP_EXTERNAL_REDIRECT` marked `[TEST]`.
+
+**Channels**: SMTP, Composio Gmail, Slack, Telegram or a webhook. A channel that is not set
+up marks its messages `skipped` with what it lacks rather than holding them; a failure is
+retried three times, then `failed`.
+
+### The record, and what comes out
+
+One SQLite file (`SIGAP_DB`, default `data/sigap.db`). What lands there is the official
+record: what was decided, on what evidence, who approved it and what was actually sent.
+`approvals` rows are never changed; an `actions` row moves one way; a correction is a new row.
+
+| Group | Tables |
+|---|---|
+| The handling | `events` · `runs` · `steps` · `actions` · `approvals` · `reservations` |
+| Exploration | `graph_nodes` · `graph_edges` (with `SIGAP_GRAPH=1`) |
+| People and settings | `users` · `conversations` · `messages` · `contacts` · `uploads` · `settings` · `jobs` |
+| Delivery | `notifications` — one message to one address over one channel, with its status and attempts |
+
+Everything the system produces is built from that record:
+
+- **Reports** — per handling or across the whole portfolio, markdown, PDF and XLSX, written
+  with the Python standard library (`engine/report.py`, `engine/export.py`). The only text a
+  model writes is the optional executive summary, handed the figures and told not to
+  introduce a number
+- **The trace** — `core/topology.py` folds the steps into a graph of event → agent → tool →
+  source → action, each edge carrying its calls, step numbers and weakest origin; drawn on
+  `/log/[id]`
+- **The exploration graph** — the same handling as a DAG, served by `GET /runs/{id}/graph`
+  and drawn on `/disruptions/[id]`
+- **Alerts** — the message as sent: status, the lead's recommendation quoted and labelled,
+  what waits for approval with the lowest role that may approve it, and a warning when
+  evidence was modelled or missing
+- **SAP writes** — each carrying the action's idempotency key, storing the reference SAP
+  returns
+- **[`sigap/AGENT-REFERENCE.md`](sigap/AGENT-REFERENCE.md)** — regenerated from the live
+  registry by `python3 manage.py docs`, so it cannot disagree with the code
+
+### The pages
+
+| URL | Shows |
+|---|---|
+| `/` | the decision queue: every handling, what it proposes, what it costs, what waits for a signature |
+| `/dashboard` | exposure, orders at risk, what is blocked and why |
+| `/disruptions/[id]` | one handling: recommendation, actions, approvals, the exploration graph |
+| `/log`, `/log/[id]` | every run, and one run's trace — each tool call with its origin |
+| `/reports`, `/reports/[id]`, `/reports/portfolio` | reports and the portfolio, as PDF/XLSX or emailed from the page |
+| `/agents`, `/agents/[code]`, `/chat` | the twelve, their tools, their data, and a conversation with any of them |
+| `/audit` | what is wrong with the data the system can see, with its evidence |
+| `/uploads` | bring your own data, with downloadable templates |
+| `/contacts`, `/notifications` | who is told about what, and by which channel |
+| `/models` | the model behind each agent, testable from the page |
+| `/schedule` | the seven jobs: on/off, last result, run now |
+
+A page whose handling is running refreshes every four seconds while the tab is visible, so
+the queue, a disruption and its trace follow the agents without a reload.
+
+### The other ways an agent runs
+
+| Entry | What runs | Records |
+|---|---|---|
+| `POST /agents/{code}/ask` (the conversation page) | one specialist's tool loop on your question, with chat history and attachments | conversations and messages; an action raised from a question comes back `missing` — actions come from a signal |
+| `POST /mcp` | the same registry tools, called directly, **no model** | only what the tool itself writes |
+| `GET /exposure`, the `exposure` job | Vega's scan through the registry, **no model** | the top three become events |
+| `python3 main.py` | a scripted walk of the design scenario, **no model**, real calculator | a JSON trace only |
+| `python3 graph.py` | the orchestration's self-check on a stand-in model and a scratch database | nothing in the real record |
+
+Two flags, both off by default, change how a handling runs:
+
+| Flag | Turns on |
+|---|---|
+| `SIGAP_GRAPH=1` | the exploration graph: board writes mirrored as `fact` nodes, Clint's options as `option`, Kira's rulings as `ruling`, and the deterministic planner opening the next leads. Fail-open: a graph error never touches the handling |
+| `SIGAP_SWARM_ASYNC=1` | `engine/dispatch.py`: several specialists at once over a claimable frontier on `SIGAP_ASYNC_WORKERS` threads (default 4), with `core/admission.py` bounding work per operator and globally. Arya writes the recommendation once, from the settled graph |
+
+The planner is deterministic because the mitigation chain is known:
+
+```mermaid
+flowchart LR
+    E["event"] -->|spawns| IMP["lead impact:event, Elsa"]
+    E -->|per material| SRC["lead source:material, Clint"]
+    SRC -->|yields| OPT["option nodes"]
+    OPT -->|no ruling yet| RULE["lead rule:option, Kira"]
+    RULE -->|rules_on| RUL{"ruling"}
+    RUL -->|allowed, not priced| PRICE["lead price:option, Tara"]
+    RUL -->|blocked| STOP["no further lead"]
+    PRICE --> FIN["Arya writes the recommendation"]
+    IMP --> FIN
+
+    style STOP fill:#dc2626,color:#fff
+```
 
 ---
 
