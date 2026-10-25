@@ -13,6 +13,7 @@
 </p>
 
 <p align="center">
+  <a href="https://sigap.lumbungstack.dev"><img src="https://img.shields.io/badge/LIVE-sigap.lumbungstack.dev-16A34A?style=flat-square&labelColor=555555" alt="Live app" /></a>
   <a href="https://github.com/maulana-tech/socrates/actions/workflows/deploy.yml"><img src="https://img.shields.io/badge/CI-GITHUB%20ACTIONS-181717?style=flat-square&labelColor=555555&logo=githubactions&logoColor=white" alt="CI" /></a>
   <a href="https://nextjs.org"><img src="https://img.shields.io/badge/WEB-NEXT.JS%2016-000000?style=flat-square&labelColor=555555&logo=nextdotjs&logoColor=white" alt="Next.js 16" /></a>
   <a href="https://www.python.org"><img src="https://img.shields.io/badge/AGENT-PYTHON%203-3776AB?style=flat-square&labelColor=555555&logo=python&logoColor=white" alt="Python" /></a>
@@ -219,6 +220,92 @@ a signal arrives (BMKG · GDACS · Open-Meteo · POST /events)
 | Containers | Docker Compose: Next.js web, Python agent service, PostgreSQL |
 | CI/CD | GitHub Actions: lint, agent output, Python self-check on every push; SSH deploy from `main` to EC2 |
 | Tests | Python self-check, transport and rollback tests for the deploy scripts |
+
+### The stack, drawn
+
+```mermaid
+flowchart TB
+    subgraph CLIENT["Who talks to it"]
+        U["Browser — the app at :3000"]
+        J["SAP Joule — asked inside SAP"]
+        EXT["External clients over MCP"]
+    end
+
+    subgraph WEB["Docker: web — Next.js 16 · React 19 · Tailwind v4 · shadcn-ui · D3"]
+        P["app/(app) pages, server components"]
+        PX["/api/sigap proxy — attaches the session token"]
+        LI["/api/login — httpOnly cookie"]
+    end
+
+    subgraph AGENT["Docker: agents — Python, stdlib http.server + sqlite3"]
+        API["api.py :8787 — 47 routes"]
+        GR["graph.py — Arya + 11 specialists<br/>14 rounds · 600 s · spend cap"]
+        REG["core/registry.py — 45 tools"]
+        ENG["engines — simulate · allocate · forecast<br/>matching · audit · report · export"]
+        SCH["core/schedule.py — 7 jobs"]
+        SND["sender.py — approved actions"]
+        OUT["notify.py · outreach.py — the outbox"]
+        DB[("SQLite — the record")]
+    end
+
+    subgraph AWSS["AWS"]
+        BR["Bedrock — Claude Opus for Arya &amp; Kira<br/>Mantle: MiniMax for the specialists<br/>Haiku for report prose"]
+        EC2["EC2 Ubuntu — sigap-web · sigap-agent (systemd)"]
+        IAM["IAM role — the only credential AWS sees"]
+    end
+
+    subgraph SAPS["SAP"]
+        S4["S/4HANA Cloud sandbox — OData reads"]
+        AIC["AI Core — gpt-5.4 fallback<br/>sonar briefs · RPT-1.6 slip ranking"]
+        CF["BTP Cloud Foundry — the Joule A2A shim"]
+    end
+
+    subgraph FEEDS["Public feeds, all labelled"]
+        F1["BMKG · GDACS · NASA EONET · USGS"]
+        F2["Open-Meteo · Nager.Date · Frankfurter · News RSS"]
+    end
+
+    subgraph DELIVERY["Delivery"]
+        CH["Email — SMTP or Composio Gmail"]
+        TC["Slack · Telegram · webhook"]
+    end
+
+    GH["GitHub Actions — CI on every push,<br/>SSH deploy from main to EC2"]
+
+    U --> P
+    LI --> API
+    P --> PX --> API
+    J -->|A2A, service user| CF --> API
+    EXT -->|POST /mcp, no model| API
+
+    API --> GR --> REG
+    REG --> ENG
+    API --> DB
+    GR -->|models| BR
+    REG -->|"RPT-1.6 · sonar"| AIC
+
+    SCH --> F1
+    SCH --> F2
+    SCH --> SND --> S4
+    REG -->|reads| S4
+    SCH --> OUT --> CH
+    OUT --> TC
+
+    GH --> EC2
+    EC2 -.->|"runs the same images"| WEB
+    EC2 -.-> AGENT
+
+    style BR fill:#FF9900,color:#000
+    style S4 fill:#0FAAFF,color:#fff
+    style DB fill:#16a34a,color:#fff
+    style GH fill:#181717,color:#fff
+```
+
+Locally that is `docker compose up` (web container, agents container, Postgres). In
+production the same two images run as `sigap-web.service` and `sigap-agent.service` on an
+Ubuntu EC2 instance, deployed over SSH by GitHub Actions when a push to `main` passes CI —
+[`ops/CICD.md`](ops/CICD.md) is the runbook, and the instance's IAM role is what lets the
+agent service call Bedrock.
 
 ---
 
