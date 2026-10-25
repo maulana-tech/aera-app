@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="public/logo/sigap-mark-19-dark.svg" />
+    <img src="public/logo/sigap-mark-19-light.svg" alt="SIGAP" width="104" />
+  </picture>
+</p>
+
 <h1 align="center">SIGAP</h1>
 
 <p align="center">

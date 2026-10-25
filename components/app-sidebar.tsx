@@ -1,10 +1,13 @@
 "use client";
 
+import Link from "next/link";
+
 import {
   ClipboardCheck, FileText, Inbox, LayoutDashboard, MessagesSquare,
   ScrollText, Settings2, Users,
 } from "lucide-react";
 
+import { SigapMark } from "@/components/sigap-mark";
 import { NavMain, type NavItem } from "@/components/nav-main";
 import { NavUser } from "@/components/nav-user";
 import { ConnectionStatus, type Connection } from "@/components/connection-status";
@@ -70,6 +73,15 @@ export function AppSidebar({
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
+        <Link
+          href="/"
+          className="flex items-center gap-2 rounded-md px-2 py-1.5 outline-none transition-colors hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+        >
+          <SigapMark className="size-6 shrink-0" />
+          <span className="truncate text-sm font-semibold tracking-[-0.03em] group-data-[collapsible=icon]:hidden">
+            SIGAP
+          </span>
+        </Link>
         <ConnectionStatus c={connection} />
       </SidebarHeader>
 
