@@ -49,7 +49,7 @@ from typing import Any, Dict, List, Optional
 from core.provenance import Result
 from core.store import connect, new_id, _now
 
-#: Node kinds. 'lead' is the claimable unit of work (SmartX's 'intent').
+#: Node kinds. 'lead' is the claimable unit of work ( 'intent').
 NODE_KINDS = ("event", "lead", "fact", "option", "ruling")
 
 #: Typed edges. A DAG, not a tree: a node may have several parents.
@@ -62,7 +62,7 @@ EDGE_RELS = ("spawns", "derived_from", "yields", "rules_on", "covers")
 TERMINALS = ("worked", "capped", "blocked", "failed", "stopped")
 
 #: A lead that has been dispatched this many times without concluding is
-#: drained from the frontier. The recursion's depth guard, mirroring SmartX's
+#: drained from the frontier. The recursion's depth guard, mirroring
 #: attempts-cap: deep chaining without an infinite loop.
 MAX_LEAD_ATTEMPTS = 3
 

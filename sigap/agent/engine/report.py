@@ -1,6 +1,6 @@
 """The report worker: one handling, assembled into a report to send or file.
 
-The split SIGAP's law forces (and SmartX's report generator does not make):
+The split SIGAP's law forces (and  report generator does not make):
 
   * The FIGURES are deterministic. The decision, the actions and their money,
     the realized-versus-predicted outcome, the provenance of what backed the

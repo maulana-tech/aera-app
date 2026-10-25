@@ -547,7 +547,7 @@ def _graph_frontier(run_id: Optional[str]) -> dict:
 #
 # Before: one specialist raising, or the per-event budget/deadline tripping,
 # propagated out and the whole handling was recorded `failed` — every finding
-# already on the board discarded. SmartX's swarm never loses a verdict that
+# already on the board discarded.  swarm never loses a verdict that
 # way: a cancelled or timed-out run still harvests what it has. These two
 # helpers bring that discipline to SIGAP, flag-gated so the default is
 # unchanged.
@@ -622,7 +622,7 @@ def run(event: dict, report: Callable[[str, dict], None]) -> dict:
     with registry.bind_board(board):
         try:
             if dispatch.async_enabled():
-                # SmartX's Phase 2: fire leads over the claimable frontier and
+                #  Phase 2: fire leads over the claimable frontier and
                 # harvest them as they finish, several at once. The frontier,
                 # planner and convergence are the graph's; Arya writes the final
                 # recommendation from the settled graph. (The dispatcher seeds

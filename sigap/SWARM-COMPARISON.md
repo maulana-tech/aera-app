@@ -88,7 +88,7 @@ scarce heavy-worker capacity — a throughput lever, not just a fallback.
 
 Worth stating, so the port does not erode it:
 
-- **Provenance on every fact.** SmartX's verdict is a judged claim; SIGAP's
+- **Provenance on every fact.**  verdict is a judged claim; SIGAP's
   every value says live/cached/derived/modelled/missing. A decision read back
   off SIGAP's graph can be audited for the trustworthiness of its inputs.
 - **A calculator with no model in it.** `engine/simulate.py` refuses a figure
@@ -110,9 +110,9 @@ calibrates what is valuable now vs premature.
 |---|---|---|---|
 | **1** | **Non-lossy termination** (§2.4). On deadline/budget, conclude on the evidence on the board — labelled with its provenance — instead of failing the handling and discarding it. | **High.** A slow handling used to lose everything; now it degrades honestly, which is exactly SIGAP's ethos ("say what is missing, don't guess" → "decide on what we have, labelled"). | ✅ **done** — `graph.py` `_salvage`, always on |
 | **2** | **Specialist run-state on the graph** (§2.1/2.3 substrate). Each worked lead is a tracked node: `worked\|failed\|capped\|blocked\|stopped`, tokens, summary. | **High.** Observability (which specialist stalled, what each cost) and the spine for async. | ✅ **done** — `core/exploration.py` `annotate_lead` + `failed` terminal |
-| **3** | **Fail-open specialist isolation.** One specialist raising settles that lead `failed` and lets the handling continue — SmartX's fail-open discipline the inline loop lacked. | **High.** Robustness, small change. | ✅ **done** — `graph.py` `_run_specialist_isolated` |
+| **3** | **Fail-open specialist isolation.** One specialist raising settles that lead `failed` and lets the handling continue —  fail-open discipline the inline loop lacked. | **High.** Robustness, small change. | ✅ **done** — `graph.py` `_run_specialist_isolated` |
 | **4** | **Admission / fairness** (§2.2). A Python `fair-admission` (global + per-operator, weighted, clamped knobs). | **Medium, future.** Needed *when SIGAP goes multi-tenant*. Built off to the side, generous defaults, so it does not gate a single operator today. | ✅ **done** — `core/admission.py`, flag-gated |
-| **5** | **Async dispatch + harvest** (§2.1). Fire leads over the claimable frontier and harvest as they finish, several at once. | **Low now, high later.** The big behavioural change (SmartX's Phase 2). At a dozen events/day the synchronous path is simpler; this is there for when events arrive concurrently or specialists run long in parallel. | ✅ **done** — `engine/dispatch.py`, flag-gated (default off) |
+| **5** | **Async dispatch + harvest** (§2.1). Fire leads over the claimable frontier and harvest as they finish, several at once. | **Low now, high later.** The big behavioural change ( Phase 2). At a dozen events/day the synchronous path is simpler; this is there for when events arrive concurrently or specialists run long in parallel. | ✅ **done** — `engine/dispatch.py`, flag-gated (default off) |
 | **6** | **Weighted two-tier specialists** (§2.5). The rule-giver runs heavier than a light lookup; admission counts the weight. | **Low on its own.** Folded into #4+#5: `engine/dispatch.py` `_ROUTE` assigns per-lead weight, admission bounds it. | ✅ **done** (as part of #4+#5) |
 
 All six are implemented, all flag-gated + fail-open, so with every flag off the
@@ -134,7 +134,7 @@ only change what happens on a stop or a crash, never the happy path.
 
 ## 5. What would be over-engineering (said plainly)
 
-- A **container-per-run worker service** (SmartX's swarm-service) makes no sense
+- A **container-per-run worker service** ( swarm-service) makes no sense
   for SIGAP: its specialists are in-process Python functions, not sandboxed
   black-box pentesters. The isolation SmartX needs (untrusted exploit code) does
   not exist here.

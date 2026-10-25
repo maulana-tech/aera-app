@@ -1,7 +1,7 @@
-"""Async, frontier-driven dispatch — SmartX's Phase 2, adapted to SIGAP.
+"""Async, frontier-driven dispatch —  Phase 2, adapted to SIGAP.
 
 The default handling (graph.py `_handle_event`) is SYNCHRONOUS: Arya calls one
-specialist, waits for it, decides the next, waits, and so on. SmartX's swarm
+specialist, waits for it, decides the next, waits, and so on.  swarm
 instead treats the graph as a claimable frontier: the orchestrator fires leads
 and harvests them as they finish, so several run at once. This module brings
 that here, flag-gated (SIGAP_SWARM_ASYNC), leaving the synchronous path the
@@ -64,7 +64,7 @@ def max_workers() -> int:
 #: Which specialist owns each lead kind, and how to phrase its task. The planner
 #: opens leads keyed `<kind>:<subject>`; this is how a kind becomes a worker.
 #: A heavier `weight` means the specialist costs more admission units (the
-#: rule-giver runs at high effort — a nod to SmartX's heavy/light worker split).
+#: rule-giver runs at high effort — a nod to  heavy/light worker split).
 _ROUTE: Dict[str, Tuple[str, Callable[[str], str], int]] = {
     "impact":  ("impact",     lambda s: f"Trace the impact of this disruption ({s}). "
                               "Which POs, stock and customer commitments are hit?", 1),
@@ -213,7 +213,7 @@ def handle_event_async(
                     # Work remains but every slot is taken by OTHER operators and
                     # none of ours is in flight to free one. Do not converge —
                     # wait (non-blocking, the deadline above still bounds it) and
-                    # retry, the posture SmartX's non-blocking admission takes.
+                    # retry, the posture  non-blocking admission takes.
                     time.sleep(0.25)
                     continue
                 break                        # nothing running, nothing to claim → converged

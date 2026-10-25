@@ -14,7 +14,7 @@ import type { ExplorationGraph, GraphEdge, GraphNode } from "@/app/lib";
 /* The exploration graph as a layered DAG.
  *
  * SmartX renders its topology on an SVG canvas; here the nodes are HTML so they
- * can carry the one thing SIGAP's graph has that SmartX's does not — a fact's
+ * can carry the one thing SIGAP's graph has that  does not — a fact's
  * provenance badge — and stay legible in both themes without fighting SVG fill
  * colours. The edges are a single SVG layer painted behind the nodes: React
  * renders every path, there is no d3.select touching the DOM.
