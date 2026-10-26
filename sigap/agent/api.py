@@ -70,6 +70,18 @@ from tools.views import VIEWS
 HOST, PORT = bind_target(os.environ)
 
 
+def _reasoning_workers() -> int:
+    """Bound concurrent handlings so a burst cannot exhaust provider RPM/TPM."""
+    try:
+        return max(1, min(8, int(os.environ.get("SIGAP_REASONING_WORKERS", "1"))))
+    except ValueError:
+        return 1
+
+
+#: Events are still recorded immediately; only their model reasoning queues.
+REASONING_SEMAPHORE = threading.BoundedSemaphore(_reasoning_workers())
+
+
 # ------------------------------------------------------------------- handling
 def _handle(run_id: str, event: dict) -> None:
     """Run the agent team in the background. Failures are written down, not swallowed."""
@@ -94,15 +106,24 @@ def _handle(run_id: str, event: dict) -> None:
         })
 
     try:
-        import graph
-        # Every tool called inside this handling knows which run it belongs to,
-        # so an action raised by one lands on this run rather than on nothing.
-        with registry.bind_run(run_id):
-            result = graph.run(event, report)
+        # Runs remain visible as `running` while queued. Only the expensive
+        # model work enters the bounded section, so event ingestion stays fast.
+        with REASONING_SEMAPHORE:
+            import graph
+            # Every tool called inside this handling knows which run it belongs to,
+            # so an action raised by one lands on this run rather than on nothing.
+            with registry.bind_run(run_id):
+                result = graph.run(event, report)
         store.close_run(run_id, "done", result, cost_idr=result.get("cost_idr", 0))
     except Exception as e:                                           # noqa: BLE001
-        store.close_run(run_id, "failed", error=f"{type(e).__name__}: {e}")
-        traceback.print_exc()
+        if llm.is_rate_limited(e):
+            reason = "The Bedrock account is temporarily rate-limited after automatic retries."
+            store.close_run(run_id, "held", decision={
+                "status": "held", "reason": reason, "retryable": True,
+            })
+        else:
+            store.close_run(run_id, "failed", error=f"{type(e).__name__}: {e}")
+            traceback.print_exc()
     _tell(run_id)
 
 

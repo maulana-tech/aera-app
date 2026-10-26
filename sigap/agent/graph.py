@@ -211,6 +211,13 @@ def _model_request(agent: Agent, **req) -> dict:
 def _note_fallback(r, agent: Agent, report: Callable[[str, dict], None],
                    noted: List[bool]) -> None:
     """Write it to the trail, once per loop, when another model answered."""
+    account_failover = getattr(r, "account_failover", None)
+    if account_failover and not noted:
+        noted.append(True)
+        report("fallback", {"agent": agent.code, "name": agent.nickname,
+                            "summary": f"{getattr(r, 'model', '?')} was served through the "
+                                       f"fallback Bedrock account ({account_failover})"})
+        return
     gone = getattr(r, "fell_back_from", None)
     if gone and not noted:
         noted.append(True)
@@ -563,6 +570,11 @@ def _run_specialist_isolated(cl, specialist: Agent, task: str, board: Board,
     except (BudgetExhausted, DeadlineExceeded):
         raise
     except Exception as e:                                           # noqa: BLE001
+        # Exhausted provider capacity is global to this handling, not a bad
+        # specialist finding. Let api.py record the whole run as held instead
+        # of completing a recommendation with a missing rules/impact verdict.
+        if llm.is_rate_limited(e):
+            raise
         err = f"{specialist.title} could not complete: {type(e).__name__}: {e}"
         report("specialist_done", {"agent": specialist.code, "name": specialist.nickname,
                                    "summary": err, "full_summary": err, "error": True})
