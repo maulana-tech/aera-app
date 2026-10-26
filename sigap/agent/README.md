@@ -44,6 +44,8 @@ Roles and how much each may approve:
 | `SAP_API_KEY` | key from api.sap.com | ✅ |
 | `SAP_BASE_URL` | defaults to the SAP sandbox |, |
 | `AWS_REGION` | a region that offers Claude | ✅ unless the lead runs on AI Core |
+| `AWS_FALLBACK_ACCESS_KEY_ID` · `AWS_FALLBACK_SECRET_ACCESS_KEY` · `AWS_FALLBACK_REGION` | required second Bedrock account for rate-limit failover | ✅ with Bedrock |
+| `SIGAP_REASONING_WORKERS` | concurrent event reasoning limit, default 1 |, |
 | `SIGAP_MODEL` | defaults to `anthropic.claude-opus-5`; `provider:model`, see `ENV.md` Models |, |
 | `SIGAP_MODEL_SPECIALISTS` · `SIGAP_MODEL_<CODE>` · `SIGAP_MODEL_FALLBACK` | the model split, see `ENV.md` Models |, |
 | `SIGAP_AUTONOMOUS_LIMIT_IDR` | ceiling for unapproved actions, default 50m |, |
