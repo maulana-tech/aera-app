@@ -27,7 +27,10 @@ export const KIND_LABEL: Record<string, string> = {
 };
 
 const time = (t: string | null) =>
-  t ? new Date(t).toLocaleTimeString("en-GB", { hour12: false }) : "";
+  t ? new Date(t).toLocaleTimeString("en-GB", {
+    hour12: false,
+    timeZone: "Asia/Jakarta",
+  }) : "";
 
 const rupiah = (n: number) => `Rp ${n.toLocaleString("en-US")}`;
 
@@ -138,7 +141,7 @@ function CallRow({
               className="hover:bg-muted/50 grid w-full grid-cols-[18px_44px_64px_minmax(0,1fr)_auto] items-center gap-2 px-3 py-2 text-left">
         <ChevronRight className={cn("text-muted-foreground size-3.5 transition-transform", open && "rotate-90")} />
         <span className="text-muted-foreground font-mono text-[11px] tabular-nums">#{c.seq}</span>
-        <span className="text-muted-foreground font-mono text-[11px] tabular-nums">{time(c.at)}</span>
+        <span suppressHydrationWarning className="text-muted-foreground font-mono text-[11px] tabular-nums">{time(c.at)}</span>
         <span className={cn("flex min-w-0 items-center gap-2 text-xs", nested && "pl-4")}>
           <span className="shrink-0 font-medium">
             {c.kind === "delegate" ? `${by?.label ?? "Arya"} → ${who?.label ?? c.agent}` : who?.label ?? c.agent}
@@ -213,7 +216,13 @@ export function CallDetail({ c, runId, compact = false }: { c: TraceCall; runId:
         {c.origin && <Field k="origin"><OriginBadge origin={c.origin} /></Field>}
         {c.source && <Field k="source"><span className="font-mono">{c.source}</span></Field>}
         {c.note && <Field k="source note">{c.note}</Field>}
-        {c.fetched_at && <Field k="read at">{new Date(c.fetched_at).toLocaleString("en-GB")}</Field>}
+        {c.fetched_at && (
+          <Field k="read at">
+            <span suppressHydrationWarning>
+              {new Date(c.fetched_at).toLocaleString("en-GB", { timeZone: "Asia/Jakarta" })}
+            </span>
+          </Field>
+        )}
         {c.ms != null && <Field k="took">{c.ms} ms{c.round ? ` · model turn ${c.round}` : ""}</Field>}
         {c.rows != null && (
           <Field k="rows">
