@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { idr, wib, type Run } from "@/app/lib";
+import { idr, wib, type RunRow } from "@/app/lib";
 import { StatusBadge } from "@/components/status-badge";
 import { cn } from "@/lib/utils";
 
@@ -86,7 +86,28 @@ function cleanExecutiveSummary(raw?: string): string {
     .trim();
 }
 
-export function DisruptionCard({ r }: { r: Run }) {
+/* The colour of a verdict. It carries no meaning on its own — every card
+ * prints the verdict's own sentence beside it, which is where the figures are. */
+const VERDICT_CLS: Record<string, string> = {
+  needs_you_now: "border-rose-500/50 hover:border-rose-500/80",
+  needs_you:     "border-amber-500/40 hover:border-amber-500/70",
+  held:          "border-amber-500/40 hover:border-amber-500/70",
+  failed:        "border-rose-500/40 hover:border-rose-500/70",
+  owes_outcome:  "border-sky-500/30 hover:border-sky-500/60",
+  running:       "border-sky-500/40 hover:border-sky-500/70",
+};
+const VERDICT_TEXT: Record<string, string> = {
+  needs_you_now: "text-rose-700 dark:text-rose-400",
+  needs_you:     "text-amber-700 dark:text-amber-400",
+  held:          "text-amber-700 dark:text-amber-400",
+  failed:        "text-rose-700 dark:text-rose-400",
+  owes_outcome:  "text-sky-700 dark:text-sky-400",
+  running:       "text-sky-700 dark:text-sky-400",
+  handled:       "text-muted-foreground",
+};
+
+export function DisruptionCard({ r }: { r: RunRow }) {
+  const v = r.verdict;
   const isHeld = r.status === "held";
   const isRunning = r.status === "running";
   const specialistsCount = Array.isArray(r.decision?.agents_called)
@@ -118,8 +139,10 @@ export function DisruptionCard({ r }: { r: Run }) {
       href={`/disruptions/${r.id}`}
       className={cn(
         "group flex h-full w-full flex-col justify-between rounded-lg border border-border bg-card p-5 transition-colors hover:border-foreground/40",
-        isHeld && "border-amber-500/40 hover:border-amber-500/70",
-        isRunning && "border-sky-500/40 hover:border-sky-500/70"
+        // The verdict decides the card's edge when there is one; the old
+        // status colouring stays as the fallback so nothing goes unmarked.
+        v ? VERDICT_CLS[v.state] : isHeld ? "border-amber-500/40 hover:border-amber-500/70"
+          : isRunning ? "border-sky-500/40 hover:border-sky-500/70" : ""
       )}
     >
       <div>
@@ -138,6 +161,15 @@ export function DisruptionCard({ r }: { r: Run }) {
         <h2 className="mt-2.5 h-6 truncate text-base font-semibold leading-6 tracking-tight text-foreground transition-colors group-hover:text-primary">
           {r.title}
         </h2>
+
+        {/* What this one still asks of a person, with the figures that earned
+            it. Computed in engine/triage.py, never a model's opinion. */}
+        {v && (
+          <p className={cn("mt-1.5 h-4 truncate text-xs font-medium leading-4",
+                           VERDICT_TEXT[v.state])}>
+            {v.headline}
+          </p>
+        )}
 
         {/* Level 2 Sub: External trigger (fixed h-4) */}
         <p className="mt-1 h-4 truncate font-mono text-xs leading-4 text-muted-foreground">

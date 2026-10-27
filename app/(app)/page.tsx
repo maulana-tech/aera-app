@@ -1,4 +1,4 @@
-import { api, type Run } from "@/app/lib";
+import { api, idr, type Board, type RunRow } from "@/app/lib";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { DisruptionCard } from "@/components/disruption-card";
 import { StatusBadge } from "@/components/status-badge";
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function Queue() {
   const [data, health] = await Promise.all([
-    api<{ runs: Run[] }>("runs"),
+    api<{ runs: RunRow[]; board?: Board }>("runs"),
     api<{ env: string; sap_ready: boolean; model_ready: boolean }>("health"),
   ]);
 
@@ -24,16 +24,30 @@ export default async function Queue() {
   }
 
   const runs = data.runs;
-  const needsAttention = runs.filter((r) => r.status === "running" || r.status === "held");
+  // The board comes back already sorted by what is owed, so the top of the
+  // screen is the thing most owed, not the thing most recent.
+  const board = data.board;
 
   return (
     <main className="w-full px-4 py-4 md:px-6 md:py-8">
       <header className="flex flex-wrap items-end justify-between gap-3 border-b border-border pb-4 md:gap-4 md:pb-5">
         <div>
           <h1 className="mt-1 text-xl font-semibold tracking-tight md:mt-2 md:text-2xl">Supply disruptions</h1>
-          <p className="mt-1 text-xs text-muted-foreground md:text-sm">
-            {runs.length} handlings · {needsAttention.length} need attention
+          {/* One line that says whether to open anything. It may only read
+              "nothing needs a person" when nothing waits, nothing is held,
+              nothing failed and nothing owes an outcome — a board that says
+              all clear while four handlings sit held is believed once. */}
+          <p className={`mt-1 text-xs md:text-sm ${
+            board?.clear ? "text-emerald-700 dark:text-emerald-400"
+                         : board?.needs_a_person ? "text-amber-700 dark:text-amber-400"
+                         : "text-muted-foreground"}`}>
+            {board?.line ?? `${runs.length} handlings`}
           </p>
+          {board && board.needs_a_person > 0 && (
+            <p className="text-muted-foreground mt-0.5 font-mono text-[11px]">
+              {runs.length} handlings · {idr(board.value_idr)} waiting on a person
+            </p>
+          )}
         </div>
         {health && (
           <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">

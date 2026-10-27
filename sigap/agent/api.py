@@ -1348,8 +1348,16 @@ def me(_m, _b, h) -> Tuple[int, dict]:
 
 @route("GET", r"/runs")
 def list_runs(_m, _b, h) -> Tuple[int, dict]:
+    """The board, most owed first, each handling carrying its verdict.
+
+    The verdict is computed from the record (engine/triage.py), never asked of
+    a model: a severity nobody can recompute is the kind of confident unlabelled
+    claim this system exists to refuse."""
     _user(h)
-    return 200, {"runs": store.list_runs()}
+    from engine import triage
+    runs = triage.queue()
+    return 200, {"runs": runs,
+                 "board": triage.summarise([triage.Verdict(**r["verdict"]) for r in runs])}
 
 
 @route("GET", r"/runs/([A-Za-z0-9_]+)")

@@ -38,7 +38,6 @@ from typing import Dict, List, Optional
 from clients import channels
 from core import store
 from core.config import CFG
-from core.identity import ROLE_LIMITS
 
 MAX_ATTEMPTS = 3
 RECOMMENDATION_CHARS = 900
@@ -59,12 +58,8 @@ def _value(action: dict) -> int:
 
 
 def _who_may_approve(value: int, kind: str = "") -> str:
-    import outreach
-    if kind in outreach.APPROVERS:
-        return outreach.APPROVERS[kind][0]
-    roles = [r for r, limit in sorted(ROLE_LIMITS.items(), key=lambda x: x[1])
-             if limit > 0 and value <= limit and r != "admin"]
-    return roles[0] if roles else "nobody below admin"
+    from engine.triage import approver_for
+    return approver_for(value, kind)
 
 
 def _alert_formats() -> List[str]:
@@ -123,7 +118,10 @@ def handling_message(run: dict) -> Dict[str, str]:
     """Subject and body for one finished handling, from the record."""
     status = run["status"]
     decision = run.get("decision") or {}
-    lines = [run["title"], f"{_HEADLINE.get(status, status)} · {run['kind']} · run {run['id']}", ""]
+    from engine import triage
+    said = triage.verdict_for_run(run)
+    lines = [run["title"], said.headline,
+             f"{_HEADLINE.get(status, status)} · {run['kind']} · run {run['id']}", ""]
     if status == "done" and decision.get("recommendation"):
         if decision.get("status") == "partial":
             lines.append("The lead ran out of time; this is what it had so far.")
@@ -168,8 +166,9 @@ def handling_message(run: dict) -> Dict[str, str]:
         lines += ["The attached workbook holds the record. The rows each tool read are not in "
                   "it; download the workbook from SIGAP for those.", ""]
     lines.append(f"Open it: {CFG.web_url}/disruptions/{run['id']}")
-    return {"subject": f"[SIGAP] {_HEADLINE.get(status, status)}: {run['title']}"[:180],
-            "body": "\n".join(lines)}
+    return {"subject": f"[SIGAP] {said.headline}: {run['title']}"[:180],
+            "body": "\n".join(lines),
+            "verdict": said.state}
 
 
 def queue_handling(run_id: str) -> int:
@@ -207,7 +206,14 @@ def digest_message(now: Optional[datetime] = None) -> Dict[str, str]:
     for r in recent:
         by_status[r["status"]] = by_status.get(r["status"], 0) + 1
     day = now.astimezone(WIB).strftime("%d %b %Y")
-    lines = [f"SIGAP, {day}", "",
+
+    # The digest leads with what is owed, not with what happened. A reader
+    # scanning it on a phone needs one line that says whether to open anything,
+    # and that line is arithmetic (engine/triage.py), never a model's opinion.
+    from engine import triage
+    board = triage.summarise([triage.verdict_for_run(store.get_run(r["id"]) or {})
+                              for r in runs[:40]])
+    lines = [f"SIGAP, {day}", "", board["line"], "",
              f"Last 24 hours: {len(recent)} handling(s)"
              + (" · " + " · ".join(f"{v} {k}" for k, v in sorted(by_status.items())) if recent else ""),
              f"Waiting for approval: {len(waiting)} action(s), {_idr(total)} in all", ""]

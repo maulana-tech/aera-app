@@ -396,4 +396,38 @@ export type Trace = {
   };
   nodes: TraceNode[]; edges: TraceEdge[]; calls: TraceCall[];
 };
-export type RunRow = Run & { step_count: number; tool_count: number; action_count?: number };
+/* What a handling still asks of a person, computed from the record by
+ * engine/triage.py — never asked of a model. The word always travels with the
+ * figures that earned it, so `headline` and `because` can be shown as they
+ * come and still be checkable. */
+export type VerdictState =
+  | "needs_you_now" | "needs_you" | "held" | "failed"
+  | "owes_outcome" | "running" | "handled";
+export type Verdict = {
+  state: VerdictState;
+  /** sort key: lower is more owed */
+  rank: number;
+  headline: string;
+  because: string[];
+  value_idr: number;
+  approver: string | null;
+  days_of_cover: number | null;
+  depleted_on: string | null;
+  untrusted: number;
+  owed: number;
+  oldest_owed_days: number | null;
+  compliance_cost_idr: number | null;
+};
+export type Board = {
+  counts: Record<VerdictState, number>;
+  needs_a_person: number;
+  value_idr: number;
+  /** true only when nothing waits, nothing is held, nothing failed and nothing owes an outcome */
+  clear: boolean;
+  line: string;
+};
+
+export type RunRow = Run & {
+  step_count: number; tool_count: number; action_count?: number;
+  verdict?: Verdict;
+};

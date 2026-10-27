@@ -207,7 +207,52 @@ finding and the lead carries on without it.
 
 ---
 
-## 5. Provenance: the spine of the whole thing
+## 5. The verdict: what a person still owes
+
+A queue of twenty disruptions is useless if the reader has to open each one to
+learn which needs them. So every handling carries a verdict — and the verdict is
+**arithmetic** (`engine/triage.py`), not an opinion.
+
+That is the same decision as Kira's veto, for the same reason. A model that says
+"this is critical" has made exactly the kind of confident, unlabelled claim this
+system refuses: it cannot be recomputed, it cannot be argued with, and it would
+drift the day the specialists move to a cheaper model — which they are meant to
+be able to do.
+
+```mermaid
+graph LR
+    rec[("the record")] --> f["<b>facts</b><br/>pending actions and their value · role limits<br/>days of cover from the costing step<br/>untrusted evidence · outcomes owed"]
+    f --> v{{"<b>verdict</b><br/>engine/triage.py"}}
+    v --> s1["<b>needs you now</b><br/>a decision waits AND the clock has run out"]
+    v --> s2["<b>needs you</b> · <b>held</b> · <b>failed</b>"]
+    v --> s3["<b>owes an outcome</b> · <b>running</b> · <b>handled</b>"]
+    s1 --> out["the queue, sorted by what is owed<br/>the alert's subject line<br/>the 07:30 digest's first line"]
+    s2 --> out
+    s3 --> out
+
+    style v fill:#dbeafe,stroke:#2563eb
+```
+
+Two rules hold it together:
+
+- **A verdict never says a word without the number that earns it.** Not
+  "critical" but *"Approve now — Rp 94,000,000 waiting, stock out in 3 days"*.
+  Every line of its reasoning is a fact a reader can go and check.
+- **A verdict is about what is owed, not how dramatic something is.** "Needs you
+  now" and "handled" are instructions. "High" and "medium" are adjectives, and
+  nobody has ever known what to do with an adjective.
+
+The states are the sort order, so the top of the screen is always the thing most
+owed: `needs_you_now · needs_you · held · failed · owes_outcome · running ·
+handled`. A handling with no costing step gets **no clock** rather than an
+invented one — otherwise every queue looks like an emergency.
+
+And one claim is guarded above all: the board may only read **"nothing needs a
+person"** when nothing waits, nothing was held, nothing failed and nothing owes
+an outcome. A screen that says all-clear while four handlings sit held is
+believed exactly once.
+
+## 6. Provenance: the spine of the whole thing
 
 Every value a tool returns is a `Result` carrying an `Origin`. Nothing in SIGAP shows a
 number without saying where it came from.
@@ -244,7 +289,7 @@ Three places this is enforced rather than merely displayed:
 
 ---
 
-## 6. The record, and the loop that closes it
+## 7. The record, and the loop that closes it
 
 ```mermaid
 erDiagram
@@ -304,7 +349,7 @@ Two rules this code holds, both because the alternative falsifies a number:
 
 ---
 
-## 7. Reporting
+## 8. Reporting
 
 ```mermaid
 graph TB
@@ -336,7 +381,7 @@ Four properties worth knowing:
 
 ---
 
-## 8. Repository map
+## 9. Repository map
 
 ```
 socrates/
@@ -370,7 +415,7 @@ Every module carries a `demo()` self-check. `python3 manage.py check` runs all o
 
 ---
 
-## 9. Deployment
+## 10. Deployment
 
 ```mermaid
 graph LR
@@ -408,7 +453,7 @@ move `core/store.py` onto it.
 
 ---
 
-## 10. The decisions this architecture is making
+## 11. The decisions this architecture is making
 
 | Decision | What it buys | What it costs |
 |---|---|---|
@@ -422,7 +467,7 @@ move `core/store.py` onto it.
 
 ---
 
-## 11. Honest state
+## 12. Honest state
 
 What is real: the agent loop, all 45 tools, the rules engine, the costing engine, the
 record, approvals and limits, the reports and their files, the signal watchers, MCP, the
@@ -433,7 +478,7 @@ What is demo-grade, and says so on screen:
 - The installed **rule pack is `verified:false`** throughout — the mechanism is real, the
   Ningbo values are illustrative. Filling it with contract figures is the customer's
   domain work, and until then every ruling that uses one is labelled `modelled`.
-- **SQLite on Cloud Foundry** does not survive a restart (§9).
+- **SQLite on Cloud Foundry** does not survive a restart (§10).
 - The **SAP write path** sends approved actions but has not been run against a customer
   tenant.
 
