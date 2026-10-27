@@ -14,7 +14,7 @@ Endpoints
     GET  /runs                     recent handlings
     GET  /runs/{id}                one handling: steps, actions, approvals
     POST /actions/{id}/decision    {decision, note}
-    POST /actions/{id}/outcome     {outcome, detail}   what actually happened
+    POST /actions/{id}/outcome     {outcome, detail?, actual_cost_idr?}  what happened
     POST /login                    {email, password}
     GET  /me
     GET  /agents                   team anatomy
@@ -33,7 +33,8 @@ Endpoints
     POST /mcp                      the tool registry over MCP
     GET  /reports/{run_id}         one handling written up, and the sheets its workbook holds
     GET  /reports/{run_id}.pdf · .xlsx   the same as a document, or every table it produced
-    GET  /portfolio · /portfolio.pdf · /portfolio.xlsx   every handling rolled up
+    GET  /portfolio · /portfolio.pdf · /portfolio.xlsx   the handlings rolled up over a
+                                   period: ?days=30, or ?since=&until= as WIB calendar dates
     POST /reports/{run_id}/send · /portfolio/send   {contacts, me?, formats, note} by email  (session)
     GET  /contacts · /contacts/{id}  (session) · POST /contacts, /contacts/{id}, /contacts/{id}/delete  (admin, lead)
     GET  /notifications            channel status and what was sent  (session)
@@ -59,7 +60,7 @@ import threading
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Callable, Dict, List, Optional, Tuple
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 import tools  # noqa: F401  (registers every tool)
 from core import identity, llm, registry, store
@@ -509,6 +510,15 @@ def upload(_m, b: dict, h) -> Tuple[int, dict]:
                                   synthetic=bool(b.get("synthetic")))
 
 
+@route("GET", r"/uploads/([A-Za-z0-9_]+)/rows")
+def upload_rows(m, _b, h) -> Tuple[int, dict]:
+    """One upload's own rows, so a person can see what they actually gave the
+    system rather than trusting a row count. Capped; the reply says when it is."""
+    _user(h)
+    u = store.get_upload(m.group(1))
+    return (200, u) if u else (404, {"error": "not found"})
+
+
 @route("GET", r"/uploads/template/([A-Za-z]+)")
 def upload_template(m, _b, h) -> Tuple[int, dict]:
     """The expected columns (and a one-row sample) for an entity, so a company
@@ -528,13 +538,26 @@ def remove_upload(m, _b, h) -> Tuple[int, dict]:
         else (404, {"error": "not found"})
 
 
+def _period(b: dict) -> dict:
+    """The period a rollup is asked for: ?days=30, or ?since=&until= as WIB
+    calendar dates. Nothing given means every handling on record."""
+    days = b.get("days")
+    return {"since": str(b["since"]) if b.get("since") else None,
+            "until": str(b["until"]) if b.get("until") else None,
+            "days": int(days) if days not in (None, "") else None}
+
+
 @route("GET", r"/portfolio")
-def portfolio_report(_m, _b, h) -> Tuple[int, dict]:
-    """The operations rollup across every handling: counts, committed value,
-    realized-vs-predicted. Figures deterministic; aux adds a summary when able."""
+def portfolio_report(_m, b, h) -> Tuple[int, dict]:
+    """The operations rollup over a period: counts, committed value, what the
+    rules cost, realized-vs-predicted. Figures deterministic; aux adds a summary
+    when able. ?days=30, or ?since=2026-10-01&until=2026-10-31 (WIB)."""
     _user(h)
     from engine import report
-    return 200, report.build_portfolio()
+    try:
+        return 200, report.build_portfolio(**_period(b))
+    except ValueError as e:
+        return 400, {"error": str(e)}
 
 
 @route("GET", r"/reports/([A-Za-z0-9_]+)")
@@ -559,10 +582,14 @@ def report_file(m, _b, h) -> Tuple[int, Any]:
 
 
 @route("GET", r"/portfolio\.(pdf|xlsx)")
-def portfolio_file(m, _b, h) -> Tuple[int, Any]:
+def portfolio_file(m, b, h) -> Tuple[int, Any]:
+    """The operations report as a file, over the same period as the page."""
     _user(h)
     from engine import report
-    return 200, Download(*report.portfolio_file(m.group(1)))
+    try:
+        return 200, Download(*report.portfolio_file(m.group(1), **_period(b)))
+    except ValueError as e:
+        return 400, {"error": str(e)}
 
 
 def _send_report(target: str, b: dict, h) -> Tuple[int, dict]:
@@ -586,7 +613,8 @@ def _send_report(target: str, b: dict, h) -> Tuple[int, dict]:
         return 409, {"error": "email is not set up: " + "; ".join(gaps)}
     try:
         n = notify.queue_report(target, list(b.get("formats") or ["pdf"]), emails, u.email,
-                                str(b.get("note") or "")[:2000])
+                                str(b.get("note") or "")[:2000],
+                                period=_period(b) if target == "portfolio" else None)
     except LookupError as e:
         return 404, {"error": str(e)}
     return 200, {"queued": n, "to": emails, "delivery": notify.deliver_summary()}
@@ -1373,12 +1401,22 @@ def run_graph(m, _b, h) -> Tuple[int, dict]:
 
 @route("POST", r"/actions/([A-Za-z0-9_]+)/outcome")
 def record_outcome(m, b: dict, h) -> Tuple[int, dict]:
-    """What actually happened. The half of the record that closes the loop."""
-    _user(h)                           # a reading of reality is still attributable
+    """What actually happened. The half of the record that closes the loop.
+
+    `actual_cost_idr` is taken as a number at the top level, not dug out of
+    `detail`: a client that sends "24,500,000" gets a 400 rather than having a
+    scale guessed for it. Structured `detail` still passes through as given.
+    """
+    u = _user(h)                       # a reading of reality is still attributable
     if not b.get("outcome"):
         return 400, {"error": f"'outcome' is required, one of {', '.join(store.OUTCOMES)}"}
     try:
-        return 200, store.record_outcome(m.group(1), b["outcome"], b.get("detail"))
+        given = b.get("detail")
+        if given is not None and not isinstance(given, dict):
+            given = {"note": str(given)}       # a plain string is a note, not a shape error
+        detail = (given or {}) | (
+            store.outcome_detail("", b.get("actual_cost_idr"), recorded_by=u.email) or {})
+        return 200, store.record_outcome(m.group(1), b["outcome"], detail or None)
     except KeyError:
         return 404, {"error": "action not found"}
     except ValueError as e:
@@ -1482,8 +1520,12 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def _dispatch(self, method: str) -> None:
-        path = urlparse(self.path).path.rstrip("/") or "/health"
-        body: Dict[str, Any] = {}
+        parts = urlparse(self.path)
+        path = parts.path.rstrip("/") or "/health"
+        # A GET has no body, so its query string is its inputs and a handler
+        # reads them the same way: b.get("since"). First value wins; a repeated
+        # parameter is a caller mistake, not two answers.
+        body: Dict[str, Any] = {k: v[0] for k, v in parse_qs(parts.query).items()}
         if method == "POST":
             n = int(self.headers.get("Content-Length") or 0)
             if n:

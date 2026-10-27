@@ -74,6 +74,20 @@ def _alert_formats() -> List[str]:
     return [f for f in ("pdf", "xlsx") if f in {x.strip() for x in raw.split(",")}]
 
 
+def email_carries_data() -> bool:
+    """Whether a workbook that LEAVES by email carries the per-tool data sheets.
+
+    A handling's workbook holds every row every tool read — supplier prices,
+    quotations, customer orders. Inside the company that is the audit trail;
+    attached to an email it is a data export nobody asked for, and the address
+    it goes to is a contact's, not necessarily a colleague's. So an emailed
+    workbook carries the record (summary, actions, approvals, steps, compliance
+    cost) and leaves the rows behind, with the body saying so and where to get
+    them. An installation that wants the rows attached says so explicitly.
+    """
+    return os.environ.get("SIGAP_REPORT_EMAIL_DATA", "").strip().lower() in ("1", "true", "yes", "on")
+
+
 def files_for(specs: Optional[List[dict]]) -> List[channels.File]:
     """Render what a message names: {"report": run_id | "portfolio", "format"}."""
     from engine import report
@@ -81,7 +95,9 @@ def files_for(specs: Optional[List[dict]]) -> List[channels.File]:
     for spec in specs or []:
         fmt = spec.get("format") if spec.get("format") in ("pdf", "xlsx") else "pdf"
         target = str(spec.get("report") or "")
-        f = report.portfolio_file(fmt) if target == "portfolio" else report.run_file(target, fmt)
+        f = (report.portfolio_file(fmt, spec.get("since"), spec.get("until"), spec.get("days"))
+             if target == "portfolio"
+             else report.run_file(target, fmt, include_data=email_carries_data()))
         if not f:
             raise LookupError(f"report {target} is not on record")
         out.append(f)
@@ -148,6 +164,9 @@ def handling_message(run: dict) -> Dict[str, str]:
     if untrusted:
         lines += [f"{len(untrusted)} piece(s) of evidence were modelled or missing, not live. "
                   "Check them before acting.", ""]
+    if "xlsx" in _alert_formats() and not email_carries_data():
+        lines += ["The attached workbook holds the record. The rows each tool read are not in "
+                  "it; download the workbook from SIGAP for those.", ""]
     lines.append(f"Open it: {CFG.web_url}/disruptions/{run['id']}")
     return {"subject": f"[SIGAP] {_HEADLINE.get(status, status)}: {run['title']}"[:180],
             "body": "\n".join(lines)}
@@ -198,6 +217,17 @@ def digest_message(now: Optional[datetime] = None) -> Dict[str, str]:
         lines += ["", "Oldest waiting:"]
         for w in waiting[:5]:
             lines.append(f"  - {w['kind']} for \"{w['title']}\"  {CFG.web_url}/disruptions/{w['run_id']}")
+
+    # The other open half of the record: things that went out and whose real
+    # result nobody has written down. Nothing polls a carrier to find out, so
+    # this is the ask. Silent when there is nothing to chase.
+    owed = store.actions_awaiting_outcome()
+    if owed:
+        lines += ["", f"Waiting for an outcome: {len(owed)} action(s)"]
+        for o in owed[:5]:
+            age = f" · {o['days_waiting']} days" if o.get("days_waiting") is not None else ""
+            lines.append(f"  - {o['kind']} for \"{o['title']}\"{age}"
+                         f"  {CFG.web_url}/disruptions/{o['run_id']}")
     return {"subject": f"[SIGAP] Daily digest, {day}", "body": "\n".join(lines),
             "key": now.astimezone(WIB).strftime("%Y-%m-%d")}
 
@@ -228,11 +258,20 @@ def queue_test(requested_by: str) -> int:
 
 
 def queue_report(target: str, formats: List[str], emails: List[str], requested_by: str,
-                 note: str = "") -> int:
+                 note: str = "", period: Optional[dict] = None) -> int:
     """A report sent on request: one handling (`target` is its run id) or the
-    operations report ("portfolio"), to each address, with the files asked for."""
+    operations report ("portfolio"), to each address, with the files asked for.
+
+    `period` applies to the portfolio only, and rides on the attachment spec so
+    the file that arrives covers the period the sender was looking at. Without
+    it an emailed rollup would silently be all-time while the page it was sent
+    from showed one month.
+    """
     formats = [f for f in ("pdf", "xlsx") if f in formats] or ["pdf"]
+    period = {k: v for k, v in (period or {}).items() if v} if target == "portfolio" else {}
     if target == "portfolio":
+        from engine import report
+        label = report.period_label(report.window(**period) if period else None)
         title, url = "Operations report", f"{CFG.web_url}/reports/portfolio"
     else:
         run = store.get_run(target)
@@ -241,12 +280,24 @@ def queue_report(target: str, formats: List[str], emails: List[str], requested_b
         title, url = run["title"], f"{CFG.web_url}/reports/{target}"
     stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
     lines = [f"{requested_by} sent you this report from SIGAP: {title}.", ""]
+    if target == "portfolio":
+        lines += [f"It covers {label}.", ""]
     if note.strip():
         lines += [note.strip(), ""]
-    lines += [f"Attached: the report as {' and '.join({'pdf': 'a PDF', 'xlsx': 'an Excel workbook'}[f] for f in formats)}.",
-              f"Open it in SIGAP: {url}"]
-    files = [{"report": target, "format": f} for f in formats]
-    return sum(store.enqueue_notification(f"report:{target}:{stamp}:{e}", "report", "email", e,
+    lines += [f"Attached: the report as {' and '.join({'pdf': 'a PDF', 'xlsx': 'an Excel workbook'}[f] for f in formats)}."]
+    if "xlsx" in formats and target != "portfolio" and not email_carries_data():
+        # Said plainly, because a workbook that is missing sheets without
+        # explanation reads as a workbook that had nothing in them.
+        lines.append("The workbook holds the record — the decision, the actions, the approvals, "
+                     "the steps. The rows each tool read are not attached; open the report in "
+                     "SIGAP and download the workbook there for those.")
+    lines.append(f"Open it in SIGAP: {url}")
+    files = [{"report": target, "format": f, **period} for f in formats]
+    # The period is part of what identifies the send: two periods asked for in
+    # the same second are two different reports, and the dedup key must not
+    # swallow the second one as a double click.
+    tag = ",".join(f"{k}={v}" for k, v in sorted(period.items()))
+    return sum(store.enqueue_notification(f"report:{target}:{tag}:{stamp}:{e}", "report", "email", e,
                                           f"[SIGAP] Report: {title}"[:180], "\n".join(lines),
                                           None if target == "portfolio" else target,
                                           attachments=files)
@@ -351,6 +402,18 @@ def demo() -> None:
         assert queue_digest() >= 1 and queue_digest() == 0, "one digest a day"
         assert "Waiting for approval: 1 action(s), Rp 94,000,000" in digest_message()["body"]
 
+        # The other open half of the record. Nothing polls a carrier, so the
+        # digest is what asks. Silent when there is nothing to chase: the draft
+        # PO above is still pending, and `notify` is never chased at all.
+        assert "Waiting for an outcome" not in digest_message()["body"]
+        moved = store.record_action(rid, "k-move", "stock_transfer", True,
+                                    {"material": "M-4471", "cost_idr": 22_000_000})
+        assert "Waiting for an outcome: 1 action(s)" in digest_message()["body"]
+        store.record_outcome(moved["id"], "delivered",
+                             store.outcome_detail("", 21_800_000, "rina@x"))
+        assert "Waiting for an outcome" not in digest_message()["body"], \
+            "a closed loop is still being chased"
+
         # A finished handling's email carries its report; a team channel the link.
         rid3 = store.start_run(eid, "guided")
         store.close_run(rid3, "held", {"reason": "two figures modelled"})
@@ -373,6 +436,19 @@ def demo() -> None:
         assert [n for n, _ in two[4]] and two[4][0][0].endswith(".pdf") and two[4][1][0].endswith(".xlsx"), two
         assert "For Monday." in two[3] and "lead@x sent you" in two[3]
         assert one[4][0][1].startswith("application/vnd.openxml"), one
+        # A workbook that leaves the building carries the record, not every row
+        # every tool read, and the body says so rather than letting a reader
+        # think the sheets were empty.
+        assert not email_carries_data()
+        assert "rows each tool read are not attached" in two[3], two[3]
+        # The portfolio send states the period it covers, so the file and the
+        # page it was sent from cannot quietly disagree.
+        assert "It covers every handling on record." in one[3], one[3]
+        sent.clear()
+        assert queue_report("portfolio", ["pdf"], ["dodi@x"], "lead@x", period={"days": 7}) == 1
+        deliver()
+        assert "It covers the last 7 days" in sent[0][3], sent[0][3]
+        assert "last7d" in sent[0][4][0][0], sent[0][4][0][0]
         try:
             queue_report("run_missing", ["pdf"], ["rina@x"], "lead@x")
             raise AssertionError("a report that does not exist cannot be sent")
@@ -401,7 +477,9 @@ def demo() -> None:
         assert not absent, f"Contacts page offers no {absent}, which the watchers raise"
     print("  notify: recipients by kind ✓ · once per run ✓ · approvals and actions from the record ✓ "
           "· unconfigured skipped, not held ✓ · retried, then failed ✓ · one digest a day ✓ "
-          "· every kind raised can be chosen ✓ · reports go as PDF and workbook, by email only ✓")
+          "· every kind raised can be chosen ✓ · reports go as PDF and workbook, by email only ✓ "
+          "· an emailed workbook leaves the raw rows behind and says so ✓ · a sent rollup names "
+          "its period ✓")
     print("notify ok")
 
 
