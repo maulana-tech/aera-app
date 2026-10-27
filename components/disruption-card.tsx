@@ -13,77 +13,56 @@ function formatTrigger(trigger?: string | null): string {
   return trigger.replace(/,\s*\d{4}-\d{2}-\d{2}T[\d:+-]+/, "").trim();
 }
 
-function cleanExecutiveSummary(raw?: string): string {
-  if (!raw) return "";
+/* The report's own metadata lines. These come from engine/report.py, not from
+ * a model, so naming them is a fact about our format rather than a guess at
+ * some model's voice. */
+const METADATA = /^(status|kind|trigger|started|finished|run|event|mode|generated)\s*:/i;
 
+/* The first human sentence of a recommendation, for the card's two lines.
+ *
+ * The verdict above already says what is owed and what it is worth, so this
+ * only has to give the gist. It used to try much harder: it scored candidate
+ * lines, required 30 characters, and carried a blacklist of specific agent
+ * phrasings ("Elsa has made the right call"). Guessing at one model's voice is
+ * not something that can be kept correct, and the fallback path it fell into
+ * ran `replace(/[#*_-]/g, " ")` over the raw text, which turns every hyphen
+ * into a space: "re-source" shipped to the queue as "re source" and "M-4471"
+ * as "M 4471".
+ *
+ * So it strips Markdown as Markdown - only where a character is a marker - and
+ * takes the first line that carries content. Short answers are answers.
+ */
+function gist(raw?: string): string {
+  if (!raw) return "";
   const lines = raw
     .replace(/\r/g, "")
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l && !l.startsWith("---") && !l.startsWith("==="));
-
-  const candidates: string[] = [];
+    .replace(/```[\s\S]*?```/g, " ")
+    .split("\n");
 
   for (const line of lines) {
-    let clean = line
-      .replace(/^#+\s*/, "") // headings
-      .replace(/^[*_]{1,3}|[*_]{1,3}$/g, "") // bold/italic edges
-      .replace(/^[*-]\s+/, "") // list markers
-      .replace(/^\d+\.\s+/, "") // numbered list
+    const heading = /^\s*#{1,6}\s+/.test(line);
+    const text = line
+      .replace(/^\s*#{1,6}\s+/, "")
+      .replace(/^\s*>\s?/, "")
+      .replace(/^\s*[-*+]\s+/, "")
+      .replace(/^\s*\d+[.)]\s+/, "")
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+      .replace(/\*\*([^*]+)\*\*/g, "$1")
+      .replace(/__([^_]+)__/g, "$1")
+      .replace(/(^|[\s(])\*([^*\s][^*]*?)\*(?=[\s).,;:!?]|$)/g, "$1$2")
+      .replace(/`([^`]+)`/g, "$1")
+      .replace(/\s+/g, " ")
       .trim();
 
-    // Strip status banners or metadata lines with prefixes
-    if (
-      /^(status|event|issue|disruption|summary|overview|what happened|the evidence|what i need|critical data missing|options to proceed|recommendation):/i.test(
-        clean
-      )
-    ) {
-      const parts = clean.split(/:\s*/);
-      if (parts.length > 1 && parts[1].length > 25) {
-        clean = parts.slice(1).join(": ").trim();
-      } else {
-        continue;
-      }
-    }
-
-    // Skip short labels, uppercase shouts, or metadata strings
-    if (
-      clean.length < 30 ||
-      (/^[A-Z0-9\s—–_-]+$/.test(clean) && clean.length < 50) ||
-      /^(disruption analysis|insufficient data|live, fetched|what happened|the problem|summary)/i.test(
-        clean
-      )
-    ) {
-      continue;
-    }
-
-    // Skip technical timestamp lines
-    if (/^\d{4}-\d{2}-\d{2}|fetched \d{4}/i.test(clean)) {
-      continue;
-    }
-
-    // Strip internal agent conversational meta-openers
-    clean = clean
-      .replace(/^(Elsa has made the right call\.?\s*)/i, "")
-      .replace(/^(Understood\.?\s*Elsa is correct[—–-]?\s*)/i, "")
-      .replace(/^(The data needed to route this disruption is missing\.?\s*)/i, "")
-      .replace(/^(Let me escalate what we know and what needs to be provided\.?\s*)/i, "")
-      .trim();
-
-    if (clean.length >= 30) {
-      clean = clean.replace(/\*\*/g, "").replace(/\s+/g, " ");
-      candidates.push(clean);
-    }
+    if (!text) continue;
+    if (heading) continue;                                  // names a section, is not the gist
+    if (/^[-=_*]{3,}$/.test(text)) continue;                // horizontal rule
+    if (text.startsWith("|")) continue;                     // table row
+    if (METADATA.test(text)) continue;
+    if (/^[A-Za-z][A-Za-z ]{1,24}:$/.test(text)) continue;  // a bare label, nothing after it
+    return text;
   }
-
-  if (candidates.length > 0) {
-    return candidates[0];
-  }
-
-  return raw
-    .replace(/[#*_-]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return "";
 }
 
 /* The colour of a verdict. It carries no meaning on its own — every card
@@ -124,7 +103,7 @@ export function DisruptionCard({ r }: { r: RunRow }) {
     bodyContent = `Error: ${r.error}`;
     bodyCls = "text-destructive font-mono text-xs";
   } else if (r.decision?.recommendation) {
-    bodyContent = cleanExecutiveSummary(r.decision.recommendation);
+    bodyContent = gist(r.decision.recommendation);
     bodyCls = "text-foreground/80";
   } else if (isRunning) {
     bodyContent = "Specialists actively scanning SAP purchase orders, inventory buffers, and logistics exposure...";
