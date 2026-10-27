@@ -170,8 +170,21 @@ def check_local_constraints(option_id: str) -> Result:
     options = read("AlternateSource", ids=[option_id])
     option = next(iter(options.value or []), None)
     if option is None:
+        # Name the ids that do exist. A caller reaches here mainly one way: the
+        # options were listed by one agent, renumbered in the hand-off, and
+        # ruled on by another under the new numbers, so every call misses and
+        # nothing is ever cleared. Refusing without saying what the real ids
+        # are costs a whole handling; saying so lets the next call be right.
+        known = [str(o.get("id")) for o in (read("AlternateSource").value or []) if o.get("id")]
+        hint = ""
+        if known:
+            shown = ", ".join(known[:10])
+            hint = (f". The options on record are: {shown}"
+                    + (f" and {len(known) - 10} more" if len(known) > 10 else "")
+                    + ". Use the id exactly as find_alternate_sources returned it, not a "
+                      "number assigned to it afterwards")
         return Result(None, Origin.MISSING, "rule pack",
-                      note=f"unknown option '{option_id}'")
+                      note=f"unknown option '{option_id}'{hint}")
 
     reasons: List[str] = []
     unknown: List[str] = []
@@ -267,6 +280,88 @@ def check_local_constraints(option_id: str) -> Result:
     )
 
 
+#: Every rule name the pack may state. Anything else is a typo, and a typo is
+#: the dangerous case: `rule()` falls back to the profile or the built-in and
+#: the ruling reads as if the pack had simply stayed silent.
+KNOWN_RULES = (*FROM_PROFILE, *BUILT_IN)
+
+
+def validate_pack(pack: Optional[dict]) -> List[str]:
+    """Problems with an installed rule pack, named. Deterministic.
+
+    Returns a list of human-readable problems, empty when the pack is sound (or
+    absent, which is a normal state). This never raises and is never fatal: a
+    company whose pack has a typo still gets its handling, it just gets told.
+    """
+    if not pack:
+        return []
+    problems: List[str] = []
+    rules = pack.get("rules")
+    if rules is not None and not isinstance(rules, dict):
+        return ["'rules' must be an object of rule name -> {value, source, verified}"]
+    for name, entry in (rules or {}).items():
+        if name not in KNOWN_RULES:
+            problems.append(
+                f"unknown rule '{name}' — it is ignored, and the ruling will use the "
+                f"built-in or the company profile instead. One of: {', '.join(KNOWN_RULES)}")
+            continue
+        if not isinstance(entry, dict) or entry.get("value") is None:
+            problems.append(f"rule '{name}' has no value, so it is ignored")
+            continue
+        if not isinstance(entry["value"], (int, float)) or isinstance(entry["value"], bool):
+            problems.append(f"rule '{name}' value must be a number, not {entry['value']!r}")
+        if entry.get("verified") and not str(entry.get("source") or "").strip():
+            problems.append(
+                f"rule '{name}' is marked verified but names no source; it will be "
+                "treated as an assumption until it cites the document it was read from")
+    for i, d in enumerate((pack.get("collective_leave") or []), start=1):
+        if not isinstance(d, dict) or not str(d.get("date") or "").strip():
+            problems.append(f"collective_leave entry {i} has no date, so it is ignored")
+            continue
+        try:
+            date.fromisoformat(str(d["date"]))
+        except ValueError:
+            problems.append(f"collective_leave entry {i}: '{d['date']}' is not YYYY-MM-DD")
+    for i, cert in enumerate((pack.get("certificates") or []), start=1):
+        if not isinstance(cert, dict) or not str(cert.get("supplier") or "").strip():
+            problems.append(f"certificate entry {i} names no supplier, so it is ignored")
+    return problems
+
+
+def pack_status() -> Dict[str, Any]:
+    """How much of the knowledge base is verified, and what is wrong with it.
+
+    Reads the pack file and nothing else: no profile, no SAP, no holiday
+    calendar. A report states the trust level of the rules it rests on, and it
+    must be able to do that for the price of reading one file rather than the
+    price of a ruling. The same figures `get_rule_pack` returns, which is the
+    agent's way in; this is the record's way in.
+
+    A rule counts as verified only where the pack states it, gives a value,
+    marks it verified AND cites a source — the same test `rule()` applies, so
+    the two can never disagree about what is trusted.
+    """
+    try:
+        pack = load_pack()
+    except ValueError as e:
+        # A pack that does not parse is not a pack with no rules: nothing in it
+        # is trusted, and the reason is the first thing to show.
+        return {"pack": str(pack_path()), "total": len(KNOWN_RULES), "verified": 0,
+                "unverified": list(KNOWN_RULES), "problems": [str(e)]}
+    rules = (pack or {}).get("rules")
+    if not isinstance(rules, dict):
+        rules = {}
+    verified = {n for n in KNOWN_RULES
+                if isinstance(rules.get(n), dict)
+                and rules[n].get("value") is not None
+                and rules[n].get("verified")
+                and str(rules[n].get("source") or "").strip()}
+    return {"pack": str(pack_path()) if pack else None,
+            "total": len(KNOWN_RULES), "verified": len(verified),
+            "unverified": [n for n in KNOWN_RULES if n not in verified],
+            "problems": validate_pack(pack)}
+
+
 @register(
     "get_rule_pack", "compliance",
     "The rules check_local_constraints applies, each with its value, the document it "
@@ -280,22 +375,33 @@ def get_rule_pack() -> Result:
     pack = load_pack()
     rules = [rule(n, pack) for n in (*FROM_PROFILE, *BUILT_IN)]
     leave = collective_leave(pack)
+    unverified = [r.name for r in rules if not r.verified]
     value = {
         "pack": str(pack_path()) if pack else None,
         "version": (pack or {}).get("version"),
         "rules": [r.as_dict() for r in rules],
         "collective_leave": [{"date": d.isoformat(), "name": n} for d, n in sorted(leave.items())],
         "certificates": len((pack or {}).get("certificates") or []),
+        # The trust state of the knowledge base, as a figure, so a reader does
+        # not have to count booleans to learn how much of this is assumption.
+        "verified_rules": len(rules) - len(unverified),
+        "total_rules": len(rules),
+        "unverified": unverified,
+        "problems": validate_pack(pack),
     }
     if pack is None:
         return Result(value, Origin.MODELLED, "built-in rules + company profile",
                       note="no rule pack is installed, so every rule is the built-in "
                            "assumption or the company profile; no collective leave and no "
                            "certificate is on file")
-    unverified = [r.name for r in rules if not r.verified]
+    note = (("not verified against a source: " + ", ".join(unverified))
+            if unverified else "every rule verified against its source")
+    if value["problems"]:
+        # A malformed pack is said out loud rather than silently ignored: the
+        # quiet failure is a misspelled rule reading exactly like no rule.
+        note += ". Problems in the pack: " + "; ".join(value["problems"])
     return Result(value, Origin.MODELLED if unverified else Origin.DERIVED, pack_source(),
-                  note=("not verified against a source: " + ", ".join(unverified))
-                  if unverified else "every rule verified against its source")
+                  note=note)
 
 
 def demo() -> None:
@@ -381,12 +487,40 @@ def demo() -> None:
                 assert "Test Leave" in v.value["reason"], v.value["reason"]
                 pack = get_rule_pack()
                 assert pack.origin is Origin.DERIVED and pack.value["collective_leave"], pack.brief()
+                # The same trust state, for the price of reading one file: this
+                # is what a report states, and it must agree with the tool.
+                st = pack_status()
+                assert st["verified"] == st["total"] == pack.value["total_rules"], st
+                assert st["unverified"] == [] and st["problems"] == [], st
 
                 # A rule written down but not checked is still an assumption.
                 f.write_text(json.dumps({"rules": {"lartas_new_origin_working_days":
                                                    {"value": 12, "verified": True}}}))
                 r = rule("lartas_new_origin_working_days", load_pack())
                 assert r.value == 12 and not r.verified and r.origin is Origin.MODELLED, r
+                # Marked verified with no source: said out loud, not ignored.
+                assert any("names no source" in p for p in validate_pack(load_pack()))
+
+                # A misspelled rule name is the dangerous case: `rule()` falls
+                # back to the profile, so the pack reads exactly as if it had
+                # stayed silent. It must be named rather than swallowed.
+                f.write_text(json.dumps({"rules": {
+                    "tkdn_floor_pct": {"value": 40.0, "source": "x", "verified": True},
+                    "default_port_dwell_days": {"value": "four", "source": "x"},
+                }, "collective_leave": [{"date": "not-a-date"}]}))
+                problems = validate_pack(load_pack())
+                assert any("unknown rule 'tkdn_floor_pct'" in p for p in problems), problems
+                assert any("must be a number" in p for p in problems), problems
+                assert any("not YYYY-MM-DD" in p for p in problems), problems
+                # The tool reports them instead of failing the handling.
+                reported = get_rule_pack()
+                assert reported.value["problems"] == problems
+                assert "Problems in the pack" in reported.note
+                assert reported.value["total_rules"] == 4
+
+                # And the cheap read agrees that nothing here is trusted.
+                st = pack_status()
+                assert st["verified"] == 0 and st["problems"] == problems, st
 
                 f.write_text("{not json")
                 try:
@@ -394,6 +528,12 @@ def demo() -> None:
                     raise AssertionError("a broken pack must fail out loud")
                 except ValueError:
                     pass
+                # A pack that will not parse is not a pack with no rules: a
+                # report must be able to say why nothing in it is trusted
+                # rather than raise in the middle of being assembled.
+                broken = pack_status()
+                assert broken["verified"] == 0 and broken["problems"], broken
+                assert "not valid JSON" in broken["problems"][0], broken
             finally:
                 _pack_file = absent
         assert get_rule_pack().origin is Origin.MODELLED
@@ -404,7 +544,9 @@ def demo() -> None:
     print("compliance ok, keeps TKDN ✓ · worsens TKDN → blocked ✓ · LARTAS delay over "
           "holidays ✓ · unknown TKDN → not cleared ✓")
     print("  no pack → modelled, named ✓ · verified pack → derived ✓ · unsourced rule "
-          "stays an assumption ✓ · broken pack fails ✓")
+          "stays an assumption ✓ · broken pack fails ✓ · pack_status agrees with the tool ✓")
+    print("  a misspelled rule is named, not swallowed ✓ · pack problems reported without "
+          "failing the handling ✓")
 
 
 if __name__ == "__main__":
