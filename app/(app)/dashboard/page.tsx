@@ -108,6 +108,18 @@ export default async function Dashboard() {
               figure on this page came from."
       />
 
+      {/* The same line the decision queue leads with, computed the same way
+          (engine/triage.py). Two screens that disagree about whether anything
+          needs you are worse than one screen. */}
+      {s.board && (
+        <p className={`mt-4 text-sm ${
+          s.board.clear ? "text-emerald-700 dark:text-emerald-400"
+                        : s.board.needs_a_person ? "text-amber-700 dark:text-amber-400"
+                        : "text-muted-foreground"}`}>
+          {s.board.line}
+        </p>
+      )}
+
       <section className="mt-8 grid gap-x-10 gap-y-6 border-b pb-8 sm:grid-cols-2 xl:grid-cols-4">
         <Metric
           label="Awaiting decision"
@@ -128,6 +140,43 @@ export default async function Dashboard() {
           label="Model cost"
           value={idr(s.model_cost_idr)}
           note="since the beginning"
+        />
+
+        {/* What obeying the rules cost. engine/simulate.py prices every option
+            including the ones Kira struck out, which is the only way to answer
+            whether there was a cheaper way and what stopped us taking it. It
+            used to live only inside a report somebody had to go and open. */}
+        <Metric
+          label="What the rules cost"
+          value={s.rules_cost_cases ? idr(s.rules_cost_idr ?? 0) : "-"}
+          note={s.rules_cost_cases
+            ? `a rule struck out a cheaper plan on ${s.rules_cost_cases} disruption(s)`
+            : "no cheaper plan has been struck out by a rule"}
+        />
+        <Metric
+          label="Handled alone"
+          value={String(s.autonomous_actions ?? 0)}
+          note="carried out on the system's own authority, under the limit"
+        />
+        <Metric
+          label="Outcomes owed"
+          value={String(s.outcomes_owed ?? 0)}
+          note={s.outcomes_owed
+            ? `oldest ${s.oldest_owed_days ?? 0} day(s) — until these are recorded the realized side is incomplete`
+            : "every action that went out has been closed"}
+        />
+        {/* The rulings rest on these. A page that shows a TKDN verdict without
+            saying how much of the pack anybody has checked is half a figure. */}
+        <Metric
+          label="Rules verified"
+          value={s.knowledge_base
+            ? `${s.knowledge_base.verified} of ${s.knowledge_base.total}`
+            : "-"}
+          note={!s.knowledge_base ? "unknown"
+            : !s.knowledge_base.pack ? "no rule pack installed; every rule is an assumption"
+            : s.knowledge_base.unverified.length
+              ? `assumptions: ${s.knowledge_base.unverified.join(", ")}`
+              : "every rule checked against its source"}
         />
       </section>
 

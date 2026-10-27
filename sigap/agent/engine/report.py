@@ -519,7 +519,7 @@ def portfolio_metrics(w: Optional[Dict[str, Any]] = None, *,
     """
     runs = _all_runs(w) if runs is None else runs
     actions = _all_actions(w) if actions is None else actions
-    costs = _compliance_costs(w) if costs is None else costs
+    costs = compliance_costs(w) if costs is None else costs
 
     by_status: Dict[str, int] = {}
     by_kind: Dict[str, int] = {}
@@ -693,7 +693,7 @@ def _portfolio_data(w: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     route that is never cached. One pass, passed down.
     """
     runs, actions = _all_runs(w), _all_actions(w)
-    costs = _compliance_costs(w)
+    costs = compliance_costs(w)
     return {"window": w, "runs": runs, "actions": actions, "costs": costs,
             "metrics": portfolio_metrics(w, runs=runs, actions=actions, costs=costs)}
 
@@ -1177,7 +1177,7 @@ def _all_actions(w: Optional[Dict[str, Any]] = None) -> List[dict]:
     return rows
 
 
-def _compliance_costs(w: Optional[Dict[str, Any]] = None) -> List[dict]:
+def compliance_costs(w: Optional[Dict[str, Any]] = None) -> List[dict]:
     """What obeying the rules cost, one row per handling that priced it.
 
     Read out of the costing step already on the record rather than kept in a
@@ -1232,7 +1232,7 @@ def portfolio_sheets(m: Optional[Dict[str, Any]] = None, *,
     w = (m or {}).get("period")
     runs = _all_runs(w) if runs is None else runs
     actions = _all_actions(w) if actions is None else actions
-    costs = _compliance_costs(w) if costs is None else costs
+    costs = compliance_costs(w) if costs is None else costs
     m = m or portfolio_metrics(w, runs=runs, actions=actions, costs=costs)
     kb = m["knowledge_base"]
     dist = lambda d: ", ".join(f"{k} {v}" for k, v in sorted(d.items(), key=lambda x: -x[1]))  # noqa: E731

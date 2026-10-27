@@ -239,6 +239,21 @@ export type View = {
 export type Summary = {
   runs: Record<string, number>; actions: Record<string, number>;
   approved_value_idr: number; pending_value_idr: number; model_cost_idr: number;
+  /** actions the system carried out on its own authority, under the limit */
+  autonomous_actions?: number;
+  /** the same board line the decision queue leads with */
+  board?: Board;
+  /** what obeying the rules cost, across every handling that priced it */
+  rules_cost_idr?: number;
+  rules_cost_cases?: number;
+  /** the open half of the record */
+  outcomes_owed?: number;
+  oldest_owed_days?: number;
+  /** how much of what the rulings rest on is still assumption */
+  knowledge_base?: {
+    pack: string | null; total: number; verified: number;
+    unverified: string[]; problems: string[];
+  };
   critical_stock: { material: string; description: string; plant: string;
                     days_left: number | null; depleted_on: string | null }[];
   recent: { title: string; status: string; started_at: string }[];

@@ -399,6 +399,9 @@ def summary(_m, _b, h) -> Tuple[int, dict]:
             "SELECT COALESCE(SUM(json_extract(payload,'$.cost_idr')),0) FROM actions"
             " WHERE status='pending'").fetchone()[0]
         model_cost = c.execute("SELECT COALESCE(SUM(token_cost_idr),0) FROM runs").fetchone()[0]
+        autonomous = c.execute(
+            "SELECT COUNT(*) FROM actions WHERE autonomous=1 AND status IN ('approved','sent')"
+        ).fetchone()[0]
         recent = c.execute(
             "SELECT e.title, r.status, r.started_at FROM runs r"
             " JOIN events e ON e.id=r.event_id ORDER BY r.started_at DESC LIMIT 5").fetchall()
@@ -406,14 +409,31 @@ def summary(_m, _b, h) -> Tuple[int, dict]:
     stock = VIEWS["inventory"]()
     critical = [x for x in stock["rows"] if (x.get("days_left") or 999) < 14]
 
+    # The three figures that used to live only in a report the operator had to
+    # go and open. The first screen is where somebody decides whether to open
+    # anything at all, so what the rules cost, what the loop still owes and how
+    # much of the rule pack is assumption belong here.
+    from engine import report, triage
+    from tools.compliance import pack_status
+    board = triage.summarise([triage.Verdict(**r["verdict"]) for r in triage.queue()])
+    costs = report.compliance_costs()
+    owed = store.actions_awaiting_outcome()
+
     return 200, {
         "runs": {r["status"]: r["n"] for r in runs},
         "actions": {r["status"]: r["n"] for r in actions},
         "approved_value_idr": approved,
         "pending_value_idr": pending,
         "model_cost_idr": model_cost,
+        "autonomous_actions": autonomous,
         "critical_stock": critical[:5],
         "recent": [dict(r) for r in recent],
+        "board": board,
+        "rules_cost_idr": sum(int(c["idr"]) for c in costs),
+        "rules_cost_cases": len(costs),
+        "outcomes_owed": len(owed),
+        "oldest_owed_days": max((o["days_waiting"] or 0 for o in owed), default=0),
+        "knowledge_base": pack_status(),
         "sap_ready": CFG.sap_ready,
         "model_ready": CFG.model_ready,
     }

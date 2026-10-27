@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS steps (
 );
 CREATE INDEX IF NOT EXISTS idx_steps_run ON steps(run_id, seq);
 -- The operations report reads what the rules cost out of every costing step
--- across many runs (engine/report.py _compliance_costs), which is a scan by
+-- across many runs (engine/report.py compliance_costs), which is a scan by
 -- stage rather than by run.
 CREATE INDEX IF NOT EXISTS idx_steps_stage ON steps(stage, run_id, seq);
 
