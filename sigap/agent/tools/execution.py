@@ -202,7 +202,10 @@ def notify(role: str, message: str) -> Result:
 
 
 @register("monitor_shipment", "execution",
-          "Watch a shipment through to receipt, then record the outcome to memory.",
+          "File a watch on a shipment so its outcome is owed and asked for. SIGAP does not "
+          "poll the carrier: this records that this reference still needs a result, and a "
+          "person, or you, closes it with record_outcome once receipt is actually known. "
+          "Nothing here observes an arrival, so nothing here can invent one.",
           {"reference": {"type": "string"}}, ["reference"])
 def monitor_shipment(reference: str) -> Result:
     return _record("monitor", True, reference=reference)
@@ -216,13 +219,33 @@ def monitor_shipment(reference: str) -> Result:
                        "description": "delivered | late | short | failed | cancelled"},
            "detail": {"type": "string",
                       "description": "what was actually seen: real arrival date, real "
-                                     "quantity, real cost. Plain text."}},
+                                     "quantity. Plain text."},
+           "actual_cost_idr": {"type": ["number", "null"],
+                               "description": "what it actually cost, in rupiah, as a "
+                                              "number you were given — off an invoice, a "
+                                              "goods receipt, or from a person. Never "
+                                              "compute it, never convert it, never round a "
+                                              "range into it. Omit it unless you have the "
+                                              "figure: a cost written into `detail` is "
+                                              "prose and is never read as money."}},
           ["action_id", "outcome"])
-def record_outcome(action_id: str, outcome: str, detail: str = "") -> Result:
+def record_outcome(action_id: str, outcome: str, detail: str = "",
+                   actual_cost_idr: Optional[float] = None) -> Result:
+    """Record what happened. The realized cost travels as its own number.
+
+    `detail` is prose and stays prose: nothing mines a rupiah figure out of it,
+    because a number parsed out of a sentence is the model's guess about money,
+    which is the one thing this system will not do. A caller who knows the real
+    cost passes `actual_cost_idr`; one who does not passes nothing, and the
+    report says the realized cost is not known rather than showing a zero.
+    """
     from core import store
 
     try:
-        row = store.record_outcome(action_id, outcome, {"note": detail} if detail else None)
+        detail_doc = store.outcome_detail(
+            detail, actual_cost_idr,
+            recorded_by="agent:execution.record_outcome")
+        row = store.record_outcome(action_id, outcome, detail_doc)
     except KeyError:
         return Result(None, Origin.MISSING, "actions table",
                       note=f"no action {action_id}")
@@ -232,7 +255,12 @@ def record_outcome(action_id: str, outcome: str, detail: str = "") -> Result:
     if row.get("repeated"):
         return Result(row, Origin.DERIVED, "action record",
                       note="an outcome was already recorded; it was not overwritten")
-    return Result(row, Origin.DERIVED, "action record")
+    # Say out loud whether a figure was recorded, so the transcript shows the
+    # model leaving it blank rather than quietly omitting it.
+    said = (f"realized cost recorded: Rp {int(actual_cost_idr):,}"
+            if actual_cost_idr is not None else
+            "no realized cost was given, so the report will not state one")
+    return Result(row, Origin.DERIVED, "action record", note=said)
 
 
 # ------------------------------------------------------------ outside parties
@@ -502,10 +530,46 @@ def demo() -> None:
         assert "not connected" in t.note, t.note
         told = _record("notify", True, role="buyer", message="Hold 55 t at SBY1.")
         assert told.value["status"] == "sent", "a record that never goes to SAP is done once written"
+
+        # A filed watch is owed a result. The description must keep saying so:
+        # it used to promise it would observe the arrival, which it never did.
+        from core import registry as _reg
+        assert "does not poll" in _reg.get("monitor_shipment").description
+        watch = monitor_shipment("SHP-1")
+        assert watch.value["status"] == "sent"
+        assert watch.value["id"] in {a["id"] for a in store.actions_awaiting_outcome()}
+
+        # ---- the loop closes, with a figure that survives to the report ----
+        from engine.report import _actual_cost
+        schema = _reg.get("record_outcome").schema
+        assert schema["additionalProperties"] is False
+        assert "actual_cost_idr" in schema["properties"]
+        assert "actual_cost_idr" not in schema["required"], "the figure is optional"
+
+        done = record_outcome(t.value["id"], "delivered", detail="arrived 3 Oct",
+                              actual_cost_idr=24_500_000)
+        assert done.origin is Origin.DERIVED and "24,500,000" in done.note, done.note
+        # THE assertion: the realized figure recorded through the agent's own
+        # tool reaches the report. This is the link that used to be broken, so
+        # every realized column read "-" however carefully it was filled in.
+        assert _actual_cost(store.get_action(t.value["id"])) == 24_500_000
+
+        # A cost mentioned only in prose stays prose.
+        prose = record_outcome(watch.value["id"], "late",
+                               detail="it cost about Rp 24,5 jt more")
+        assert prose.origin is Origin.DERIVED and "no realized cost" in prose.note
+        assert _actual_cost(store.get_action(watch.value["id"])) is None
+
+        # A figure sent as text is refused, not coerced into some scale.
+        refused = record_outcome(told.value["id"], "delivered", actual_cost_idr="24500000")
+        assert refused.origin is Origin.MISSING and "must be a number" in refused.note
+        assert store.get_action(told.value["id"])["outcome"] is None
     store.close_run(rid, "done", decision={"status": "done"})
     print("  a customer notice and a supplier request are drafts, addressed from the record, "
           "written as the email that will go")
     print("  an autonomous transfer is approved until SAP has it, so a failed write is retried")
+    print("  the loop closes: a realized figure reaches the report ✓ · prose never becomes "
+          "money ✓ · a watch is owed a result ✓")
 
 
 if __name__ == "__main__":

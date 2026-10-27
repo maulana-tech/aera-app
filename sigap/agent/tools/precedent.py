@@ -90,15 +90,34 @@ def demo() -> None:
         from tools.execution import raise_action
         act = raise_action("stock_transfer", True, material="M-4471",
                            from_plant="SBY1", to_plant="KRW1", qty=55, cost_idr=1_000_000)
-    store.record_outcome(act.value["id"], "late",
-                         {"note": "arrived 3 days after the promised date"})
+    # Recorded through the agent's own tool, figure and all, so this check
+    # exercises the path a specialist actually takes.
+    with registry.bind_run(rid):
+        from tools.execution import record_outcome as tool_record_outcome
+        tool_record_outcome(act.value["id"], "late",
+                            detail="arrived 3 days after the promised date",
+                            actual_cost_idr=1_150_000)
 
     learned = search_past_incidents("typhoon Ningbo")
     acts = learned.value[0]["actions"]
     assert acts and acts[0]["outcome"] == "late", acts
     assert acts[0]["outcome_detail"]["note"].startswith("arrived 3 days"), acts[0]
+    assert acts[0]["outcome_detail"]["actual_idr"] == 1_150_000, acts[0]
     print(f"  and what came of it: {acts[0]['kind']} -> {acts[0]['outcome']}, "
           f"{acts[0]['outcome_detail']['note']}")
+
+    # Findable by what HAPPENED, not only by what it was called. An incident is
+    # worth retrieving for its outcome, and a title never says "it was late".
+    by_outcome = search_past_incidents("late promised date")
+    assert by_outcome.value and by_outcome.value[0]["run_id"] == rid, by_outcome.value
+    assert by_outcome.origin is Origin.DERIVED
+    print("  and findable by what happened, not only by what it was called")
+
+    # Only values are searched, never the JSON keys around them: if key names
+    # matched, every incident would answer to 'recommendation' and the ranking
+    # would collapse into noise.
+    keys = search_past_incidents("recommendation outcome_detail actual_idr recorded_by")
+    assert keys.value == [] and keys.origin is Origin.DERIVED, keys.value
 
     # Reality is read once. A second reading does not quietly replace the first.
     again = store.record_outcome(act.value["id"], "delivered")
