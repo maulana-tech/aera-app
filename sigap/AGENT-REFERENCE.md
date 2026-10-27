@@ -240,8 +240,8 @@ Writes back to SAP within its authority, tells the affected roles, drafts the no
 - **`request_supplier_update`**(purchase_order, question)
   <br>Draft a request to a supplier about one of its purchase orders: confirm the date, give a revised one, say what has shipped. The supplier and its email address are read from the order and the business partner record, never typed in. A DRAFT: it waits for a buyer to approve it; once approved SIGAP emails it exactly as written, so write it as the finished message. The answer, once it comes, is recorded with record_outcome.
 - **`monitor_shipment`**(reference)
-  <br>Watch a shipment through to receipt, then record the outcome to memory.
-- **`record_outcome`**(action_id, outcome, detail?)
+  <br>File a watch on a shipment so its outcome is owed and asked for. SIGAP does not poll the carrier: this records that this reference still needs a result, and a person, or you, closes it with record_outcome once receipt is actually known. Nothing here observes an arrival, so nothing here can invent one.
+- **`record_outcome`**(action_id, outcome, detail?, actual_cost_idr?)
   <br>Close the loop on an action that was sent: what actually happened, and when. Writes it to the record so the next incident can learn from this one.
 - **`create_sourcing_event`**(material, rationale)
   <br>Open a sourcing event to qualify a second supplier for a material. A DRAFT for procurement to approve. Never autonomous, whatever the value.

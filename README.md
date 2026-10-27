@@ -740,8 +740,11 @@ Everything lives in [`sigap/`](sigap/):
 | File | What's in it |
 |---|---|
 | [`sigap/PLAN.md`](sigap/PLAN.md) ⭐ | The plan, the status of each part, what to do next |
+| [`sigap/ARCHITECTURE.md`](sigap/ARCHITECTURE.md) ⭐ | **One page**: the tech stack and why each piece, eight diagrams, the decisions and what they cost |
 | [`sigap/AGENT-REFERENCE.md`](sigap/AGENT-REFERENCE.md) | All 12 agents and their 45 tools, **generated** from the registry |
-| [`sigap/architecture/`](sigap/architecture/) | How the parts fit together: app, agents, tools, workers, data |
+| [`sigap/architecture/`](sigap/architecture/) | The long version, one concern per file: app, agents, tools, workers, data |
+| [`sigap/DEMO.md`](sigap/DEMO.md) | The 6–7 minute demo storyboard: pre-flight, six scenes, judge Q&A |
+| [`sigap/PITCH-5-SLIDES.md`](sigap/PITCH-5-SLIDES.md) | Deck outline: five content slides, what to say, what to leave out |
 | [`sigap/ENV.md`](sigap/ENV.md) | Every environment variable, where to get it, how to check it works |
 | [`sigap/SETUP.md`](sigap/SETUP.md) | The ordered walkthrough for a first-time setup |
 | [`sigap/DESIGN.md`](sigap/DESIGN.md) | The scenario and its figures, the constraint rules, the eval suite |

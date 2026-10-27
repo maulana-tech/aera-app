@@ -4,6 +4,15 @@
 > every record ends up. One concern per file. Read from the code as it stands; where
 > another document disagrees with these pages, the code is right and these pages say so.
 
+Looking for the short version — the tech stack, why each piece was chosen, and the
+diagrams on one page? That is [`../ARCHITECTURE.md`](../ARCHITECTURE.md). It summarises
+these files; these files are the ones kept against the code.
+
+| Also in this folder | |
+|---|---|
+| [`sigap-aws-architecture.svg`](sigap-aws-architecture.svg) | The reference architecture as one picture, in AWS's own diagram idiom. [PNG at 2×](sigap-aws-architecture.png) for slides |
+| [`diagram.py`](diagram.py) | What draws it. Edit the `CONTENT` section and run it: the layout is computed, and it refuses to write a diagram whose boxes overlap, escape their parent, or whose labels run past their tile |
+
 | File | What it covers |
 |---|---|
 | [`app.md`](app.md) | The Next.js web app: its pages, how a page reaches the agent service, the session, file downloads |
