@@ -386,54 +386,82 @@ def exposure(_m, _b, h) -> Tuple[int, dict]:
 
 
 @route("GET", r"/summary")
-def summary(_m, _b, h) -> Tuple[int, dict]:
-    """The dashboard figures."""
+def summary(_m, b, h) -> Tuple[int, dict]:
+    """The dashboard figures, over a period: ?days=30, or ?since=&until= (WIB).
+
+    Two kinds of figure live here and they are NOT both period figures, so the
+    reply keeps them apart rather than letting a date range quietly change the
+    meaning of half the page:
+
+      * a FLOW is what happened between two dates - how much was handled, what
+        it was predicted to cost, what obeying the rules cost, what the models
+        cost. A period makes these comparable month to month.
+      * a STATE is what is true right now - what waits on a person, what still
+        owes an outcome, how much of the rule pack anybody has verified.
+        Filtering a state by last month would answer a question nobody asked
+        and hide the approval that is late today.
+    """
     _user(h)
+    from engine import report, triage
+    from tools.compliance import pack_status
+    try:
+        w = report.window(**_period(b))
+    except ValueError as e:
+        return 400, {"error": str(e)}
+    clause, args = report.period_sql(w, "r.started_at")
+
     with store.connect() as c:
-        runs = c.execute("SELECT status, COUNT(*) n FROM runs GROUP BY status").fetchall()
-        actions = c.execute("SELECT status, COUNT(*) n FROM actions GROUP BY status").fetchall()
+        runs = c.execute("SELECT r.status, COUNT(*) n FROM runs r WHERE 1=1"
+                         + clause + " GROUP BY r.status", args).fetchall()
+        actions = c.execute(
+            "SELECT a.status, COUNT(*) n FROM actions a JOIN runs r ON r.id = a.run_id"
+            " WHERE 1=1" + clause + " GROUP BY a.status", args).fetchall()
         approved = c.execute(
-            "SELECT COALESCE(SUM(json_extract(payload,'$.cost_idr')),0) FROM actions"
-            " WHERE status IN ('approved','sent')").fetchone()[0]
+            "SELECT COALESCE(SUM(json_extract(a.payload,'$.cost_idr')),0) FROM actions a"
+            " JOIN runs r ON r.id = a.run_id WHERE a.status IN ('approved','sent')"
+            + clause, args).fetchone()[0]
         pending = c.execute(
-            "SELECT COALESCE(SUM(json_extract(payload,'$.cost_idr')),0) FROM actions"
-            " WHERE status='pending'").fetchone()[0]
-        model_cost = c.execute("SELECT COALESCE(SUM(token_cost_idr),0) FROM runs").fetchone()[0]
+            "SELECT COALESCE(SUM(json_extract(a.payload,'$.cost_idr')),0) FROM actions a"
+            " JOIN runs r ON r.id = a.run_id WHERE a.status='pending'" + clause, args).fetchone()[0]
+        model_cost = c.execute("SELECT COALESCE(SUM(r.token_cost_idr),0) FROM runs r"
+                               " WHERE 1=1" + clause, args).fetchone()[0]
         autonomous = c.execute(
-            "SELECT COUNT(*) FROM actions WHERE autonomous=1 AND status IN ('approved','sent')"
-        ).fetchone()[0]
+            "SELECT COUNT(*) FROM actions a JOIN runs r ON r.id = a.run_id"
+            " WHERE a.autonomous=1 AND a.status IN ('approved','sent')" + clause, args).fetchone()[0]
         recent = c.execute(
             "SELECT e.title, r.status, r.started_at FROM runs r"
-            " JOIN events e ON e.id=r.event_id ORDER BY r.started_at DESC LIMIT 5").fetchall()
+            " JOIN events e ON e.id=r.event_id WHERE 1=1" + clause
+            + " ORDER BY r.started_at DESC LIMIT 5", args).fetchall()
 
     stock = VIEWS["inventory"]()
     critical = [x for x in stock["rows"] if (x.get("days_left") or 999) < 14]
 
-    # The three figures that used to live only in a report the operator had to
-    # go and open. The first screen is where somebody decides whether to open
-    # anything at all, so what the rules cost, what the loop still owes and how
-    # much of the rule pack is assumption belong here.
-    from engine import report, triage
-    from tools.compliance import pack_status
+    # Flow: what the rules cost between those dates.
+    costs = report.compliance_costs(w)
+    # State: what is true now. Deliberately not filtered by the period - an
+    # approval that is late today is late whatever month the reader picked.
     board = triage.summarise([triage.Verdict(**r["verdict"]) for r in triage.queue()])
-    costs = report.compliance_costs()
     owed = store.actions_awaiting_outcome()
 
     return 200, {
+        "period": w,
+        "period_label": report.period_label(w),
+        # ---- flow, inside the period
         "runs": {r["status"]: r["n"] for r in runs},
         "actions": {r["status"]: r["n"] for r in actions},
         "approved_value_idr": approved,
         "pending_value_idr": pending,
         "model_cost_idr": model_cost,
         "autonomous_actions": autonomous,
-        "critical_stock": critical[:5],
-        "recent": [dict(r) for r in recent],
-        "board": board,
         "rules_cost_idr": sum(int(c["idr"]) for c in costs),
         "rules_cost_cases": len(costs),
+        "recent": [dict(r) for r in recent],
+        # ---- state, right now, whatever period is selected
+        "board": board,
         "outcomes_owed": len(owed),
         "oldest_owed_days": max((o["days_waiting"] or 0 for o in owed), default=0),
         "knowledge_base": pack_status(),
+        "critical_stock": critical[:5],
         "sap_ready": CFG.sap_ready,
         "model_ready": CFG.model_ready,
     }

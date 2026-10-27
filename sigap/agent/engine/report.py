@@ -120,7 +120,7 @@ def period_label(w: Optional[Dict[str, Any]]) -> str:
     return w["label"] if w else "every handling on record"
 
 
-def _period_sql(w: Optional[Dict[str, Any]], column: str) -> Tuple[str, List[str]]:
+def period_sql(w: Optional[Dict[str, Any]], column: str) -> Tuple[str, List[str]]:
     """The AND clause and its parameters that keep a query inside the window."""
     if not w:
         return "", []
@@ -1144,7 +1144,7 @@ def run_file(run_id: str, fmt: str,
 # October's disruptions holds October's actions even where one was approved on
 # the 2nd of November — and the counts in it reconcile with each other.
 def _all_runs(w: Optional[Dict[str, Any]] = None) -> List[dict]:
-    clause, args = _period_sql(w, "r.started_at")
+    clause, args = period_sql(w, "r.started_at")
     with store.connect() as c:
         return [dict(r) for r in c.execute(
             "SELECT r.id, r.status, r.mode, r.started_at, r.finished_at, r.token_cost_idr, r.decision,"
@@ -1157,7 +1157,7 @@ def _all_runs(w: Optional[Dict[str, Any]] = None) -> List[dict]:
 
 
 def _all_actions(w: Optional[Dict[str, Any]] = None) -> List[dict]:
-    clause, args = _period_sql(w, "r.started_at")
+    clause, args = period_sql(w, "r.started_at")
     with store.connect() as c:
         rows = [dict(a) for a in c.execute(
             "SELECT a.*, e.title FROM actions a JOIN runs r ON r.id = a.run_id"
@@ -1185,7 +1185,7 @@ def compliance_costs(w: Optional[Dict[str, Any]] = None) -> List[dict]:
     disagree with the first. The LIKE narrows the scan to the few steps that
     could carry one; the parse decides whether it does.
     """
-    clause, args = _period_sql(w, "r.started_at")
+    clause, args = period_sql(w, "r.started_at")
     with store.connect() as c:
         rows = c.execute(
             "SELECT s.run_id, s.seq, s.detail, e.title, r.started_at"

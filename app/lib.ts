@@ -237,6 +237,9 @@ export type View = {
   sections?: ViewSection[];
 };
 export type Summary = {
+  /** the window the FLOW figures below cover; null means every handling on record */
+  period?: { from: string | null; to: string | null; days: number | null; label: string } | null;
+  period_label?: string;
   runs: Record<string, number>; actions: Record<string, number>;
   approved_value_idr: number; pending_value_idr: number; model_cost_idr: number;
   /** actions the system carried out on its own authority, under the limit */

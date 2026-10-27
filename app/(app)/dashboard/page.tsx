@@ -28,9 +28,24 @@ const andMore = (total: number, where: string) =>
     ? `Showing the ${SHOWN} that matter most. ${total - SHOWN} more are on ${where}.`
     : undefined;
 
-export default async function Dashboard() {
+/* The periods on offer, the same three the operations report carries, so a
+ * figure on this page and a figure in that report mean the same thing. */
+const PERIODS: { label: string; query: Record<string, string> }[] = [
+  { label: "Last 30 days", query: { days: "30" } },
+  { label: "Last 90 days", query: { days: "90" } },
+  { label: "All time", query: {} },
+];
+
+export default async function Dashboard({ searchParams }: {
+  searchParams: Promise<{ days?: string; since?: string; until?: string }>;
+}) {
+  const sp = await searchParams;
+  const period: Record<string, string> = {};
+  for (const k of ["days", "since", "until"] as const) if (sp[k]) period[k] = String(sp[k]);
+  const query = new URLSearchParams(period).toString();
+
   const [s, stock, sourcing, logistics, costing] = await Promise.all([
-    api<Summary>("summary"),
+    api<Summary>(`summary${query ? `?${query}` : ""}`),
     api<View>("data/inventory"),
     api<View>("data/sourcing"),
     api<View>("data/logistics"),
@@ -110,7 +125,9 @@ export default async function Dashboard() {
 
       {/* The same line the decision queue leads with, computed the same way
           (engine/triage.py). Two screens that disagree about whether anything
-          needs you are worse than one screen. */}
+          needs you are worse than one screen. It is deliberately NOT filtered
+          by the period below: an approval that is late today is late whatever
+          month the reader is looking at. */}
       {s.board && (
         <p className={`mt-4 text-sm ${
           s.board.clear ? "text-emerald-700 dark:text-emerald-400"
@@ -120,43 +137,16 @@ export default async function Dashboard() {
         </p>
       )}
 
-      <section className="mt-8 grid gap-x-10 gap-y-6 border-b pb-8 sm:grid-cols-2 xl:grid-cols-4">
+      {/* Right now. Three figures that a date range must not touch: what is
+          owed today, and how much of what the rulings rest on anybody has
+          actually checked. */}
+      <section className="mt-6 grid gap-x-10 gap-y-6 border-b pb-8 sm:grid-cols-2 xl:grid-cols-4">
         <Metric
-          label="Awaiting decision"
-          value={String(awaiting)}
-          note={awaiting ? `worth ${idr(s.pending_value_idr)}` : "nothing is waiting"}
-        />
-        <Metric
-          label="Approved"
-          value={idr(s.approved_value_idr)}
-          note="value of actions that cleared approval"
-        />
-        <Metric
-          label="Being handled"
-          value={String(running)}
-          note={held ? `${held} held` : "none in flight"}
-        />
-        <Metric
-          label="Model cost"
-          value={idr(s.model_cost_idr)}
-          note="since the beginning"
-        />
-
-        {/* What obeying the rules cost. engine/simulate.py prices every option
-            including the ones Kira struck out, which is the only way to answer
-            whether there was a cheaper way and what stopped us taking it. It
-            used to live only inside a report somebody had to go and open. */}
-        <Metric
-          label="What the rules cost"
-          value={s.rules_cost_cases ? idr(s.rules_cost_idr ?? 0) : "-"}
-          note={s.rules_cost_cases
-            ? `a rule struck out a cheaper plan on ${s.rules_cost_cases} disruption(s)`
-            : "no cheaper plan has been struck out by a rule"}
-        />
-        <Metric
-          label="Handled alone"
-          value={String(s.autonomous_actions ?? 0)}
-          note="carried out on the system's own authority, under the limit"
+          label="Needs a person"
+          value={String(s.board?.needs_a_person ?? 0)}
+          note={s.board?.needs_a_person
+            ? `worth ${idr(s.board.value_idr)} · right now`
+            : "nothing is waiting · right now"}
         />
         <Metric
           label="Outcomes owed"
@@ -175,8 +165,77 @@ export default async function Dashboard() {
           note={!s.knowledge_base ? "unknown"
             : !s.knowledge_base.pack ? "no rule pack installed; every rule is an assumption"
             : s.knowledge_base.unverified.length
-              ? `assumptions: ${s.knowledge_base.unverified.join(", ")}`
+              ? `${s.knowledge_base.unverified.length} still an assumption`
               : "every rule checked against its source"}
+        />
+        <Metric
+          label="Being handled"
+          value={String(running)}
+          note={held ? `${held} held` : "none in flight"}
+        />
+      </section>
+
+      {/* Over a period, so the figures can be compared month to month. The
+          same three windows the operations report offers. */}
+      <div className="mt-8 flex flex-wrap items-center gap-2">
+        <h2 className="mr-1 text-sm font-medium">Over a period</h2>
+        {PERIODS.map((x) => {
+          const q = new URLSearchParams(x.query).toString();
+          const active = q === query;
+          return (
+            <Link
+              key={x.label}
+              href={q ? `/dashboard?${q}` : "/dashboard"}
+              className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+                active ? "bg-primary text-primary-foreground border-primary"
+                       : "hover:border-foreground/30"}`}
+            >
+              {x.label}
+            </Link>
+          );
+        })}
+        <span className="text-muted-foreground ml-1 font-mono text-[11px]">
+          {s.period_label ?? "every handling on record"}
+        </span>
+      </div>
+
+      <section className="mt-4 grid gap-x-10 gap-y-6 border-b pb-8 sm:grid-cols-2 xl:grid-cols-4">
+        <Metric
+          label="Handled"
+          value={String(Object.values(s.runs).reduce((a, n) => a + n, 0))}
+          note={`disruptions worked in this period${held ? `, ${held} held` : ""}`}
+        />
+        <Metric
+          label="Approved"
+          value={idr(s.approved_value_idr)}
+          note="value of actions that cleared approval"
+        />
+        <Metric
+          label="Handled alone"
+          value={String(s.autonomous_actions ?? 0)}
+          note="carried out on the system's own authority, under the limit"
+        />
+        <Metric
+          label="Model cost"
+          value={idr(s.model_cost_idr)}
+          note="what the agents spent thinking"
+        />
+
+        {/* What obeying the rules cost. engine/simulate.py prices every option
+            including the ones Kira struck out, which is the only way to answer
+            whether there was a cheaper way and what stopped us taking it. It
+            used to live only inside a report somebody had to go and open. */}
+        <Metric
+          label="What the rules cost"
+          value={s.rules_cost_cases ? idr(s.rules_cost_idr ?? 0) : "-"}
+          note={s.rules_cost_cases
+            ? `a rule struck out a cheaper plan on ${s.rules_cost_cases} disruption(s)`
+            : "no cheaper plan has been struck out by a rule"}
+        />
+        <Metric
+          label="Committed"
+          value={idr(s.pending_value_idr + s.approved_value_idr)}
+          note={awaiting ? `${awaiting} still awaiting a decision` : "nothing awaiting a decision"}
         />
       </section>
 
