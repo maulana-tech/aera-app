@@ -14,6 +14,15 @@ export type Action = {
   payload: Record<string, unknown>; sap_reference: string | null; created_at: string;
   /** Where an approved message to a supplier or a customer goes, or went. */
   delivery?: Delivery;
+  /**
+   * What actually happened, once somebody read reality: one of delivered, late,
+   * short, failed, cancelled (store.OUTCOMES). Null until recorded, and written
+   * only once. `outcome_detail.actual_idr` is the realized cost when it is
+   * known as a figure — absent means not known, never zero.
+   */
+  outcome?: string | null;
+  outcome_at?: string | null;
+  outcome_detail?: Record<string, unknown> | null;
 };
 export type Approval = {
   id: number; action_id: string; decided_by: string; role: string;
@@ -29,6 +38,35 @@ export type Run = {
 };
 
 export const idr = (n: number) => "Rp " + (n ?? 0).toLocaleString("en-US");
+
+/* Jakarta, always, and labelled.
+ *
+ * The stamps are UTC and the PDFs and workbooks are written in WIB
+ * (engine/report.py), so a page that formatted in the reader's own zone put a
+ * different time on the same event than its own download did — invisible in
+ * Jakarta and wrong everywhere else. One formatter, one zone, and the zone is
+ * written out so nobody has to guess which one they are reading.
+ */
+export const WIB = "Asia/Jakarta";
+export function wib(t?: string | null, opts: {
+  /** false for the date alone */
+  time?: boolean;
+  /** seconds too, for a trace where the order of two calls is the point */
+  seconds?: boolean;
+  /** drop the "WIB" marker where a column header or nearby line already says it */
+  mark?: boolean;
+} = {}): string {
+  if (!t) return "-";
+  const at = new Date(t);
+  if (Number.isNaN(at.getTime())) return t;
+  const date = at.toLocaleDateString("en-GB", { timeZone: WIB, day: "2-digit", month: "short", year: "numeric" });
+  if (opts.time === false) return date;
+  const time = at.toLocaleTimeString("en-GB", {
+    timeZone: WIB, hour: "2-digit", minute: "2-digit",
+    ...(opts.seconds ? { second: "2-digit" } : {}),
+  });
+  return `${date} ${time}${opts.mark === false ? "" : " WIB"}`;
+}
 
 export type Me = { name: string; email: string; role: string; limit_idr: number };
 

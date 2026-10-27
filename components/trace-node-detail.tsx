@@ -13,7 +13,7 @@ import {
   Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import type { Trace, TraceCall, TraceEdge, TraceNode } from "@/app/lib";
+import { WIB, wib, type Trace, type TraceCall, type TraceEdge, type TraceNode } from "@/app/lib";
 
 /* A trace node opened in a drawer, the way a node of the exploration graph
  * opens on the disruption page: what the node is, its numbers, what it is
@@ -64,9 +64,10 @@ const REL_OUT: Record<TraceEdge["rel"], string> = {
 
 const rupiah = (n: number) => `Rp ${n.toLocaleString("en-US")}`;
 const seconds = (ms: number) => (ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${ms} ms`);
-const when = (t: string | null | undefined) => (t ? new Date(t).toLocaleString("en-GB") : "");
+// Jakarta, with seconds: a trace is read for the order of things.
+const when = (t: string | null | undefined) => (t ? wib(t, { seconds: true }) : "");
 const time = (t: string | null) =>
-  t ? new Date(t).toLocaleTimeString("en-GB", { hour12: false }) : "";
+  t ? new Date(t).toLocaleTimeString("en-GB", { hour12: false, timeZone: WIB }) : "";
 
 // Long lists open short; the rest is one click away.
 const FIRST_STEPS = 25;

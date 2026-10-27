@@ -1,20 +1,11 @@
 import Link from "next/link";
 
-import { idr, type Run } from "@/app/lib";
+import { idr, wib, type Run } from "@/app/lib";
 import { StatusBadge } from "@/components/status-badge";
 import { cn } from "@/lib/utils";
 
-function formatStartedAt(iso: string) {
-  try {
-    const d = new Date(iso);
-    return d.toLocaleString("en-GB", {
-      dateStyle: "short",
-      timeStyle: "short",
-    });
-  } catch {
-    return iso;
-  }
-}
+// Jakarta, like every other stamp SIGAP shows and writes.
+const formatStartedAt = (iso: string) => wib(iso);
 
 function formatTrigger(trigger?: string | null): string {
   if (!trigger) return "Direct trigger recorded";

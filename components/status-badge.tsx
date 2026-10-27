@@ -14,6 +14,11 @@ const COLOURS: Record<string, string> = {
   off:      "border-border bg-muted text-muted-foreground",
   failed:   "border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-400",
   rejected: "border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-400",
+  // What actually happened, from store.OUTCOMES. `failed` is above already.
+  delivered: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  late:      "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  short:     "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  cancelled: "border-border bg-muted text-muted-foreground",
 };
 
 /** A status marker. The colour carries meaning, so the word is always written too. */

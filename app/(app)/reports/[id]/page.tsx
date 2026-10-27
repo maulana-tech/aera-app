@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 
 import { StepSummary, stageLabel, stepAgentName } from "@/components/agent-activity";
 import { Markdown } from "@/components/markdown";
-import { api, idr, type Run, type Step } from "@/app/lib";
+import { api, idr, wib, type Run, type Step } from "@/app/lib";
 import { ReportFiles } from "@/components/report-files";
 import { ReportSend } from "@/components/report-send";
 import { Fact, Rail, Section } from "@/components/shell";
@@ -17,14 +17,32 @@ type ReportDoc = {
   run_id: string; title: string; markdown: string;
   summary_by: string | null; summary?: string | null;
   sheets?: { name: string; rows: number }[];
+  /* What obeying the rules cost here: the plan that was taken against the
+   * cheaper one a rule struck out. Null when nothing struck out would have
+   * been cheaper anyway — which is not the same as zero. */
+  compliance_cost?: {
+    idr: number; step: number;
+    chosen: string[]; chosen_cost_idr: number;
+    cheaper_but_blocked: string[]; cheaper_cost_idr: number;
+    blocked_by: { id: string; label: string; reason: string }[];
+  } | null;
+  /** The rules this handling applied, as they stood when it applied them. */
+  rules_applied?: {
+    total: number; verified: number; unverified: string[];
+    problems: string[]; pack: string | null;
+  } | null;
+  rules_note?: string | null;
 };
-
-const when = (t: string) =>
-  new Date(t).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
 
 // The first steps show; the rest fold, so the decision and the actions are not
 // pushed a long scroll down by a sixty-step handling.
 const FIRST_STEPS = 12;
+
+// The kinds whose real result somebody owes us, mirroring store.AWAITS_OUTCOME.
+// `notify` is absent there: an internal message has no realized cost, and
+// chasing one teaches people to ignore the chase.
+const OWES_OUTCOME = ["stock_transfer", "draft_po", "monitor",
+                      "customer_notice", "supplier_request"];
 
 export default async function Report({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -45,6 +63,7 @@ export default async function Report({ params }: { params: Promise<{ id: string 
   const took = run.finished_at
     ? Math.round((Date.parse(run.finished_at) - Date.parse(run.started_at)) / 1000) : null;
   const untrusted = run.decision?.untrusted_on_board ?? [];
+  const cc = doc.compliance_cost;
 
   return (
     <main className="w-full px-4 py-4 md:px-6 md:py-8">
@@ -72,7 +91,7 @@ export default async function Report({ params }: { params: Promise<{ id: string 
 
       <dl className="grid grid-cols-2 gap-x-8 gap-y-4 border-b py-5 sm:grid-cols-3 xl:grid-cols-6">
         {[
-          ["Started", when(run.started_at)],
+          ["Started", wib(run.started_at)],
           ["Took", took != null ? `${Math.floor(took / 60)}m ${took % 60}s` : "still running"],
           ["Steps", String(steps.length)],
           ["Tool calls", String(tools)],
@@ -104,8 +123,63 @@ export default async function Report({ params }: { params: Promise<{ id: string 
                   Not yet trustworthy: {untrusted.join(", ")}
                 </p>
               )}
+              {/* How much of what ruled this decision is still assumption. The
+                  figures carry their origin; so must the rules. */}
+              {doc.rules_note && (
+                <p className="text-muted-foreground mt-2 border-t pt-3 text-xs leading-relaxed">
+                  {doc.rules_note}
+                </p>
+              )}
             </div>
           </Section>
+
+          {/* What obeying the rules cost. engine/simulate.py computes it on the
+              same arithmetic as every option, including the ones that were
+              struck out — which is the only way to answer "was there a cheaper
+              way, and what exactly stopped us taking it". */}
+          {cc && (
+            <Section
+              title="What the rules cost"
+              note="The price of the rule, not an overrun. It is on the record so the decision can be defended without re-deriving it."
+            >
+              <div className="max-w-3xl rounded-lg border p-5">
+                <p className="text-sm leading-relaxed">
+                  Obeying the rules on this disruption cost{" "}
+                  <span className="font-mono font-semibold tabular-nums">{idr(cc.idr)}</span>.
+                </p>
+                <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-md border p-3">
+                    <dt className="text-muted-foreground text-xs">Chosen</dt>
+                    <dd className="mt-1 font-mono text-sm">
+                      {(cc.chosen ?? []).join(", ") || "-"}
+                      <span className="text-muted-foreground block tabular-nums">
+                        {idr(cc.chosen_cost_idr ?? 0)}
+                      </span>
+                    </dd>
+                  </div>
+                  <div className="rounded-md border border-dashed p-3">
+                    <dt className="text-muted-foreground text-xs">Cheaper, struck out</dt>
+                    <dd className="mt-1 font-mono text-sm">
+                      {(cc.cheaper_but_blocked ?? []).join(", ") || "-"}
+                      <span className="text-muted-foreground block tabular-nums">
+                        {idr(cc.cheaper_cost_idr ?? 0)}
+                      </span>
+                    </dd>
+                  </div>
+                </dl>
+                {(cc.blocked_by ?? []).length > 0 && (
+                  <ul className="mt-4 space-y-2 border-t pt-3">
+                    {cc.blocked_by.map((b) => (
+                      <li key={b.id} className="text-xs leading-relaxed">
+                        <span className="font-mono font-medium">{b.id}</span>
+                        {b.label ? ` ${b.label}` : ""} — {b.reason}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </Section>
+          )}
 
           <Section
             title={`How the system reasoned (${steps.length} steps)`}
@@ -157,6 +231,22 @@ export default async function Report({ params }: { params: Promise<{ id: string 
                       {typeof a.payload.cost_idr === "number" ? idr(a.payload.cost_idr) : "-"}
                     </span>
                   </div>
+                  {/* What came of it, where somebody has read reality. */}
+                  {a.outcome ? (
+                    <div className="mt-1.5 flex items-center justify-between gap-3">
+                      <StatusBadge status={a.outcome} />
+                      <span className="text-muted-foreground font-mono text-[11px] tabular-nums">
+                        {typeof a.outcome_detail?.actual_idr === "number"
+                          ? `actual ${idr(a.outcome_detail.actual_idr as number)}`
+                          : "no realized figure"}
+                      </span>
+                    </div>
+                  ) : OWES_OUTCOME.includes(a.kind) && (a.status === "sent" || a.status === "approved") ? (
+                    <Link href={`/disruptions/${id}`}
+                          className="mt-1.5 block text-[11px] text-amber-700 hover:underline dark:text-amber-400">
+                      owes an outcome
+                    </Link>
+                  ) : null}
                 </div>
               ))
             )}
@@ -168,7 +258,7 @@ export default async function Report({ params }: { params: Promise<{ id: string 
                 <div key={p.id} className="px-4 py-3 text-xs">
                   <div className="flex items-center justify-between gap-3">
                     <StatusBadge status={p.decision === "escalated" ? "pending" : p.decision}>{p.decision}</StatusBadge>
-                    <span className="text-muted-foreground font-mono text-[11px]">{when(p.at)}</span>
+                    <span className="text-muted-foreground font-mono text-[11px]">{wib(p.at)}</span>
                   </div>
                   <p className="mt-1.5">{p.decided_by} <span className="text-muted-foreground">({p.role})</span></p>
                 </div>
