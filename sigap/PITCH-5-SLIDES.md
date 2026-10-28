@@ -1,5 +1,16 @@
 # SIGAP — Outline PPT, 5 halaman isi
 
+> **Deck jadinya ada di `deck/`** — 27 halaman, dibangun dengan [open-slide](https://github.com/open-slide/open-slide),
+> lengkap dengan speaker notes per halaman. File siap pakai di `deck/export/`:
+> `sigap-hackathon.pptx` (teks native, bisa diedit di PowerPoint), `sigap-hackathon-image.pptx`
+> (tiap halaman satu gambar — pakai ini kalau font di laptop panggung tidak sama), dan
+> `sigap-hackathon.pdf`. Ubah isinya di `deck/slides/sigap-hackathon/index.tsx`, lalu
+> `cd deck && npm run dev`.
+>
+> Dokumen ini tetap berguna sebagai **argumennya**: urutan, takeaway tiap halaman, dan
+> catatan apa yang tidak boleh ditaruh di slide.
+
+
 Cover, demo, dan closing **tidak** dihitung di sini. Urutan lengkap saat tampil:
 
 ```
@@ -165,15 +176,16 @@ menang karena spesifik.
 **Isi slide — tiga kolom:**
 
 **Sudah jalan**
-- 12 agen · 45 tool · 47 modul ber-self-check
+- 12 agen · 46 tool · 56 modul ber-self-check
 - Loop penuh: sinyal → keputusan → aksi SAP → hasil nyata
 - Laporan deterministik + PDF/Excel, periode WIB
+- Lima watcher otonom — termasuk sertifikat TKDN yang mau habis, yang **tak ada feed-nya**
 - MCP untuk AgentCore, A2A untuk Joule
 
 **Dampak**
 - Penelusuran hitungan hari → **menit**
 - Skenario Ningbo: **Rp 116 jt** vs **Rp 186 jt** refleks *air freight* → hemat **38%**
-- Opsi tak patuh **tersaring sebelum** jadi PO
+- Veto di **dua pintu**: saat opsi dipilih, dan saat PO diterbitkan — PO ke supplier terblokir **ditolak**
 - Jejak audit per keputusan: siapa, kapan, atas bukti apa
 - Harga kepatuhan jadi angka, bukan perasaan
 
