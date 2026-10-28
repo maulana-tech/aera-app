@@ -86,7 +86,8 @@ SPECIALISTS = [
           "Tests every candidate against TKDN and the contract floor, LARTAS licensing for a "
           "new origin, and the holiday calendar, from the rule pack, and says which rules "
           "are verified and which are assumptions. Her rejection cannot be overturned on cost.",
-          ["check_local_constraints", "get_rule_pack"], effort="high", veto=True),
+          ["check_local_constraints", "check_supplier_constraints",
+           "get_rule_pack"], effort="high", veto=True),
     Agent("simulation", "Tara", "Costing",
           "Costs the options that cleared the rules, and their combinations, and when the "
           "material cannot cover every customer order, which orders to serve first and what "

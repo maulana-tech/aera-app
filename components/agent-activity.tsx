@@ -23,6 +23,7 @@ const toolLabels: Record<string, string> = {
   get_shipment_status: "Checking shipment status",
   estimate_eta: "Estimating arrival dates",
   check_local_constraints: "Checking compliance requirements",
+  check_supplier_constraints: "Ruling on the supplier",
   simulate_scenario: "Comparing scenario costs",
   search_past_incidents: "Reviewing similar past incidents",
   create_stock_transfer: "Requesting a stock transfer",

@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from core.config import CFG
 from core.provenance import Origin, Result, weakest
 from core.registry import register
-from tools.fetcher import fixture, profile, read
+from tools.fetcher import as_of, fixture, profile, read
 
 REFERENCES = pathlib.Path(__file__).resolve().parent.parent.parent / "references"
 
@@ -277,6 +277,175 @@ def check_local_constraints(option_id: str) -> Result:
         weakest(*origins),
         pack_source() if pack else "built-in rules + company profile",
         note=note,
+    )
+
+
+def _import_origins() -> set:
+    """Countries the company has already imported from, from its own orders.
+
+    A new origin is the thing LARTAS charges for, and whether a country is new
+    is a fact about this company's history, not a judgement. Derived from the
+    purchase order book and the supplier master rather than asked of anyone.
+    """
+    suppliers = {str(s.get("Supplier")): str(s.get("Country") or "")
+                 for s in (read("Supplier").value or [])}
+    seen = set()
+    for o in read("PurchaseOrder").value or []:
+        c = suppliers.get(str(o.get("Supplier")))
+        if c:
+            seen.add(c)
+    return seen
+
+
+@register(
+    "check_supplier_constraints", "compliance",
+    "Test one SUPPLIER against TKDN and LARTAS, for a purchase that comes from a "
+    "quotation rather than from a costed supply option. Returns allowed/blocked with a "
+    "reason that names the rule and the numbers, the rules it applied and where each "
+    "came from. A rejection here is final and must not be overridden on price. Use it "
+    "before drafting a purchase order; use check_local_constraints for an option the "
+    "sourcing search returned.",
+    {"supplier": {"type": "string", "description": "a supplier id, e.g. SUP-4417"}},
+    ["supplier"],
+)
+def check_supplier_constraints(supplier: str) -> Result:
+    """Kira, on a supplier.
+
+    check_local_constraints rules an AlternateSource option, which carries the
+    local-content position the company would be left with. A quotation carries
+    no such figure, so until now the whole procurement path reached a draft
+    purchase order without a ruling at all: the veto had a back door, and price
+    walked through it.
+
+    What can honestly be said about a supplier, and nothing more:
+
+      * A domestic supplier contributes local content. Without a certified
+        percentage on record there is nothing to check, and an effect that
+        cannot be checked has not passed the check - the same discipline
+        check_local_constraints applies to an unknown TkdnAfterPct.
+      * A foreign supplier contributes none. It therefore cannot improve the
+        position, and when the company already sits below its contract floor
+        the rule "must not worsen" is breached by definition.
+      * A country the company has never imported from is a new origin, and
+        LARTAS charges working days for it.
+      * A certificate that has lapsed takes its local content with it.
+
+    What is deliberately NOT claimed: the position this company would be left
+    with after the order. That depends on volume and mix, a quotation states
+    neither, and inventing it would be exactly the confident unlabelled number
+    this file exists to refuse.
+    """
+    sid = (supplier or "").strip()
+    found = read("Supplier", ids=[sid])
+    firm = next(iter(found.value or []), None)
+    if firm is None:
+        known = sorted({str(s.get("Supplier")) for s in (read("Supplier").value or [])})[:10]
+        return Result(None, Origin.MISSING, "supplier master",
+                      note=f"unknown supplier '{sid}'"
+                           + (f". On the approved list: {', '.join(known)}" if known else ""))
+
+    pack = load_pack()
+    floor_rule, current_rule = rule("tkdn_contract_floor_pct", pack), rule("tkdn_current_pct", pack)
+    floor, current = float(floor_rule.value), float(current_rule.value)
+    used = [floor_rule, current_rule]
+    reasons: List[str] = []
+    unknown: List[str] = []
+    allowed = True
+
+    country = str(firm.get("Country") or "").strip().upper()
+    certified = firm.get("TkdnCertifiedPct")
+
+    # --- TKDN ---
+    if country == "ID":
+        if certified is None:
+            allowed = False
+            unknown.append("TkdnCertifiedPct")
+            reasons.append(
+                f"not cleared: {sid} is domestic but carries no certified local-content "
+                "figure, so its effect on TKDN cannot be checked. Upload Supplier with "
+                "TkdnCertifiedPct, or add the certificate to the rule pack")
+        elif float(certified) < current - 0.05:
+            allowed = False
+            reasons.append(
+                f"TKDN: {sid} is certified at {certified}%, below the company's current "
+                f"{current}%, so buying here moves the position down")
+        else:
+            reasons.append(f"TKDN: {sid} is certified at {certified}%, at or above the "
+                           f"company's current {current}%")
+    else:
+        if current < floor:
+            allowed = False
+            reasons.append(
+                f"TKDN: {country or 'a foreign'} supply carries no local content, and the "
+                f"company is already at {current}% against a {floor}% contract floor. An "
+                "order here cannot improve the position and the rule is that it must not "
+                "worsen")
+        else:
+            reasons.append(
+                f"TKDN: {country or 'foreign'} supply adds no local content. The company is "
+                f"at {current}% against a {floor}% floor, and how far this order would "
+                "dilute it depends on volume, which a quotation does not state")
+
+    # --- certificates ---
+    today = as_of()
+    for c in (pack or {}).get("certificates") or []:
+        if str(c.get("supplier")) != sid:
+            continue
+        until = str(c.get("valid_until") or "")
+        try:
+            left = (date.fromisoformat(until) - today).days if until else None
+        except ValueError:
+            left = None
+        if left is not None and left < 0:
+            allowed = False
+            reasons.append(f"certificate {c.get('certificate')} lapsed on {until}, "
+                           f"{-left} day(s) ago, so the local content behind it is gone")
+        elif left is not None:
+            reasons.append(f"certificate {c.get('certificate')} is valid for another "
+                           f"{left} day(s), to {until}")
+
+    # --- LARTAS ---
+    licensed_from = None
+    if country and country != "ID":
+        history = _import_origins()
+        if country not in history:
+            lartas = rule("lartas_new_origin_working_days", pack)
+            used.append(lartas)
+            days = int(lartas.value)
+            closed, calendar = closed_days(today, today + timedelta(days=7 * (days // 5 + 3)), pack)
+            licensed_from = _add_working_days(today, days, set(closed))
+            reasons.append(
+                f"LARTAS: the company has not imported from {country} before, so an import "
+                f"licence adds {days} working days; nothing from {sid} clears customs before "
+                f"{licensed_from}")
+            if calendar.value is None:
+                unknown.append("holiday calendar")
+                reasons.append(f"the holiday calendar could not be read ({calendar.note}), so "
+                               "only weekends were skipped")
+        else:
+            reasons.append(f"LARTAS: the company already imports from {country}, so no new "
+                           "origin licence is needed")
+
+    assumed = [r for r in used if not r.verified]
+    return Result(
+        {
+            "supplier": sid,
+            "supplier_name": firm.get("SupplierName"),
+            "country": country or None,
+            "allowed": allowed,
+            "reason": "; ".join(reasons) if reasons else "no rule breached",
+            "tkdn_certified_pct": certified,
+            "tkdn_current_pct": current,
+            "tkdn_contract_floor_pct": floor,
+            "earliest_customs_clearance": licensed_from.isoformat() if licensed_from else None,
+            "rules": [r.as_dict() for r in used],
+            **({"unknown": unknown} if unknown else {}),
+        },
+        weakest(found.origin, Origin.DERIVED, *(r.origin for r in used)),
+        pack_source() if pack else "built-in rules + company profile",
+        note=("" if not assumed else
+              "not from a verified rule pack: " + "; ".join(
+                  f"{r.name} {r.value} ({r.source})" for r in assumed)),
     )
 
 
@@ -545,6 +714,55 @@ def demo() -> None:
           "holidays ✓ · unknown TKDN → not cleared ✓")
     print("  no pack → modelled, named ✓ · verified pack → derived ✓ · unsourced rule "
           "stays an assumption ✓ · broken pack fails ✓ · pack_status agrees with the tool ✓")
+    # ---- Kira on a supplier, which is the path a quotation takes ----
+    # check_local_constraints rules an option; a purchase order comes from a
+    # quotation, which is not one. Without this the veto had a back door.
+    from tools.fetcher import read as _read
+    firms = {str(s.get("Supplier")): s for s in (_read("Supplier").value or [])}
+    dom = next(s for s in firms.values()
+               if s.get("Country") == "ID" and s.get("TkdnCertifiedPct") is not None)
+    foreign = next(s for s in firms.values() if s.get("Country") not in ("ID", None))
+
+    # The company sits below its contract floor in this fixture, so foreign
+    # supply cannot help and the rule "must not worsen" is breached outright.
+    assert p["TkdnCurrentPct"] < p["TkdnContractFloorPct"]
+    bad = check_supplier_constraints(str(foreign["Supplier"]))
+    assert bad.value["allowed"] is False, bad.value
+    assert "carries no local content" in bad.value["reason"], bad.value["reason"]
+    assert "must not worsen" in bad.value["reason"]
+
+    good = check_supplier_constraints(str(dom["Supplier"]))
+    assert good.value["allowed"] is True, good.value["reason"]
+    assert "certified at" in good.value["reason"], good.value["reason"]
+
+    # A domestic firm with no certified figure is NOT cleared. An effect that
+    # cannot be checked has not passed the check, exactly as an unknown
+    # TkdnAfterPct is treated above.
+    blind = {s for s in firms.values()
+             if s.get("Country") == "ID" and s.get("TkdnCertifiedPct") is None}
+    if blind:
+        r = check_supplier_constraints(str(next(iter(blind))["Supplier"]))
+        assert r.value["allowed"] is False and "cannot be checked" in r.value["reason"], r.value
+
+    assert check_supplier_constraints("SUP-NOBODY").value is None
+    assert "unknown supplier" in check_supplier_constraints("SUP-NOBODY").note
+
+    # LARTAS on a country the company has never bought from. The fixture has
+    # imported from every country its suppliers sit in, so the history is stood
+    # aside to reach the branch rather than left untested.
+    global _import_origins
+    real_origins = _import_origins
+    _import_origins = lambda: {"ID"}                      # noqa: E731
+    try:
+        fresh = check_supplier_constraints(str(foreign["Supplier"]))
+        assert "has not imported from" in fresh.value["reason"], fresh.value["reason"]
+        assert fresh.value["earliest_customs_clearance"], fresh.value
+        assert fresh.value["earliest_customs_clearance"] > str(as_of()), fresh.value
+    finally:
+        _import_origins = real_origins
+    print("  Kira rules a supplier too: foreign supply below the floor blocked ✓ · "
+          "unknown local content not cleared ✓ · a new origin costs LARTAS days ✓")
+
     print("  a misspelled rule is named, not swallowed ✓ · pack problems reported without "
           "failing the handling ✓")
 
