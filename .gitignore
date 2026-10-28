@@ -76,3 +76,8 @@ socrates-logo.zip
 # Kira's rule pack: contract terms and supplier certificates, per installation.
 # The format and an example are committed beside it (sigap/references/).
 sigap/references/rule-pack.json
+
+# A local run of main.py writes its trace here (its documented --out default).
+# Nothing in the app reads the file — the UI fetches traces from GET /runs/{id}/trace —
+# so it is a run artifact, not a fixture.
+app/sigap/trace.json
