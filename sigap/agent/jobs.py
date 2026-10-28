@@ -50,6 +50,10 @@ def all_jobs(raise_event: RaiseEvent) -> List[Job]:
         from signals import watch
         return _raised(watch.sweep_exposure(raise_event), "Vega")
 
+    def certificates() -> str:
+        from signals import watch
+        return _raised(watch.sweep_certificates(raise_event), "rule pack")
+
     def deliver() -> str:
         import notify
         import outreach
@@ -78,6 +82,9 @@ def all_jobs(raise_event: RaiseEvent) -> List[Job]:
             weather, every=3 * 3600, signal=True),
         Job("exposure", "Vega's scan for risk that has not happened yet", exposure,
             every=7 * 86400, signal=True),
+        Job("certificates",
+            "TKDN certificates running out, which no feed can see (rule pack)",
+            certificates, every=24 * 3600, signal=True),
         Job("notify", "Deliver queued alerts and approved outward messages", deliver, every=30),
         Job("sap_send", "Send approved actions to SAP", sap_send, every=600),
         Job("digest", "The morning digest", digest, at="07:30"),
@@ -91,19 +98,21 @@ def scheduler(raise_event: RaiseEvent) -> Scheduler:
 def demo() -> None:
     s = scheduler(lambda body: "evt_x")
     d = {j["name"]: j for j in s.describe()}
-    assert list(d) == ["bmkg", "hazards", "weather", "exposure", "notify", "sap_send", "digest"]
+    watchers = ("bmkg", "hazards", "weather", "exposure", "certificates")
+    assert list(d) == [*watchers, "notify", "sap_send", "digest"]
     assert d["digest"]["cadence"] == "daily at 07:30 WIB" and d["exposure"]["cadence"] == "weekly"
-    assert all(d[n]["signal"] for n in ("bmkg", "hazards", "weather", "exposure"))
+    assert all(d[n]["signal"] for n in watchers)
     assert not any(d[n]["signal"] for n in ("notify", "sap_send", "digest"))
     off = {j["name"]: j["off"] for j in Scheduler(all_jobs(lambda b: ""), watch=False).describe()}
-    assert off["hazards"] == "SIGAP_WATCH=0" and off["notify"] is None
+    # Certificates are a watcher too: SIGAP_WATCH=0 must silence it with the rest.
+    assert off["hazards"] == off["certificates"] == "SIGAP_WATCH=0" and off["notify"] is None
     # The two that touch nothing outside: run them for real on the scratch db.
     assert s.run_now("sap_send") and s.run_now("notify")
     s.wait_idle()
     st = {j["name"]: j for j in s.describe()}
     assert st["sap_send"]["last_status"] == "ok", st["sap_send"]
     assert st["notify"]["last_detail"] == "nothing queued", st["notify"]
-    print("  jobs: seven, with their cadences ✓ · SIGAP_WATCH=0 stops only the watchers ✓ "
+    print("  jobs: eight, with their cadences ✓ · SIGAP_WATCH=0 stops only the watchers ✓ "
           "· outbox and SAP sender run ✓")
     print("jobs ok")
 

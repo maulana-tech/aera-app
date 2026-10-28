@@ -475,7 +475,7 @@ def demo() -> None:
     from pathlib import Path
     from signals.hazards import EONET_KIND, GDACS_KIND
     raised = {*GDACS_KIND.values(), *EONET_KIND.values(),
-              "seismic", "port_weather", "plant_weather", "exposure"}
+              "seismic", "port_weather", "plant_weather", "exposure", "certificate_lapse"}
     page = Path(__file__).resolve().parents[2] / "app" / "(app)" / "contacts" / "Manage.tsx"
     if page.exists():
         offered = page.read_text()

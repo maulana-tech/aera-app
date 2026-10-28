@@ -22,6 +22,7 @@ from __future__ import annotations
 import threading
 import time
 import traceback
+from datetime import date
 from typing import Callable, List
 
 from core import store
@@ -43,6 +44,14 @@ EXPOSURE_TOP_N = 3
 # A standing exposure is not news every week. It is news again if it is still
 # there a month later and nobody has acted on it.
 EXPOSURE_QUIET_DAYS = 30
+
+#: How far ahead a lapsing TKDN certificate is worth raising. A certificate is
+#: renewed through a testing body, not a form, so sixty days is the window in
+#: which somebody can still do something about it.
+CERTIFICATE_HORIZON_DAYS = 60
+
+#: The same certificate must not be raised every week while it runs down.
+CERTIFICATE_QUIET_DAYS = 30
 
 
 def sweep(raise_event: Callable[[dict], str]) -> List[str]:
@@ -92,6 +101,67 @@ def sweep_exposure(raise_event: Callable[[dict], str]) -> List[str]:
     for finding in ranked[:EXPOSURE_TOP_N]:
         body = as_exposure_event(finding)
         if store.event_exists(body["title"], body["trigger"], within_days=EXPOSURE_QUIET_DAYS):
+            continue
+        raised.append(raise_event(body))
+    return raised
+
+
+def as_certificate_event(cert: dict, days_left: int) -> dict:
+    """One lapsing certificate, in the shape POST /events expects."""
+    sid = str(cert.get("supplier") or "?")
+    gone = days_left < 0
+    when = cert.get("valid_until")
+    return {
+        "kind": "certificate_lapse",
+        "title": (f"TKDN certificate for {sid} lapsed {-days_left} day(s) ago" if gone
+                  else f"TKDN certificate for {sid} lapses in {days_left} day(s)")[:120],
+        # The certificate is its own identity, so the same one dedupes against
+        # itself while a second supplier's still gets through.
+        "trigger": f"rule pack: {cert.get('certificate') or sid} · valid until {when}"[:200],
+        "payload": {**cert, "days_left": days_left, "lapsed": gone},
+        "source": "sigap/references/rule-pack.json",
+    }
+
+
+def sweep_certificates(raise_event: Callable[[dict], str],
+                       horizon_days: int = CERTIFICATE_HORIZON_DAYS) -> List[str]:
+    """Certificates running out, which no feed can see.
+
+    Every other watcher reads the weather or the ground. This one reads the
+    calendar, because a TKDN certificate falling out of date drops the local
+    content with no physical event at all: nothing arrives late, nothing
+    closes, and the next ruling Kira makes is simply worse than the last one
+    for a reason nobody was told. The dates are already on file in the rule
+    pack; until now nothing looked at them until a handling happened to.
+    """
+    from core import store
+    from tools.compliance import load_pack
+    from tools.fetcher import as_of
+
+    try:
+        pack = load_pack()
+    except ValueError:
+        # A pack that will not parse is the rule pack's own problem and is
+        # reported where packs are reported. A watcher is not the place to
+        # fail loudly about it.
+        return []
+    if not pack:
+        return []
+
+    today = as_of()
+    raised: List[str] = []
+    for cert in pack.get("certificates") or []:
+        until = str(cert.get("valid_until") or "").strip()
+        if not until:
+            continue
+        try:
+            left = (date.fromisoformat(until[:10]) - today).days
+        except ValueError:
+            continue
+        if left > horizon_days:
+            continue
+        body = as_certificate_event(cert, left)
+        if store.event_exists(body["title"], body["trigger"], within_days=CERTIFICATE_QUIET_DAYS):
             continue
         raised.append(raise_event(body))
     return raised
@@ -167,6 +237,55 @@ def demo() -> None:
               f"Rp {ranked[0]:,} at the head")
     assert sweep_exposure(fake_raise) == [], "a standing exposure was raised twice"
     print("  the same standing risk does not come back next pass ✓")
+
+    # ---- certificates, which no feed can see ----
+    import json
+    import pathlib
+    import tempfile
+    from datetime import timedelta
+    from tools import compliance
+    from tools.fetcher import as_of
+
+    today = as_of()
+    scratch = pathlib.Path(tempfile.mkdtemp(prefix="sigap-cert-")) / "pack.json"
+    scratch.write_text(json.dumps({"certificates": [
+        {"supplier": "SUP-A", "certificate": "TKDN-A", "valid_until": str(today + timedelta(days=21))},
+        {"supplier": "SUP-B", "certificate": "TKDN-B", "valid_until": str(today - timedelta(days=5))},
+        {"supplier": "SUP-C", "certificate": "TKDN-C", "valid_until": str(today + timedelta(days=400))},
+        {"supplier": "SUP-D", "certificate": "TKDN-D"},                       # no date at all
+        {"supplier": "SUP-E", "certificate": "TKDN-E", "valid_until": "soon"},  # not a date
+    ]}))
+    real_pack = compliance._pack_file
+    compliance._pack_file = scratch
+    try:
+        before = len(seen)
+        got = sweep_certificates(fake_raise)
+        # One lapsing inside the horizon and one already gone. The one 400 days
+        # out is not news, and the two with no readable date are not claims.
+        assert len(got) == 2, got
+        new_events = seen[before:]
+        assert {b["payload"]["supplier"] for b in new_events} == {"SUP-A", "SUP-B"}, new_events
+        soon = next(b for b in new_events if b["payload"]["supplier"] == "SUP-A")
+        gone = next(b for b in new_events if b["payload"]["supplier"] == "SUP-B")
+        assert "lapses in 21 day(s)" in soon["title"], soon["title"]
+        assert soon["payload"]["lapsed"] is False and soon["payload"]["days_left"] == 21
+        assert "lapsed 5 day(s) ago" in gone["title"], gone["title"]
+        assert gone["payload"]["lapsed"] is True and gone["payload"]["days_left"] == -5
+        assert all(b["kind"] == "certificate_lapse" for b in new_events)
+        print("  a certificate running out is raised before it does, and after ✓")
+
+        # A date that has not moved is not news twice.
+        assert sweep_certificates(fake_raise) == [], "the same certificate came back"
+        print("  the same certificate does not come back next pass ✓")
+
+        # A pack that will not parse is the rule pack's problem, reported where
+        # packs are reported. A watcher that died on it would stop watching.
+        scratch.write_text("{not json")
+        assert sweep_certificates(fake_raise) == []
+        compliance._pack_file = pathlib.Path(scratch.parent / "absent.json")
+        assert sweep_certificates(fake_raise) == [], "no pack means nothing to say"
+    finally:
+        compliance._pack_file = real_pack
     print("watch ok")
 
 
