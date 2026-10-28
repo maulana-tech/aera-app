@@ -440,6 +440,46 @@ def compare_quotations(material: str, qty: float) -> Result:
     return Result(rows, quotes.origin, quotes.source, note=note)
 
 
+#: Figures a reader takes out of a sentence: rupiah amounts and day counts.
+#: Percentages and tonnages are deliberately not matched - "0.6% above" and
+#: "60 T" are not claims about price or lead time.
+_RUPIAH = re.compile(r"(?:Rp\.?\s*)?(\d{1,3}(?:[.,]\d{3})+|\d{6,})", re.I)
+_DAYS = re.compile(r"\b(\d{1,3})\s*(?:-|\s)?\s*(?:day|days|hari)\b", re.I)
+
+
+def _figures_in(text: str) -> tuple:
+    money = set()
+    for m in _RUPIAH.finditer(text or ""):
+        digits = re.sub(r"[.,]", "", m.group(1))
+        if digits.isdigit():
+            money.add(int(digits))
+    return money, {int(m.group(1)) for m in _DAYS.finditer(text or "")}
+
+
+def _shortfall(material: str, lead_days: int) -> Optional[dict]:
+    """What the plant is short of this material by the time an order lands.
+
+    Read from the stock rows, not from the request. A purchase order quantity
+    is the one figure in the draft that comes straight from a model, and in
+    testing a model ordered 1 unit of a material burning 13 tonnes a day. This
+    does not refuse that order - a buyer may have a reason - but the approver
+    now sees the gap beside the quantity instead of having to go and work it out.
+    """
+    rows = read("MaterialStock", material=material).value or []
+    if not rows:
+        return None
+    stock = sum(float(r.get("MatlWrhsStkQtyInMatlBaseUnit") or 0) for r in rows)
+    daily = sum(float(r.get("DailyConsumption") or 0) for r in rows)
+    if daily <= 0:
+        return {"stock": stock, "daily": 0.0, "cover_days": None, "short_at_arrival": None}
+    return {
+        "stock": round(stock, 1),
+        "daily": round(daily, 1),
+        "cover_days": round(stock / daily, 1),
+        "short_at_arrival": round(max(0.0, daily * max(lead_days, 0) - stock), 1),
+    }
+
+
 @register(
     "propose_purchase_order", "procurement",
     "Draft a purchase order against a quotation on file and raise it for approval. "
@@ -478,6 +518,25 @@ def propose_purchase_order(material: str, supplier: str, qty: float,
         return Result(None, Origin.MISSING, "purchase order",
                       note="an approver signs a reason, so the draft needs one.")
 
+    # Kira rules the supplier before a draft exists. Until this gate was here
+    # the whole procurement path reached a purchase order without a ruling at
+    # all: check_local_constraints rules an AlternateSource option, a quotation
+    # is not one, and so price walked around the veto. Asked here rather than
+    # left to the lead to remember, for the same reason simulate_scenario rules
+    # its own options instead of trusting the list it was handed.
+    from tools.compliance import check_supplier_constraints
+    ruling = check_supplier_constraints(sid)
+    verdict = ruling.value or {}
+    if verdict and not verdict.get("allowed"):
+        return Result(None, Origin.MISSING, ruling.source,
+                      note=(f"the rules do not clear {sid}: {verdict.get('reason')}. "
+                            "A purchase order cannot be drafted against a supplier the "
+                            "rules struck out, and price does not overturn that."))
+    if ruling.value is None:
+        return Result(None, ruling.origin, ruling.source,
+                      note=f"{sid} could not be ruled on, so no draft was written. "
+                           + (ruling.note or ""))
+
     quotes = _quotes(wanted or None)
     if quotes.value is None:
         return Result(None, quotes.origin, quotes.source,
@@ -512,13 +571,70 @@ def propose_purchase_order(material: str, supplier: str, qty: float,
     unit_name = str(q.get("PurchaseOrderQuantityUnit") or "")
     total = int(round(unit * amount))
 
+    lead = int(q.get("DeliveryTimeInDays") or 0)
+
+    # The rationale is the one thing on this draft an approver actually reads
+    # before signing, and the one thing a model writes freely. Two ways it goes
+    # wrong, and they are not equally bad.
+    #
+    #   A figure that matches NOTHING on file is a fabrication, and is refused
+    #   the same way a price taken from the request is refused.
+    #
+    #   A figure that is real but belongs to a DIFFERENT offer is worse to read
+    #   and must not be refused: "only 0.6% above the cheapest at Rp 1,219,098"
+    #   is a fair thing to write. In testing a model described quotation ...848
+    #   at Rp 1,228,526 in 6 days while the draft ordered ...847 at Rp 1,266,272
+    #   in 21 days, so a buyer would have approved the slower, dearer offer
+    #   believing it was the faster, cheaper one. That one is stated, loudly,
+    #   beside the draft's own figures, and the approver decides.
+    mine_money = {int(round(unit)), total}
+    mine_days = {lead}
+    on_file_money = {int(round(_unit_price(o))) for o in offers
+                     if str(o.get("Material")) == wanted}
+    on_file_days = {int(o.get("DeliveryTimeInDays") or 0) for o in offers
+                    if str(o.get("Material")) == wanted}
+    said_money, said_days = _figures_in(reason)
+
+    invented_money = sorted(said_money - on_file_money - mine_money)
+    invented_days = sorted(said_days - on_file_days - mine_days)
+    if invented_money or invented_days:
+        bits = []
+        if invented_money:
+            bits.append("figure(s) " + ", ".join(f"Rp {m:,}" for m in invented_money))
+        if invented_days:
+            bits.append("lead time(s) of " + ", ".join(f"{d} days" for d in invented_days))
+        return Result(None, Origin.MISSING, "purchase order",
+                      note=("the reason names " + " and ".join(bits)
+                            + f", which no quotation on file for {wanted} states. This draft "
+                              f"is Rp {int(round(unit)):,} per unit, Rp {total:,} in all, "
+                              f"{lead} days, on quotation {q.get('SupplierQuotation')}."))
+
+    elsewhere_money = sorted(said_money - mine_money)
+    elsewhere_days = sorted(said_days - mine_days)
+    conflict = ""
+    if elsewhere_money or elsewhere_days:
+        said = []
+        if elsewhere_money:
+            said.append(", ".join(f"Rp {m:,}" for m in elsewhere_money))
+        if elsewhere_days:
+            said.append(", ".join(f"{d} days" for d in elsewhere_days))
+        conflict = (f" The reason quotes {' and '.join(said)}, which is another offer on file, "
+                    f"not this one: this draft is Rp {int(round(unit)):,} per unit and "
+                    f"{lead} days on quotation {q.get('SupplierQuotation')}.")
+
+    gap = _shortfall(wanted, lead)
     payload = {
         "material": wanted, "supplier": sid, "qty": amount, "needed_by": str(needed_by),
         "unit_price_idr": int(round(unit)), "cost_idr": total,
         "quotation": q.get("SupplierQuotation"),
-        "lead_time_days": int(q.get("DeliveryTimeInDays") or 0),
+        "lead_time_days": lead,
         "tkdn_certified_pct": who.get("TkdnCertifiedPct"),
         "rationale": reason,
+        "rules_checked": verdict.get("reason"),
+        **({"rationale_conflict": conflict.strip()} if conflict else {}),
+        **({"stock_on_hand": gap["stock"], "daily_consumption": gap["daily"],
+            "days_of_cover": gap["cover_days"],
+            "short_at_arrival": gap["short_at_arrival"]} if gap else {}),
     }
     raised = raise_action("draft_po", False, **payload)
 
@@ -528,6 +644,16 @@ def propose_purchase_order(material: str, supplier: str, qty: float,
             f"Rp {payload['unit_price_idr']:,} per {unit_name}, "
             f"{payload['lead_time_days']} days lead, quotation "
             f"{payload['quotation']}, valid to {valid}.")
+    # The quantity, set against the gap it is meant to close. Never a refusal:
+    # a buyer may be topping up deliberately. But the approver sees both.
+    head += conflict
+    if gap and gap.get("short_at_arrival") is not None:
+        short = gap["short_at_arrival"]
+        head += (f" {wanted} holds {gap['stock']:g} at {gap['daily']:g} a day, "
+                 f"{gap['cover_days']:g} days of cover")
+        head += (f", and will be {short:g} short by the time this lands; this order covers "
+                 f"{min(100, round(amount / short * 100)):g}% of that."
+                 if short > 0 else ", and is not short before this lands.")
     if raised.value is None:
         note = head + " " + raised.note + " The draft is written here but not recorded."
     elif raised.value.get("repeated"):
@@ -559,3 +685,104 @@ def propose_purchase_order(material: str, supplier: str, qty: float,
 def get_exchange_rate(base: str, quote: str = "IDR") -> Result:
     from clients.web_data import exchange_rate
     return exchange_rate(base, quote)
+
+
+def demo() -> None:
+    """The module that drafts purchase orders had no self-check at all, which
+    is how three defects reached a live run: quotations read as expired because
+    the template never named the validity column, a reason that described one
+    offer while the draft ordered another, and a quantity nobody compared with
+    the shortfall it was meant to close."""
+    from core.config import fixtures_only
+    fixtures_only(__file__, "SIGAP_PROCUREMENT_CHECK")
+
+    a = _as_of()
+    live = [q for q in (read("Quotation").value or []) if _live(q, a)]
+    assert live, "the fixture must carry quotations that are still valid on its as-of date"
+
+    # The draft must go to a supplier the rules clear, because Kira now rules
+    # the supplier before a draft exists. In this fixture the company sits
+    # below its contract floor, so every foreign firm is struck out and only a
+    # domestic one can be ordered from at all.
+    mat = "M-1118"
+    mine = sorted([q for q in live if q.get("Material") == mat], key=_unit_price)
+    assert len(mine) >= 2, mat
+    from tools.compliance import check_supplier_constraints
+    cleared = [q for q in mine
+               if (check_supplier_constraints(str(q.get("Supplier"))).value or {}).get("allowed")]
+    assert cleared, "the fixture must carry one domestic supplier quoting this material"
+    ours, rival = cleared[0], mine[0]
+    sid = str(ours.get("Supplier"))
+    draft_unit = int(round(_unit_price(ours)))
+    other_unit = int(round(_unit_price(rival)))
+    assert other_unit != draft_unit, "the comparison needs two different prices"
+
+    def propose(reason, qty=10.0, supplier=sid):
+        return propose_purchase_order(mat, supplier, qty, "2026-09-20", reason)
+
+    # The request is refused before the file is read when it asks for nothing.
+    assert propose("why", qty=0).value is None
+    assert "zero is a record of nothing" in propose("why", qty=0).note
+    assert propose("").value is None and "signs a reason" in propose("").note
+
+    # The veto binds this path. A firm the rules struck out cannot be drafted
+    # against at all, whatever it quotes: price does not overturn a ruling.
+    blocked = next(q for q in mine
+                   if not (check_supplier_constraints(str(q.get("Supplier"))).value or {})
+                   .get("allowed"))
+    bid = str(blocked.get("Supplier"))
+    refused = propose("Cheapest firm on file.", supplier=bid)
+    assert refused.value is None, "a blocked supplier must not reach a draft"
+    assert f"the rules do not clear {bid}" in refused.note, refused.note
+    assert "price does not overturn that" in refused.note
+
+    # A supplier nobody has heard of is refused at the ruling, before quotations
+    # are read: there is nothing to rule on.
+    gone = propose_purchase_order(mat, "SUP-NOBODY", 10.0, "2026-09-20", "why")
+    assert gone.value is None and "could not be ruled on" in gone.note, gone.note
+
+    # A figure that matches nothing on file is a fabrication, and is refused the
+    # same way a price taken from the request is.
+    made_up = propose("Cheapest anywhere at Rp 1,234,567 per unit.")
+    assert made_up.value is None and made_up.origin is Origin.MISSING
+    assert "no quotation on file" in made_up.note and "1,234,567" in made_up.note, made_up.note
+    assert propose("Lands in 99 days.").value is None, "an invented lead time is a figure too"
+
+    # A real figure that belongs to ANOTHER offer is not refused - citing a
+    # rival quote is fair - but the approver is told which number is which.
+    crossed = propose(f"Only a little above the cheapest at Rp {other_unit:,}.")
+    assert crossed.value is not None, "a comparison must not block a draft"
+    assert crossed.value["rationale_conflict"], crossed.value
+    assert f"Rp {other_unit:,}" in crossed.note and f"Rp {draft_unit:,}" in crossed.note
+    assert "another offer on file, not this one" in crossed.note
+
+    # Written against the offer being ordered, nothing is flagged.
+    clean = propose("The incumbent failed its audit, so this is the next approved firm.")
+    assert clean.value is not None and "rationale_conflict" not in clean.value, clean.value
+    assert "another offer on file" not in clean.note
+
+    # And the quantity now travels beside the gap it is meant to close. The
+    # draft is not refused for being small; the approver simply sees both.
+    assert clean.value["short_at_arrival"] is not None, clean.value
+    assert clean.value["days_of_cover"] and clean.value["daily_consumption"]
+    assert "days of cover" in clean.note, clean.note
+    # This material has more cover than the lead time, so the honest line is
+    # that it is NOT short, and the draft says so rather than inventing a gap.
+    assert clean.value["short_at_arrival"] == 0.0, clean.value
+    assert "is not short before this lands" in clean.note, clean.note
+
+    # The other branch, on the same rows: stretch the lead past the cover and a
+    # real gap appears, computed from the stock and the daily rate.
+    g = _shortfall(mat, 60)
+    assert g["cover_days"] and g["short_at_arrival"] > 0, g
+    assert round(g["daily"] * 60 - g["stock"], 1) == g["short_at_arrival"], g
+    assert _shortfall("M-NOT-A-MATERIAL", 10) is None, "no rows means no claim"
+
+    print("procurement ok, zero and reasonless drafts refused ✓ · a supplier the rules "
+          "struck out cannot be drafted against ✓ · invented figures refused ✓ "
+          "· another offer's figures flagged, not blocked ✓ "
+          "· the quantity travels beside the shortfall ✓")
+
+
+if __name__ == "__main__":
+    demo()
