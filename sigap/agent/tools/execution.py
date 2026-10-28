@@ -28,13 +28,14 @@ it is read.
 from __future__ import annotations
 
 import hashlib
+import json
 
 from typing import Optional, Tuple
 
 from core.config import CFG
 from core.provenance import Origin, Result
 from core.registry import register
-from tools.fetcher import read
+from tools.fetcher import as_of, read
 
 AUTONOMOUS_LIMIT_IDR = CFG.autonomous_limit_idr
 LIMIT = CFG.autonomous_limit_text
@@ -43,6 +44,58 @@ LIMIT = CFG.autonomous_limit_text
 # system's own youth. Everything else on the board describes the situation
 # being acted on, and an untrusted figure there is a reason to ask a person.
 NOT_EVIDENCE = {"precedent.search_past_incidents"}
+
+
+def _earliest_arrival(material: str) -> Optional[tuple]:
+    """(date, order, field) of the first supply on record for one material."""
+    from datetime import date as _date
+    best = None
+    for o in read("PurchaseOrder", material=material).value or []:
+        for field in ("RevisedDeliveryDate", "DeliveryDate"):
+            raw = o.get(field)
+            if not raw:
+                continue
+            try:
+                when = _date.fromisoformat(str(raw)[:10])
+            except ValueError:
+                continue
+            if best is None or when < best[0]:
+                best = (when, str(o.get("PurchaseOrder")), field)
+            break
+    return best
+
+
+def _arrival_basis(finished_good: str, promised) -> Optional[str]:
+    """What on the record supports a date promised to a customer, if anything.
+
+    A customer order names a finished good, and nobody raises a purchase order
+    for a finished good, so looking one up directly answers "nothing supports
+    this" for every notice ever written. The supply that actually governs the
+    date is the components underneath it: the product cannot be built until the
+    slowest of them lands, so the binding date is the LATEST of each
+    component's earliest arrival.
+
+    Nothing here is refused. A procurement lead may know what the file does
+    not. The approver is simply told which kind of date they are signing.
+    """
+    components = sorted({str(b.get("Material")) for b in read("BillOfMaterial").value or []
+                         if str(b.get("FinishedGood")) == finished_good and b.get("Material")})
+    if not components:
+        return (f"no product structure is on record for {finished_good}, so nothing here can "
+                "say what governs its delivery date")
+    arrivals = [(c, _earliest_arrival(c)) for c in components]
+    known = [(c, a) for c, a in arrivals if a]
+    if not known:
+        return (f"{finished_good} is built from {len(components)} component(s) and no open "
+                "order is on record for any of them, so nothing supports this date")
+    binding_component, (when, po, field) = max(known, key=lambda x: x[1][0])
+    missing = len(components) - len(known)
+    tail = (f"; {missing} other component(s) have no open order at all" if missing else "")
+    if promised >= when:
+        return (f"the slowest component is {binding_component}, due {when} on order {po} "
+                f"({field}), and the date is on or after it{tail}")
+    return (f"the slowest component is {binding_component}, not due until {when} on order "
+            f"{po} ({field}), which is after {promised}: nothing on file arrives that soon{tail}")
 
 
 def autonomy_check(cost_idr: int) -> tuple[bool, str]:
@@ -159,10 +212,51 @@ def _record(kind: str, autonomous: bool, **details) -> Result:
           ["material", "from_plant", "to_plant", "qty", "cost_idr"])
 def create_stock_transfer(material: str, from_plant: str, to_plant: str,
                           qty: float, cost_idr: int) -> Result:
+    # The quantity and the cost both arrive from a model, and the cost is what
+    # decides whether this runs without a person. autonomy_check already
+    # refuses to go alone on anything but wholly trusted evidence, which stops
+    # a figure invented out of nothing. It does not check that THIS figure
+    # agrees with that evidence, so a model could read trusted rows and still
+    # understate the move.
+    #
+    # Iris already judges a transfer properly - donor cover before and after,
+    # the floor, stock another handling has already promised, and the cost from
+    # the same arithmetic. So ask her, rather than write a second opinion here.
+    # A disagreement does not refuse the action: a planner may know something
+    # the stock file does not. It refuses the AUTHORITY to do it unwatched, and
+    # it says so where the approver reads.
+    from tools.inventory import assess_transfer
+
+    judged = assess_transfer(material, from_plant, to_plant, qty)
+    seen = judged.value or {}
+    doubts: list[str] = []
+    if seen:
+        if seen.get("verdict") != "available":
+            doubts.append(f"{from_plant} {seen['verdict']}: {seen.get('reason')}")
+        engine_cost = seen.get("cost_idr")
+        if isinstance(engine_cost, (int, float)) and engine_cost > 0:
+            stated = float(cost_idr or 0)
+            if abs(stated - engine_cost) > max(0.05 * engine_cost, 1):
+                doubts.append(f"the move is costed at Rp {int(engine_cost):,} from the stock "
+                              f"file, not the Rp {int(stated):,} given here")
+    elif judged.origin is Origin.MISSING:
+        doubts.append(f"the transfer could not be judged against the stock file "
+                      f"({judged.note})")
+
     alone, why = autonomy_check(cost_idr)
+    if alone and doubts:
+        alone = False
+        why = "; ".join(doubts) + ", so this waits for a person"
+
     r = _record("stock_transfer", alone,
                 material=material, from_plant=from_plant, to_plant=to_plant,
-                qty=qty, cost_idr=cost_idr)
+                qty=qty, cost_idr=cost_idr,
+                **({"assessed": {k: seen.get(k) for k in
+                                 ("verdict", "reason", "cost_idr", "donor_cover_before",
+                                  "donor_cover_after", "donor_breaches_floor",
+                                  "recipient_cover_after", "reserved_elsewhere")}}
+                   if seen else {}),
+                **({"doubts": doubts} if doubts else {}))
 
     # Hold the donor's stock the moment the move is raised, not when it is
     # approved. The window between raising and approving is exactly when a
@@ -202,7 +296,10 @@ def notify(role: str, message: str) -> Result:
 
 
 @register("monitor_shipment", "execution",
-          "Watch a shipment through to receipt, then record the outcome to memory.",
+          "File a watch on a shipment so its outcome is owed and asked for. SIGAP does not "
+          "poll the carrier: this records that this reference still needs a result, and a "
+          "person, or you, closes it with record_outcome once receipt is actually known. "
+          "Nothing here observes an arrival, so nothing here can invent one.",
           {"reference": {"type": "string"}}, ["reference"])
 def monitor_shipment(reference: str) -> Result:
     return _record("monitor", True, reference=reference)
@@ -216,13 +313,33 @@ def monitor_shipment(reference: str) -> Result:
                        "description": "delivered | late | short | failed | cancelled"},
            "detail": {"type": "string",
                       "description": "what was actually seen: real arrival date, real "
-                                     "quantity, real cost. Plain text."}},
+                                     "quantity. Plain text."},
+           "actual_cost_idr": {"type": ["number", "null"],
+                               "description": "what it actually cost, in rupiah, as a "
+                                              "number you were given — off an invoice, a "
+                                              "goods receipt, or from a person. Never "
+                                              "compute it, never convert it, never round a "
+                                              "range into it. Omit it unless you have the "
+                                              "figure: a cost written into `detail` is "
+                                              "prose and is never read as money."}},
           ["action_id", "outcome"])
-def record_outcome(action_id: str, outcome: str, detail: str = "") -> Result:
+def record_outcome(action_id: str, outcome: str, detail: str = "",
+                   actual_cost_idr: Optional[float] = None) -> Result:
+    """Record what happened. The realized cost travels as its own number.
+
+    `detail` is prose and stays prose: nothing mines a rupiah figure out of it,
+    because a number parsed out of a sentence is the model's guess about money,
+    which is the one thing this system will not do. A caller who knows the real
+    cost passes `actual_cost_idr`; one who does not passes nothing, and the
+    report says the realized cost is not known rather than showing a zero.
+    """
     from core import store
 
     try:
-        row = store.record_outcome(action_id, outcome, {"note": detail} if detail else None)
+        detail_doc = store.outcome_detail(
+            detail, actual_cost_idr,
+            recorded_by="agent:execution.record_outcome")
+        row = store.record_outcome(action_id, outcome, detail_doc)
     except KeyError:
         return Result(None, Origin.MISSING, "actions table",
                       note=f"no action {action_id}")
@@ -232,7 +349,12 @@ def record_outcome(action_id: str, outcome: str, detail: str = "") -> Result:
     if row.get("repeated"):
         return Result(row, Origin.DERIVED, "action record",
                       note="an outcome was already recorded; it was not overwritten")
-    return Result(row, Origin.DERIVED, "action record")
+    # Say out loud whether a figure was recorded, so the transcript shows the
+    # model leaving it blank rather than quietly omitting it.
+    said = (f"realized cost recorded: Rp {int(actual_cost_idr):,}"
+            if actual_cost_idr is not None else
+            "no realized cost was given, so the report will not state one")
+    return Result(row, Origin.DERIVED, "action record", note=said)
 
 
 # ------------------------------------------------------------ outside parties
@@ -310,6 +432,29 @@ def draft_customer_notice(sales_order: str, message: str,
         return Result(None, Origin.MISSING, orders.source,
                       note=why + ", so there is nobody to address a notice to")
     so = str(order["SalesOrder"])
+
+    # A date in this notice is a promise to somebody outside the company, and
+    # it arrives from a model. Two things are refused outright because no
+    # approver can rescue them: a date that is not a date, and a date already
+    # past. Everything else is drafted, but the draft carries what the date
+    # rests on - or that it rests on nothing - where the approver reads it,
+    # and never in the body the customer receives.
+    basis = None
+    if new_date:
+        from datetime import date as _date
+        try:
+            promised = _date.fromisoformat(str(new_date)[:10])
+        except ValueError:
+            return Result(None, Origin.MISSING, "customer notice",
+                          note=f"'{new_date}' is not a date. A delivery date told to a "
+                               "customer is written YYYY-MM-DD.")
+        today = as_of()
+        if promised < today:
+            return Result(None, Origin.MISSING, "customer notice",
+                          note=f"{promised} has already passed; as of {today} that is not a "
+                               "date anything can arrive on.")
+        basis = _arrival_basis(str(order.get("Material") or ""), promised)
+
     to = partner_address(order.get("Customer"))
     facts = [f"Order: {so}", f"Product: {order.get('Material')}",
              f"Requested delivery: {order.get('RequestedDeliveryDate')}"]
@@ -319,11 +464,16 @@ def draft_customer_notice(sales_order: str, message: str,
                 sales_order=so, customer=order.get("Customer"),
                 customer_name=order.get("CustomerName"), finished_good=order.get("Material"),
                 requested_date=order.get("RequestedDeliveryDate"), new_date=new_date,
+                **({"new_date_basis": basis} if new_date else {}),
                 message=message, **_addressed(to),
                 subject=f"Your order {so}: delivery update",
                 body=message.strip() + "\n\n" + "\n".join(facts))
     if isinstance(r.value, dict):
-        r.note = "; ".join(x for x in (r.note, _send_note(to, "a procurement lead")) if x)
+        said = basis or ("no arrival on record supports it" if new_date else "")
+        r.note = "; ".join(x for x in (
+            r.note,
+            f"the {new_date} given to the customer: {said}" if new_date else "",
+            _send_note(to, "a procurement lead")) if x)
     return r
 
 
@@ -387,8 +537,22 @@ def create_sourcing_event(material: str, rationale: str) -> Result:
           ["material", "plant", "new_level", "rationale"])
 def propose_safety_stock_change(material: str, plant: str, new_level: float,
                                 rationale: str) -> Result:
+    # A safety floor is a number of units, and a number of units means nothing
+    # to the person approving it without the rate it is measured against. The
+    # proposal travels with the days of cover it buys and what the plant holds
+    # today, computed from the stock file rather than asked of anyone.
+    held = daily = cover = None
+    for r in read("MaterialStock", material=material, plant=plant).value or []:
+        held = r.get("MatlWrhsStkQtyInMatlBaseUnit")
+        daily = r.get("DailyConsumption")
+        break
+    if isinstance(daily, (int, float)) and daily > 0:
+        cover = round(float(new_level) / float(daily), 1)
     return _record("propose_safety_stock_change", False, material=material, plant=plant,
-                   new_level=new_level, rationale=rationale)
+                   new_level=new_level, rationale=rationale,
+                   **({"stock_on_hand": held} if held is not None else {}),
+                   **({"daily_consumption": daily} if daily is not None else {}),
+                   **({"floor_in_days": cover} if cover is not None else {}))
 
 
 def demo() -> None:
@@ -471,8 +635,74 @@ def demo() -> None:
     print("  autonomy needs a trusted board, not just a small number")
     print("  a modelled figure anywhere under the decision sends it to a person")
 
+    # ---- a figure from a model, set against the record that judges it ----
+    from core import store
+    from tools.fetcher import read as _read
+    from tools.inventory import assess_transfer
+
+    rows = [r for r in (_read("MaterialStock").value or []) if r.get("DailyConsumption")]
+    mat, donor = rows[0]["Material"], rows[0]["Plant"]
+    to = next((r["Plant"] for r in rows if r["Material"] == mat and r["Plant"] != donor), "KRW1")
+    truth = assess_transfer(mat, donor, to, 5.0).value or {}
+    assert truth.get("verdict") == "available", truth
+
+    eid = store.record_event("port_closure", "self-check", "t", {}, "check")
+    rid = store.start_run(eid, "autonomous")
+    board = FakeBoard({"impact.get_material_stock": "cached"})
+
+    def move(qty, cost):
+        with registry.bind_run(rid), registry.bind_board(board):
+            return (create_stock_transfer(mat, donor, to, qty, cost).value or {}).get("autonomy") or {}
+
+    # Costed as the stock file costs it, this may go alone.
+    honest = move(5.0, int(truth["cost_idr"]))
+    assert honest.get("autonomous") is True, honest
+
+    # The same move, understated to buy itself the authority to execute. The
+    # evidence is wholly trusted, so autonomy_check alone would have allowed
+    # it: what refuses it is the figure disagreeing with the arithmetic.
+    cheap = move(6.0, 1_000)
+    assert cheap.get("autonomous") is False, cheap
+    assert "not the Rp 1,000 given here" in cheap["reason"], cheap["reason"]
+    assert "waits for a person" in cheap["reason"]
+
+    # More than the donor holds is refused the authority too, and says which.
+    greedy = move(999_999.0, 1_000)
+    assert greedy.get("autonomous") is False
+    assert "no surplus" in greedy["reason"], greedy["reason"]
+
+    # ---- a date promised to somebody outside the company ----
+    so = str((_read("SalesOrder").value or [])[0]["SalesOrder"])
+
+    def notice(when):
+        with registry.bind_run(rid), registry.bind_board(board):
+            return draft_customer_notice(so, "Updating you on your order.", when)
+
+    # Two that no approver could rescue are refused outright.
+    assert notice("next Tuesday").value is None
+    assert "is not a date" in notice("next Tuesday").note
+    assert notice("2020-01-01").value is None
+    assert "already passed" in notice("2020-01-01").note
+
+    # Everything else is drafted, and the draft says what the date rests on.
+    # A customer order names a finished good, and nobody raises a purchase
+    # order for one, so the basis is the slowest component underneath it.
+    soon, late = notice("2026-09-06"), notice("2027-06-01")
+    assert soon.value is not None and late.value is not None
+    assert "slowest component" in soon.note, soon.note
+    assert "nothing on file arrives that soon" in soon.note, soon.note
+    assert "the date is on or after it" in late.note, late.note
+
+    # ---- a floor in units, said in the days it buys ----
+    with registry.bind_run(rid), registry.bind_board(board):
+        ss = propose_safety_stock_change(mat, donor, 500.0, "Cover the typhoon season.")
+    pay = ss.value["payload"]
+    pay = json.loads(pay) if isinstance(pay, str) else pay
+    assert pay["floor_in_days"] == round(500.0 / rows[0]["DailyConsumption"], 1), pay
+    assert pay["stock_on_hand"] == rows[0]["MatlWrhsStkQtyInMatlBaseUnit"]
+
+
     # Outward drafts: the party comes from the record, and the draft waits.
-    import json
     from core import store
     eid = store.record_event("supplier_failure", "Qingdao Baowu misses a shipment", "check",
                              {"supplier": "SUP-2209"}, "execution-check")
@@ -502,10 +732,49 @@ def demo() -> None:
         assert "not connected" in t.note, t.note
         told = _record("notify", True, role="buyer", message="Hold 55 t at SBY1.")
         assert told.value["status"] == "sent", "a record that never goes to SAP is done once written"
+
+        # A filed watch is owed a result. The description must keep saying so:
+        # it used to promise it would observe the arrival, which it never did.
+        from core import registry as _reg
+        assert "does not poll" in _reg.get("monitor_shipment").description
+        watch = monitor_shipment("SHP-1")
+        assert watch.value["status"] == "sent"
+        assert watch.value["id"] in {a["id"] for a in store.actions_awaiting_outcome()}
+
+        # ---- the loop closes, with a figure that survives to the report ----
+        from engine.report import _actual_cost
+        schema = _reg.get("record_outcome").schema
+        assert schema["additionalProperties"] is False
+        assert "actual_cost_idr" in schema["properties"]
+        assert "actual_cost_idr" not in schema["required"], "the figure is optional"
+
+        done = record_outcome(t.value["id"], "delivered", detail="arrived 3 Oct",
+                              actual_cost_idr=24_500_000)
+        assert done.origin is Origin.DERIVED and "24,500,000" in done.note, done.note
+        # THE assertion: the realized figure recorded through the agent's own
+        # tool reaches the report. This is the link that used to be broken, so
+        # every realized column read "-" however carefully it was filled in.
+        assert _actual_cost(store.get_action(t.value["id"])) == 24_500_000
+
+        # A cost mentioned only in prose stays prose.
+        prose = record_outcome(watch.value["id"], "late",
+                               detail="it cost about Rp 24,5 jt more")
+        assert prose.origin is Origin.DERIVED and "no realized cost" in prose.note
+        assert _actual_cost(store.get_action(watch.value["id"])) is None
+
+        # A figure sent as text is refused, not coerced into some scale.
+        refused = record_outcome(told.value["id"], "delivered", actual_cost_idr="24500000")
+        assert refused.origin is Origin.MISSING and "must be a number" in refused.note
+        assert store.get_action(told.value["id"])["outcome"] is None
     store.close_run(rid, "done", decision={"status": "done"})
     print("  a customer notice and a supplier request are drafts, addressed from the record, "
           "written as the email that will go")
     print("  an autonomous transfer is approved until SAP has it, so a failed write is retried")
+    print("  a figure from a model is set against the arithmetic that judges it: an "
+          "understated move loses its authority ✓ · a date promised to a customer says "
+          "what it rests on ✓ · a floor in units is said in the days it buys ✓")
+    print("  the loop closes: a realized figure reaches the report ✓ · prose never becomes "
+          "money ✓ · a watch is owed a result ✓")
 
 
 if __name__ == "__main__":

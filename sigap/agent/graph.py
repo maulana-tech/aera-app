@@ -211,6 +211,13 @@ def _model_request(agent: Agent, **req) -> dict:
 def _note_fallback(r, agent: Agent, report: Callable[[str, dict], None],
                    noted: List[bool]) -> None:
     """Write it to the trail, once per loop, when another model answered."""
+    account_failover = getattr(r, "account_failover", None)
+    if account_failover and not noted:
+        noted.append(True)
+        report("fallback", {"agent": agent.code, "name": agent.nickname,
+                            "summary": f"{getattr(r, 'model', '?')} was served through the "
+                                       f"fallback Bedrock account ({account_failover})"})
+        return
     gone = getattr(r, "fell_back_from", None)
     if gone and not noted:
         noted.append(True)
@@ -547,7 +554,7 @@ def _graph_frontier(run_id: Optional[str]) -> dict:
 #
 # Before: one specialist raising, or the per-event budget/deadline tripping,
 # propagated out and the whole handling was recorded `failed` — every finding
-# already on the board discarded. SmartX's swarm never loses a verdict that
+# already on the board discarded.  swarm never loses a verdict that
 # way: a cancelled or timed-out run still harvests what it has. These two
 # helpers bring that discipline to SIGAP, flag-gated so the default is
 # unchanged.
@@ -563,6 +570,11 @@ def _run_specialist_isolated(cl, specialist: Agent, task: str, board: Board,
     except (BudgetExhausted, DeadlineExceeded):
         raise
     except Exception as e:                                           # noqa: BLE001
+        # Exhausted provider capacity is global to this handling, not a bad
+        # specialist finding. Let api.py record the whole run as held instead
+        # of completing a recommendation with a missing rules/impact verdict.
+        if llm.is_rate_limited(e):
+            raise
         err = f"{specialist.title} could not complete: {type(e).__name__}: {e}"
         report("specialist_done", {"agent": specialist.code, "name": specialist.nickname,
                                    "summary": err, "full_summary": err, "error": True})
@@ -622,7 +634,7 @@ def run(event: dict, report: Callable[[str, dict], None]) -> dict:
     with registry.bind_board(board):
         try:
             if dispatch.async_enabled():
-                # SmartX's Phase 2: fire leads over the claimable frontier and
+                #  Phase 2: fire leads over the claimable frontier and
                 # harvest them as they finish, several at once. The frontier,
                 # planner and convergence are the graph's; Arya writes the final
                 # recommendation from the settled graph. (The dispatcher seeds

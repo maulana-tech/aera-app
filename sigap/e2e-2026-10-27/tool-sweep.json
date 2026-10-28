@@ -1,0 +1,362 @@
+[
+ {
+  "agent": "compliance",
+  "tool": "check_local_constraints",
+  "origin": "modelled",
+  "rows": "1",
+  "note": "not from a verified rule pack: tkdn_contract_floor_pct 40.",
+  "secs": 4.86
+ },
+ {
+  "agent": "compliance",
+  "tool": "get_rule_pack",
+  "origin": "modelled",
+  "rows": "1",
+  "note": "not verified against a source: tkdn_contract_floor_pct, tk",
+  "secs": 0.0
+ },
+ {
+  "agent": "demand",
+  "tool": "forecast_demand",
+  "origin": "missing",
+  "rows": "0",
+  "note": "no withdrawal history for 221 at 1710",
+  "secs": 11.91
+ },
+ {
+  "agent": "demand",
+  "tool": "get_demand_signal",
+  "origin": "missing",
+  "rows": "0",
+  "note": "not connected. The SAP sandbox exposes no demand plan",
+  "secs": 0.0
+ },
+ {
+  "agent": "demand",
+  "tool": "get_production_schedule",
+  "origin": "derived",
+  "rows": "1",
+  "note": "MatlWrhsStkQtyInMatlBaseUnit is unrestricted stock only; q",
+  "secs": 3.2
+ },
+ {
+  "agent": "execution",
+  "tool": "create_draft_po",
+  "origin": "skipped",
+  "rows": "-",
+  "note": "writes outside SIGAP",
+  "secs": 0.0
+ },
+ {
+  "agent": "execution",
+  "tool": "create_sourcing_event",
+  "origin": "skipped",
+  "rows": "-",
+  "note": "writes outside SIGAP",
+  "secs": 0.0
+ },
+ {
+  "agent": "execution",
+  "tool": "create_stock_transfer",
+  "origin": "skipped",
+  "rows": "-",
+  "note": "writes outside SIGAP",
+  "secs": 0.0
+ },
+ {
+  "agent": "execution",
+  "tool": "draft_customer_notice",
+  "origin": "skipped",
+  "rows": "-",
+  "note": "writes outside SIGAP",
+  "secs": 0.0
+ },
+ {
+  "agent": "execution",
+  "tool": "monitor_shipment",
+  "origin": "skipped",
+  "rows": "-",
+  "note": "writes outside SIGAP",
+  "secs": 0.0
+ },
+ {
+  "agent": "execution",
+  "tool": "notify",
+  "origin": "skipped",
+  "rows": "-",
+  "note": "writes outside SIGAP",
+  "secs": 0.0
+ },
+ {
+  "agent": "execution",
+  "tool": "propose_safety_stock_change",
+  "origin": "skipped",
+  "rows": "-",
+  "note": "writes outside SIGAP",
+  "secs": 0.0
+ },
+ {
+  "agent": "execution",
+  "tool": "record_outcome",
+  "origin": "skipped",
+  "rows": "-",
+  "note": "writes outside SIGAP",
+  "secs": 0.0
+ },
+ {
+  "agent": "execution",
+  "tool": "request_supplier_update",
+  "origin": "skipped",
+  "rows": "-",
+  "note": "writes outside SIGAP",
+  "secs": 0.0
+ },
+ {
+  "agent": "exposure",
+  "tool": "get_supplier_certifications",
+  "origin": "missing",
+  "rows": "0",
+  "note": "1018 has no certificate in the rule pack",
+  "secs": 0.0
+ },
+ {
+  "agent": "exposure",
+  "tool": "rank_po_slip_risk",
+  "origin": "modelled",
+  "rows": "0",
+  "note": "no order is waiting to ship, nothing to rank",
+  "secs": 4.28
+ },
+ {
+  "agent": "exposure",
+  "tool": "scan_live_hazards",
+  "origin": "derived",
+  "rows": "1",
+  "note": "distances to places from the company profile and open orde",
+  "secs": 27.64
+ },
+ {
+  "agent": "exposure",
+  "tool": "scan_supply_exposure",
+  "origin": "derived",
+  "rows": "202",
+  "note": "202 exposures across 1043 material and plant pairs. 85 cou",
+  "secs": 11.83
+ },
+ {
+  "agent": "impact",
+  "tool": "get_bom_explosion",
+  "origin": "live",
+  "rows": "0",
+  "note": "API_BILL_OF_MATERIAL_SRV",
+  "secs": 6.22
+ },
+ {
+  "agent": "impact",
+  "tool": "get_material_stock",
+  "origin": "derived",
+  "rows": "1",
+  "note": "MatlWrhsStkQtyInMatlBaseUnit is unrestricted stock only; q",
+  "secs": 0.0
+ },
+ {
+  "agent": "impact",
+  "tool": "get_open_purchase_orders",
+  "origin": "live",
+  "rows": "0",
+  "note": "one row per order item; DeliveryDate is the schedule line'",
+  "secs": 2.01
+ },
+ {
+  "agent": "impact",
+  "tool": "get_sales_order_commitments",
+  "origin": "live",
+  "rows": "0",
+  "note": "one row per order item; NetAmount in rupiah at the ECB ref",
+  "secs": 1.87
+ },
+ {
+  "agent": "inventory",
+  "tool": "assess_transfer",
+  "origin": "derived",
+  "rows": "1",
+  "note": "1710 holds 0 and cannot give 10",
+  "secs": 2.26
+ },
+ {
+  "agent": "inventory",
+  "tool": "get_quality_holds",
+  "origin": "live",
+  "rows": "0",
+  "note": "stock types 02 (quality inspection) and 07 (blocked), and ",
+  "secs": 0.0
+ },
+ {
+  "agent": "inventory",
+  "tool": "get_safety_stock_policy",
+  "origin": "live",
+  "rows": "1",
+  "note": "API_PRODUCT_SRV A_ProductSupplyPlanning",
+  "secs": 1.46
+ },
+ {
+  "agent": "logistics",
+  "tool": "estimate_eta",
+  "origin": "modelled",
+  "rows": "1",
+  "note": "dwell time engine",
+  "secs": 0.01
+ },
+ {
+  "agent": "logistics",
+  "tool": "get_customs_status",
+  "origin": "missing",
+  "rows": "0",
+  "note": "no CustomsDeclaration has been uploaded, and SAP S/4HANA d",
+  "secs": 0.0
+ },
+ {
+  "agent": "logistics",
+  "tool": "get_port_conditions",
+  "origin": "live",
+  "rows": "1",
+  "note": "distances to places from the company profile and open orde",
+  "secs": 3.09
+ },
+ {
+  "agent": "logistics",
+  "tool": "get_public_holidays",
+  "origin": "live",
+  "rows": "1",
+  "note": "national public holidays 2026-10-27 to 2026-11-26; cuti be",
+  "secs": 0.0
+ },
+ {
+  "agent": "logistics",
+  "tool": "get_shipment_status",
+  "origin": "live",
+  "rows": "1",
+  "note": "order dates only, no vessel position; one row per order it",
+  "secs": 3.35
+ },
+ {
+  "agent": "logistics",
+  "tool": "search_news",
+  "origin": "live",
+  "rows": "1",
+  "note": "7 headline(s) in the last 7 day(s); headlines only, the ar",
+  "secs": 0.7
+ },
+ {
+  "agent": "logistics",
+  "tool": "web_brief",
+  "origin": "derived",
+  "rows": "1",
+  "note": "written by a model from the pages it found; follow the cit",
+  "secs": 7.17
+ },
+ {
+  "agent": "precedent",
+  "tool": "search_past_incidents",
+  "origin": "ERROR",
+  "rows": "-",
+  "note": "AttributeError: 'list' object has no attribute 'lower'",
+  "secs": 0.0
+ },
+ {
+  "agent": "procurement",
+  "tool": "compare_quotations",
+  "origin": "live",
+  "rows": "0",
+  "note": "no quotations on file for 221",
+  "secs": 1.36
+ },
+ {
+  "agent": "procurement",
+  "tool": "get_exchange_rate",
+  "origin": "live",
+  "rows": "1",
+  "note": "ECB reference rate for 2026-10-26, set once a working day ",
+  "secs": 0.0
+ },
+ {
+  "agent": "procurement",
+  "tool": "get_quotations",
+  "origin": "live",
+  "rows": "0",
+  "note": "no quotations on file for 221",
+  "secs": 0.0
+ },
+ {
+  "agent": "procurement",
+  "tool": "get_supplier_master",
+  "origin": "live",
+  "rows": "1766",
+  "note": "1766 suppliers on the approved list, 1748 of them holding ",
+  "secs": 0.36
+ },
+ {
+  "agent": "procurement",
+  "tool": "get_supplier_performance",
+  "origin": "live",
+  "rows": "0",
+  "note": "1018 holds no purchase orders",
+  "secs": 0.02
+ },
+ {
+  "agent": "procurement",
+  "tool": "propose_purchase_order",
+  "origin": "skipped",
+  "rows": "-",
+  "note": "writes outside SIGAP",
+  "secs": 0.0
+ },
+ {
+  "agent": "simulation",
+  "tool": "allocate_short_supply",
+  "origin": "live",
+  "rows": "1",
+  "note": "no finished good consumes 221, so no customer order compet",
+  "secs": 2.93
+ },
+ {
+  "agent": "simulation",
+  "tool": "simulate_scenario",
+  "origin": "derived",
+  "rows": "1",
+  "note": "engine/simulate.py",
+  "secs": 2.44
+ },
+ {
+  "agent": "sourcing",
+  "tool": "find_alternate_sources",
+  "origin": "derived",
+  "rows": "0",
+  "note": "from purchasing info records; ArrivalDate is today plus th",
+  "secs": 0.0
+ },
+ {
+  "agent": "sourcing",
+  "tool": "find_internal_transfers",
+  "origin": "derived",
+  "rows": "0",
+  "note": "0 of 0 donor plants can afford it",
+  "secs": 0.0
+ },
+ {
+  "agent": "sourcing",
+  "tool": "find_substitute_materials",
+  "origin": "missing",
+  "rows": "0",
+  "note": "no substitute for 221 on record (API_BILL_OF_MATERIAL_SRV ",
+  "secs": 1.64
+ },
+ {
+  "agent": "supervisor",
+  "tool": "detect_disruption",
+  "origin": "missing",
+  "rows": "0",
+  "note": "events table",
+  "secs": 0.0
+ }
+]

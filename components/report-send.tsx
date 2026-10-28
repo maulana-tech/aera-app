@@ -15,7 +15,14 @@ import {
  * who may read that. The agent service renders the files when it sends, from
  * the record as it then stands. `base` is the API path, as for ReportFiles:
  * "reports/run_x" or "portfolio". */
-export function ReportSend({ base, title, excel = true }: { base: string; title: string; excel?: boolean }) {
+export function ReportSend({ base, title, excel = true, period, periodLabel }: {
+  base: string; title: string; excel?: boolean;
+  /** The period the page is showing, sent on so the file that arrives covers
+   *  it. Without this an emailed rollup would be all-time while the page it
+   *  was sent from showed one month. */
+  period?: Record<string, string>;
+  periodLabel?: string;
+}) {
   const [open, setOpen] = useState(false);
   const [contacts, setContacts] = useState<Contact[] | null>(null);
   const [chosen, setChosen] = useState<string[]>([]);
@@ -44,7 +51,7 @@ export function ReportSend({ base, title, excel = true }: { base: string; title:
       const res = await fetch(`/api/sigap/${base}/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contacts: chosen, me, formats, note }),
+        body: JSON.stringify({ contacts: chosen, me, formats, note, ...(period ?? {}) }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error ?? "failed");
@@ -74,7 +81,10 @@ export function ReportSend({ base, title, excel = true }: { base: string; title:
       >
         <SheetHeader className="border-b px-5 py-3.5">
           <SheetTitle className="text-sm font-medium">Send by email</SheetTitle>
-          <SheetDescription className="text-xs">{title}</SheetDescription>
+          <SheetDescription className="text-xs">
+            {title}
+            {periodLabel ? ` · ${periodLabel}` : ""}
+          </SheetDescription>
         </SheetHeader>
 
         <div className="flex-1 space-y-6 overflow-y-auto px-5 py-4">
@@ -121,6 +131,13 @@ export function ReportSend({ base, title, excel = true }: { base: string; title:
                 </label>
               ))}
             </div>
+            {formats.includes("xlsx") && base !== "portfolio" && (
+              <p className="text-muted-foreground mt-2 text-xs leading-relaxed">
+                The emailed workbook holds the record: the decision, the actions, the approvals,
+                the steps. The rows each tool read — supplier prices among them — stay inside
+                SIGAP; download the workbook here for those.
+              </p>
+            )}
           </fieldset>
 
           <label className="block">

@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { StepSummary, stageLabel, stepAgentName } from "@/components/agent-activity";
-import { api, idr, type RunRow } from "@/app/lib";
+import { api, idr, wib, type RunRow } from "@/app/lib";
 import { Empty, PageHeader, Section } from "@/components/shell";
 import { OriginBadge, StatusBadge } from "@/components/status-badge";
 
@@ -21,8 +21,9 @@ type Approval = {
   decided_by: string; role: string; decision: string; at: string;
 };
 
-const when = (t: string) =>
-  new Date(t).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "medium" });
+// Jakarta, with seconds: in a log the order of two things a second apart is
+// the whole point, and the stamps are UTC in the database.
+const when = (t: string) => wib(t, { seconds: true, mark: false });
 
 export default async function Log() {
   const d = await api<{ steps: Step[]; actions: Action[]; approvals: Approval[] }>("log");

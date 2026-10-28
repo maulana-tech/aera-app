@@ -34,7 +34,7 @@
 | `execution` | Bram | Execution | medium | 9 | writes the actions, drafts outward messages |
 | `exposure` | Vega | Risk Scanner | medium | 4 | Prevent mode: risk that has not happened yet |
 
-45 tools in all, each owned by exactly one agent. `agents/definitions.py demo()` asserts
+46 tools in all, each owned by exactly one agent. `agents/definitions.py demo()` asserts
 that what the agents claim and what `core/registry.py` holds are the same set in both
 directions, that only `compliance` holds a veto, and that every tool has an activity
 phrase in `api._TOOL_LABELS` and a label in `components/agent-activity.tsx`. `tools.md`

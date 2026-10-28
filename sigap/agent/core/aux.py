@@ -1,13 +1,13 @@
 """The auxiliary LLM: a cheap, fast model for boilerplate generation.
 
-Ported in spirit from SmartX's aux-llm.ts. The idea: the agent team runs on an
+Ported in spirit from  aux-llm.ts. The idea: the agent team runs on an
 expensive frontier model (Opus), and spending that model on one-shot chores —
 writing a report's summary prose, condensing a finding to one line, titling a
 conversation — is waste that also slows and crowds the real reasoning. Those
 chores go to a small model (Haiku by default, SIGAP_AUX_MODEL) through this one
 helper, so the agents are left to decide.
 
-Two rules carried straight from SmartX's hard-won experience:
+Two rules carried straight from  hard-won experience:
 
   * BEST-EFFORT, FAIL-OPEN. Every call here can return None (model not ready,
     timeout, any error). A caller must degrade gracefully — the aux LLM is UX

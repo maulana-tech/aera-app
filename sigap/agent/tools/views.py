@@ -665,3 +665,84 @@ VIEWS = {
     "compliance": compliance, "simulation": simulation, "execution": execution,
     "exposure": exposure,
 }
+
+
+def demo() -> None:
+    """These views add no data source, so what can go wrong is the arranging:
+    a page keyed to an agent who no longer exists, a column whose field was
+    renamed and now draws blank, or a label claiming more than the rows have.
+    """
+    from agents.definitions import ALL
+
+    # The file's own claim is that a page and its specialist cannot drift
+    # apart. That only holds while every key is a real agent code.
+    orphans = sorted(set(VIEWS) - set(ALL))
+    assert not orphans, f"views keyed to no agent: {orphans}"
+    # Otto searches and Arya coordinates; neither owns a table. Naming them
+    # here means a new desk without a view is noticed rather than assumed.
+    assert sorted(set(ALL) - set(VIEWS)) == ["precedent", "supervisor"]
+
+    flat = {"columns", "rows", "origin", "source", "note"}
+    origins = {o.value for o in Origin}
+    drawn = 0
+
+    for name, build in VIEWS.items():
+        view = build()
+        # One question is a flat view; a desk with two returns sections. The
+        # page renders both, so both are legal here.
+        sections = view.get("sections") or [view]
+        assert sections, f"{name} returned nothing to draw"
+        for sec in sections:
+            where = f"{name}[{sec.get('title', 'flat')}]"
+            assert flat <= set(sec), f"{where} is missing {sorted(flat - set(sec))}"
+            assert sec["origin"] in origins, f"{where} origin {sec['origin']!r}"
+            assert sec["source"], f"{where} says nothing about where it came from"
+            assert isinstance(sec["rows"], list) and isinstance(sec["columns"], list)
+
+            # A column whose field was renamed still draws, as a column of
+            # blanks. Nothing errors, the page just quietly stops saying it.
+            if sec["rows"]:
+                present = set().union(*(set(r) for r in sec["rows"]))
+                blank = [c["k"] for c in sec["columns"] if c["k"] not in present]
+                assert not blank, f"{where} draws empty columns: {blank}"
+                assert all(c.get("l") for c in sec["columns"]), f"{where} has an unlabelled column"
+            drawn += 1
+
+        # Nothing here reads SAP, so nothing here may call itself live. The one
+        # exception is the action log, which really is this installation's own.
+        labels = {sec["origin"] for sec in sections}
+        if name == "execution":
+            assert labels == {"live"}, labels
+        else:
+            assert "live" not in labels, f"{name} claims live over modelled rows: {labels}"
+
+    # Two shapes, and both are actually exercised by the real views.
+    assert "sections" in procurement() and "sections" not in impact()
+    assert len(procurement()["sections"]) == 2
+    assert all(s.get("title") for s in procurement()["sections"]), "a section needs its heading"
+
+    # A chart that redraws the table would be a smear, so it draws a few lines
+    # and the caption owns up to what it left out.
+    charted = [n for n, b in VIEWS.items() if "chart" in b()]
+    assert charted, "no view charts anything"
+    for n in charted:
+        chart = VIEWS[n]()["chart"]
+        assert chart, f"{n} carries an empty chart"
+        assert len(chart.get("series", chart.get("lines", []))) <= CHART_LINES, n
+
+    # The scenario the single-focus views are drawn for, without SAP.
+    assert _focus() == ("M-4471", "KRW1", "CNNGB")
+    assert SAFETY_FLOOR_DAYS == 14, "the dashboard draws its threshold here"
+
+    print(f"  {len(VIEWS)} views, {drawn} tables, every key a real agent ✓")
+    print("  no blank columns ✓ · no unlabelled ones ✓ · both shapes drawn ✓")
+    print(f"  only the action log calls itself live ✓ · charts capped at {CHART_LINES} ✓")
+    print("views ok")
+
+
+if __name__ == "__main__":
+    # execution() reads the actions table, so keep it off the real database.
+    from core.config import fixtures_only
+
+    fixtures_only(__file__, "SIGAP_VIEWS_CHECK")
+    demo()

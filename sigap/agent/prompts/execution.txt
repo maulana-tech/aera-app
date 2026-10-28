@@ -17,7 +17,9 @@ YOUR TOOLS AND WHAT THEY COMMIT TO
   short, on a sales order that exists; the customer is read from the order.
 - request_supplier_update: drafts a request to a supplier about one of its purchase
   orders, to confirm or revise the date; the supplier is read from the order.
-- monitor_shipment: watches a shipment through to receipt.
+- monitor_shipment: files a watch so a shipment is owed a result. It does not
+  poll the carrier and never observes an arrival; a person or you close it with
+  record_outcome once receipt is actually known.
 - record_outcome: closes the loop on an action that was sent or approved: delivered,
   late, short, failed or cancelled, with what was actually seen. Written once.
 - create_sourcing_event, propose_safety_stock_change: Prevent mode only. A sourcing

@@ -74,6 +74,8 @@ region named `us-west-2    see below`.
 | `SIGAP_MODEL_FALLBACK` | empty | Tried once when an agent's model fails, then kept for the rest of that handling. Used by the aux model too |
 | `SIGAP_AUX_MODEL` | `anthropic.claude-haiku-5-5` | Narration, summaries and titles. Never on a figure or a decision (`core/aux.py`) |
 | `AWS_BEARER_TOKEN_BEDROCK` | empty | A Bedrock API key, instead of IAM credentials. An environment variable, read by the AWS SDK and by `core/llm.py`; not a `.env` line |
+| `AWS_FALLBACK_ACCESS_KEY_ID` · `AWS_FALLBACK_SECRET_ACCESS_KEY` · `AWS_FALLBACK_REGION` | required with Bedrock | Second AWS account used when the primary Bedrock account is rate-limited. The session token is required only for temporary STS credentials. Store all values in the deployment secret manager; never commit them |
+| `SIGAP_REASONING_WORKERS` | `1` | Maximum concurrent event reasonings. This bounds request bursts before they reach Bedrock |
 | `SIGAP_AICORE_KEY_FILE` | `.secrets/ai-core.json` | The SAP AI Core service key. `AICORE_SERVICE_KEY` (the JSON itself) wins when set, which is how Cloud Foundry passes it |
 | `AICORE_RESOURCE_GROUP` | `default` | The AI Core resource group, `default` for the hackathon |
 | `SIGAP_AICORE_DEPLOYMENTS` | empty | Pin deployment ids, `gpt-5.4=…,sap-rpt-1.6=…`. Empty means they are looked up by model name |

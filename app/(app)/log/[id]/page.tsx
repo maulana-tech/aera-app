@@ -10,7 +10,11 @@ import TraceView from "./TraceView";
 export const dynamic = "force-dynamic";
 
 const when = (t: string | null) =>
-  t ? new Date(t).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "medium" }) : "";
+  t ? new Date(t).toLocaleString("en-GB", {
+    dateStyle: "short",
+    timeStyle: "medium",
+    timeZone: "Asia/Jakarta",
+  }) : "";
 
 export default async function TracePage({
   params, searchParams,
@@ -63,7 +67,7 @@ export default async function TracePage({
           ].map(([k, v]) => (
             <div key={k}>
               <dt className="text-muted-foreground text-xs">{k}</dt>
-              <dd className="mt-0.5 font-mono text-sm tabular-nums">{v}</dd>
+              <dd suppressHydrationWarning className="mt-0.5 font-mono text-sm tabular-nums">{v}</dd>
             </div>
           ))}
         </dl>

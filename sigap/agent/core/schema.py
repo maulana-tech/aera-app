@@ -89,9 +89,14 @@ EXAMPLES: Dict[str, Dict[str, Any]] = {
                         "label": "Local supplier, Gresik"},
     "Supplier": {"Supplier": "SUP-2201", "SupplierName": "Ningbo Yongtai Metals",
                  "Country": "CN", "TkdnCertifiedPct": 38.2},
+    # QuotationValidityEndDate is not required, but leave it out and every offer
+    # in the file reads as expired: tools/procurement.py counts an offer nobody
+    # can check as one a buyer must re-quote. A template that did not show the
+    # column handed companies a book of quotations that was dead on arrival.
     "Quotation": {"SupplierQuotation": "6000000045", "Supplier": "SUP-4417", "Material": "M-4471",
                   "OrderQuantity": 60.0, "NetPrice": 1_560_000, "DeliveryTimeInDays": 9,
-                  "Currency": "IDR", "QtnLifecycleStatus": "A"},
+                  "Currency": "IDR", "QtnLifecycleStatus": "A",
+                  "QuotationValidityEndDate": "2026-10-31"},
     "CustomsDeclaration": {"DeclarationNumber": "PIB-2609-0027", "PurchaseOrder": "4500018876",
                            "Material": "M-5512", "Supplier": "SUP-2209", "OriginCountry": "CN",
                            "Port": "IDTPP", "ArrivalDate": "2026-09-01",

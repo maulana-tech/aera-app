@@ -119,6 +119,60 @@ class ModelCallFailed(RuntimeError):
         self.status = status
 
 
+#: The SDK retries temporary Bedrock failures before the optional second AWS
+#: account is used. The fallback account is for capacity, not a second model.
+BEDROCK_MAX_RETRIES = 3
+
+
+def is_rate_limited(error: BaseException) -> bool:
+    """Whether an error represents a temporary provider quota response."""
+    return (
+        getattr(error, "status", None) == 429
+        or getattr(error, "status_code", None) == 429
+        or type(error).__name__ == "RateLimitError"
+    )
+
+
+def _fallback_aws_options(cfg) -> Optional[dict[str, str]]:
+    """The second-account credentials for Bedrock, or None if there is no second
+    account.
+
+    The primary account remains the instance's normal AWS credential chain, and
+    it is the only one a call needs: the fallback is reached solely when the
+    primary answers 429, after the SDK has already retried. So one account is a
+    complete configuration, and demanding two made Bedrock unreachable for every
+    deployment that has one.
+
+    A *partial* fallback is still an error. Two of the three names set means
+    someone meant to configure failover and mistyped, and silently running
+    without the failover they think they have is worse than refusing. Session
+    tokens stay optional because long-lived IAM keys do not use them.
+    """
+    access = os.environ.get("AWS_FALLBACK_ACCESS_KEY_ID", "").strip()
+    secret = os.environ.get("AWS_FALLBACK_SECRET_ACCESS_KEY", "").strip()
+    region = os.environ.get("AWS_FALLBACK_REGION", "").strip()
+    token = os.environ.get("AWS_FALLBACK_SESSION_TOKEN", "").strip()
+    if not cfg.aws_region:
+        raise ModelUnavailable("AWS_REGION is not set")
+    named = (
+        ("AWS_FALLBACK_ACCESS_KEY_ID", access),
+        ("AWS_FALLBACK_SECRET_ACCESS_KEY", secret),
+        ("AWS_FALLBACK_REGION", region),
+    )
+    missing = [name for name, value in named if not value]
+    if len(missing) == len(named):
+        return None
+    if missing:
+        raise ModelUnavailable(
+            "a Bedrock fallback account is half-configured; set or clear all of: "
+            + ", ".join(missing)
+        )
+    options = {"aws_access_key": access, "aws_secret_key": secret, "aws_region": region}
+    if token:
+        options["aws_session_token"] = token
+    return options
+
+
 # --------------------------------------------------------------------- naming
 @dataclass(frozen=True)
 class Spec:
@@ -292,6 +346,10 @@ def ready(spec: Spec, cfg=None) -> Tuple[bool, str]:
             import botocore   # noqa: F401
         except ImportError:
             return False, "the Bedrock SDK is not installed: pip install -r requirements.txt"
+        try:
+            _fallback_aws_options(cfg)
+        except ModelUnavailable as e:
+            return False, str(e)
         return True, ""
     if spec.provider == "aicore":
         from clients import aicore
@@ -407,8 +465,10 @@ class Reply:
         self.stop_reason = stop_reason
         self.usage = usage
         self.model = str(spec)
-        #: (model that failed, why) when the fallback answered instead.
+        #: (model that failed, why) when a configured model fallback answered instead.
         self.fell_back_from: Optional[Tuple[str, str]] = None
+        #: Why the same model was served through explicit fallback AWS credentials.
+        self.account_failover: Optional[str] = None
 
 
 def _get(b: Any, key: str, default: Any = None) -> Any:
@@ -486,15 +546,31 @@ def _anthropic_usage(spec: Spec, u: Any) -> Usage:
 class _AnthropicBackend:
     def __init__(self, spec: Spec, cfg):
         self.spec = spec
-        if _runtime_id(spec.model):
+        self._cfg = cfg
+        self._sdk = self._new_client()
+        options = _fallback_aws_options(cfg)
+        self._sdk_fallback = self._new_client(options) if options else None
+
+    def _new_client(self, options: Optional[dict[str, str]] = None):
+        kwargs = {"aws_region": self._cfg.aws_region, "max_retries": BEDROCK_MAX_RETRIES}
+        kwargs.update(options or {})
+        if _runtime_id(self.spec.model):
             from anthropic import AnthropicBedrock
-            self._sdk = AnthropicBedrock(aws_region=cfg.aws_region)
-        else:
-            from anthropic import AnthropicBedrockMantle
-            self._sdk = AnthropicBedrockMantle(aws_region=cfg.aws_region)
+            return AnthropicBedrock(**kwargs)
+        from anthropic import AnthropicBedrockMantle
+        return AnthropicBedrockMantle(**kwargs)
 
     def create(self, req: dict) -> Reply:
-        r = self._sdk.messages.create(**_anthropic_body(self.spec, req))
+        body = _anthropic_body(self.spec, req)
+        try:
+            r = self._sdk.messages.create(**body)
+        except Exception as error:                                  # noqa: BLE001
+            if not is_rate_limited(error) or self._sdk_fallback is None:
+                raise
+            r = self._sdk_fallback.messages.create(**body)
+            reply = Reply(list(r.content), r.stop_reason, _anthropic_usage(self.spec, r.usage), self.spec)
+            reply.account_failover = f"primary Bedrock account rate-limited ({type(error).__name__})"
+            return reply
         return Reply(list(r.content), r.stop_reason, _anthropic_usage(self.spec, r.usage), self.spec)
 
 
@@ -702,42 +778,67 @@ def _post_json(spec: Spec, url: str, body: dict, headers_for: Callable[[bytes], 
 
 
 class _BedrockChatBackend:
-    """Chat Completions on Bedrock: Mantle for bare ids, bedrock-runtime's
-    /openai/v1 for inference profiles, which Mantle does not serve.
-    Authenticates with a Bedrock API key when AWS_BEARER_TOKEN_BEDROCK is set
-    (the same variable the Anthropic SDK reads), otherwise signs with SigV4
-    from the standard AWS chain."""
+    """Chat Completions on Bedrock, with optional account-level failover."""
 
     def __init__(self, spec: Spec, cfg):
         self.spec = spec
         self.region = cfg.aws_region
-        if _runtime_id(spec.model):
-            base = f"https://bedrock-runtime.{self.region}.amazonaws.com/openai/v1"
-            self._service = "bedrock"
-        else:
-            base = os.environ.get("SIGAP_BEDROCK_OPENAI_BASE_URL",
-                                  f"https://bedrock-mantle.{self.region}.api.aws/v1")
-            self._service = "bedrock-mantle"
-        self.url = base.rstrip("/") + "/chat/completions"
+        self.url, self._service = self._endpoint(self.region, "SIGAP_BEDROCK_OPENAI_BASE_URL")
+        options = _fallback_aws_options(cfg)
+        self._fallback_url = None
+        if options:
+            from botocore.credentials import Credentials
+            self._fallback_credentials = Credentials(
+                options["aws_access_key"], options["aws_secret_key"],
+                options.get("aws_session_token"),
+            )
+            self._fallback_region = options["aws_region"]
+            self._fallback_url, self._fallback_service = self._endpoint(
+                self._fallback_region, "SIGAP_FALLBACK_BEDROCK_OPENAI_BASE_URL"
+            )
 
-    def _headers(self, data: bytes) -> dict:
-        token = os.environ.get("AWS_BEARER_TOKEN_BEDROCK", "").strip()
-        if token:
-            return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-        creds = _aws_credentials()
-        if creds is None:
+    def _endpoint(self, region: str, override: str) -> Tuple[str, str]:
+        if _runtime_id(self.spec.model):
+            base, service = f"https://bedrock-runtime.{region}.amazonaws.com/openai/v1", "bedrock"
+        else:
+            base = os.environ.get(override, f"https://bedrock-mantle.{region}.api.aws/v1")
+            service = "bedrock-mantle"
+        return base.rstrip("/") + "/chat/completions", service
+
+    def _headers_for(self, data: bytes, *, url: str, region: str, service: str, credentials=None) -> dict:
+        if credentials is None:
+            token = os.environ.get("AWS_BEARER_TOKEN_BEDROCK", "").strip()
+            if token:
+                return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+            credentials = _aws_credentials()
+        if credentials is None:
             raise ModelUnavailable("no AWS credentials: run `aws configure`, set AWS_PROFILE, "
                                    "or set AWS_BEARER_TOKEN_BEDROCK")
         from botocore.auth import SigV4Auth
         from botocore.awsrequest import AWSRequest
-        r = AWSRequest(method="POST", url=self.url, data=data,
-                       headers={"Content-Type": "application/json"})
-        SigV4Auth(creds.get_frozen_credentials(), self._service, self.region).add_auth(r)
-        return dict(r.headers.items())
+        request = AWSRequest(method="POST", url=url, data=data,
+                             headers={"Content-Type": "application/json"})
+        SigV4Auth(credentials.get_frozen_credentials(), service, region).add_auth(request)
+        return dict(request.headers.items())
+
+    def _headers(self, data: bytes) -> dict:
+        return self._headers_for(data, url=self.url, region=self.region, service=self._service)
+
+    def _fallback_headers(self, data: bytes) -> dict:
+        return self._headers_for(data, url=self._fallback_url, region=self._fallback_region,
+                                 service=self._fallback_service, credentials=self._fallback_credentials)
 
     def create(self, req: dict) -> Reply:
-        return from_chat(_post_json(self.spec, self.url, to_chat(req, self.spec), self._headers),
-                         self.spec)
+        body = to_chat(req, self.spec)
+        try:
+            return from_chat(_post_json(self.spec, self.url, body, self._headers), self.spec)
+        except Exception as error:                                  # noqa: BLE001
+            if not is_rate_limited(error) or self._fallback_url is None:
+                raise
+            reply = from_chat(_post_json(self.spec, self._fallback_url, body, self._fallback_headers),
+                              self.spec)
+            reply.account_failover = f"primary Bedrock account rate-limited ({type(error).__name__})"
+            return reply
 
 
 class _AICoreChatBackend:
@@ -1060,6 +1161,79 @@ def demo() -> None:
         "an unsigned thinking block never reaches Claude"
     print("  translation: tools ↔ functions ✓ · tool_result ↔ role tool ✓ · errors kept ✓ "
           "· reasoning split out ✓ · usage not double-counted ✓")
+
+    assert is_rate_limited(ModelCallFailed(Spec("bedrock", "x"), 429, "slow down"))
+    assert not is_rate_limited(ModelCallFailed(Spec("bedrock", "x"), 403, "denied"))
+
+    class FakeMessages:
+        def __init__(self, response=None, error=None):
+            self.response, self.error, self.calls = response, error, 0
+
+        def create(self, **_req):
+            self.calls += 1
+            if self.error:
+                raise self.error
+            return self.response
+
+    class FakeClient:
+        def __init__(self, messages):
+            self.messages = messages
+
+    response = type("Response", (), {
+        "content": [TextBlock("ok")], "stop_reason": "end_turn",
+        "usage": {"input_tokens": 10, "output_tokens": 1},
+    })()
+    backend = object.__new__(_AnthropicBackend)
+    backend.spec = Spec("bedrock", "anthropic.claude-haiku-4-5")
+    primary_messages = FakeMessages(error=ModelCallFailed(backend.spec, 429, "slow down"))
+    fallback_messages = FakeMessages(response=response)
+    backend._sdk = FakeClient(primary_messages)
+    backend._sdk_fallback = FakeClient(fallback_messages)
+    account_reply = backend.create({"max_tokens": 10, "system": "s",
+                                    "messages": [{"role": "user", "content": "q"}]})
+    assert primary_messages.calls == fallback_messages.calls == 1
+    assert account_reply.account_failover and account_reply.model == str(backend.spec), \
+        "a 429 uses the second AWS account without changing the configured model"
+
+    # One AWS account is a whole configuration. Requiring two made Bedrock
+    # unreachable for every deployment that has one, which is most of them.
+    fallback_names = ("AWS_FALLBACK_ACCESS_KEY_ID", "AWS_FALLBACK_SECRET_ACCESS_KEY",
+                      "AWS_FALLBACK_REGION", "AWS_FALLBACK_SESSION_TOKEN")
+    kept = {k: os.environ.pop(k, None) for k in fallback_names}
+    one_account = type("Cfg", (), {"aws_region": "ap-southeast-3"})()
+    try:
+        assert _fallback_aws_options(one_account) is None, "no second account is not an error"
+        os.environ["AWS_FALLBACK_ACCESS_KEY_ID"] = "AKIAEXAMPLE"
+        try:
+            _fallback_aws_options(one_account)
+            raise AssertionError("a half-configured fallback must be refused, not ignored")
+        except ModelUnavailable as e:
+            assert "AWS_FALLBACK_REGION" in str(e), e
+        os.environ.update({"AWS_FALLBACK_SECRET_ACCESS_KEY": "s", "AWS_FALLBACK_REGION": "us-east-1"})
+        assert _fallback_aws_options(one_account) == {
+            "aws_access_key": "AKIAEXAMPLE", "aws_secret_key": "s", "aws_region": "us-east-1"}
+        try:
+            _fallback_aws_options(type("Cfg", (), {"aws_region": ""})())
+            raise AssertionError("the primary region is still required")
+        except ModelUnavailable:
+            pass
+    finally:
+        for k, v in kept.items():
+            os.environ.pop(k, None)
+            if v is not None:
+                os.environ[k] = v
+    # And with no second account, a 429 is the answer — not an AttributeError.
+    backend._sdk_fallback = None
+    primary_messages.calls = 0
+    try:
+        backend.create({"max_tokens": 10, "system": "s",
+                        "messages": [{"role": "user", "content": "q"}]})
+        raise AssertionError("a 429 with no second account must surface")
+    except ModelCallFailed as e:
+        assert e.status == 429
+    assert primary_messages.calls == 1, "and it is not retried into nothing"
+    print("  rate-limit classification ✓ · second AWS account failover ✓ "
+          "· one account is enough ✓ · half-configured failover refused ✓")
 
     # Routing and fallback, with stand-in backends.
     calls: List[str] = []

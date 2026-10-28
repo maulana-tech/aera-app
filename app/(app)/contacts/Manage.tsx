@@ -18,7 +18,7 @@ const ROLES = ["planner", "buyer", "procurement_lead", "qa", "oem"];
 const KINDS = [
   "port_closure", "quality_hold", "customs_hold", "demand_spike", "supplier_failure",
   "seismic", "earthquake", "tropical_cyclone", "flood", "volcano", "wildfire", "drought",
-  "port_weather", "plant_weather", "exposure", "digest",
+  "port_weather", "plant_weather", "exposure", "certificate_lapse", "digest",
 ];
 
 const when = (t: string) =>

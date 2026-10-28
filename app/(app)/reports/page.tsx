@@ -1,16 +1,13 @@
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 
-import { api, idr, type RunRow } from "@/app/lib";
+import { api, idr, wib, type RunRow } from "@/app/lib";
 import { ReportFiles } from "@/components/report-files";
 import { Empty, Metric, PageHeader, Section } from "@/components/shell";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
-
-const when = (t: string) =>
-  new Date(t).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
 
 export default async function ReportList() {
   const runs = (await api<{ runs: RunRow[] }>("runs"))?.runs;
@@ -118,7 +115,7 @@ function ReportCard({ r }: { r: RunRow }) {
 
       <div className="flex-1" />
       <div className="mt-4 flex items-center justify-between gap-3 border-t pt-3">
-        <span className="text-muted-foreground font-mono text-[11px]">{when(r.started_at)}</span>
+        <span className="text-muted-foreground font-mono text-[11px]">{wib(r.started_at)}</span>
         <span className="relative z-10 flex items-center gap-1.5">
           <ReportFiles base={`reports/${r.id}`} excel={hasTables} size="xs" />
         </span>

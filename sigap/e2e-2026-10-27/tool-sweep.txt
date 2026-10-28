@@ -1,0 +1,52 @@
+context: material=221 plant=1710 po=4500000011-10 supplier=1018 option=IR5300000100-1010
+
+AGENT        TOOL                         ORIGIN     ROWS    SECS  NOTE / SOURCE
+compliance   check_local_constraints      modelled      1    4.9s  not from a verified rule pack: tkdn_contract_floor_pct 40.
+compliance   get_rule_pack                modelled      1    0.0s  not verified against a source: tkdn_contract_floor_pct, tk
+demand       forecast_demand              missing       0   11.9s  no withdrawal history for 221 at 1710
+demand       get_demand_signal            missing       0    0.0s  not connected. The SAP sandbox exposes no demand plan
+demand       get_production_schedule      derived       1    3.2s  MatlWrhsStkQtyInMatlBaseUnit is unrestricted stock only; q
+execution    create_draft_po              skipped       -    0.0s  writes outside SIGAP
+execution    create_sourcing_event        skipped       -    0.0s  writes outside SIGAP
+execution    create_stock_transfer        skipped       -    0.0s  writes outside SIGAP
+execution    draft_customer_notice        skipped       -    0.0s  writes outside SIGAP
+execution    monitor_shipment             skipped       -    0.0s  writes outside SIGAP
+execution    notify                       skipped       -    0.0s  writes outside SIGAP
+execution    propose_safety_stock_change  skipped       -    0.0s  writes outside SIGAP
+execution    record_outcome               skipped       -    0.0s  writes outside SIGAP
+execution    request_supplier_update      skipped       -    0.0s  writes outside SIGAP
+exposure     get_supplier_certifications  missing       0    0.0s  1018 has no certificate in the rule pack
+exposure     rank_po_slip_risk            modelled      0    4.3s  no order is waiting to ship, nothing to rank
+exposure     scan_live_hazards            derived       1   27.6s  distances to places from the company profile and open orde
+exposure     scan_supply_exposure         derived     202   11.8s  202 exposures across 1043 material and plant pairs. 85 cou
+impact       get_bom_explosion            live          0    6.2s  API_BILL_OF_MATERIAL_SRV
+impact       get_material_stock           derived       1    0.0s  MatlWrhsStkQtyInMatlBaseUnit is unrestricted stock only; q
+impact       get_open_purchase_orders     live          0    2.0s  one row per order item; DeliveryDate is the schedule line'
+impact       get_sales_order_commitments  live          0    1.9s  one row per order item; NetAmount in rupiah at the ECB ref
+inventory    assess_transfer              derived       1    2.3s  1710 holds 0 and cannot give 10
+inventory    get_quality_holds            live          0    0.0s  stock types 02 (quality inspection) and 07 (blocked), and 
+inventory    get_safety_stock_policy      live          1    1.5s  API_PRODUCT_SRV A_ProductSupplyPlanning
+logistics    estimate_eta                 modelled      1    0.0s  dwell time engine
+logistics    get_customs_status           missing       0    0.0s  no CustomsDeclaration has been uploaded, and SAP S/4HANA d
+logistics    get_port_conditions          live          1    3.1s  distances to places from the company profile and open orde
+logistics    get_public_holidays          live          1    0.0s  national public holidays 2026-10-27 to 2026-11-26; cuti be
+logistics    get_shipment_status          live          1    3.3s  order dates only, no vessel position; one row per order it
+logistics    search_news                  live          1    0.7s  7 headline(s) in the last 7 day(s); headlines only, the ar
+logistics    web_brief                    derived       1    7.2s  written by a model from the pages it found; follow the cit
+precedent    search_past_incidents        ERROR         -    0.0s  AttributeError: 'list' object has no attribute 'lower'
+procurement  compare_quotations           live          0    1.4s  no quotations on file for 221
+procurement  get_exchange_rate            live          1    0.0s  ECB reference rate for 2026-10-26, set once a working day 
+procurement  get_quotations               live          0    0.0s  no quotations on file for 221
+procurement  get_supplier_master          live       1766    0.4s  1766 suppliers on the approved list, 1748 of them holding 
+procurement  get_supplier_performance     live          0    0.0s  1018 holds no purchase orders
+procurement  propose_purchase_order       skipped       -    0.0s  writes outside SIGAP
+simulation   allocate_short_supply        live          1    2.9s  no finished good consumes 221, so no customer order compet
+simulation   simulate_scenario            derived       1    2.4s  engine/simulate.py
+sourcing     find_alternate_sources       derived       0    0.0s  from purchasing info records; ArrivalDate is today plus th
+sourcing     find_internal_transfers      derived       0    0.0s  0 of 0 donor plants can afford it
+sourcing     find_substitute_materials    missing       0    1.6s  no substitute for 221 on record (API_BILL_OF_MATERIAL_SRV 
+supervisor   detect_disruption            missing       0    0.0s  events table
+
+summary: {'modelled': 4, 'missing': 6, 'derived': 9, 'skipped': 10, 'live': 15, 'ERROR': 1}
+
+[exited with code 0]

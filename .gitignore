@@ -65,6 +65,10 @@ secrets/
 # Joule CLI debug dumps. They can carry credentials.
 sigap/agent/debug-*.json
 
+# Source artwork for the brand mark. The traced SVGs are committed in public/logo/; the
+# original upload stays out of the repo.
+socrates-logo.zip
+
 /data/
 *.db
 .codegraph/
@@ -72,3 +76,8 @@ sigap/agent/debug-*.json
 # Kira's rule pack: contract terms and supplier certificates, per installation.
 # The format and an example are committed beside it (sigap/references/).
 sigap/references/rule-pack.json
+
+# A local run of main.py writes its trace here (its documented --out default).
+# Nothing in the app reads the file — the UI fetches traces from GET /runs/{id}/trace —
+# so it is a run artifact, not a fixture.
+app/sigap/trace.json

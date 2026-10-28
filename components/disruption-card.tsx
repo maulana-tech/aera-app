@@ -1,20 +1,12 @@
 import Link from "next/link";
 
-import { idr, type Run } from "@/app/lib";
+import { idr, wib, type RunRow } from "@/app/lib";
 import { StatusBadge } from "@/components/status-badge";
+import { gist } from "@/lib/gist";
 import { cn } from "@/lib/utils";
 
-function formatStartedAt(iso: string) {
-  try {
-    const d = new Date(iso);
-    return d.toLocaleString("en-GB", {
-      dateStyle: "short",
-      timeStyle: "short",
-    });
-  } catch {
-    return iso;
-  }
-}
+// Jakarta, like every other stamp SIGAP shows and writes.
+const formatStartedAt = (iso: string) => wib(iso);
 
 function formatTrigger(trigger?: string | null): string {
   if (!trigger) return "Direct trigger recorded";
@@ -22,80 +14,28 @@ function formatTrigger(trigger?: string | null): string {
   return trigger.replace(/,\s*\d{4}-\d{2}-\d{2}T[\d:+-]+/, "").trim();
 }
 
-function cleanExecutiveSummary(raw?: string): string {
-  if (!raw) return "";
+/* The colour of a verdict. It carries no meaning on its own — every card
+ * prints the verdict's own sentence beside it, which is where the figures are. */
+const VERDICT_CLS: Record<string, string> = {
+  needs_you_now: "border-rose-500/50 hover:border-rose-500/80",
+  needs_you:     "border-amber-500/40 hover:border-amber-500/70",
+  held:          "border-amber-500/40 hover:border-amber-500/70",
+  failed:        "border-rose-500/40 hover:border-rose-500/70",
+  owes_outcome:  "border-sky-500/30 hover:border-sky-500/60",
+  running:       "border-sky-500/40 hover:border-sky-500/70",
+};
+const VERDICT_TEXT: Record<string, string> = {
+  needs_you_now: "text-rose-700 dark:text-rose-400",
+  needs_you:     "text-amber-700 dark:text-amber-400",
+  held:          "text-amber-700 dark:text-amber-400",
+  failed:        "text-rose-700 dark:text-rose-400",
+  owes_outcome:  "text-sky-700 dark:text-sky-400",
+  running:       "text-sky-700 dark:text-sky-400",
+  handled:       "text-muted-foreground",
+};
 
-  const lines = raw
-    .replace(/\r/g, "")
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l && !l.startsWith("---") && !l.startsWith("==="));
-
-  const candidates: string[] = [];
-
-  for (const line of lines) {
-    let clean = line
-      .replace(/^#+\s*/, "") // headings
-      .replace(/^[*_]{1,3}|[*_]{1,3}$/g, "") // bold/italic edges
-      .replace(/^[*-]\s+/, "") // list markers
-      .replace(/^\d+\.\s+/, "") // numbered list
-      .trim();
-
-    // Strip status banners or metadata lines with prefixes
-    if (
-      /^(status|event|issue|disruption|summary|overview|what happened|the evidence|what i need|critical data missing|options to proceed|recommendation):/i.test(
-        clean
-      )
-    ) {
-      const parts = clean.split(/:\s*/);
-      if (parts.length > 1 && parts[1].length > 25) {
-        clean = parts.slice(1).join(": ").trim();
-      } else {
-        continue;
-      }
-    }
-
-    // Skip short labels, uppercase shouts, or metadata strings
-    if (
-      clean.length < 30 ||
-      (/^[A-Z0-9\s—–_-]+$/.test(clean) && clean.length < 50) ||
-      /^(disruption analysis|insufficient data|live, fetched|what happened|the problem|summary)/i.test(
-        clean
-      )
-    ) {
-      continue;
-    }
-
-    // Skip technical timestamp lines
-    if (/^\d{4}-\d{2}-\d{2}|fetched \d{4}/i.test(clean)) {
-      continue;
-    }
-
-    // Strip internal agent conversational meta-openers
-    clean = clean
-      .replace(/^(Elsa has made the right call\.?\s*)/i, "")
-      .replace(/^(Understood\.?\s*Elsa is correct[—–-]?\s*)/i, "")
-      .replace(/^(The data needed to route this disruption is missing\.?\s*)/i, "")
-      .replace(/^(Let me escalate what we know and what needs to be provided\.?\s*)/i, "")
-      .trim();
-
-    if (clean.length >= 30) {
-      clean = clean.replace(/\*\*/g, "").replace(/\s+/g, " ");
-      candidates.push(clean);
-    }
-  }
-
-  if (candidates.length > 0) {
-    return candidates[0];
-  }
-
-  return raw
-    .replace(/[#*_-]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-export function DisruptionCard({ r }: { r: Run }) {
+export function DisruptionCard({ r }: { r: RunRow }) {
+  const v = r.verdict;
   const isHeld = r.status === "held";
   const isRunning = r.status === "running";
   const specialistsCount = Array.isArray(r.decision?.agents_called)
@@ -112,7 +52,7 @@ export function DisruptionCard({ r }: { r: Run }) {
     bodyContent = `Error: ${r.error}`;
     bodyCls = "text-destructive font-mono text-xs";
   } else if (r.decision?.recommendation) {
-    bodyContent = cleanExecutiveSummary(r.decision.recommendation);
+    bodyContent = gist(r.decision.recommendation);
     bodyCls = "text-foreground/80";
   } else if (isRunning) {
     bodyContent = "Specialists actively scanning SAP purchase orders, inventory buffers, and logistics exposure...";
@@ -127,8 +67,10 @@ export function DisruptionCard({ r }: { r: Run }) {
       href={`/disruptions/${r.id}`}
       className={cn(
         "group flex h-full w-full flex-col justify-between rounded-lg border border-border bg-card p-5 transition-colors hover:border-foreground/40",
-        isHeld && "border-amber-500/40 hover:border-amber-500/70",
-        isRunning && "border-sky-500/40 hover:border-sky-500/70"
+        // The verdict decides the card's edge when there is one; the old
+        // status colouring stays as the fallback so nothing goes unmarked.
+        v ? VERDICT_CLS[v.state] : isHeld ? "border-amber-500/40 hover:border-amber-500/70"
+          : isRunning ? "border-sky-500/40 hover:border-sky-500/70" : ""
       )}
     >
       <div>
@@ -147,6 +89,15 @@ export function DisruptionCard({ r }: { r: Run }) {
         <h2 className="mt-2.5 h-6 truncate text-base font-semibold leading-6 tracking-tight text-foreground transition-colors group-hover:text-primary">
           {r.title}
         </h2>
+
+        {/* What this one still asks of a person, with the figures that earned
+            it. Computed in engine/triage.py, never a model's opinion. */}
+        {v && (
+          <p className={cn("mt-1.5 h-4 truncate text-xs font-medium leading-4",
+                           VERDICT_TEXT[v.state])}>
+            {v.headline}
+          </p>
+        )}
 
         {/* Level 2 Sub: External trigger (fixed h-4) */}
         <p className="mt-1 h-4 truncate font-mono text-xs leading-4 text-muted-foreground">

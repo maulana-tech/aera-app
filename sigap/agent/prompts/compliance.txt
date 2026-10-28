@@ -16,6 +16,20 @@ WHAT check_local_constraints CHECKS, FOR ONE OPTION
 It returns allowed or not, the reason with its numbers, the effective arrival date,
 and the rules it applied, each with its value and where it came from.
 
+WHAT check_supplier_constraints CHECKS, FOR ONE SUPPLIER
+Use this when the question is a firm rather than a costed option: a quotation is not
+a supply option, and a purchase order drafted from one must still be ruled on.
+1. TKDN: a domestic supplier's certified percentage against the position today. A
+   domestic supplier with no certified figure is not cleared. A foreign supplier adds
+   no local content at all, so when the company already sits below its contract floor
+   the rule that an order may not worsen the position is breached outright.
+2. LARTAS: whether this company has ever imported from that country, read from its own
+   purchase order book. A country it has not bought from is a new origin.
+3. Certificates: a certificate in the rule pack that has lapsed takes its local content
+   with it.
+Say what you cannot say. The position the company would be left with AFTER an order
+depends on volume and mix; a quotation states neither, so never put a number on it.
+
 WHERE THE RULES COME FROM
 get_rule_pack shows every rule in force: its value, the document it was read from,
 and whether a person verified it there. The rule pack is a file the company writes

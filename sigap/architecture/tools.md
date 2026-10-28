@@ -1,6 +1,6 @@
 # Tools and the data path
 
-> The tool registry, all 45 tools by the agent that owns them, the path every read takes
+> The tool registry, all 46 tools by the agent that owns them, the path every read takes
 > to SAP, an upload or the fixture, the origin label every result carries, the
 > deterministic engines that do the arithmetic, and the rule pack Kira rules from.
 > Paths are relative to `sigap/agent/`.
@@ -36,7 +36,7 @@ it, with every parameter.
 
 ---
 
-## The 45 tools, by owner
+## The 46 tools, by owner
 
 "Reads" names the path in the next section: `read(Entity)` and `bom()` go through
 `tools/fetcher.py` to SAP, an upload or the fixture; `read_extra(Entity)` is for what SAP

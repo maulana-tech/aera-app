@@ -4,12 +4,21 @@
 > every record ends up. One concern per file. Read from the code as it stands; where
 > another document disagrees with these pages, the code is right and these pages say so.
 
+Looking for the short version — the tech stack, why each piece was chosen, and the
+diagrams on one page? That is [`../ARCHITECTURE.md`](../ARCHITECTURE.md). It summarises
+these files; these files are the ones kept against the code.
+
+| Also in this folder | |
+|---|---|
+| [`sigap-aws-architecture.svg`](sigap-aws-architecture.svg) | The reference architecture as one picture, in AWS's own diagram idiom. [PNG at 2×](sigap-aws-architecture.png) for slides |
+| [`diagram.py`](diagram.py) | What draws it. Edit the `CONTENT` section and run it: the layout is computed, and it refuses to write a diagram whose boxes overlap, escape their parent, or whose labels run past their tile |
+
 | File | What it covers |
 |---|---|
 | [`app.md`](app.md) | The Next.js web app: its pages, how a page reaches the agent service, the session, file downloads |
 | [`agents.md`](agents.md) | The twelve agents, the lead and its delegation, Kira's veto, one handling from start to finish, the model each agent runs on, the autonomy limit |
-| [`tools.md`](tools.md) | The tool registry and all 45 tools by owner, the path every read takes (SAP, an upload, the fixture), origin labels, the deterministic engines, the rule pack |
-| [`workers.md`](workers.md) | What runs without a person: the HTTP service, the schedule and its seven jobs, the signal watchers, the SAP sender, the alert outbox and its channels |
+| [`tools.md`](tools.md) | The tool registry and all 46 tools by owner, the path every read takes (SAP, an upload, the fixture), origin labels, the deterministic engines, the rule pack |
+| [`workers.md`](workers.md) | What runs without a person: the HTTP service, the schedule and its eight jobs, the signal watchers, the SAP sender, the alert outbox and its channels |
 | [`data.md`](data.md) | The SQLite record table by table, the fixtures, and every output: reports, workbooks, the trace, alerts, SAP writes, the generated agent reference |
 
 Conventions used on every page:

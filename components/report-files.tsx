@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
  * under the name the service gives. `base` is the API path without the
  * extension, for instance "reports/run_x" or "portfolio". */
 export function ReportFiles({
-  base, excel = true, sheets, size = "sm", primary = false,
+  base, excel = true, sheets, size = "sm", primary = false, period,
 }: {
   base: string;
   /** Offer the workbook. Off when the report holds no table worth one. */
@@ -18,18 +18,22 @@ export function ReportFiles({
   size?: "xs" | "sm" | "default";
   /** The PDF as the page's main action. */
   primary?: boolean;
+  /** The period the page is showing, carried into the download so the file and
+   *  the page cannot cover different months. */
+  period?: Record<string, string>;
 }) {
+  const q = period && Object.keys(period).length ? `?${new URLSearchParams(period)}` : "";
   return (
     <>
       <Button asChild size={size} variant={primary ? "default" : "outline"}>
-        <a href={`/api/sigap/${base}.pdf`} download>
+        <a href={`/api/sigap/${base}.pdf${q}`} download>
           <FileText />
           PDF
         </a>
       </Button>
       {excel && (
         <Button asChild size={size} variant="outline">
-          <a href={`/api/sigap/${base}.xlsx`} download
+          <a href={`/api/sigap/${base}.xlsx${q}`} download
              title={sheets ? `A workbook with ${sheets} sheets` : "A workbook of every table in this report"}>
             <FileSpreadsheet />
             Excel{sheets ? <span className="text-muted-foreground font-mono text-[10px]">{sheets}</span> : null}

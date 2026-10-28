@@ -4,18 +4,22 @@ import { notFound } from "next/navigation";
 
 import { StepSummary, stageLabel, stepAgentName } from "@/components/agent-activity";
 import { Markdown } from "@/components/markdown";
-import { api, idr, me, type ExplorationGraph, type Run } from "@/app/lib";
+import { api, idr, me, wib, type ExplorationGraph, type Run } from "@/app/lib";
 import { ActionPayload } from "@/components/action-payload";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { ReasoningTabs } from "@/components/reasoning-tabs";
 import { Empty, Section } from "@/components/shell";
 import { OriginBadge, StatusBadge } from "@/components/status-badge";
 import Decision from "./Decision";
+import Outcome from "./Outcome";
 import { OUTWARD, Outbound } from "./Outbound";
 
 export const dynamic = "force-dynamic";
 
-const when = (t: string) => new Date(t).toLocaleString("en-GB");
+// Jakarta, like the PDF and the workbook of this same handling: the stamps are
+// UTC, and a page in the reader's own zone put a different time on the event
+// than its own download did.
+const when = (t: string) => wib(t);
 
 export default async function DisruptionDetail({ params }: { params: Promise<{ id: string }> }) {
   const id = (await params).id;
@@ -29,7 +33,18 @@ export default async function DisruptionDetail({ params }: { params: Promise<{ i
   const actions = run.actions ?? [];
   const approvals = run.approvals ?? [];
   const waiting = actions.filter((a) => a.status === "pending");
-  const settled = actions.filter((a) => a.status !== "pending");
+  // `decided`, not `settled`: in engine/report.py "settled" means the outcome
+  // has been recorded, which is a different and later thing than being decided.
+  const decided = actions.filter((a) => a.status !== "pending");
+  // Went out, and nobody has written down what came of it yet. The kinds mirror
+  // store.AWAITS_OUTCOME; `notify` is absent there because an internal message
+  // has no realized cost and chasing one teaches people to ignore the chase.
+  const AWAITS_OUTCOME = ["stock_transfer", "draft_po", "monitor",
+                          "customer_notice", "supplier_request"];
+  const owed = actions.filter(
+    (a) => !a.outcome && (a.status === "sent" || a.status === "approved")
+            && AWAITS_OUTCOME.includes(a.kind),
+  );
 
   return (
     <main className="w-full px-4 py-4 md:px-6 md:py-8">
@@ -102,11 +117,19 @@ export default async function DisruptionDetail({ params }: { params: Promise<{ i
       {/* The decision a person owes comes next, at full width. It used to sit in
           a 360px rail while an empty reasoning panel took the main column. */}
       <Section
-        title={waiting.length ? `Waiting on you (${waiting.length})` : "Actions"}
+        title={
+          waiting.length
+            ? `Waiting on you (${waiting.length})`
+            : owed.length
+              ? `Actions · ${owed.length} awaiting an outcome`
+              : "Actions"
+        }
         note={
           waiting.length && user
             ? `Your role approves up to ${idr(user.limit_idr)}. Anything above that escalates.`
-            : undefined
+            : owed.length
+              ? "What was sent is only half the record. Close the loop below and the next incident learns from this one."
+              : undefined
         }
       >
         {actions.length === 0 ? (
@@ -116,7 +139,7 @@ export default async function DisruptionDetail({ params }: { params: Promise<{ i
           />
         ) : (
           <ul className="max-w-4xl space-y-3">
-            {[...waiting, ...settled].map((a) => {
+            {[...waiting, ...decided].map((a) => {
               const history = approvals.filter((p) => p.action_id === a.id);
               const value = Number(a.payload.cost_idr ?? 0);
               return (
@@ -149,6 +172,18 @@ export default async function DisruptionDetail({ params }: { params: Promise<{ i
                       {p.note ? `. ${p.note}` : ""}
                     </p>
                   ))}
+
+                  {/* What came of it. The form only where the store would accept
+                      one; once recorded it reads back, never edits. */}
+                  {(a.outcome || owed.some((o) => o.id === a.id)) && (
+                    <Outcome
+                      actionId={a.id}
+                      predictedIdr={value}
+                      outcome={a.outcome}
+                      outcomeAt={a.outcome_at}
+                      detail={a.outcome_detail}
+                    />
+                  )}
 
                   {a.status === "pending" &&
                     (user ? (

@@ -3,7 +3,7 @@
 Ported from the SmartX exploration graph's planner (graph-planner.ts) and its
 graph-aware finding gates (exploration-graph-gates.ts), adapted to SIGAP.
 
-SmartX's planner reads the exploration graph — what is already proven and what
+ planner reads the exploration graph — what is already proven and what
 is already being worked — and emits the NEXT steps that CHAIN forward from it,
 never a flat re-scan of what is already known. It used an LLM, because its
 domain (what to probe next on a web app) is open-ended.
@@ -19,7 +19,7 @@ board — but by domain rule, not by a model. That is the house law: no model
 sits on the decision path (engine/simulate.py is the same principle for the
 arithmetic). The planner reads the graph; it never guesses.
 
-Two graph-aware gates come with it, both faithful to SmartX's:
+Two graph-aware gates come with it, both faithful to :
 
   * `blocked_option_reject` — NEGATIVE KNOWLEDGE. Once Kira records a ruling
     that blocks an option, that ruling sits on the graph. No later step may

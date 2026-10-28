@@ -57,6 +57,10 @@ CREATE TABLE IF NOT EXISTS steps (
   at            TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_steps_run ON steps(run_id, seq);
+-- The operations report reads what the rules cost out of every costing step
+-- across many runs (engine/report.py compliance_costs), which is a scan by
+-- stage rather than by run.
+CREATE INDEX IF NOT EXISTS idx_steps_stage ON steps(stage, run_id, seq);
 
 -- The official record. Never UPDATEd except to stamp the SAP reference.
 CREATE TABLE IF NOT EXISTS actions (
@@ -460,6 +464,48 @@ def open_reservations(material: Optional[str] = None) -> List[dict]:
 
 OUTCOMES = ("delivered", "late", "short", "failed", "cancelled")
 
+#: The one key engine/report.py reads as the realized cost. Declared here so the
+#: agent tool and the HTTP route cannot each invent their own spelling.
+REALIZED_COST_KEY = "actual_idr"
+
+#: Action kinds that have a real-world result worth asking about. `notify` is
+#: deliberately absent: an internal message has no realized cost, and chasing
+#: one would teach people to ignore the chase.
+AWAITS_OUTCOME = ("stock_transfer", "draft_po", "monitor",
+                  "customer_notice", "supplier_request")
+
+
+def outcome_detail(note: str = "", actual_cost_idr: Optional[float] = None,
+                   recorded_by: str = "") -> Optional[Dict[str, Any]]:
+    """Build the `detail` document for `record_outcome`. Deterministic.
+
+    The realized cost travels as a number or not at all. A string raises here
+    rather than being coerced, and `note` is never scanned for a figure: in
+    Indonesian "Rp 24,5 jt" and "24.500.000" put the same digits a thousand
+    apart, so any parser would have to guess a scale, and a guessed rupiah
+    figure that reaches a portfolio tile is indistinguishable from a read one.
+    That is the single thing this system refuses to do.
+
+    `recorded_by` says who read reality, which is what makes the figure
+    admissible as a reading rather than as somebody's arithmetic.
+    """
+    doc: Dict[str, Any] = {}
+    if note:
+        doc["note"] = note
+    if actual_cost_idr is not None:
+        # bool is an int in Python; True is not a cost.
+        if isinstance(actual_cost_idr, bool) or not isinstance(actual_cost_idr, (int, float)):
+            raise ValueError(
+                f"a realized cost must be a number, not {actual_cost_idr!r}. "
+                "Pass the figure itself, or leave it out and the report will say "
+                "the realized cost is not known.")
+        if actual_cost_idr < 0:
+            raise ValueError(f"a realized cost cannot be negative: {actual_cost_idr!r}")
+        doc[REALIZED_COST_KEY] = float(actual_cost_idr)
+    if recorded_by:
+        doc["recorded_by"] = recorded_by
+    return doc or None
+
 
 def record_outcome(action_id: str, outcome: str, detail: Optional[dict] = None) -> Dict[str, Any]:
     """What actually happened after the action was sent.
@@ -492,6 +538,50 @@ def record_outcome(action_id: str, outcome: str, detail: Optional[dict] = None) 
                   (_now(), f"outcome {outcome}", action_id))
         return dict(c.execute("SELECT * FROM actions WHERE id=?",
                               (action_id,)).fetchone()) | {"repeated": False}
+
+
+def actions_awaiting_outcome(older_than_days: int = 0) -> List[Dict[str, Any]]:
+    """Actions that went out and whose real result nobody has written down yet.
+
+    The loop that makes this system learn is closed by hand: nothing here polls
+    SAP or a carrier to discover a receipt, and inventing one would be worse
+    than an empty column. So the open half of the record is made visible
+    instead, and the daily digest asks for it. Oldest first, because the one
+    sent three weeks ago is the one whose outcome is about to be forgotten.
+
+    The `status IN ('sent','approved') AND outcome IS NULL` test is a literal
+    mirror of the guard inside `record_outcome`. If the two drift, this offers
+    a thing the store would then refuse. The kind filter is narrower on purpose
+    (see AWAITS_OUTCOME), so the two rules sit next to each other here.
+    """
+    cutoff = ""
+    if older_than_days > 0:
+        cutoff = (datetime.now(timezone.utc)
+                  - timedelta(days=older_than_days)).isoformat(timespec="seconds")
+    marks = ",".join("?" * len(AWAITS_OUTCOME))
+    with connect() as c:
+        rows = c.execute(
+            "SELECT a.id, a.run_id, a.kind, a.payload, a.status, a.sap_reference,"
+            "       a.created_at, e.title, e.kind AS event_kind"
+            " FROM actions a JOIN runs r ON r.id = a.run_id"
+            " JOIN events e ON e.id = r.event_id"
+            " WHERE a.status IN ('sent','approved') AND a.outcome IS NULL"
+            f" AND a.kind IN ({marks})"
+            + (" AND a.created_at <= ?" if cutoff else "")
+            + " ORDER BY a.created_at",
+            AWAITS_OUTCOME + ((cutoff,) if cutoff else ())).fetchall()
+
+    now = datetime.now(timezone.utc)
+    out = []
+    for r in rows:
+        waiting = None
+        try:
+            waiting = (now - datetime.fromisoformat(r["created_at"])).days
+        except (TypeError, ValueError):       # a stamp we cannot read is not a crash
+            pass
+        out.append(dict(r) | {"payload": json.loads(r["payload"]),
+                              "days_waiting": waiting})
+    return out
 
 
 def decide_action(action_id: str, decided_by: str, role: str, decision: str,
@@ -540,6 +630,11 @@ def past_incidents(terms: List[str], limit: int = 5) -> tuple[List[dict], int]:
     comparable" are different answers and only the first is a gap in the data.
     The caller needs to tell them apart to label its result honestly.
 
+    What is searched includes how the handling ENDED, not only how it was
+    titled: the lead's recommendation and each action's outcome. An incident is
+    most worth finding for what came of it ("late", "short"), and that is
+    exactly the part a title never says.
+
     # ponytail: ranks in Python over every finished run. Fine for a dozen
     #           events a day; move to FTS5 when the table outgrows a scan.
     """
@@ -550,33 +645,46 @@ def past_incidents(terms: List[str], limit: int = 5) -> tuple[List[dict], int]:
             " FROM runs r JOIN events e ON e.id = r.event_id"
             " WHERE r.finished_at IS NOT NULL"
             " ORDER BY r.finished_at DESC").fetchall()
+        # One query for every action, grouped here: the haystack now needs the
+        # outcomes before anything is scored, and asking per run would be a
+        # query per finished run.
+        by_run: Dict[str, List[dict]] = {}
+        for a in c.execute(
+                "SELECT run_id, kind, payload, status, outcome, outcome_at, outcome_detail"
+                " FROM actions ORDER BY created_at").fetchall():
+            by_run.setdefault(a["run_id"], []).append({
+                "kind": a["kind"],
+                "payload": json.loads(a["payload"]),
+                "status": a["status"],
+                "outcome": a["outcome"],
+                "outcome_at": a["outcome_at"],
+                "outcome_detail": json.loads(a["outcome_detail"]) if a["outcome_detail"] else None,
+            })
 
     total = len(rows)
     scored = []
-    with connect() as c:
-        for r in rows:
-            hay = f"{r['title']} {r['kind']} {r['trigger']}".lower()
-            hits = sum(1 for t in terms if t in hay)
-            if not hits:
-                continue
-            # What was done, and what came of it. A precedent without its
-            # outcome only says what somebody decided, which is the part the
-            # system already knows it decided.
-            acts = c.execute(
-                "SELECT kind, payload, status, outcome, outcome_at, outcome_detail"
-                " FROM actions WHERE run_id=? ORDER BY created_at", (r["run_id"],)).fetchall()
-            scored.append((hits, dict(r) | {
-                "decision": json.loads(r["decision"]) if r["decision"] else None,
-                "matched": hits,
-                "actions": [{
-                    "kind": a["kind"],
-                    "payload": json.loads(a["payload"]),
-                    "status": a["status"],
-                    "outcome": a["outcome"],
-                    "outcome_at": a["outcome_at"],
-                    "outcome_detail": json.loads(a["outcome_detail"]) if a["outcome_detail"] else None,
-                } for a in acts],
-            }))
+    for r in rows:
+        # What was done, and what came of it. A precedent without its outcome
+        # only says what somebody decided, which is the part the system already
+        # knows it decided.
+        acts = by_run.get(r["run_id"], [])
+        decision = json.loads(r["decision"]) if r["decision"] else None
+        # Only the prose is searched, never the JSON around it: matching on the
+        # raw document would make every incident a hit for "recommendation".
+        said = " ".join(str(decision.get(k) or "") for k in ("recommendation", "reason")
+                        ) if isinstance(decision, dict) else ""
+        happened = " ".join(
+            f"{a['kind']} {a['outcome'] or ''} "
+            f"{(a['outcome_detail'] or {}).get('note') or ''}" for a in acts)
+        hay = f"{r['title']} {r['kind']} {r['trigger']} {said} {happened}".lower()
+        hits = sum(1 for t in terms if t in hay)
+        if not hits:
+            continue
+        scored.append((hits, dict(r) | {
+            "decision": decision,
+            "matched": hits,
+            "actions": acts,
+        }))
 
     # Most terms matched first; the query already ordered by recency, and
     # Python's sort is stable, so equal scores keep the newest incident on top.
@@ -604,7 +712,12 @@ def get_run(run_id: str) -> Optional[dict]:
         "decision": json.loads(r["decision"]) if r["decision"] else None,
         "steps": [dict(s) | {"tools": json.loads(s["tools"]),
                              "detail": json.loads(s["detail"])} for s in steps],
-        "actions": [dict(a) | {"payload": json.loads(a["payload"])} for a in actions],
+        "actions": [dict(a) | {
+            "payload": json.loads(a["payload"]),
+            # Parsed here like `payload`, so a reader never has to know that one
+            # JSON column arrives decoded and the next one as a string.
+            "outcome_detail": json.loads(a["outcome_detail"]) if a["outcome_detail"] else None,
+        } for a in actions],
         "approvals": [dict(p) for p in approvals],
     }
 
@@ -641,6 +754,35 @@ def latest_upload(entity: str) -> Optional[dict]:
         r = c.execute("SELECT * FROM uploads WHERE entity=? ORDER BY uploaded_at DESC LIMIT 1",
                       (entity,)).fetchone()
     return dict(r) | {"payload": json.loads(r["payload"])} if r else None
+
+
+#: How many rows of an upload a reader is handed at once. A file of 1,395
+#: quotations is normal, and sending all of it to a browser to fill a drawer
+#: nobody scrolls is a cost paid on every open.
+PREVIEW_ROWS = 200
+
+
+def get_upload(uid: str, limit: int = PREVIEW_ROWS) -> Optional[dict]:
+    """One upload with the first `limit` of its rows, for looking at.
+
+    The row count stays the file's own, not the number returned, so a reader
+    can tell a short file from a long one that was cut — a preview that quietly
+    renamed 1,395 rows to 200 would be the kind of small lie this system is
+    built to avoid.
+    """
+    with connect() as c:
+        r = c.execute("SELECT * FROM uploads WHERE id=?", (uid,)).fetchone()
+    if not r:
+        return None
+    rows = json.loads(r["payload"])
+    shown = rows[:limit] if limit else rows
+    return {k: r[k] for k in ("id", "entity", "filename", "rows", "uploaded_by",
+                              "uploaded_at", "synthetic")} | {
+        "columns": list(shown[0]) if shown else [],
+        "preview": shown,
+        "shown": len(shown),
+        "truncated": len(shown) < len(rows),
+    }
 
 
 def list_uploads() -> List[dict]:
@@ -967,6 +1109,54 @@ def demo() -> None:
     assert not open_reservations("M-4471")
     print("  reservations: donor stock cannot be promised twice ✓ · freed on failure ✓")
 
+    # ---- the realized figure, and what is still owed one -------------------
+    # A cost is a number or it is nothing. These are the assertions that keep
+    # prose from ever becoming money.
+    assert outcome_detail() is None
+    assert outcome_detail("arrived late") == {"note": "arrived late"}, "prose only"
+    assert REALIZED_COST_KEY not in outcome_detail("it cost about Rp 24,5 jt")
+    assert outcome_detail("", 24_500_000, "rina@x") == {
+        REALIZED_COST_KEY: 24_500_000.0, "recorded_by": "rina@x"}
+    for bad in ("24,500,000", "24500000", True, -1):
+        try:
+            outcome_detail("", bad)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"a realized cost of {bad!r} was accepted")
+
+    r3 = start_run(e1, "guided")
+    moved = record_action(r3, "k-move", "stock_transfer", True,
+                          {"material": "M-4471", "cost_idr": 22_000_000})
+    told = record_action(r3, "k-told", "notify", True, {"role": "buyer"})
+    reserve(r3, "M-4471", "SBY1", 10, action_id=moved["id"])
+
+    owed = {a["id"]: a for a in actions_awaiting_outcome()}
+    assert moved["id"] in owed, "a sent transfer is owed an outcome"
+    assert told["id"] not in owed, "an internal message is not chased for an outcome"
+    assert owed[moved["id"]]["title"] == "Ningbo closes"
+    assert owed[moved["id"]]["days_waiting"] == 0
+
+    # An outcome recorded by hand releases the hold in the same transaction.
+    record_outcome(moved["id"], "late", outcome_detail("3 days late", 24_500_000, "rina@x"))
+    assert moved["id"] not in {a["id"] for a in actions_awaiting_outcome()}
+    assert reserved_qty("M-4471", "SBY1") == 0, "the outcome left stock held"
+    again = record_outcome(moved["id"], "delivered")
+    assert again["repeated"] and again["outcome"] == "late", "an outcome was overwritten"
+
+    # Nothing was sent, so nothing can have happened to it — and the store's
+    # refusal must agree with what actions_awaiting_outcome() offers.
+    waiting = record_action(r3, "k-po", "draft_po", False, {"cost_idr": 94_000_000})
+    assert waiting["id"] not in {a["id"] for a in actions_awaiting_outcome()}
+    try:
+        record_outcome(waiting["id"], "delivered")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("an outcome was recorded against a pending action")
+    print("  outcomes: a figure is a number or nothing, never read out of prose ✓ "
+          "· written once ✓ · the hold is released ✓ · what is still owed one ✓")
+
     save_model_choices({"lead": "aicore:gpt-5.4", "specialists": "deepseek.v3.2"}, "a@x")
     save_model_choices({"specialists": "zai.glm-5", "lead": None}, "b@x")
     assert model_choices() == {"specialists": "zai.glm-5"}, model_choices()
@@ -997,6 +1187,21 @@ def demo() -> None:
     j = job_states()["probe"]
     assert (j["runs"], j["failures"], j["last_status"], j["enabled"]) == (1, 1, "failed", 0)
     print("  jobs: a run, a failure and a switch-off are remembered ✓")
+
+    # An upload read back for looking at. The count a reader is shown must stay
+    # the file's own even when the rows handed over are cut, because a preview
+    # that renamed 7 rows to 3 would be a quiet lie about what was stored.
+    big = [{"Supplier": f"SUP-{i}", "TkdnCertifiedPct": float(i)} for i in range(7)]
+    up = save_upload("Supplier", "suppliers.csv", big, "rina@x")
+    whole = get_upload(up["id"])
+    assert whole and whole["rows"] == 7 and whole["shown"] == 7 and not whole["truncated"]
+    assert whole["columns"] == ["Supplier", "TkdnCertifiedPct"], whole["columns"]
+    cut = get_upload(up["id"], limit=3)
+    assert cut["shown"] == 3 and cut["truncated"] and cut["rows"] == 7, cut
+    assert cut["preview"][0]["Supplier"] == "SUP-0"
+    assert get_upload("upl_nope") is None, "an unknown id is not found, not an empty file"
+    assert delete_upload(up["id"]) and get_upload(up["id"]) is None
+    print("  uploads: read back whole, cut rows say so, the row count stays the file's ✓")
 
     print("store ok")
 

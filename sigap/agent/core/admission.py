@@ -1,13 +1,13 @@
 """Fair admission: a bound on how many specialists run at once.
 
-Ported from SmartX's fair-admission.ts, kept to the half SIGAP's scale needs.
+Ported from  fair-admission.ts, kept to the half SIGAP's scale needs.
 
 SmartX gates concurrent workers with a global cap, a per-operator cap, and
 weight units (a heavy worker costs several, a light one costs one), so that on
 one box ten operators cannot each spawn enough heavy workers to melt it, and no
 one operator can starve the rest. SIGAP will need exactly this the day it goes
 multi-tenant (its own roadmap note: "move to Postgres once this is
-multi-tenant"). The elaborate parts of SmartX's version — dynamic fair-share
+multi-tenant"). The elaborate parts of  version — dynamic fair-share
 and waiter-priority aging — solve a many-operators-contending-for-one-box
 problem SIGAP does not have yet, so they are deliberately left out. If that day
 comes, they port the same way.
@@ -21,7 +21,7 @@ event loop:
 Flag-gated (SIGAP_FAIR_ADMISSION, default on) with generous defaults, so for a
 single operator it does not gate a normal handling — it only bites under
 genuine concurrency. Non-blocking: tryAcquire only gates; a caller refused does
-not wait, it retries on a later dispatch pass, exactly as SmartX's does.
+not wait, it retries on a later dispatch pass, exactly as  does.
 """
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ from typing import Dict, Optional
 def _clamp_int(v: Optional[str], default: int, lo: int, hi: int) -> int:
     """Parse an env knob, clamp to [lo, hi]. A blank/unset/non-numeric value
     falls back to `default`, never the floor — a blank .env line must not
-    silently collapse the cap to 1 (SmartX's clampInt, same reasoning)."""
+    silently collapse the cap to 1 ( clampInt, same reasoning)."""
     if v is None or (isinstance(v, str) and v.strip() == ""):
         return max(lo, min(hi, default))
     try:
@@ -96,7 +96,7 @@ class FairAdmission:
 
     def release(self, operator_id: str, weight: int = 1) -> None:
         """Give back the EXACT weight acquired. Over-release is a no-op and can
-        never drive a bucket or the total negative (SmartX's rule: release what
+        never drive a bucket or the total negative ( rule: release what
         was acquired, never recompute — the slot-leak class they fixed)."""
         w = _clamp_weight(weight)
         k = operator_id or ANON
@@ -127,7 +127,7 @@ class FairAdmission:
                     "enabled": self._on}
 
 
-#: One process-global instance shared by every handling, like SmartX's
+#: One process-global instance shared by every handling, like
 #: globalSwarmAdmission. The dispatcher acquires from it before running a
 #: specialist and releases when that specialist reaches a terminal state.
 GLOBAL = FairAdmission()

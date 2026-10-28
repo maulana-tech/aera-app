@@ -10,9 +10,13 @@ async function forward(req: Request, path: string[], method: "GET" | "POST") {
   const accept = req.headers.get("accept");
   if (accept) headers.accept = accept;
   if (token) headers.Authorization = `Bearer ${token}`;
+  // The query string is part of the request, not decoration: the operations
+  // report takes its period there, and a download that lost it would quietly
+  // cover a different period than the page it was downloaded from.
+  const { search } = new URL(req.url);
 
   try {
-    const r = await fetch(`${UPSTREAM}/${path.join("/")}`, {
+    const r = await fetch(`${UPSTREAM}/${path.join("/")}${search}`, {
       method,
       headers,
       body: method === "POST" ? await req.text() : undefined,

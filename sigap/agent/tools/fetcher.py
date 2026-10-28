@@ -22,7 +22,7 @@ from datetime import date
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 from clients import sap_s4
-from core.provenance import Origin, Result
+from core.provenance import STRENGTH, Origin, Result
 
 _FIXTURE = pathlib.Path(__file__).resolve().parent.parent / "fixtures" / "ningbo_scenario.json"
 _cache: Optional[dict] = None
@@ -95,7 +95,10 @@ SUPPLEMENT: Dict[str, Tuple[Tuple[str, ...], Tuple[str, ...]]] = {
                         ("Quantity", "ExtraCostIDR", "TkdnAfterPct", "NewOrigin")),
 }
 
-_ORDER = [Origin.MISSING, Origin.MODELLED, Origin.CACHED, Origin.DERIVED, Origin.LIVE]
+#: Weakest first, borrowed rather than restated: this list is the one thing
+#: standing between a live figure and an upload quietly lending it its own
+#: authority, and two copies of it are one copy that can go stale.
+_ORDER = list(STRENGTH)
 
 
 def _supplement(entity: str, r: Result) -> Result:
@@ -403,3 +406,136 @@ def current_dataset() -> tuple[dict, dict]:
     data["BillOfMaterial"] = r.value or []
     origins["BillOfMaterial"] = {"origin": r.origin.value, "source": r.source, "note": r.note}
     return data, origins
+
+
+def demo() -> None:
+    """What this module promises is not the rows: it is the label on them.
+
+    So the check is about the label. Every case below is one way a figure could
+    come out looking better sourced than it is.
+    """
+    import contextlib
+
+    @contextlib.contextmanager
+    def sap(available: bool, upload: Optional[dict] = None):
+        """Run a block as if SAP were (not) connected, with one upload on file."""
+        was_available, was_upload = sap_s4.available, globals()["_upload"]
+        sap_s4.available = lambda: available                     # type: ignore[assignment]
+        globals()["_upload"] = lambda entity: upload
+        _KNOWN["until"] = 0.0
+        try:
+            yield
+        finally:
+            sap_s4.available = was_available                     # type: ignore[assignment]
+            globals()["_upload"] = was_upload
+            _KNOWN["until"] = 0.0
+
+    # The ordering is the whole mechanism, and it is borrowed, not restated.
+    assert _ORDER == [Origin.MISSING, Origin.MODELLED, Origin.CACHED,
+                      Origin.DERIVED, Origin.LIVE]
+    assert min(Origin.LIVE, Origin.CACHED, key=_ORDER.index) is Origin.CACHED
+    assert min(Origin.CACHED, Origin.MODELLED, key=_ORDER.index) is Origin.MODELLED
+
+    # No SAP: the fixture says so, in the note, and is not trusted for money.
+    with sap(False):
+        r = read("MaterialStock")
+        assert r.value and r.origin is Origin.MODELLED and not r.trusted
+        assert "SAP_API_KEY is not set" in r.note, r.note
+        assert r.source == "fixture:MaterialStock"
+        one = read("MaterialStock", material=r.value[0]["Material"])
+        assert one.value and all(x["Material"] == r.value[0]["Material"] for x in one.value)
+        assert read("MaterialStock", material="M-NOPE").value == []
+
+    # An upload is real company data, so CACHED outranks a fixture...
+    real = {"filename": "stock-oct.xlsx", "uploaded_at": "2026-10-20T04:00:00+00:00",
+            "payload": [{"Material": "M-4471", "Plant": "P-01", "DailyConsumption": 12.0}]}
+    with sap(False, real):
+        r = read("MaterialStock")
+        assert r.origin is Origin.CACHED and r.trusted, r.brief()
+        assert r.source == "upload:stock-oct.xlsx" and "2026-10-20" in r.note
+
+    # ...but a file its own uploader declared as generated stays MODELLED.
+    # Calling that cached would launder invented numbers into trusted ones.
+    with sap(False, {**real, "synthetic": True}):
+        r = read("MaterialStock")
+        assert r.origin is Origin.MODELLED and not r.trusted, r.brief()
+        assert "declared as generated sample data" in r.note, r.note
+
+    # Supplementing LIVE rows from an upload lowers the label to the upload's,
+    # and says which field filled how many rows. A live row wearing a figure
+    # that came from a spreadsheet is the exact lie this prevents.
+    live = Result([{"Material": "M-4471", "Plant": "P-01", "DailyConsumption": None},
+                   {"Material": "M-9999", "Plant": "P-01", "DailyConsumption": None}],
+                  Origin.LIVE, "API_MATERIAL_STOCK_SRV")
+    with sap(True, real):
+        out = _supplement("MaterialStock", live)
+    assert out.origin is Origin.CACHED, out.brief()
+    assert out.value[0]["DailyConsumption"] == 12.0
+    assert out.value[1]["DailyConsumption"] is None, "only the row that matched"
+    assert "DailyConsumption for 1 of 2 rows" in out.note, out.note
+    assert "upload:stock-oct.xlsx" in out.source and "API_MATERIAL_STOCK_SRV" in out.source
+
+    # Nothing filled, nothing lowered: an upload that matched no row leaves a
+    # live read live.
+    untouched = Result([{"Material": "M-0000", "Plant": "P-9", "DailyConsumption": None}],
+                       Origin.LIVE, "API_MATERIAL_STOCK_SRV")
+    with sap(True, real):
+        assert _supplement("MaterialStock", untouched).origin is Origin.LIVE
+
+    # An entity SAP does not hold: with SAP connected the fixture is NOT
+    # offered in its place, because it describes an invented company.
+    with sap(True, None):
+        r = read_extra("CustomsDeclaration")
+        assert r.origin is Origin.MISSING and r.value is None, r.brief()
+        assert "does not hold it" in r.note, r.note
+    with sap(False, None):
+        assert read_extra("CustomsDeclaration").origin is Origin.MODELLED
+        assert read_extra("NotAnEntity").origin is Origin.MISSING, "an unknown entity is a gap"
+
+    # Ids. An argument that matched nothing used to come back as an empty list,
+    # which reads exactly like "no alternate source exists" - a wrong answer
+    # stated with confidence. Now it is refused out loud.
+    with sap(False):
+        mats, plants = known_materials(), known_plants()
+        assert mats and plants, "the fixture must name some"
+        pick = sorted(mats.values())[0]
+        assert material_id(pick) == pick and material_id(pick.lower()) == pick
+        assert material_id(f"KRW1 {pick} Steel bar SCM440") == pick, "an id inside prose"
+        for bad in ("M-NOPE", "1000", "PlantA"):
+            try:
+                material_id(bad)
+                raise AssertionError(f"material '{bad}' must be refused, not answered emptily")
+            except ValueError as e:
+                assert "no material" in str(e) and "for example" in str(e), e
+        plant = sorted(plants.values())[0]
+        assert plant_id(plant) == plant and plant_id("") == "", "blank means every plant"
+        try:
+            plant_id("HUART")
+            raise AssertionError("an unknown plant must be refused")
+        except ValueError as e:
+            assert plant.lower() in str(e).lower(), "and the error names the real ones"
+
+    # The audit's view: every entity, each with where it came from. An audit
+    # that does not say which inputs were modelled is an audit of nothing.
+    with sap(False):
+        data, origins = current_dataset()
+    assert set(origins) == set(ENTITIES) | {"BillOfMaterial"}, sorted(origins)
+    assert all(o["origin"] and o["source"] for o in origins.values())
+    assert all(set(o) == {"origin", "source", "note"} for o in origins.values())
+    assert origins["MaterialStock"]["origin"] == "modelled"
+    assert data["BillOfMaterial"], "the product structure is read by Impact and Audit"
+
+    print("  ordering borrowed from provenance, not restated ✓ · fixture says so ✓")
+    print("  upload outranks a fixture ✓ · a declared sample is never laundered to cached ✓")
+    print("  a live row filled from a spreadsheet drops to the spreadsheet's label ✓")
+    print("  no fixture stands in for a live company ✓ · unknown ids refused out loud ✓")
+    print("fetcher ok")
+
+
+if __name__ == "__main__":
+    # The upload path is stubbed, but _known() and current_dataset() read the
+    # fixtures through the same calls the tools use, so keep it off a real DB.
+    from core.config import fixtures_only
+
+    fixtures_only(__file__, "SIGAP_FETCHER_CHECK")
+    demo()
