@@ -77,6 +77,6 @@ If a figure in a document cannot be reproduced by that command, **the document i
 
 **What is blocking, right now**, `PYTHONPATH=. python3 manage.py check` prints this
 live, but in short: `SAP_API_KEY`, `AWS_REGION`, and the rule pack (the TKDN & LARTAS
-rules, `references/README.md`). All 12 prompts are written and all 45 tools are
+rules, `references/README.md`). All 12 prompts are written and all 46 tools are
 installed. The SAP key is self-service and takes 15 minutes; the rule pack needs
 nobody's permission and is domain work, not code. `SETUP.md` is the runbook for the two keys.

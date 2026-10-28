@@ -9,7 +9,8 @@ what passed, the one defect found, and nine screenshots.
 | | |
 |---|---|
 | [`agent-output/`](agent-output/) | What the system itself produced: three PDFs, three workbooks, and the rollup's figures as JSON. Not written for this test — these are the files a user downloads from the Reports page |
-| [`screenshots/`](screenshots/) | The six UI pages, captured headless against the same database |
+| [`screenshots/`](screenshots/) | Fourteen UI pages, captured headless against the same database |
+| [`agent-output/data-audit-findings.json`](agent-output/data-audit-findings.json) | The data audit's own output on that database, as the page shows it: what it found, how bad, and the rows behind each finding |
 
 ## What ran
 

@@ -148,6 +148,7 @@ Seven jobs, Jakarta time. `core/schedule.py` runs them; a job is `every N second
 | `hazards` | 30 min | Cyclones, floods, quakes near a port or plant (GDACS, NASA EONET, USGS) |
 | `weather` | 3 h | Gales, high seas, heavy rain forecast (Open-Meteo) |
 | `exposure` | weekly | Vega's scan for risk that has not happened yet |
+| `certificates` | daily | TKDN certificates running out, which no feed can see — the lapse is in the company's own rule pack, and the local content behind it goes when it does |
 | `notify` | 30 s | Deliver queued alerts and approved outward messages |
 | `sap_send` | 10 min | Send approved actions to SAP |
 | `digest` | 07:30 WIB | The morning digest, including what still owes an outcome |
@@ -158,7 +159,7 @@ Seven jobs, Jakarta time. `core/schedule.py` runs them; a job is `every N second
 
 Twelve agents: one supervisor, one with a veto, ten specialists. Each is a prompt
 (`prompts/*.txt`), a set of tools (`core/registry.py`), and a model it may run on.
-45 tools in all.
+46 tools in all.
 
 ```mermaid
 graph TD
@@ -394,14 +395,14 @@ socrates/
     ├── agent/                THE PRODUCT — Python, stdlib only
     │   ├── api.py            HTTP surface, ~40 routes, one dispatcher
     │   ├── graph.py          the agent loop (Anthropic-shaped, any model)
-    │   ├── jobs.py           the seven scheduled jobs
+    │   ├── jobs.py           the eight scheduled jobs
     │   ├── notify.py         alerts, digest, reports by email
     │   ├── mcp.py            the tool registry, spoken as MCP
     │   ├── core/             store · identity · provenance · registry · llm · aux
     │   │                     exploration · admission · schema · config · trace
     │   ├── agents/           the twelve definitions
     │   ├── prompts/          one prompt per agent
-    │   ├── tools/            45 tools, grouped by agent
+    │   ├── tools/            46 tools, grouped by agent
     │   ├── engine/           simulate · allocate · forecast · planner · report · export
     │   ├── clients/          sap_s4 · aicore · composio · channels · feeds · web_data
     │   ├── signals/          bmkg · hazards · weather · places · watch
@@ -411,7 +412,7 @@ socrates/
 ```
 
 Every module carries a `demo()` self-check. `python3 manage.py check` runs all of them:
-**47 modules, 12 agents, 45/45 tools, 12/12 prompts.**
+**56 modules, 12 agents, 46/46 tools, 12/12 prompts.**
 
 ---
 
@@ -469,9 +470,9 @@ move `core/store.py` onto it.
 
 ## 12. Honest state
 
-What is real: the agent loop, all 45 tools, the rules engine, the costing engine, the
+What is real: the agent loop, all 46 tools, the rules engine, the costing engine, the
 record, approvals and limits, the reports and their files, the signal watchers, MCP, the
-A2A bridge, and the outcome loop. All of it self-checked, 47 modules.
+A2A bridge, and the outcome loop. All of it self-checked, 56 modules.
 
 What is demo-grade, and says so on screen:
 

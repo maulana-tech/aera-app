@@ -1,6 +1,6 @@
 # Workers: what runs without a person
 
-> The HTTP service, the schedule and its seven jobs, the signal watchers that raise
+> The HTTP service, the schedule and its eight jobs, the signal watchers that raise
 > events, the sender that pushes approved actions into SAP, and the outbox that tells
 > people. All of it lives in one Python process. Paths are relative to `sigap/agent/`.
 
@@ -8,7 +8,7 @@
 |---|---|
 | `api.py` | The HTTP service, the handling threads, and the process that starts the schedule |
 | `core/schedule.py` | The one loop that runs jobs: cadence, no overlap, state in the `jobs` table |
-| `jobs.py` | The seven jobs, with their cadences and why |
+| `jobs.py` | The eight jobs, with their cadences and why |
 | `signals/bmkg.py`, `signals/hazards.py`, `signals/weather.py`, `signals/watch.py`, `signals/places.py` | The watchers, and the places they measure against |
 | `clients/feeds.py` | One GET for every public feed: a named User-Agent, a timeout, a cache that keeps the real fetch time, a memory of failures |
 | `sender.py` | Approved actions into SAP |
@@ -61,11 +61,11 @@ a time of day in WIB (UTC+7, no daylight saving).
 | A daily job missed by more than two hours (`GRACE`) is skipped, not caught up | a 07:30 digest that arrives in the afternoon is noise |
 | A job that raises loses that round, not the schedule; the error is kept on the job | the Schedule page shows it |
 | `SIGAP_SCHEDULE=0` | nothing runs on its own; a run by hand still works |
-| `SIGAP_WATCH=0` | the four jobs that watch the outside world stay off; the outbox and the sender still run |
+| `SIGAP_WATCH=0` | the five jobs that watch stay off; the outbox and the sender still run |
 | `POST /schedule/{name}/enabled` | switches one job, stored in `jobs.enabled` |
 | `POST /schedule/{name}/run` | runs one now (`run_now`), refused while it is already running |
 
-The seven jobs (`jobs.all_jobs`):
+The eight jobs (`jobs.all_jobs`):
 
 | Job | Cadence | Calls | Effect |
 |---|---|---|---|
@@ -73,6 +73,7 @@ The seven jobs (`jobs.all_jobs`):
 | `hazards` | 30 min | `signals/hazards.sweep` | a cyclone, flood, quake, eruption, fire or drought within its radius of a plant or loading port becomes an event (`tropical_cyclone`, `flood`, `earthquake`, `volcano`, `wildfire`, `drought`) |
 | `weather` | 3 h | `signals/weather.sweep` | a forecast day over a threshold at a port or plant becomes a `port_weather` or `plant_weather` event, one per spell |
 | `exposure` | weekly | `signals/watch.sweep_exposure` → `scan_supply_exposure` | the three most valuable findings become `exposure` events; the same standing risk is quiet for 30 days |
+| `certificates` | daily | `signals/watch.sweep_certificates` | a TKDN certificate in the rule pack that runs out within 60 days becomes a `certificate_lapse` event. No feed can see this one: the lapse is in the company's own paperwork, and the local content behind it goes when it does. The same certificate is quiet for 30 days |
 | `notify` | 30 s | `outreach.queue_approved`, then `notify.deliver` | sends what is queued in the outbox |
 | `sap_send` | 10 min | `sender.send_approved` | approved actions posted to SAP; skipped with a note when SAP is not connected |
 | `digest` | daily 07:30 WIB | `notify.queue_digest`, then deliver | the morning summary to contacts whose `notify_for` covers `digest` (or `*`), and to the team channels |
@@ -86,12 +87,13 @@ flowchart LR
     J2["hazards, 30 min"]
     J3["weather, 3 h"]
     J4["exposure, weekly"]
+    J5["certificates, daily"]
   end
 
   subgraph OUT["Delivery"]
-    J5["notify, 30 s"]
-    J6["sap_send, 10 min"]
-    J7["digest, 07:30 WIB"]
+    J6["notify, 30 s"]
+    J7["sap_send, 10 min"]
+    J8["digest, 07:30 WIB"]
   end
 
   SCH --> WATCH
@@ -101,24 +103,27 @@ flowchart LR
   HZ["GDACS RSS, NASA EONET, USGS"]
   OM["Open-Meteo forecast and marine"]
   VEGA["scan_supply_exposure, no model"]
+  PACK["references/rule-pack.json, the company's own certificates"]
 
   J1 --> BMKG
   J2 --> HZ
   J3 --> OM
   J4 --> VEGA
+  J5 --> PACK
 
   DEDUP{"store.event_exists: seen before?"}
   BMKG --> DEDUP
   HZ --> DEDUP
   OM --> DEDUP
   VEGA --> DEDUP
+  PACK --> DEDUP
   DEDUP -->|"new"| RAISE["api.raise_event: events row, runs row, a handling thread"]
   DEDUP -->|"seen"| SKIP["nothing raised"]
 
-  J5 --> OBX["notify.deliver: outbox rows to their channels"]
-  J7 --> QD["notify.queue_digest"]
+  J6 --> OBX["notify.deliver: outbox rows to their channels"]
+  J8 --> QD["notify.queue_digest"]
   QD --> OBX
-  J6 --> SND["sender.send_approved"]
+  J7 --> SND["sender.send_approved"]
   SND --> SAP["SAP S/4HANA, OData POST"]
   OBX --> CH["email, Slack, Telegram, webhook"]
   RAISE -->|"handling ends, api._tell"| OBX

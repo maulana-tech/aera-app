@@ -17,8 +17,8 @@ these files; these files are the ones kept against the code.
 |---|---|
 | [`app.md`](app.md) | The Next.js web app: its pages, how a page reaches the agent service, the session, file downloads |
 | [`agents.md`](agents.md) | The twelve agents, the lead and its delegation, Kira's veto, one handling from start to finish, the model each agent runs on, the autonomy limit |
-| [`tools.md`](tools.md) | The tool registry and all 45 tools by owner, the path every read takes (SAP, an upload, the fixture), origin labels, the deterministic engines, the rule pack |
-| [`workers.md`](workers.md) | What runs without a person: the HTTP service, the schedule and its seven jobs, the signal watchers, the SAP sender, the alert outbox and its channels |
+| [`tools.md`](tools.md) | The tool registry and all 46 tools by owner, the path every read takes (SAP, an upload, the fixture), origin labels, the deterministic engines, the rule pack |
+| [`workers.md`](workers.md) | What runs without a person: the HTTP service, the schedule and its eight jobs, the signal watchers, the SAP sender, the alert outbox and its channels |
 | [`data.md`](data.md) | The SQLite record table by table, the fixtures, and every output: reports, workbooks, the trace, alerts, SAP writes, the generated agent reference |
 
 Conventions used on every page:

@@ -275,7 +275,7 @@ def build() -> None:
     tile(Box(416, 346, 420, 96), "sigap-agent :8787", COMPUTE, "gear",
          ["One Python process, standard library only.",
           "The HTTP service, the twelve agents, the",
-          "schedule and its seven jobs, the workers."], ec2)
+          "schedule and its eight jobs, the workers."], ec2)
     step(820, 332, 3)
 
     tile(Box(526, 462, 200, 84), "Amazon EBS", STORAGE, "disk",
@@ -295,7 +295,7 @@ def build() -> None:
     integ = group(Box(346, 724, 760, 112), "Open to other agents", AWSBOX, aws, dashed=True)
     tile(Box(366, 758, 350, 70), "AgentCore Gateway", AI, "net",
          ["reads the registry as MCP", "over POST /mcp"], integ)
-    tile(Box(736, 758, 350, 70), "45 tools, one registry", AWSBOX, "code",
+    tile(Box(736, 758, 350, 70), "46 tools, one registry", AWSBOX, "code",
          ["every reply carries its origin;", "missing is an error, not a value"], integ)
     step(690, 712, 6)
 
@@ -321,7 +321,7 @@ def build() -> None:
     # --------------------------------------------------------- CI/CD box
     gh = group(Box(1146, 726, 318, 124), "GitHub Actions", GREY, dashed=True)
     tile(Box(1162, 762, 286, 76), "CI on every branch", GREY, "code",
-         ["lint · 47 self-checks · SSH transport", "deploy from main, over SSH"], gh)
+         ["lint · 56 self-checks · SSH transport", "deploy from main, over SSH"], gh)
 
     # ------------------------------------------------------------- what leaves
     out = group(Box(16, 886, 1448, 78), "What leaves SIGAP", GREY, dashed=True)

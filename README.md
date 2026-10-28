@@ -191,9 +191,9 @@ a signal arrives (BMKG · GDACS · Open-Meteo · POST /events)
   the exploration graph of what was asked and what it found
 - **Reports**: generated per handling or across the portfolio, exported to PDF and XLSX, and
   sent by email straight from the page
-- **Schedule**: seven jobs that run without a person — three signal watchers, Vega's exposure
-  scan, alert and outreach delivery, the SAP sender and the 07:30 digest; each toggleable and
-  runnable by hand
+- **Schedule**: eight jobs that run without a person — three signal watchers, Vega's exposure
+  scan, the TKDN certificate watch, alert and outreach delivery, the SAP sender and the 07:30
+  digest; each toggleable and runnable by hand
 - **Contacts and notifications**: who is told about what, by email or team channel, with a
   mailbox you connect and a test button; approved supplier and customer messages go out
   verbatim from the draft
@@ -222,7 +222,7 @@ a signal arrives (BMKG · GDACS · Open-Meteo · POST /events)
 | Persistence | SQLite (`data/sigap.db`): events, runs, steps, actions, approvals, contacts, outbox |
 | Outside feeds | BMKG · GDACS · NASA EONET · USGS · Open-Meteo · holidays · FX · news, each labelled |
 | ERP | SAP S/4HANA Cloud OData (sandbox by default, fixtures when the key is absent) |
-| Interfaces | REST (47 routes, session required except `/health` and `/login`) · MCP (`/mcp`) |
+| Interfaces | REST (48 routes, session required except `/health` and `/login`) · MCP (`/mcp`) |
 | Delivery | Email (SMTP outbox with retries) and team channels, quoted from the record |
 | Containers | Docker Compose: Next.js web, Python agent service, PostgreSQL |
 | CI/CD | GitHub Actions: lint, agent output, Python self-check on every push; SSH deploy from `main` to EC2 |
@@ -245,11 +245,11 @@ flowchart TB
     end
 
     subgraph AGENT["Docker: agents — Python, stdlib http.server + sqlite3"]
-        API["api.py :8787 — 47 routes"]
+        API["api.py :8787 — 48 routes"]
         GR["graph.py — Arya + 11 specialists<br/>14 rounds · 600 s · spend cap"]
-        REG["core/registry.py — 45 tools"]
+        REG["core/registry.py — 46 tools"]
         ENG["engines — simulate · allocate · forecast<br/>matching · audit · report · export"]
-        SCH["core/schedule.py — 7 jobs"]
+        SCH["core/schedule.py — 8 jobs"]
         SND["sender.py — approved actions"]
         OUT["notify.py · outreach.py — the outbox"]
         DB[("SQLite — the record")]
@@ -635,7 +635,7 @@ Everything the system produces is built from that record:
 | `/uploads` | bring your own data, with downloadable templates |
 | `/contacts`, `/notifications` | who is told about what, and by which channel |
 | `/models` | the model behind each agent, testable from the page |
-| `/schedule` | the seven jobs: on/off, last result, run now |
+| `/schedule` | the eight jobs: on/off, last result, run now |
 
 A page whose handling is running refreshes every four seconds while the tab is visible, so
 the queue, a disruption and its trace follow the agents without a reload.
@@ -741,7 +741,7 @@ Everything lives in [`sigap/`](sigap/):
 |---|---|
 | [`sigap/PLAN.md`](sigap/PLAN.md) ⭐ | The plan, the status of each part, what to do next |
 | [`sigap/ARCHITECTURE.md`](sigap/ARCHITECTURE.md) ⭐ | **One page**: the tech stack and why each piece, eight diagrams, the decisions and what they cost |
-| [`sigap/AGENT-REFERENCE.md`](sigap/AGENT-REFERENCE.md) | All 12 agents and their 45 tools, **generated** from the registry |
+| [`sigap/AGENT-REFERENCE.md`](sigap/AGENT-REFERENCE.md) | All 12 agents and their 46 tools, **generated** from the registry |
 | [`sigap/architecture/`](sigap/architecture/) | The long version, one concern per file: app, agents, tools, workers, data |
 | [`sigap/DEMO.md`](sigap/DEMO.md) | The 6–7 minute demo storyboard: pre-flight, six scenes, judge Q&A |
 | [`sigap/PITCH-5-SLIDES.md`](sigap/PITCH-5-SLIDES.md) | Deck outline: five content slides, what to say, what to leave out |
@@ -763,7 +763,7 @@ Everything lives in [`sigap/`](sigap/):
 
 **Working**: provenance labelling on every tool, the deterministic calculator, SAP reads,
 persistence with idempotent actions and one-shot approvals, auth with server-side authority
-limits, the full interface, all 45 tools, all 12 prompts, the signal watchers (BMKG, hazards,
+limits, the full interface, all 46 tools, all 12 prompts, the signal watchers (BMKG, hazards,
 weather), the schedule, email and outreach delivery, reports by email, the data audit, and the
 agent team running end to end on AI Core.
 
