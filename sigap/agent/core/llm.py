@@ -133,13 +133,20 @@ def is_rate_limited(error: BaseException) -> bool:
     )
 
 
-def _fallback_aws_options(cfg) -> dict[str, str]:
-    """Return the required second-account credentials for Bedrock.
+def _fallback_aws_options(cfg) -> Optional[dict[str, str]]:
+    """The second-account credentials for Bedrock, or None if there is no second
+    account.
 
-    The primary account remains the instance's normal AWS credential chain.
-    The fallback account is mandatory whenever Bedrock is configured, so a
-    deployment cannot silently run without the capacity failover it promises.
-    Session tokens remain optional because long-lived IAM keys do not use them.
+    The primary account remains the instance's normal AWS credential chain, and
+    it is the only one a call needs: the fallback is reached solely when the
+    primary answers 429, after the SDK has already retried. So one account is a
+    complete configuration, and demanding two made Bedrock unreachable for every
+    deployment that has one.
+
+    A *partial* fallback is still an error. Two of the three names set means
+    someone meant to configure failover and mistyped, and silently running
+    without the failover they think they have is worse than refusing. Session
+    tokens stay optional because long-lived IAM keys do not use them.
     """
     access = os.environ.get("AWS_FALLBACK_ACCESS_KEY_ID", "").strip()
     secret = os.environ.get("AWS_FALLBACK_SECRET_ACCESS_KEY", "").strip()
@@ -147,16 +154,18 @@ def _fallback_aws_options(cfg) -> dict[str, str]:
     token = os.environ.get("AWS_FALLBACK_SESSION_TOKEN", "").strip()
     if not cfg.aws_region:
         raise ModelUnavailable("AWS_REGION is not set")
-    missing = [
-        name for name, value in (
-            ("AWS_FALLBACK_ACCESS_KEY_ID", access),
-            ("AWS_FALLBACK_SECRET_ACCESS_KEY", secret),
-            ("AWS_FALLBACK_REGION", region),
-        ) if not value
-    ]
+    named = (
+        ("AWS_FALLBACK_ACCESS_KEY_ID", access),
+        ("AWS_FALLBACK_SECRET_ACCESS_KEY", secret),
+        ("AWS_FALLBACK_REGION", region),
+    )
+    missing = [name for name, value in named if not value]
+    if len(missing) == len(named):
+        return None
     if missing:
         raise ModelUnavailable(
-            "required Bedrock fallback credentials are missing: " + ", ".join(missing)
+            "a Bedrock fallback account is half-configured; set or clear all of: "
+            + ", ".join(missing)
         )
     options = {"aws_access_key": access, "aws_secret_key": secret, "aws_region": region}
     if token:
@@ -539,7 +548,8 @@ class _AnthropicBackend:
         self.spec = spec
         self._cfg = cfg
         self._sdk = self._new_client()
-        self._sdk_fallback = self._new_client(_fallback_aws_options(cfg))
+        options = _fallback_aws_options(cfg)
+        self._sdk_fallback = self._new_client(options) if options else None
 
     def _new_client(self, options: Optional[dict[str, str]] = None):
         kwargs = {"aws_region": self._cfg.aws_region, "max_retries": BEDROCK_MAX_RETRIES}
@@ -555,7 +565,7 @@ class _AnthropicBackend:
         try:
             r = self._sdk.messages.create(**body)
         except Exception as error:                                  # noqa: BLE001
-            if not is_rate_limited(error):
+            if not is_rate_limited(error) or self._sdk_fallback is None:
                 raise
             r = self._sdk_fallback.messages.create(**body)
             reply = Reply(list(r.content), r.stop_reason, _anthropic_usage(self.spec, r.usage), self.spec)
@@ -775,14 +785,17 @@ class _BedrockChatBackend:
         self.region = cfg.aws_region
         self.url, self._service = self._endpoint(self.region, "SIGAP_BEDROCK_OPENAI_BASE_URL")
         options = _fallback_aws_options(cfg)
-        from botocore.credentials import Credentials
-        self._fallback_credentials = Credentials(
-            options["aws_access_key"], options["aws_secret_key"], options.get("aws_session_token")
-        )
-        self._fallback_region = options["aws_region"]
-        self._fallback_url, self._fallback_service = self._endpoint(
-            self._fallback_region, "SIGAP_FALLBACK_BEDROCK_OPENAI_BASE_URL"
-        )
+        self._fallback_url = None
+        if options:
+            from botocore.credentials import Credentials
+            self._fallback_credentials = Credentials(
+                options["aws_access_key"], options["aws_secret_key"],
+                options.get("aws_session_token"),
+            )
+            self._fallback_region = options["aws_region"]
+            self._fallback_url, self._fallback_service = self._endpoint(
+                self._fallback_region, "SIGAP_FALLBACK_BEDROCK_OPENAI_BASE_URL"
+            )
 
     def _endpoint(self, region: str, override: str) -> Tuple[str, str]:
         if _runtime_id(self.spec.model):
@@ -820,7 +833,7 @@ class _BedrockChatBackend:
         try:
             return from_chat(_post_json(self.spec, self.url, body, self._headers), self.spec)
         except Exception as error:                                  # noqa: BLE001
-            if not is_rate_limited(error):
+            if not is_rate_limited(error) or self._fallback_url is None:
                 raise
             reply = from_chat(_post_json(self.spec, self._fallback_url, body, self._fallback_headers),
                               self.spec)
@@ -1181,7 +1194,46 @@ def demo() -> None:
     assert primary_messages.calls == fallback_messages.calls == 1
     assert account_reply.account_failover and account_reply.model == str(backend.spec), \
         "a 429 uses the second AWS account without changing the configured model"
-    print("  rate-limit classification ✓ · second AWS account failover ✓")
+
+    # One AWS account is a whole configuration. Requiring two made Bedrock
+    # unreachable for every deployment that has one, which is most of them.
+    fallback_names = ("AWS_FALLBACK_ACCESS_KEY_ID", "AWS_FALLBACK_SECRET_ACCESS_KEY",
+                      "AWS_FALLBACK_REGION", "AWS_FALLBACK_SESSION_TOKEN")
+    kept = {k: os.environ.pop(k, None) for k in fallback_names}
+    one_account = type("Cfg", (), {"aws_region": "ap-southeast-3"})()
+    try:
+        assert _fallback_aws_options(one_account) is None, "no second account is not an error"
+        os.environ["AWS_FALLBACK_ACCESS_KEY_ID"] = "AKIAEXAMPLE"
+        try:
+            _fallback_aws_options(one_account)
+            raise AssertionError("a half-configured fallback must be refused, not ignored")
+        except ModelUnavailable as e:
+            assert "AWS_FALLBACK_REGION" in str(e), e
+        os.environ.update({"AWS_FALLBACK_SECRET_ACCESS_KEY": "s", "AWS_FALLBACK_REGION": "us-east-1"})
+        assert _fallback_aws_options(one_account) == {
+            "aws_access_key": "AKIAEXAMPLE", "aws_secret_key": "s", "aws_region": "us-east-1"}
+        try:
+            _fallback_aws_options(type("Cfg", (), {"aws_region": ""})())
+            raise AssertionError("the primary region is still required")
+        except ModelUnavailable:
+            pass
+    finally:
+        for k, v in kept.items():
+            os.environ.pop(k, None)
+            if v is not None:
+                os.environ[k] = v
+    # And with no second account, a 429 is the answer — not an AttributeError.
+    backend._sdk_fallback = None
+    primary_messages.calls = 0
+    try:
+        backend.create({"max_tokens": 10, "system": "s",
+                        "messages": [{"role": "user", "content": "q"}]})
+        raise AssertionError("a 429 with no second account must surface")
+    except ModelCallFailed as e:
+        assert e.status == 429
+    assert primary_messages.calls == 1, "and it is not retried into nothing"
+    print("  rate-limit classification ✓ · second AWS account failover ✓ "
+          "· one account is enough ✓ · half-configured failover refused ✓")
 
     # Routing and fallback, with stand-in backends.
     calls: List[str] = []
