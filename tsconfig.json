@@ -6,6 +6,9 @@
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
+    // lib/*.test.mts imports "./gist.ts" because that is the path `node --test`
+    // resolves at runtime; nothing is emitted, so tsc only has to allow it.
+    "allowImportingTsExtensions": true,
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",
