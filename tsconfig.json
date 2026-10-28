@@ -33,5 +33,9 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  // sigap/deck is its own workspace: its own tsconfig, its own dependencies, and its
+  // own `tsc --noEmit`. Left in, the app's include globs swallow its .tsx and then
+  // fail on @open-slide/core, which only resolves after `npm install` inside deck/ -
+  // so the app build broke in CI while passing on a machine that had run the deck.
+  "exclude": ["node_modules", "sigap/deck"]
 }
