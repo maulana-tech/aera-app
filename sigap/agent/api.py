@@ -1669,7 +1669,18 @@ def demo() -> None:
     `_user(` would not do - several routes are guarded inside a shared helper -
     so they are called for real.
     """
+    import secrets
+
     from core import identity
+
+    # A check must not need the operator's own secret. It needs A secret: one
+    # that signs the tokens it mints and reads back inside this process and
+    # nowhere else. core/identity.py's own check does exactly this. Without it
+    # `manage.py check` fails on any clean checkout - which is how CI found it,
+    # because a developer's sigap/agent/.env was quietly supplying one here.
+    if not identity.SECRET:
+        os.environ.setdefault("SIGAP_SECRET", secrets.token_hex(16))
+        identity.SECRET = os.environ["SIGAP_SECRET"]
 
     assert len(ROUTES) >= 40, f"only {len(ROUTES)} routes registered; did an import fail?"
 
