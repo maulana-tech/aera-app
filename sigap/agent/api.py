@@ -56,6 +56,7 @@ import json
 import os
 import queue
 import re
+import sys
 import threading
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -932,6 +933,7 @@ _TOOL_LABELS = {
     "get_shipment_status": "shipment tracking status",
     "estimate_eta": "estimated arrival dates (ETA)",
     "check_local_constraints": "compliance and regulatory constraints",
+    "check_supplier_constraints": "whether the rules clear this supplier",
     "simulate_scenario": "scenario mitigation costs",
     "search_past_incidents": "similar past incident records",
     "create_stock_transfer": "stock transfer request",
@@ -965,6 +967,7 @@ _TOOL_BADGES = {
     "get_sales_order_commitments": "Sales",
     "forecast_demand": "Demand",
     "check_local_constraints": "Compliance",
+    "check_supplier_constraints": "Compliance",
     "simulate_scenario": "Simulation",
     "find_alternate_sources": "Sourcing",
     "find_internal_transfers": "Transfers",
@@ -1636,7 +1639,113 @@ class Handler(BaseHTTPRequestHandler):
         print(f"  {self.command} {self.path} → {a[1] if len(a) > 1 else ''}")
 
 
+#: The only two routes that may be reached without a session token. /health is
+#: what a load balancer polls, and /login is where a token comes from. Every
+#: other route handles one company's disruptions, costs and suppliers.
+PUBLIC = {("GET", "/health"), ("POST", "/login")}
+
+#: One sample value per group shape a pattern uses, so a route can be called
+#: without naming all 48 by hand. A new shape fails the check rather than
+#: quietly skipping the route that uses it.
+_SAMPLES = ((r"([A-Za-z0-9_]+)", "x1"), (r"([A-Za-z]+)", "Supplier"),
+            (r"([a-z_]+)", "digest"), (r"([a-z]+)", "impact"),
+            (r"(\d+)", "0"), (r"(pdf|xlsx)", "pdf"))
+
+
+def _sample_path(pattern) -> str:
+    path = pattern.pattern.lstrip("^").rstrip("$")
+    for group, value in _SAMPLES:
+        path = path.replace(group, value)
+    return path.replace("\\.", ".")
+
+
+def demo() -> None:
+    """What is checked here is the door, not the rooms.
+
+    Every route but two handles one company's disruptions, costs and suppliers.
+    A route added without `_user(h)` is an open door, and nothing else in the
+    suite would notice: it would answer 200 to anyone who could reach the port.
+    So each one is called with no token and has to refuse. Grepping for
+    `_user(` would not do - several routes are guarded inside a shared helper -
+    so they are called for real.
+    """
+    from core import identity
+
+    assert len(ROUTES) >= 40, f"only {len(ROUTES)} routes registered; did an import fail?"
+
+    # A shadowed route never runs, and the one that wins is whichever was
+    # imported first - which is not a thing anyone chooses on purpose.
+    seen = [(m, r.pattern) for m, r, _ in ROUTES]
+    duplicates = sorted({x for x in seen if seen.count(x) > 1})
+    assert not duplicates, f"two handlers for the same route: {duplicates}"
+
+    public, guarded, unmatched = [], [], []
+    for method, pattern, fn in ROUTES:
+        path = _sample_path(pattern)
+        found = pattern.match(path)
+        if found is None:
+            unmatched.append(pattern.pattern)
+            continue
+        key = (method, path)
+        try:
+            fn(found, {}, {})
+        except NotAuthorised:
+            guarded.append(key)
+            continue
+        except Exception:                                            # noqa: BLE001
+            # It got past the door on its own business and then failed on a
+            # made-up id. That is a route serving an anonymous caller.
+            pass
+        public.append(key)
+
+    assert not unmatched, f"no sample path for: {unmatched}; add its shape to _SAMPLES"
+    extra = sorted(set(public) - PUBLIC)
+    assert not extra, f"reachable without a token: {extra}"
+    missing = sorted(PUBLIC - set(public))
+    assert not missing, f"meant to be public but refused anonymously: {missing}"
+    assert len(guarded) == len(ROUTES) - len(PUBLIC)
+
+    # Identity comes from the token and from nowhere else. A body naming
+    # another user is a request, not a fact.
+    identity.prepare()
+    u = identity.add_user("buyer@example.com", "A Buyer", "buyer", "pw-for-the-check")
+    code, out = login(None, {"email": "buyer@example.com", "password": "pw-for-the-check"}, {})
+    assert code == 200 and out["token"], out
+    token = out["token"]
+    assert out["user"]["role"] == "buyer" and out["user"]["limit_idr"] == 500_000_000, out
+
+    headers = {"Authorization": f"Bearer {token}"}
+    code, who = me(None, {"email": "admin@example.com", "role": "admin"}, headers)
+    assert code == 200 and who["email"] == u.email, who
+    assert who["role"] == "buyer", "a body claiming admin must not become one"
+    assert who["limit_idr"] == 500_000_000, who
+
+    for bad in ("", "Bearer", "Bearer not-a-token", "Basic abc", f"Bearer {token}x"):
+        try:
+            me(None, {}, {"Authorization": bad})
+            raise AssertionError(f"{bad!r} must not authenticate")
+        except NotAuthorised:
+            pass
+
+    # The one route a load balancer polls says what it can see, without a token.
+    code, health_out = health(None, {}, {})
+    assert code == 200 and "sap_ready" in health_out and "models" in health_out
+
+    print(f"  {len(ROUTES)} routes · {len(guarded)} refuse an anonymous caller ✓")
+    print(f"  public by design: {', '.join(f'{m} {p}' for m, p in sorted(PUBLIC))} ✓")
+    print("  no route shadows another ✓ · identity comes from the token, never the body ✓")
+    print("api ok")
+
+
 if __name__ == "__main__":
+    if "--check" in sys.argv:
+        # Calling 48 handlers writes and reads; never against a real database.
+        from core.config import fixtures_only
+
+        fixtures_only(__file__, "SIGAP_API_CHECK")
+        demo()
+        raise SystemExit(0)
+
     _load_model_choices()
     print(f"SIGAP API · env={CFG.env} · sap={'ready' if CFG.sap_ready else 'no'} "
           f"· model={'ready' if CFG.model_ready else 'no'}")
