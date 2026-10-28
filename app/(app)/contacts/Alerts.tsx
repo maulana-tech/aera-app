@@ -24,20 +24,26 @@ export function Alerts({ data }: { data: NotificationsPayload }) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState("");
   const [error, setError] = useState("");
+  const [link, setLink] = useState("");
   const anyReady = Object.values(data.channels).some((c) => c.ready);
 
   async function connect() {
     setBusy(true);
     setError("");
     setResult("");
+    setLink("");
     try {
       const res = await fetch("/api/sigap/notifications/connect", { method: "POST" });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error ?? "failed");
-      // Whoever signs in there becomes the mailbox SIGAP sends from, so it
-      // opens for the person who asked and is not shown to copy.
-      window.open(d.url, "_blank", "noopener");
-      setResult("Sign in to the Gmail SIGAP should send from, then come back and refresh.");
+      // This used to window.open() the link here and say "sign in, then come
+      // back". It does not work: by the time the fetch resolves the click is
+      // over, so the browser treats the popup as unsolicited and blocks it -
+      // and because window.open(..., "noopener") returns null whether it was
+      // blocked or not, the code could not tell, and the only copy of the URL
+      // was thrown away. The button went dead and the message lied about it.
+      // So the link is rendered instead, and the second click opens it.
+      setLink(d.url);
     } catch (err) {
       setError(err instanceof Error ? err.message : "failed");
     } finally {
@@ -95,10 +101,24 @@ export function Alerts({ data }: { data: NotificationsPayload }) {
                 </p>
               )}
               {c.key === "email" && s.via === "composio" && s.connectable && data.may_change && (
-                <Button type="button" variant="outline" size="sm" className="mt-2"
-                  disabled={busy} onClick={connect}>
-                  Connect Gmail
-                </Button>
+                <div className="mt-2 space-y-2">
+                  <Button type="button" variant="outline" size="sm"
+                    disabled={busy} onClick={connect}>
+                    {busy ? "Asking Composio…" : link ? "Get a fresh link" : "Connect Gmail"}
+                  </Button>
+                  {link && (
+                    <p className="text-xs leading-relaxed">
+                      <a href={link} target="_blank" rel="noopener noreferrer"
+                        className="font-medium underline underline-offset-4">
+                        Open the Google sign-in page
+                      </a>
+                      <span className="text-muted-foreground">
+                        {" "}— whoever signs in there is the mailbox SIGAP sends from. Come back
+                        and refresh this page afterwards. The link expires in a few minutes.
+                      </span>
+                    </p>
+                  )}
+                </div>
               )}
             </li>
           );

@@ -9,6 +9,7 @@ root=/opt/sigap-project
 release="$root/releases/$release_id"
 current="$root/current"
 env_file="$root/sigap/agent/.env"
+secrets_dir="$root/sigap/agent/.secrets"
 [[ -f $env_file ]] || { echo "Missing server configuration: $env_file"; exit 1; }
 for tool in node python3 curl flock runuser; do command -v "$tool" >/dev/null; done
 [[ $(node -p 'process.versions.node.split(".")[0]') == 20 ]] || { echo 'Install Node.js 20 on EC2'; exit 1; }
@@ -21,6 +22,13 @@ mkdir "$release"
 tar -xzf "$archive" -C "$release" --no-same-owner
 [[ -f $release/standalone/server.js && -f $release/sigap/agent/api.py ]]
 ln -s "$env_file" "$release/sigap/agent/.env"
+# core/config.py reads .env, .secrets/bedrock.env and .secrets/notify.env. Only
+# the first was ever linked, so anything kept in .secrets reached the laptop and
+# never the server: the deployed Contacts page reported email "via smtp,
+# connectable false" because COMPOSIO_API_KEY was not there to be read. Linked
+# the same way as .env, and optional, because a server may keep everything in
+# .env instead.
+if [[ -d $secrets_dir ]]; then ln -s "$secrets_dir" "$release/sigap/agent/.secrets"; fi
 chown -R ubuntu:ubuntu "$release"
 runuser -u ubuntu -- python3 -m venv "$release/sigap/agent/.venv"
 runuser -u ubuntu -- "$release/sigap/agent/.venv/bin/pip" install \
