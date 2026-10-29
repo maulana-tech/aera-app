@@ -244,6 +244,30 @@ def seed() -> None:
     from tools.execution import idempotency_key
     import tools  # noqa: F401
 
+    contacts = [
+        {"name": "Dewi Lestari", "role": "planner", "email": "dewi.lestari@example.com",
+         "notify_for": "digest,exposure", "phone": "+62 811 0000 1001",
+         "title": "Supply Chain Planner", "department": "Supply Chain"},
+        {"name": "Rina Pratama", "role": "buyer", "email": "rina.pratama@example.com",
+         "notify_for": "port_closure,customs_hold,supplier_failure", "phone": "+62 811 0000 1002",
+         "title": "Raw Material Buyer", "department": "Procurement"},
+        {"name": "Arif Rahman", "role": "procurement_lead", "email": "arif.rahman@example.com",
+         "notify_for": "*", "phone": "+62 811 0000 1003",
+         "title": "Head of Procurement", "department": "Procurement"},
+        {"name": "Nadia Putri", "role": "qa", "email": "nadia.putri@example.com",
+         "notify_for": "quality_hold,certificate_lapse", "phone": "+62 811 0000 1004",
+         "title": "Quality Assurance Lead", "department": "Quality"},
+        {"name": "Michael Tan", "role": "oem", "email": "michael.tan@example.com",
+         "notify_for": "demand_spike,port_closure", "phone": "+62 811 0000 1005",
+         "title": "Customer Supply Liaison", "department": "Customer Operations"},
+    ]
+    existing = {c["email"].lower() for c in store.list_contacts()}
+    added_contacts = 0
+    for contact in contacts:
+        if contact["email"].lower() not in existing:
+            store.add_contact(**contact)
+            added_contacts += 1
+
     events = [
         ("port_closure", "Typhoon closes the Port of Ningbo",
          "Maritime advisory: Ningbo-Zhoushan closed 8-13 Sep 2026",
@@ -306,7 +330,8 @@ def seed() -> None:
                     store.record_action(rid, idempotency_key(k, **body), k, autonomous, body)
             print(f"  held: {title} (AWS_REGION not set)")
 
-    print(f"seeded {len(events)} events with their runs and actions")
+    print(f"seeded {len(events)} events with their runs and actions; "
+          f"{added_contacts} contact(s) added, {len(contacts)} available")
 
 
 def docs() -> None:

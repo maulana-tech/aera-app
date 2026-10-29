@@ -20,9 +20,9 @@ Target mengikuti runbook `sigap/AGENT-ONLY-EXTERNAL-DEPLOYMENT.md`:
 - Unit `sigap-agent.service` dan `sigap-web.service` sudah berjalan sebagai `ubuntu`.
 - User `ubuntu` bisa menjalankan `sudo -n true` tanpa password dan tanpa TTY.
 - `.env` tetap di `/opt/sigap-project/sigap/agent/.env`.
-- `.env` harus berisi `SIGAP_DB=/var/lib/sigap/sigap.db`, secret session, region,
-  model, dan konfigurasi SAP yang diperlukan. Database tetap di lokasi tersebut
-  dan direktorinya harus dapat ditulis `ubuntu`.
+- `.env` dapat berisi `SIGAP_DB=/app/data/sigap.db`; Docker Compose juga memaksa
+  path tersebut agar database berada pada volume `agent_data` dan bertahan saat container
+  dibuat ulang.
 - Jika systemd menggunakan `EnvironmentFile`, gunakan `KEY=value` dengan komentar
   di baris tersendiri. Jangan memasukkan AWS access key ke `.env`.
 - EC2 bisa mengakses repository dependency Python melalui internet.

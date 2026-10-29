@@ -31,6 +31,7 @@ services:
       - PORT=8787
       - SIGAP_ENV=${SIGAP_ENV:-production}
       - DATABASE_URL=postgresql://${POSTGRES_USER:-sigap}@database:5432/${POSTGRES_DB:-sigap}
+      - SIGAP_DB=/app/data/sigap.db
     env_file:
       - ./sigap/agent/.env
     volumes:
