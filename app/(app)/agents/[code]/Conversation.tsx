@@ -25,6 +25,10 @@ import { ToolActivity } from "@/components/agent-activity";
 import { AgentBadge } from "@/components/agent-card";
 import { Markdown } from "@/components/markdown";
 import {
+  notifyAIOutputReady,
+  trackAIGeneration,
+} from "@/components/notification-toast";
+import {
   OrchestrationTimeline,
   type OrchestrationStep,
   type OrchestrationTrailEntry,
@@ -585,22 +589,77 @@ export default function Conversation({
     loadThreads();
   }, [loadThreads]);
 
+  const pollingRef = useRef<string | null>(null);
+
+  const pollPendingConversation = useCallback(
+    async (cid: string) => {
+      if (pollingRef.current === cid) return;
+      pollingRef.current = cid;
+      setBusy(true);
+      setActiveSteps([
+        {
+          seq: 0,
+          kind: "init",
+          agent: "supervisor",
+          agent_name: name,
+          narrative: "Analyzing question and coordinating specialist team...",
+          badge: "Analysis ›",
+          detail: "Preparing agent orchestration...",
+          at: new Date().toISOString(),
+        },
+      ]);
+
+      const pollStart = Date.now();
+      while (Date.now() - pollStart < 120000 && pollingRef.current === cid) {
+        await new Promise((res) => setTimeout(res, 2000));
+        try {
+          const checkRes = await fetch(`/api/sigap/conversations/${cid}`, {
+            cache: "no-store",
+          });
+          if (checkRes.ok) {
+            const checkData = await checkRes.json();
+            const msgs = checkData.messages ?? [];
+            const lastMsg = msgs[msgs.length - 1];
+            if (lastMsg && (lastMsg.role === "agent" || lastMsg.from === "agent")) {
+              setMessages(fromRows(msgs));
+              if (checkData.usage) setUsage(checkData.usage as unknown as UsageOverview);
+              loadThreads();
+              break;
+            }
+          }
+        } catch {
+          // ignore transient error
+        }
+      }
+
+      if (pollingRef.current === cid) {
+        pollingRef.current = null;
+        setBusy(false);
+        setActiveSteps([]);
+      }
+    },
+    [name, loadThreads]
+  );
+
   // Restores whatever the URL named. Without this a refresh lands in an empty
   // conversation while the rows are still sitting in the database.
   useEffect(() => {
     if (!threadId) return;
     let alive = true;
     // Mark the external request as loading before restoring its result.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRestoring(true);
-    fetch(`/api/sigap/conversations/${threadId}`)
+    fetch(`/api/sigap/conversations/${threadId}`, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (!alive) return;
         if (d) {
           setId(threadId);
-          setMessages(fromRows(d.messages ?? []));
+          const parsed = fromRows(d.messages ?? []);
+          setMessages(parsed);
           if (d.usage) setUsage(d.usage);
+          if (parsed.length > 0 && parsed[parsed.length - 1].from === "person") {
+            pollPendingConversation(threadId);
+          }
         } else {
           // Deleted, or never this user's to read. Start clean rather than
           // leave the page pointing at something that is not there.
@@ -613,9 +672,9 @@ export default function Conversation({
       });
     return () => {
       alive = false;
+      pollingRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [threadId]);
+  }, [threadId, pollPendingConversation, onOpen]);
 
   function startNew() {
     setId(null);
@@ -639,15 +698,20 @@ export default function Conversation({
 
   async function open(next: string) {
     if (next === id) return;
+    pollingRef.current = null;
     setRestoring(true);
     try {
-      const r = await fetch(`/api/sigap/conversations/${next}`);
+      const r = await fetch(`/api/sigap/conversations/${next}`, { cache: "no-store" });
       if (r.ok) {
         const d = await r.json();
         setId(next);
-        setMessages(fromRows(d.messages ?? []));
+        const parsed = fromRows(d.messages ?? []);
+        setMessages(parsed);
         if (d.usage) setUsage(d.usage);
         onOpen?.(next);
+        if (parsed.length > 0 && parsed[parsed.length - 1].from === "person") {
+          pollPendingConversation(next);
+        }
       }
     } finally {
       setRestoring(false);
@@ -689,6 +753,11 @@ export default function Conversation({
       },
     ]);
     let activeCid = id;
+    trackAIGeneration({
+      conversationId: activeCid || "new",
+      agentCode: code,
+      agentName: name,
+    });
     try {
       const r = await fetch(`/api/sigap/agents/${code}/ask`, {
         method: "POST",
@@ -732,7 +801,14 @@ export default function Conversation({
               if (data.conversation_id && !activeCid) {
                 activeCid = data.conversation_id;
                 setId(data.conversation_id);
-                onOpen?.(data.conversation_id);
+                if (typeof window !== "undefined" && (window.location.pathname === "/chat" || window.location.pathname.startsWith("/chat"))) {
+                  onOpen?.(data.conversation_id);
+                }
+                trackAIGeneration({
+                  conversationId: data.conversation_id,
+                  agentCode: code,
+                  agentName: name,
+                });
               }
               if (event === "step") {
                 liveSteps.push(data as OrchestrationStep);
@@ -781,8 +857,15 @@ export default function Conversation({
           if (finalReply.usage) setUsage(finalReply.usage as unknown as UsageOverview);
           if (finalReply.conversation_id && finalReply.conversation_id !== id) {
             setId(finalReply.conversation_id);
-            onOpen?.(finalReply.conversation_id);
+            if (typeof window !== "undefined" && (window.location.pathname === "/chat" || window.location.pathname.startsWith("/chat"))) {
+              onOpen?.(finalReply.conversation_id);
+            }
           }
+          notifyAIOutputReady({
+            conversationId: activeCid || finalReply.conversation_id || "",
+            agentName: name,
+            preview: finalReply.answer,
+          });
           loadThreads();
           return;
         }
@@ -805,6 +888,11 @@ export default function Conversation({
                   }
                   setMessages((m) => [...m, { from: "agent", reply: replyData }]);
                   if (checkData.usage) setUsage(checkData.usage as unknown as UsageOverview);
+                  notifyAIOutputReady({
+                    conversationId: activeCid || "",
+                    agentName: name,
+                    preview: replyData.answer,
+                  });
                   loadThreads();
                   return;
                 }
@@ -825,8 +913,15 @@ export default function Conversation({
         if (d.usage) setUsage(d.usage);
         if (d.conversation_id && d.conversation_id !== id) {
           setId(d.conversation_id);
-          onOpen?.(d.conversation_id);
+          if (typeof window !== "undefined" && (window.location.pathname === "/chat" || window.location.pathname.startsWith("/chat"))) {
+            onOpen?.(d.conversation_id);
+          }
         }
+        notifyAIOutputReady({
+          conversationId: activeCid || d.conversation_id || "",
+          agentName: name,
+          preview: (d as Reply).answer,
+        });
         loadThreads();
         return;
       }

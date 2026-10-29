@@ -1,5 +1,6 @@
 import { AppSidebar } from "@/components/app-sidebar";
 import { Breadcrumbs } from "@/components/breadcrumbs";
+import { NotificationToast } from "@/components/notification-toast";
 import { ThemeToggle } from "@/components/theme";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -33,6 +34,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </header>
         {children}
       </SidebarInset>
+      <NotificationToast />
     </SidebarProvider>
   );
 }
