@@ -20,9 +20,11 @@ export default function ChatSurface(props: {
     <Conversation
       {...props}
       rail
-      onOpen={(id) =>
-        window.history.replaceState(null, "", id ? `/chat?c=${id}` : "/chat")
-      }
+      onOpen={(id) => {
+        if (typeof window !== "undefined" && window.location.pathname === "/chat") {
+          window.history.replaceState(null, "", id ? `/chat?c=${id}` : "/chat");
+        }
+      }}
     />
   );
 }
