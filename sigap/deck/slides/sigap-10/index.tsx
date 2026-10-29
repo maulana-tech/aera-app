@@ -10,6 +10,10 @@
  *
  * Anything that needs the full width sits on a white card (page 5), and
  * anything placed over the gradient is white text (ZONE.gradient).
+ *
+ * English, and deliberately plain: a judge should not have to know Indonesian
+ * procurement law to follow it, so TKDN and LARTAS are named once and then
+ * spoken of as local content and import restrictions.
  */
 import type { DesignSystem, Page, SlideMeta } from '@open-slide/core';
 import { useSlidePageNumber } from '@open-slide/core';
@@ -123,6 +127,17 @@ const Step = ({ n, head, children }: { n: string; head: string; children: ReactN
   </div>
 );
 
+/** One feature in a 2x2 grid. The white column is 688 wide, so two columns of
+ *  324 with a 40 gutter — the same split as template/sheets/04-two-column. */
+const Card = ({ head, children }: { head: string; children: ReactNode }) => (
+  <div>
+    <div style={{ fontSize: 23, fontWeight: 800, lineHeight: 1.2 }}>{head}</div>
+    <div style={{ fontSize: 20, lineHeight: 1.42, color: ink.muted, marginTop: 7 }}>
+      {children}
+    </div>
+  </div>
+);
+
 /** One claim on the gradient, in white. */
 const OnGradient = ({ top, kicker, children, sub }:
   { top: number; kicker?: string; children: ReactNode; sub?: ReactNode }) => (
@@ -168,14 +183,14 @@ const Cover: Page = () => (
         margin: '28px 0 0', fontSize: 42, lineHeight: 1.14, fontWeight: 700,
         letterSpacing: '-0.015em', maxWidth: 660,
       }}>
-        Gangguan pasok yang ditangani sebelum orang pertama menyadarinya
+        Supply disruptions handled before anyone has to notice
       </h2>
       <Body style={{ marginTop: 24, maxWidth: 640, fontSize: 24 }}>
-        Dua belas agen membaca SAP, mematuhi TKDN dan LARTAS, lalu menaruh satu
-        keputusan yang bisa disetujui di meja Anda.
+        Twelve agents read your SAP data, obey Indonesia&rsquo;s local-content and
+        import rules, and put one decision you can approve on your desk.
       </Body>
       <div style={{ marginTop: 32 }}>
-        <Pill>Tim Socrates</Pill>
+        <Pill>Team Socrates</Pill>
         <Pill>APP Group</Pill>
         <Pill red>Live demo</Pill>
       </div>
@@ -186,45 +201,45 @@ const Cover: Page = () => (
 const Problem: Page = () => (
   <div style={fill}>
     <div style={{ position: 'absolute', left: 80, top: 244, width: ZONE.wide.width }}>
-      <Eyebrow>01 · Masalah</Eyebrow>
-      <Title>Masalahnya bukan kecepatan saja</Title>
+      <Eyebrow>01 · The problem</Eyebrow>
+      <Title>A port closes Monday. The decision lands Thursday.</Title>
       <Rule />
     </div>
     <div style={{
       position: 'absolute', left: ZONE.tall.left, top: 476, width: ZONE.tall.width,
       display: 'grid', gap: 26,
     }}>
-      <Step n="1" head="Kabar sampai lewat jalur yang salah">
-        Berita, grup WhatsApp, telepon dari forwarder.
+      <Step n="1" head="The news arrives on the wrong channel">
+        A headline, a WhatsApp group, a call from the forwarder.
       </Step>
-      <Step n="2" head="Tiga hari menelusuri manual">
-        Excel, email, tanya satu-satu: order mana yang kena.
+      <Step n="2" head="Three days of tracing it by hand">
+        Excel, email, asking around: which orders are actually hit?
       </Step>
-      <Step n="3" head="Keputusan dari data basi">
-        Angkanya sudah berubah sejak Selasa.
+      <Step n="3" head="The decision is made on stale data">
+        The numbers already moved on Tuesday.
       </Step>
-      <Step n="4" head="Lalu jejaknya hilang">
-        Tak ada catatan dasar keputusan. Audit jadi rekonstruksi.
+      <Step n="4" head="Then the reasoning disappears">
+        Nothing records why. An audit becomes archaeology.
       </Step>
     </div>
-    <OnGradient top={470} kicker="Yang sebenarnya mahal">
-      Keputusan tercepat sering justru yang paling tidak boleh diambil.
+    <OnGradient top={470} kicker="Where the money actually goes">
+      The fastest decision is often the one that was never allowed.
       <span style={{ display: 'block', marginTop: 18, fontSize: 24, fontWeight: 400 }} />
     </OnGradient>
-    <OnGradient top={660} kicker="" sub="Datanya sudah ada di S/4HANA. Yang hilang adalah jam-jam di antara sinyal dan keputusan.">
+    <OnGradient top={660} kicker="" sub="The data is already in S/4HANA. What is missing are the hours between the signal and the decision.">
       <span style={{ fontSize: 26, fontWeight: 400, color: ink.onDark }}>
-        Ini bukan masalah ERP yang kurang.
+        This is not a missing-ERP problem.
       </span>
     </OnGradient>
-    <Footer label="Masalah" />
+    <Footer label="The problem" />
   </div>
 );
 
 const Rules: Page = () => (
   <div style={fill}>
     <div style={{ position: 'absolute', left: 80, top: 244, width: ZONE.wide.width }}>
-      <Eyebrow>01 · Masalah</Eyebrow>
-      <Title>Dua aturan yang membuat opsi termurah jadi terlarang</Title>
+      <Eyebrow>01 · The problem</Eyebrow>
+      <Title>Two Indonesian rules that make the cheapest option illegal</Title>
       <Rule />
     </div>
     <div style={{
@@ -232,44 +247,44 @@ const Rules: Page = () => (
       display: 'grid', gap: 30,
     }}>
       <div>
-        <div style={{ fontSize: 27, fontWeight: 800 }}>TKDN</div>
+        <div style={{ fontSize: 27, fontWeight: 800 }}>TKDN — local content</div>
         <Small style={{ marginTop: 6, fontSize: 22 }}>
-          Tingkat Komponen Dalam Negeri. Beralih ke supplier impor menggerus
-          angkanya — dan kontraknya punya lantai.
+          Regulation and most contracts set a floor on how much must be made in
+          Indonesia. Switching to an imported supplier pushes you under it.
         </Small>
       </div>
       <div>
-        <div style={{ fontSize: 27, fontWeight: 800 }}>LARTAS</div>
+        <div style={{ fontSize: 27, fontWeight: 800 }}>LARTAS — import restrictions</div>
         <Small style={{ marginTop: 6, fontSize: 22 }}>
-          Larangan &amp; Pembatasan impor. Origin baru butuh izin yang tidak
-          terbit dalam seminggu.
+          A new country of origin needs permits, and permits do not arrive in a
+          week.
         </Small>
       </div>
       <div style={{ borderTop: `1px solid ${ink.rule}`, paddingTop: 22 }}>
         <Small style={{ fontSize: 21 }}>
-          Mempercepat keputusan tanpa menegakkan dua aturan ini bukan kemajuan.
-          Itu mempercepat pelanggaran kontrak.
+          Making the decision faster without enforcing these two is not progress.
+          It is faster contract breach.
         </Small>
       </div>
     </div>
     <OnGradient
       top={520}
-      kicker="Contoh nyata dari demo"
-      sub="Bukan karena mahal. Karena melanggar — dan harga tidak membatalkan aturan.">
-      Opsi E — Rp 48 juta, yang termurah — dicoret.
+      kicker="From the live demo"
+      sub="Not because it costs too much. Because it is not allowed — and a price cannot overrule a rule.">
+      Option E — Rp 48 million, the cheapest — is struck out.
       <span style={{ display: 'block', marginTop: 14, fontSize: 28, fontWeight: 400, color: ink.onDarkMuted }}>
-        TKDN jatuh ke 34,8%.
+        Local content falls to 34.8%.
       </span>
     </OnGradient>
-    <Footer label="Masalah" />
+    <Footer label="The problem" />
   </div>
 );
 
 const Solution: Page = () => (
   <div style={fill}>
     <div style={{ position: 'absolute', left: 80, top: 244, width: ZONE.wide.width }}>
-      <Eyebrow>02 · Solusi</Eyebrow>
-      <Title>Dua belas agen, satu keputusan yang bisa disetujui</Title>
+      <Eyebrow>02 · The solution</Eyebrow>
+      <Title>Twelve agents, one decision you can sign</Title>
       <Rule />
     </div>
     {/* Five steps have to clear the partner logos at y=912, so they start
@@ -278,29 +293,29 @@ const Solution: Page = () => (
       position: 'absolute', left: ZONE.tall.left, top: 452, width: ZONE.tall.width,
       display: 'grid', gap: 16,
     }}>
-      <Step n="01" head="Watcher, bukan inbox">
-        BMKG, GDACS, NASA EONET, USGS, Open-Meteo — tanpa diminta.
+      <Step n="01" head="It watches instead of waiting">
+        Public hazard feeds, every few minutes, nobody asked.
       </Step>
-      <Step n="02" head="Dua belas agen membaca">
-        S/4HANA, master data, upload, feed publik.
+      <Step n="02" head="Twelve agents read the real data">
+        S/4HANA, master data, your uploads, the feeds.
       </Step>
-      <Step n="03" head="Kira mencoret yang melanggar">
-        TKDN dan LARTAS, sebelum harga ikut bicara.
+      <Step n="03" head="Kira strikes out what is not allowed">
+        Local content and import rules, before price gets a turn.
       </Step>
-      <Step n="04" head="Tara memberi angka">
-        Biaya, tanggal habis stok, OTIF, dampak TKDN.
+      <Step n="04" head="Tara puts a number on each option">
+        Cost, stock-out date, arrival date, local-content impact.
       </Step>
-      <Step n="05" head="Mengeksekusi dalam batas wewenang">
-        Di atasnya, berhenti dan bertanya.
+      <Step n="05" head="It acts inside its authority">
+        Above that limit it stops and asks a person.
       </Step>
     </div>
     <OnGradient
       top={500}
-      kicker="Satu agen punya hak veto"
-      sub="Vetonya bukan prompt. Ia membaca rule pack, dan penolakannya tidak bisa dibatalkan oleh harga.">
-      Kira menolak di dua pintu — saat opsi dipilih, dan lagi saat PO diterbitkan.
+      kicker="One agent holds a veto"
+      sub="The veto is code reading a rule pack, not a prompt. A cheaper option cannot talk its way past it.">
+      Kira blocks at two gates — when the option is chosen, and again when the PO is issued.
     </OnGradient>
-    <Footer label="Solusi" />
+    <Footer label="The solution" />
   </div>
 );
 
@@ -313,16 +328,16 @@ const Architecture: Page = () => (
       boxShadow: '0 18px 60px rgba(60,20,90,0.16)',
     }} />
     <div style={{ position: 'absolute', left: 136, top: 286, width: 1000 }}>
-      <Eyebrow>03 · Arsitektur</Eyebrow>
+      <Eyebrow>03 · Architecture</Eyebrow>
       <h1 style={{
         margin: '12px 0 0', fontSize: 44, fontWeight: 800, letterSpacing: '-0.02em',
       }}>
-        AWS untuk otaknya, SAP untuk datanya dan pintunya
+        AWS for the thinking, SAP for the data and the doors
       </h1>
     </div>
     <img
       src={architecture}
-      alt="Arsitektur SIGAP: AWS Bedrock dan AgentCore di sisi model, SAP S/4HANA dan AI Core di sisi data"
+      alt="SIGAP architecture: Amazon Bedrock and AgentCore on the model side, SAP S/4HANA and AI Core on the data side"
       style={{
         position: 'absolute', left: 136, top: 398, width: 1648, height: 398,
         objectFit: 'contain',
@@ -330,9 +345,9 @@ const Architecture: Page = () => (
     />
     <div style={{ position: 'absolute', left: 136, top: 810, width: 1200 }}>
       <Small style={{ fontSize: 18 }}>
-        Agent service: Python 3, standard library saja — <span style={{ fontFamily: mono }}>http.server</span>{' '}
-        + <span style={{ fontFamily: mono }}>sqlite3</span>. Digambar oleh{' '}
-        <span style={{ fontFamily: mono }}>sigap/architecture/diagram.py</span>, bukan tangan.
+        Agent service: Python 3, standard library only — <span style={{ fontFamily: mono }}>http.server</span>{' '}
+        + <span style={{ fontFamily: mono }}>sqlite3</span>. This diagram is generated by{' '}
+        <span style={{ fontFamily: mono }}>sigap/architecture/diagram.py</span>, not drawn.
       </Small>
     </div>
   </div>
@@ -341,7 +356,7 @@ const Architecture: Page = () => (
 const Demo: Page = () => (
   <div style={fill}>
     <div style={{ position: 'absolute', left: 80, top: 380, width: ZONE.tall.width }}>
-      <Eyebrow>Jeda</Eyebrow>
+      <Eyebrow>Pause</Eyebrow>
       <div style={{
         fontSize: 108, fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 0.96,
         marginTop: 18,
@@ -351,151 +366,143 @@ const Demo: Page = () => (
       </div>
       <Rule />
       <Body style={{ marginTop: 26, fontSize: 24 }}>
-        Satu topan menutup Ningbo. Kita lihat SIGAP menemukannya, menilainya,
-        menolak opsi termurah, lalu berhenti meminta tanda tangan.
+        One typhoon closes Ningbo. Watch SIGAP find it, size it, strike out the
+        cheapest option, and then stop to ask for a signature.
       </Body>
     </div>
     <OnGradient
       top={430}
-      kicker="Yang akan Anda lihat"
-      sub="Semua angka di layar bisa dihitung ulang dari perintah di DEMO.md.">
-      Live, bukan rekaman — terhadap SAP S/4HANA dan Amazon Bedrock yang sebenarnya.
+      kicker="What you are about to see"
+      sub="Every number on screen can be recomputed from the commands in DEMO.md.">
+      Live, not a recording — against real SAP S/4HANA and Amazon Bedrock.
     </OnGradient>
   </div>
 );
 
-const Trust: Page = () => (
+const Detect: Page = () => (
   <div style={fill}>
     <div style={{ position: 'absolute', left: 80, top: 244, width: ZONE.wide.width }}>
-      <Eyebrow>04 · Kenapa bisa dipercaya</Eyebrow>
-      <Title>Agen lain menjawab dengan percaya diri</Title>
+      <Eyebrow>04 · Detect</Eyebrow>
+      <Title>It is already watching, all night</Title>
       <Rule />
     </div>
     <div style={{
       position: 'absolute', left: ZONE.tall.left, top: 452, width: ZONE.tall.width,
       display: 'grid', gap: 18,
     }}>
-      <Step n="01" head="Tiap angka membawa asalnya">
-        <span style={{ fontFamily: mono, fontSize: 19 }}>live · uploaded · derived · modelled · missing</span>
-        {' '}— terbaca di layar, bukan di log.
+      <Step n="01" head="Five public feeds, no licence needed">
+        BMKG, GDACS, NASA EONET, USGS, Open-Meteo.
       </Step>
-      <Step n="02" head="Kalkulatornya menolak menebak">
-        Tanpa data yang layak, ia mengembalikan <span style={{ fontFamily: mono, fontSize: 19 }}>missing</span>,
-        bukan angka yang terdengar meyakinkan.
+      <Step n="02" head="Eight jobs on their own clock">
+        Quakes every five minutes; cyclones, floods and marine weather on theirs.
       </Step>
-      <Step n="03" head="Veto ada di kode, bukan di prompt">
-        Dari 18 supplier: 6 domestik lolos, 12 asing diblok.
+      <Step n="03" head="It watches your paperwork too">
+        Local-content certificates that are about to expire, before they lapse.
       </Step>
-      <Step n="04" head="56 modul memeriksa dirinya sendiri">
-        <span style={{ fontFamily: mono, fontSize: 19 }}>manage.py check</span> — 0 gagal.
+      <Step n="04" head="One digest at 07:30">
+        What moved overnight, and what is waiting for your signature.
       </Step>
     </div>
     <OnGradient
       top={500}
-      kicker="Bedanya"
-      sub="Itulah syarat sebuah agen boleh menyentuh purchase order sungguhan.">
-      Yang ini menolak menjawab kalau datanya tidak layak.
+      kicker="Nothing to remember to check"
+      sub="It only needs your ports, plants and material list: every event is matched against them by distance, so a quake 2,000 km away stays silent.">
+      No inbox to watch, no dashboard to open, for SIGAP to start working.
     </OnGradient>
-    <Footer label="Kepercayaan" />
+    <Footer label="Detect" />
   </div>
 );
 
-const Numbers: Page = () => (
+const Act: Page = () => (
   <div style={fill}>
     <div style={{ position: 'absolute', left: 80, top: 244, width: ZONE.wide.width }}>
-      <Eyebrow>04 · Kenapa bisa dipercaya</Eyebrow>
-      <Title>Angka yang bisa dihitung ulang</Title>
+      <Eyebrow>05 · Act</Eyebrow>
+      <Title>It does the work, not just the advice</Title>
       <Rule />
     </div>
     <div style={{
-      position: 'absolute', left: ZONE.tall.left, top: 492, width: ZONE.tall.width,
+      position: 'absolute', left: ZONE.tall.left, top: 510, width: ZONE.tall.width,
+      display: 'grid', gridTemplateColumns: '324px 324px', gap: '46px 40px',
+    }}>
+      <Card head="Buys inside a limit">
+        Under Rp 50 million it moves on its own. Above it, it stops and asks.
+        One setting, checked on the server.
+      </Card>
+      <Card head="Writes back into SAP">
+        The approved action leaves as a purchase order — idempotent, and only
+        ever after a person signs off.
+      </Card>
+      <Card head="Talks to your suppliers">
+        It drafts the outreach email and holds it. No agent sends anything on
+        its own.
+      </Card>
+      <Card head="Tells the right people">
+        Email, Slack, Telegram, or a webhook for Teams and ticket queues.
+      </Card>
+    </div>
+    <OnGradient
+      top={500}
+      kicker="Where it stops"
+      sub="Approve, hold or reject — and the record keeps who did it, when, and on which figures.">
+      Every action that leaves the building has a gate a human can hold shut.
+    </OnGradient>
+    <Footer label="Act" />
+  </div>
+);
+
+const Open: Page = () => (
+  <div style={fill}>
+    <div style={{ position: 'absolute', left: 80, top: 244, width: ZONE.wide.width }}>
+      <Eyebrow>06 · Open</Eyebrow>
+      <Title>Built for other agents, not only for people</Title>
+      <Rule />
+    </div>
+    <div style={{
+      position: 'absolute', left: ZONE.tall.left, top: 480, width: ZONE.tall.width,
       display: 'grid', gap: 0,
     }}>
       {[
-        ['Rp 116 jt', 'opsi B+C yang dipilih · TKDN 41,6%'],
-        ['Rp 70 jt', 'lebih hemat dari opsi A (38%)'],
-        ['Rp 46 jt', 'harga kepatuhan — dan kami tunjukkan'],
-      ].map(([n, c], i) => (
-        <div key={n} style={{
-          display: 'flex', alignItems: 'baseline', gap: 24, padding: '10px 0',
+        ['MCP', 'All 46 tools over one POST /mcp endpoint. AWS AgentCore Gateway speaks MCP, and so does SAP Joule.'],
+        ['A2A', 'An agent card with three read-only skills: investigate a disruption, check how one is going, scan for risk. None of them can approve anything.'],
+        ['Reports', 'PDF and Excel per handling, plus a portfolio view across all of them — written with the standard library, no reporting dependency.'],
+      ].map(([label, copy], i) => (
+        <div key={label} style={{
+          display: 'flex', alignItems: 'baseline', gap: 24, padding: '13px 0',
           borderTop: i === 0 ? 'none' : `1px solid ${ink.rule}`,
         }}>
           <div style={{
-            fontSize: 52, fontWeight: 800, letterSpacing: '-0.03em', minWidth: 230,
-            color: i === 2 ? ink.red : 'var(--osd-text)',
-          }}>{n}</div>
-          <div style={{ fontSize: 21, lineHeight: 1.4, color: ink.muted }}>{c}</div>
+            fontSize: 27, fontWeight: 800, letterSpacing: '-0.01em', minWidth: 132,
+            color: ink.red,
+          }}>{label}</div>
+          <div style={{ fontSize: 20, lineHeight: 1.42, color: ink.muted }}>{copy}</div>
         </div>
       ))}
     </div>
-    <div style={{ position: 'absolute', left: ZONE.tall.left, top: 800, width: ZONE.tall.width }}>
-      <Small style={{ fontSize: 19 }}>
-        Keluar dari <span style={{ fontFamily: mono }}>engine/simulate.py</span>, bukan dari model.
-      </Small>
-    </div>
     <OnGradient
       top={500}
-      kicker="Harga kepatuhan"
-      sub="Sistem lain menyembunyikan selisih ini. Kami menuliskannya, karena itulah yang ditandatangani seorang approver.">
-      Menaati TKDN memang lebih mahal. Rp 46 juta lebih mahal.
+      kicker="Why that matters here"
+      sub="Ask Joule in plain language and the answer still carries where each figure came from — and Joule is not allowed to approve.">
+      SIGAP is a teammate other agents can call, not an app you have to open.
     </OnGradient>
-    <Footer label="Kepercayaan" />
-  </div>
-);
-
-const Honest: Page = () => (
-  <div style={fill}>
-    <div style={{ position: 'absolute', left: 80, top: 244, width: ZONE.wide.width }}>
-      <Eyebrow>05 · Dampak</Eyebrow>
-      <Title>Sudah jalan hari ini — dan kami tahu persis apa yang belum</Title>
-      <Rule />
-    </div>
-    <div style={{
-      position: 'absolute', left: ZONE.tall.left, top: 516, width: ZONE.tall.width,
-      display: 'grid', gap: 22,
-    }}>
-      <div>
-        <div style={{ fontSize: 23, fontWeight: 800, color: '#1A7F4B' }}>Jalan</div>
-        <Small style={{ marginTop: 6, fontSize: 21 }}>
-          SAP S/4HANA live, Bedrock dan AI Core, 46 tool, 12 prompt, lima watcher,
-          delapan job terjadwal, laporan PDF dan XLSX, deploy terotomasi.
-        </Small>
-      </div>
-      <div>
-        <div style={{ fontSize: 23, fontWeight: 800, color: ink.red }}>Belum</div>
-        <Small style={{ marginTop: 6, fontSize: 21 }}>
-          Rule pack masih bernilai ilustratif — tiap aturan sudah membawa{' '}
-          <span style={{ fontFamily: mono, fontSize: 19 }}>verified</span>, dan semuanya
-          masih <span style={{ fontFamily: mono, fontSize: 19 }}>false</span>. SQLite perlu
-          pindah ke Postgres sebelum apa pun yang nyata.
-        </Small>
-      </div>
-    </div>
-    <OnGradient
-      top={500}
-      kicker="Kenapa ini ada di slide"
-      sub="Produk yang menolak menebak tidak boleh menebak tentang dirinya sendiri.">
-      Daftar &ldquo;belum&rdquo; itu bagian dari argumennya, bukan catatan kaki.
-    </OnGradient>
-    <Footer label="Dampak" />
+    <Footer label="Open" />
   </div>
 );
 
 const Closing: Page = () => (
   <div style={fill}>
     <div style={{ position: 'absolute', left: 80, top: 300, width: ZONE.tall.width }}>
-      <Eyebrow>Satu kalimat untuk diingat</Eyebrow>
+      <Eyebrow>One sentence to remember</Eyebrow>
       <h1 style={{
         margin: '22px 0 0', fontSize: 50, lineHeight: 1.14, fontWeight: 800,
         letterSpacing: '-0.02em',
       }}>
-        Bukan agen yang memutuskan lebih cepat — agen yang menolak memutuskan
-        hal yang tidak boleh.
+        Not an agent that decides faster — an agent that refuses to decide what
+        it may not.
       </h1>
       <Rule width={150} />
       <Body style={{ marginTop: 28, fontSize: 23 }}>
-        Keputusan yang bisa disetujui, dengan asal tiap angkanya, dalam hitungan
-        menit, dan tidak pernah melanggar TKDN atau LARTAS.
+        A decision you can approve, with the origin of every figure behind it,
+        in minutes — and never against local-content or import rules.
       </Body>
       <div style={{ marginTop: 30, fontFamily: mono, fontSize: 20, color: ink.muted }}>
         sigap.lumbungstack.dev
@@ -503,9 +510,9 @@ const Closing: Page = () => (
     </div>
     <OnGradient
       top={470}
-      kicker="Tim Socrates"
-      sub="Terima kasih — dan silakan minta kami menjalankan ulang perintah mana pun yang angkanya tadi muncul di layar.">
-      Siap menerima pertanyaan.
+      kicker="Team Socrates"
+      sub="Thank you — and please ask us to re-run any command whose numbers you saw on screen.">
+      Ready for your questions.
     </OnGradient>
   </div>
 );
@@ -513,20 +520,20 @@ const Closing: Page = () => (
 /* ------------------------------------------------------------------ notes */
 
 export const notes: (string | undefined)[] = [
-  'Halo, kami Tim Socrates. SIGAP: gangguan pasok yang ditangani sebelum orang pertama menyadarinya. Sepuluh halaman, dan salah satunya demo langsung. Mulai dari kenapa ini sulit.',
-  'Saat satu pelabuhan tutup, puluhan material berhenti. Yang mahal bukan topannya — tiga hari menelusuri Excel dan WhatsApp, lalu memutuskan dari angka yang sudah basi, dan tak ada jejak kenapa. Datanya sudah ada di S/4HANA. Yang hilang adalah jam-jam di antara sinyal dan keputusan.',
-  'Dan ada dimensi yang khas Indonesia. Opsi termurah hampir selalu impor; impor menggerus TKDN dan kena LARTAS. Di demo nanti opsi E — yang termurah, Rp 48 juta — dicoret karena TKDN jatuh ke 34,8%. Bukan karena mahal. Karena melanggar. Jadi mempercepat keputusan tanpa menegakkan aturan ini bukan kemajuan.',
-  'SIGAP menutup jam-jam itu. Watcher memantau BMKG, GDACS, NASA EONET, USGS dan Open-Meteo tanpa diminta. Dua belas agen membaca SAP dan data pendukung. Kira mencoret yang melanggar sebelum harga ikut bicara — dan vetonya ada di dua pintu, saat opsi dipilih dan lagi saat PO diterbitkan. Tara memberi angka. Lalu sistem mengeksekusi dalam batas wewenang, dan berhenti bertanya di atasnya.',
-  'Arsitekturnya: AWS untuk otaknya — Bedrock dan AgentCore — SAP untuk datanya dan pintunya, S/4HANA dan AI Core. Agent service-nya Python standard library saja, http.server dan sqlite3; tidak ada orkestrator, tidak ada message broker. Diagram ini digenerate dari kode, bukan digambar tangan.',
-  'Sekarang demonya. Satu topan menutup Ningbo. Live terhadap SAP dan Bedrock sungguhan. Perhatikan tiga hal: dari mana tiap angka berasal, di mana Kira mencoret, dan di mana sistem berhenti meminta tanda tangan.',
-  'Yang baru saja Anda lihat sulitnya di sini. Tiap angka membawa asalnya — live, uploaded, derived, modelled, missing — dan itu tampil di layar, bukan tersembunyi di log. Kalkulatornya menolak menebak: tanpa data layak ia mengembalikan missing. Vetonya ada di kode. Dan 56 modul memeriksa dirinya sendiri, nol gagal.',
-  'Angkanya bisa dihitung ulang. Opsi B+C: Rp 116 juta, TKDN 41,6% — hemat Rp 70 juta dibanding opsi A. Dan yang paling jarang ditunjukkan orang: harga kepatuhan, Rp 46 juta. Menaati TKDN memang lebih mahal, dan kami menuliskannya, karena itulah yang ditandatangani seorang approver.',
-  'Yang jalan hari ini: SAP live, dua provider model, 46 tool, lima watcher, delapan job, laporan, deploy otomatis. Yang belum: rule pack masih ilustratif — tiap aturan sudah membawa flag verified, dan semuanya masih false — dan SQLite harus pindah ke Postgres sebelum apa pun yang nyata. Kami taruh ini di slide karena produk yang menolak menebak tidak boleh menebak tentang dirinya sendiri.',
-  'Satu kalimat: ini bukan agen yang memutuskan lebih cepat, tapi agen yang menolak memutuskan hal yang tidak boleh. Keputusan yang bisa disetujui, dengan asal tiap angkanya, dalam hitungan menit. Silakan minta kami menjalankan ulang perintah mana pun yang angkanya muncul tadi. Terima kasih.',
+  'Hello, we are Team Socrates. SIGAP: supply disruptions handled before anyone has to notice. Ten pages, one of them a live demo. Let me start with why this is hard.',
+  'When a port closes, dozens of materials stop with it. The expensive part is not the typhoon. It is three days of Excel and WhatsApp to find out which orders are hit, then deciding on numbers that moved two days ago, with nothing recording why. The data is already in S/4HANA. What is missing are the hours between the signal and the decision.',
+  'And there is a dimension that is specific to Indonesia. The cheapest replacement is almost always imported, and importing cuts your local-content score and runs into import restrictions. In the demo you will see option E, the cheapest at 48 million rupiah, struck out because local content falls to 34.8 per cent. Not because it costs too much. Because it is not allowed. So making the decision faster without enforcing these rules is not progress.',
+  'SIGAP closes those hours. It watches public hazard feeds without being asked. Twelve agents read SAP and the supporting data. Kira strikes out what is not allowed before price gets a turn, and her veto sits at two gates: when the option is chosen, and again when the purchase order is issued. Tara puts a number on each surviving option. Then the system acts inside its authority, and stops to ask above it.',
+  'The architecture: AWS for the thinking, Bedrock and AgentCore, and SAP for the data and the doors, S/4HANA and AI Core. The agent service is Python standard library only, http.server and sqlite3 — no orchestrator, no message broker. This diagram is generated from the code, not drawn by hand.',
+  'Now the demo. One typhoon closes Ningbo. This is live against real SAP and real Bedrock. Watch three things: where each number comes from, where Kira strikes an option out, and where the system stops and asks for a signature.',
+  'Let me show you the features behind what you just saw. First, detection. SIGAP watches five public feeds — BMKG for quakes in Indonesia, GDACS, NASA EONET, USGS and Open-Meteo — on eight scheduled jobs. It also watches your own paperwork: local-content certificates about to expire. And at half past seven every morning it sends one digest of what moved overnight. Nobody has to remember to check anything.',
+  'Second, acting. Under 50 million rupiah it moves on its own; above that it stops and asks, and that limit is checked on the server, not in the prompt. The approved action leaves as a real purchase order into SAP. Supplier emails are drafted and held — no agent sends anything by itself. And the people who need to know are told, over email, Slack, Telegram or a webhook.',
+  'Third, and this is the part we are proudest of in an agentic track: SIGAP is open. All 46 tools are exposed over a single MCP endpoint, which is what AWS AgentCore Gateway and SAP Joule both speak. There is an A2A agent card with three read-only skills, so another agent can hand SIGAP work. And every handling comes out as a PDF and an Excel file, with a portfolio view across all of them.',
+  'One sentence to take away: this is not an agent that decides faster, it is an agent that refuses to decide what it may not. A decision you can approve, with the origin of every figure behind it, in minutes. Please ask us to re-run any command whose numbers you saw. Thank you.',
 ];
 
 export const meta: SlideMeta = {
-  title: 'SIGAP — 10 halaman, template panitia',
+  title: 'SIGAP — 10 pages, organiser template',
   createdAt: '2026-10-29T00:34:00.000Z',
 };
 
@@ -537,8 +544,8 @@ export default [
   Solution,
   Architecture,
   Demo,
-  Trust,
-  Numbers,
-  Honest,
+  Detect,
+  Act,
+  Open,
   Closing,
 ] satisfies Page[];

@@ -2,12 +2,21 @@
 
 > **Ada dua deck di `deck/`, keduanya dengan speaker notes per halaman.**
 >
-> **`sigap-10` — 10 halaman, di atas template panitia. Ini yang dibawa ke panggung.**
-> Sudah termasuk cover dan halaman demo. Tiap halaman memakai artwork panitia apa adanya
-> dan menaruh isi di ruang yang tersisa — ruang itu berbentuk baji, bukan kotak, dan
-> angkanya ada di `deck/template/README.md`. Ekspor: `deck/export/sigap-10.pptx`
-> (teks native), `sigap-10-image.pptx` (tiap halaman satu gambar, untuk laptop panggung
-> yang fontnya beda), `sigap-10.pdf`. Sumber: `deck/slides/sigap-10/index.tsx`.
+> **`sigap-10` — 10 halaman bahasa Inggris, di atas template panitia. Ini yang dibawa
+> ke panggung.** Sudah termasuk cover dan halaman demo. Tiap halaman
+> memakai artwork panitia apa adanya dan menaruh isi di ruang yang tersisa — ruang itu
+> berbentuk baji, bukan kotak, dan angkanya ada di `deck/template/README.md`.
+>
+> Urutannya: Cover · Problem · Two rules (TKDN/LARTAS) · Solution · Architecture ·
+> **Demo** · Detect · Act · Open · Closing. Tiga halaman terakhir sebelum closing adalah
+> halaman **fitur**: apa yang diawasi, apa yang dikerjakan, dan apa yang dibuka ke agen
+> lain (MCP, A2A, laporan). Istilah Indonesia disebut sekali lalu dijelaskan dengan kata
+> biasa — TKDN sebagai *local content*, LARTAS sebagai *import restrictions* — supaya juri
+> yang tidak mengenal regulasi Indonesia tetap bisa mengikuti.
+>
+> Ekspor: `deck/export/sigap-10.pptx` (teks native), `sigap-10-image.pptx` (tiap halaman
+> satu gambar, untuk laptop panggung yang fontnya beda), `sigap-10.pdf`.
+> Sumber: `deck/slides/sigap-10/index.tsx`. Speaker notes juga bahasa Inggris, index-aligned.
 >
 > **`sigap-hackathon` — 27 halaman, palet gelap sendiri.** Versi panjangnya: dipakai
 > kalau waktunya longgar, sebagai lampiran, atau sebagai bahan tanya jawab. Ekspor:
