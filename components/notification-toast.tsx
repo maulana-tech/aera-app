@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { ArrowRight, MessageSquare, Sparkles, X } from "lucide-react";
 import { AgentBadge } from "@/components/agent-card";
@@ -102,6 +102,7 @@ export function NotificationToast() {
   // Automatically dismiss the toast if user enters the conversation page
   useEffect(() => {
     if (isConversationPage && notification) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setNotification(null);
     }
   }, [isConversationPage, notification]);

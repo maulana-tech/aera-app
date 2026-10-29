@@ -647,6 +647,7 @@ export default function Conversation({
     if (!threadId) return;
     let alive = true;
     // Mark the external request as loading before restoring its result.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRestoring(true);
     fetch(`/api/sigap/conversations/${threadId}`, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
