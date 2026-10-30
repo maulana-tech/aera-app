@@ -41,8 +41,16 @@ ENTITIES: Dict[str, Dict[str, List[str]]] = {
         "required": ["id", "Material", "Supplier", "Quantity", "ArrivalDate", "ExtraCostIDR", "Origin"],
         "numeric": ["Quantity", "ExtraCostIDR"],
     },
+    # TkdnCertifiedPct is NOT required, and that is the point. A foreign
+    # supplier has no Indonesian local-content certificate, so demanding the
+    # column forces whoever fills the file to type 0 - which is a claim
+    # ("certified at zero") rather than the truth ("no certificate on record").
+    # tools/compliance.py already reads the two apart: it blocks a DOMESTIC
+    # supplier that carries no figure, and does not ask a foreign one for one.
+    # Requiring it here contradicted that, and rejected this project's own
+    # fixtures/demo/Supplier.csv - 9 of its 18 rows are foreign.
     "Supplier": {
-        "required": ["Supplier", "SupplierName", "Country", "TkdnCertifiedPct"],
+        "required": ["Supplier", "SupplierName", "Country"],
         "numeric": ["TkdnCertifiedPct"],
     },
     "Quotation": {

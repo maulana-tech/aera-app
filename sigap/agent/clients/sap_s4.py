@@ -34,12 +34,65 @@ _quota = {"until": 0.0, "since": ""}
 _quota_lock = threading.Lock()
 
 
+#: A key and a base URL set from the Settings page beat the environment, so a
+#: deployment can be pointed at a customer's own tenant without a redeploy.
+#: Cached like the mode: api_key() is called on every single SAP request.
+_CRED_TTL = 2.0
+_cred = {"at": 0.0, "key": None, "url": None}
+
+
+def _stored() -> Dict[str, Optional[str]]:
+    now = time.monotonic()
+    if now - _cred["at"] >= _CRED_TTL:
+        try:
+            from core import store
+            _cred["key"] = store.get_setting("sap.api_key")
+            _cred["url"] = store.get_setting("sap.base_url")
+        except Exception:                                           # noqa: BLE001
+            _cred["key"] = _cred["url"] = None                      # no DB yet
+        _cred["at"] = now
+    return _cred
+
+
+def clear_quota_cooldown() -> None:
+    """Forget that the quota was spent.
+
+    The cooldown exists so a spent quota is not hammered, and it is right for
+    ordinary traffic. It is wrong for two cases: a NEW key has its own quota,
+    and an admin pressing "test" has asked for one real call and deserves an
+    answer about their key rather than about the previous one.
+    """
+    with _quota_lock:
+        _quota.update(until=0.0, since="")
+
+
+def forget_credentials() -> None:
+    """Drop the cache so the next call re-reads. Called after a settings write."""
+    _cred["at"] = 0.0
+    _mode["at"] = 0.0
+    clear_quota_cooldown()
+
+
 def base_url() -> str:
-    return CFG.sap_base_url
+    return (_stored()["url"] or CFG.sap_base_url or "").rstrip("/")
 
 
 def api_key() -> str:
-    return CFG.sap_api_key
+    return _stored()["key"] or CFG.sap_api_key or ""
+
+
+def key_hint() -> str:
+    """The last four characters, for a settings page to show which key is in
+    use without ever sending the key itself to a browser."""
+    k = api_key()
+    return f"…{k[-4:]}" if len(k) >= 4 else ("set" if k else "")
+
+
+def key_source() -> str:
+    """'settings', 'environment' or 'none' - so an admin can see which one wins."""
+    if _stored()["key"]:
+        return "settings"
+    return "environment" if CFG.sap_api_key else "none"
 
 
 class MissingApiKey(RuntimeError):
@@ -63,8 +116,36 @@ def _body(resp) -> str:
     return raw.decode("utf-8", errors="replace")
 
 
+#: data_mode() reads SQLite, and available() is called on nearly every tool
+#: call, so the answer is held briefly. Two seconds is short enough that a
+#: switch in the sidebar is felt immediately and long enough that one handling
+#: does not open the database a hundred times.
+_MODE_TTL = 2.0
+_mode = {"at": 0.0, "value": "live"}
+
+
+def data_mode() -> str:
+    """'live' or 'demo', from the settings table. Falls back to live."""
+    now = time.monotonic()
+    if now - _mode["at"] >= _MODE_TTL:
+        try:
+            from core import store
+            _mode["value"] = store.data_mode()
+        except Exception:                                           # noqa: BLE001
+            _mode["value"] = "live"                                 # no DB yet
+        _mode["at"] = now
+    return _mode["value"]
+
+
 def available() -> bool:
-    return bool(api_key())
+    """Whether the tools should call SAP at all.
+
+    One gate for the whole product: ten callers ask this before reaching for
+    S/4HANA, and when it is False every one of them already falls through to
+    uploaded data and the modelled fixtures. Demo mode is therefore not a
+    second code path - it is this gate answering no.
+    """
+    return data_mode() == "live" and bool(api_key())
 
 
 def get(service: str, entity: str, params: Optional[Dict[str, Any]] = None) -> dict:

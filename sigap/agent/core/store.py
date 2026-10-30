@@ -855,6 +855,51 @@ def delete_contact(cid: str) -> bool:
     return n > 0
 
 
+# ------------------------------------------------------------------ settings
+#: Where the tools read enterprise data from. 'live' uses the SAP connector;
+#: 'demo' does not call SAP at all and the tools fall through to uploaded data
+#: and the modelled fixtures, exactly as they do when no API key is set.
+#:
+#: This exists because a BROKEN SAP is worse than an absent one: with a key
+#: present but its quota spent, every tool raised an error and a handling
+#: finished with no action at all. With SAP off the same event, on the same
+#: uploaded data, ran to completion. A sandbox that dies mid-demo should cost
+#: a switch, not the demo.
+DATA_MODES = ("live", "demo")
+
+
+def get_setting(key: str, default: Optional[str] = None) -> Optional[str]:
+    with connect() as c:
+        r = c.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+    return r["value"] if r else default
+
+
+def set_setting(key: str, value: Optional[str], by: str) -> None:
+    """Write one setting. None or '' deletes it, which restores the default."""
+    with connect() as c:
+        if value:
+            c.execute("INSERT INTO settings (key, value, updated_by, updated_at)"
+                      " VALUES (?,?,?,?) ON CONFLICT(key) DO UPDATE SET"
+                      " value=excluded.value, updated_by=excluded.updated_by,"
+                      " updated_at=excluded.updated_at", (key, value, by, _now()))
+        else:
+            c.execute("DELETE FROM settings WHERE key=?", (key,))
+
+
+def data_mode() -> str:
+    """'live' or 'demo'. Unset means live, so an existing deployment is unchanged."""
+    v = (get_setting("data.mode") or "live").strip().lower()
+    return v if v in DATA_MODES else "live"
+
+
+def data_mode_detail() -> Dict[str, Any]:
+    with connect() as c:
+        r = c.execute("SELECT * FROM settings WHERE key='data.mode'").fetchone()
+    return {"mode": data_mode(), "modes": list(DATA_MODES),
+            "set_by": r["updated_by"] if r else None,
+            "set_at": r["updated_at"] if r else None}
+
+
 # ------------------------------------------------------------- model choice
 def model_choices(detail: bool = False) -> Dict[str, Any]:
     """key → model, or key → {value, updated_by, updated_at} with detail."""

@@ -22,6 +22,7 @@ const LABELS: Record<string, string> = {
   audit: "Data audit",
   log: "Log",
   reports: "Reports",
+  sap: "SAP connection",
   uploads: "Upload data",
   contacts: "Contacts",
   models: "Models",

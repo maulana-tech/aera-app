@@ -58,6 +58,7 @@ import queue
 import re
 import sys
 import threading
+import time
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -169,9 +170,15 @@ def route(method: str, pattern: str) -> Callable:
 @route("GET", r"/health")
 def health(_m, _b, _h) -> Tuple[int, dict]:
     from agents.definitions import ALL
+    from clients import sap_s4
     return 200, {
         "env": CFG.env,
-        "sap_ready": CFG.sap_ready,
+        # Which data source the tools will actually use, and whether a key is
+        # configured at all. In demo mode sap_ready is False even when a key
+        # is present, because False is what every tool will see.
+        "data_mode": sap_s4.data_mode(),
+        "sap_key_set": bool(sap_s4.api_key()),
+        "sap_ready": sap_s4.available(),
         "model_ready": CFG.model_ready,
         "may_use_modelled": CFG.may_use_modelled,
         # The lead's model, as before. `models` has every agent's, since they
@@ -180,6 +187,148 @@ def health(_m, _b, _h) -> Tuple[int, dict]:
         "models": llm.describe(ALL.values()),
         "aux_model": str(llm.aux_spec()),
     }
+
+
+# --------------------------------------------------------------- SAP settings
+#: Entity used to prove a key works. Small, present on every S/4HANA tenant,
+#: and one row is enough: a quota error answers just as loudly as a 200.
+_SAP_PROBE = ("API_PRODUCT_SRV", "A_Product")
+
+
+def _sap_settings(user) -> dict:
+    """What a browser may know about the SAP credential. Never the key."""
+    from clients import sap_s4
+    return {
+        "base_url": sap_s4.base_url(),
+        "key_set": bool(sap_s4.api_key()),
+        "key_hint": sap_s4.key_hint(),
+        "key_source": sap_s4.key_source(),
+        "data_mode": sap_s4.data_mode(),
+        "may_change": user.role in SETTINGS_ROLES,
+    }
+
+
+@route("GET", r"/settings/sap")
+def get_sap_settings(_m, _b, h) -> Tuple[int, dict]:
+    """Where SIGAP reads enterprise data from, and whether a key is in place.
+
+    The key itself is never in this payload - only whether one is set, its last
+    four characters, and whether it came from the Settings page or the
+    environment. A credential that can leave the server through a GET is a
+    credential that ends up in a browser cache, a screenshot or a log.
+    """
+    return 200, _sap_settings(_user(h))
+
+
+@route("POST", r"/settings/sap")
+def set_sap_settings(_m, b: dict, h) -> Tuple[int, dict]:
+    """{"api_key"?: str, "base_url"?: str}. Empty string clears that one and
+    hands the choice back to the environment.
+
+    A key left out is left alone, so an admin can change the base URL without
+    re-typing the key.
+    """
+    from clients import sap_s4
+    user = _user(h)
+    if user.role not in SETTINGS_ROLES:
+        return 403, {"error": f"role '{user.role}' may not change the SAP connection "
+                              f"(needs {' or '.join(SETTINGS_ROLES)})"}
+    if "api_key" not in b and "base_url" not in b:
+        return 400, {"error": "send api_key, base_url, or both"}
+
+    if "base_url" in b:
+        url = str(b.get("base_url") or "").strip().rstrip("/")
+        if url and not url.startswith(("http://", "https://")):
+            return 400, {"error": "base_url must start with http:// or https://"}
+        store.set_setting("sap.base_url", url, user.email)
+    if "api_key" in b:
+        key = str(b.get("api_key") or "").strip()
+        # Whitespace and a pasted "APIKey: " prefix are the two ways this is
+        # mistyped; both produce a 401 that looks like a bad key.
+        if key.lower().startswith("apikey:"):
+            key = key[len("apikey:"):].strip()
+        store.set_setting("sap.api_key", key, user.email)
+
+    sap_s4.forget_credentials()
+    return 200, _sap_settings(user)
+
+
+@route("POST", r"/settings/sap/test")
+def test_sap_settings(_m, _b, h) -> Tuple[int, dict]:
+    """Call SAP once and say exactly what came back.
+
+    This exists because every failure mode here looks the same from the UI: no
+    key, a wrong key and a spent quota all end as "no data". The sandbox
+    answers a spent quota with HTTP 500 and a QuotaViolation body, not 429, so
+    the message is read rather than the status code.
+    """
+    from clients import sap_s4
+    user = _user(h)
+    if user.role not in SETTINGS_ROLES:
+        return 403, {"error": f"role '{user.role}' may not test the SAP connection"}
+    if not sap_s4.api_key():
+        return 200, {"ok": False, "reason": "no key", "detail": "No SAP API key is set."}
+    # One deliberate call: answer about THIS key, not about a cooldown left
+    # behind by the last one.
+    sap_s4.clear_quota_cooldown()
+    started = time.time()
+    try:
+        rows = sap_s4.rows(sap_s4.get(*_SAP_PROBE, {"$top": "1"}))
+        return 200, {"ok": True, "reason": "answered", "rows": len(rows),
+                     "ms": round((time.time() - started) * 1000),
+                     "base_url": sap_s4.base_url()}
+    except sap_s4.SapError as e:
+        text = str(e)
+        quota = "QuotaViolation" in text or "Rate limit" in text
+        return 200, {
+            "ok": False,
+            "reason": "quota spent" if quota else "refused",
+            "detail": ("The key is valid but its rate quota is spent. It resets on the "
+                       "provider's own schedule; until then Demo mode is the way to run.")
+            if quota else text[:300],
+            "ms": round((time.time() - started) * 1000),
+        }
+    except Exception as e:                                          # noqa: BLE001
+        return 200, {"ok": False, "reason": "unreachable", "detail": str(e)[:300],
+                     "ms": round((time.time() - started) * 1000)}
+
+
+# ------------------------------------------------------------------ data mode
+@route("GET", r"/mode")
+def get_mode(_m, _b, h) -> Tuple[int, dict]:
+    """Which data source the tools read from, and who may change it."""
+    from clients import sap_s4
+    user = _user(h)
+    d = store.data_mode_detail()
+    d["sap_key_set"] = bool(sap_s4.api_key())
+    d["may_change"] = user.role in SETTINGS_ROLES
+    return 200, d
+
+
+@route("POST", r"/mode")
+def set_mode(_m, b: dict, h) -> Tuple[int, dict]:
+    """{"mode": "live" | "demo"}.
+
+    live  - the tools call SAP S/4HANA, and fall back to uploads only where a
+            tool has no SAP source at all.
+    demo  - the tools do not call SAP. They read uploaded data and the modelled
+            fixtures, the same path taken when no API key is configured, and
+            every figure keeps its own origin label.
+
+    Switching does not migrate anything: it changes where the NEXT tool call
+    reads from. Handlings already on record keep the origins they were given.
+    """
+    user = _user(h)
+    if user.role not in SETTINGS_ROLES:
+        return 403, {"error": f"role '{user.role}' may not change the data mode "
+                              f"(needs {' or '.join(SETTINGS_ROLES)})"}
+    mode = str(b.get("mode") or "").strip().lower()
+    if mode not in store.DATA_MODES:
+        return 400, {"error": f"mode must be one of {', '.join(store.DATA_MODES)}"}
+    store.set_setting("data.mode", mode, user.email)
+    d = store.data_mode_detail()
+    d["may_change"] = True
+    return 200, d
 
 
 # ---------------------------------------------------------------------- models
@@ -402,6 +551,7 @@ def summary(_m, b, h) -> Tuple[int, dict]:
         Filtering a state by last month would answer a question nobody asked
         and hide the approval that is late today.
     """
+    from clients import sap_s4
     _user(h)
     from engine import report, triage
     from tools.compliance import pack_status
@@ -463,7 +613,11 @@ def summary(_m, b, h) -> Tuple[int, dict]:
         "oldest_owed_days": max((o["days_waiting"] or 0 for o in owed), default=0),
         "knowledge_base": pack_status(),
         "critical_stock": critical[:5],
-        "sap_ready": CFG.sap_ready,
+        # What the tools will actually do, not merely whether a key exists:
+        # in demo mode they do not call SAP even with one configured.
+        "data_mode": sap_s4.data_mode(),
+        "sap_key_set": bool(sap_s4.api_key()),
+        "sap_ready": sap_s4.available(),
         "model_ready": CFG.model_ready,
     }
 
@@ -857,6 +1011,7 @@ def schedule_switch(m, b: dict, h) -> Tuple[int, dict]:
 @route("GET", r"/agents")
 def list_agents(_m, _b, h) -> Tuple[int, dict]:
     """Team anatomy: who exists, what tools they hold, what is actually wired up."""
+    from clients import sap_s4
     _user(h)
     from agents.definitions import ALL
     from core import registry
@@ -894,7 +1049,9 @@ def list_agents(_m, _b, h) -> Tuple[int, dict]:
             "tools_total": sum(a["tool_count"] for a in out),
             "prompts_written": sum(1 for a in out if a["ready"]),
             "model_ready": CFG.model_ready,
-            "sap_ready": CFG.sap_ready,
+            "data_mode": sap_s4.data_mode(),
+            "sap_key_set": bool(sap_s4.api_key()),
+            "sap_ready": sap_s4.available(),
         },
     }
 

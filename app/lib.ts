@@ -115,6 +115,20 @@ export type Agent = {
 export type AgentSummary = {
   agent_count: number; tools_installed: number; tools_total: number;
   prompts_written: number; model_ready: boolean; sap_ready: boolean;
+  /** What the tools will do, and whether a key exists at all. `sap_ready` is
+   *  false in demo mode even when `sap_key_set` is true. */
+  data_mode?: "live" | "demo"; sap_key_set?: boolean;
+};
+
+export type SapSettings = {
+  base_url: string; key_set: boolean; key_hint: string;
+  key_source: "settings" | "environment" | "none";
+  data_mode: "live" | "demo"; may_change: boolean;
+};
+
+export type SapTest = {
+  ok: boolean; reason: string; detail?: string;
+  rows?: number; ms?: number; base_url?: string;
 };
 
 export type Column = { k: string; l: string; n?: boolean; rp?: boolean };
