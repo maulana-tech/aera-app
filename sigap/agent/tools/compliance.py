@@ -304,10 +304,18 @@ def check_local_constraints(option_id: str) -> Result:
     used = [floor_rule, current_rule]
 
     # --- TKDN ---
-    # The rule: an option must not WORSEN the local-content position, and must
-    # not push it below the contract floor when we are currently above it. A
-    # company already below the floor does not thereby lose every option, what
-    # is forbidden is making it worse.
+    # The rule: an option must not WORSEN the local-content position, must not
+    # push it below the contract floor from above, and - while the company is
+    # ALREADY below the floor - must actually restore it.
+    #
+    # That last clause reverses an earlier decision, deliberately. This file
+    # used to allow an option that merely held the position: it breached no
+    # rule in the letter, and a company below the floor did not thereby lose
+    # every option. What that permitted, on this scenario's own figures, was
+    # the agent choosing option A - more expensive than B+C, less quantity,
+    # and leaving the company in breach of its contract the whole time. Holding
+    # a breach steady is not compliance, so while below the floor only an
+    # option that climbs back above it clears.
     tkdn = option.get("TkdnAfterPct")
     if tkdn is not None:
         if tkdn < current - 0.05:                       # rounding tolerance
@@ -320,6 +328,12 @@ def check_local_constraints(option_id: str) -> Result:
         elif tkdn < floor <= current:
             allowed = False
             reasons.append(f"TKDN drops to {tkdn}%, contract floor {floor}%")
+        elif current < floor and tkdn < floor:
+            allowed = False
+            reasons.append(
+                f"TKDN stays at {tkdn}% against a {floor}% contract floor. The company is "
+                f"already below it at {current}%, and an option that holds the position "
+                "there does not end the breach")
         elif tkdn >= floor > current:
             reasons.append(f"TKDN rises to {tkdn}%, back above the {floor}% floor")
     elif option.get("Supplier") != "INTERNAL":
@@ -778,10 +792,19 @@ def _demo() -> None:
         # No pack installed: every rule is an assumption and the ruling says so.
         assert load_pack() is None
         a = check_local_constraints("A")
-        # An option that keeps TKDN where it is must NOT be rejected just for
-        # being under the floor, that was the bug this check exists to catch.
-        assert a.value["allowed"] is True, a.value["reason"]
+        # Holding the position below the floor is NOT compliance. This used to
+        # assert the opposite - that an option which merely keeps TKDN where it
+        # is must not be rejected - and that permission is what let the agent
+        # choose option A: dearer than B+C, less quantity, and the breach left
+        # running. The decision was reversed on purpose; see check_local_
+        # constraints for the reasoning.
+        assert a.value["allowed"] is False, a.value["reason"]
+        assert "does not end the breach" in a.value["reason"], a.value["reason"]
         assert a.origin is Origin.MODELLED and "not from a verified rule pack" in a.note, a.note
+
+        # An option that climbs back above the floor is the one that clears.
+        b = check_local_constraints("B").value
+        assert b["allowed"] is True and "back above" in b["reason"], b["reason"]
 
         # An option that actively worsens TKDN must be rejected.
         e = check_local_constraints("E").value
@@ -914,8 +937,10 @@ def _demo() -> None:
     assert hs_restriction(None, probe)[0] is None, "no code matches nothing"
     assert hs_for("M-4471", {"hs_codes": {"M-4471": "7601.20.00"}}) == "7601.20.00"
     a_hs = check_local_constraints("A").value
-    assert a_hs["allowed"], "an import of unrestricted goods is not blocked by LARTAS"
+    # A is blocked on TKDN, not on LARTAS: the ruling must still have read the
+    # classification and said so, or the two checks would be indistinguishable.
     assert "7601.20.00" in a_hs["reason"], "the ruling names the classification it read"
+    assert "not in the restricted headings" in a_hs["reason"], a_hs["reason"]
     print("  LARTAS reads the HS heading, and an import without one is refused ✓")
 
     print("compliance ok, keeps TKDN ✓ · worsens TKDN → blocked ✓ · LARTAS delay over "
