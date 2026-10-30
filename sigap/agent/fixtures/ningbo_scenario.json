@@ -1434,6 +1434,89 @@
       "ComponentQuantity": 0.0042
     }
   ],
+  "BlanketOrder": [
+    {
+      "BlanketOrder": "460001200",
+      "Supplier": "SUP-2201",
+      "Material": "M-4471",
+      "AgreedPriceIDR": 32000000,
+      "RemainingQty": 154.9,
+      "ValidFrom": "2026-04-25",
+      "ValidTo": "2026-12-17"
+    },
+    {
+      "BlanketOrder": "460001201",
+      "Supplier": "SUP-2207",
+      "Material": "M-4472",
+      "AgreedPriceIDR": 28000000,
+      "RemainingQty": 106.7,
+      "ValidFrom": "2026-02-26",
+      "ValidTo": "2027-05-14"
+    },
+    {
+      "BlanketOrder": "460001202",
+      "Supplier": "SUP-2209",
+      "Material": "M-4478",
+      "AgreedPriceIDR": 43000000,
+      "RemainingQty": 133.2,
+      "ValidFrom": "2026-03-30",
+      "ValidTo": "2027-04-16"
+    },
+    {
+      "BlanketOrder": "460001203",
+      "Supplier": "SUP-2244",
+      "Material": "M-5512",
+      "AgreedPriceIDR": 52000000,
+      "RemainingQty": 106.4,
+      "ValidFrom": "2025-12-02",
+      "ValidTo": "2027-06-08"
+    },
+    {
+      "BlanketOrder": "460001204",
+      "Supplier": "SUP-3390",
+      "Material": "M-5518",
+      "AgreedPriceIDR": 33000000,
+      "RemainingQty": 179.3,
+      "ValidFrom": "2026-01-11",
+      "ValidTo": "2026-09-29"
+    },
+    {
+      "BlanketOrder": "460001205",
+      "Supplier": "SUP-3402",
+      "Material": "M-5524",
+      "AgreedPriceIDR": 39000000,
+      "RemainingQty": 46.3,
+      "ValidFrom": "2026-05-21",
+      "ValidTo": "2027-06-20"
+    },
+    {
+      "BlanketOrder": "460001206",
+      "Supplier": "SUP-4417",
+      "Material": "M-5530",
+      "AgreedPriceIDR": 54000000,
+      "RemainingQty": 73.9,
+      "ValidFrom": "2026-02-19",
+      "ValidTo": "2027-01-19"
+    },
+    {
+      "BlanketOrder": "460001207",
+      "Supplier": "SUP-4418",
+      "Material": "M-3308",
+      "AgreedPriceIDR": 46000000,
+      "RemainingQty": 22.1,
+      "ValidFrom": "2026-02-11",
+      "ValidTo": "2026-08-23"
+    },
+    {
+      "BlanketOrder": "460001208",
+      "Supplier": "SUP-4423",
+      "Material": "M-3312",
+      "AgreedPriceIDR": 59000000,
+      "RemainingQty": 0.0,
+      "ValidFrom": "2026-02-19",
+      "ValidTo": "2026-10-01"
+    }
+  ],
   "SalesOrder": [
     {
       "SalesOrder": "0000104465",
@@ -1445,6 +1528,8 @@
       "RequestedDeliveryDate": "2026-10-30",
       "LatePenaltyPctPerDay": 0.5,
       "LatePenaltyCapPct": 10.0,
+      "BackorderQty": 16.0,
+      "BackorderSince": "2026-08-21",
       "Quantity": 1233
     },
     {
@@ -1505,6 +1590,8 @@
       "RequestedDeliveryDate": "2026-10-01",
       "LatePenaltyPctPerDay": 0.5,
       "LatePenaltyCapPct": 10.0,
+      "BackorderQty": 55.3,
+      "BackorderSince": "2026-08-21",
       "Quantity": 728
     },
     {
@@ -1541,6 +1628,8 @@
       "RequestedDeliveryDate": "2026-09-28",
       "LatePenaltyPctPerDay": 0.5,
       "LatePenaltyCapPct": 10.0,
+      "BackorderQty": 55.7,
+      "BackorderSince": "2026-08-30",
       "Quantity": 135
     },
     {
@@ -1565,6 +1654,8 @@
       "RequestedDeliveryDate": "2026-10-15",
       "LatePenaltyPctPerDay": 0.5,
       "LatePenaltyCapPct": 10.0,
+      "BackorderQty": 29.3,
+      "BackorderSince": "2026-08-21",
       "Quantity": 583
     },
     {
@@ -1649,6 +1740,8 @@
       "RequestedDeliveryDate": "2026-10-15",
       "LatePenaltyPctPerDay": 0.5,
       "LatePenaltyCapPct": 10.0,
+      "BackorderQty": 50.4,
+      "BackorderSince": "2026-08-26",
       "Quantity": 1232
     },
     {
@@ -1725,7 +1818,8 @@
       "HsCode": "7601.20.00",
       "Origin": "CN",
       "NewOrigin": false,
-      "QualificationDays": 0
+      "QualificationDays": 0,
+      "Fulfilment": "plant"
     },
     {
       "id": "B",
@@ -1739,7 +1833,8 @@
       "HsCode": "7601.20.00",
       "Origin": "ID",
       "NewOrigin": false,
-      "QualificationDays": 3
+      "QualificationDays": 3,
+      "Fulfilment": "plant"
     },
     {
       "id": "C",
@@ -1753,7 +1848,8 @@
       "HsCode": "7601.20.00",
       "Origin": "ID",
       "NewOrigin": false,
-      "QualificationDays": 0
+      "QualificationDays": 0,
+      "Fulfilment": "plant"
     },
     {
       "id": "D",
@@ -1767,7 +1863,8 @@
       "HsCode": "7601.20.00",
       "Origin": "VN",
       "NewOrigin": true,
-      "QualificationDays": 7
+      "QualificationDays": 7,
+      "Fulfilment": "dropship"
     },
     {
       "id": "E",
@@ -1781,7 +1878,8 @@
       "HsCode": "7601.20.00",
       "Origin": "CN",
       "NewOrigin": false,
-      "QualificationDays": 0
+      "QualificationDays": 0,
+      "Fulfilment": "plant"
     },
     {
       "id": "F",
@@ -1795,7 +1893,8 @@
       "HsCode": "7214.99.90",
       "Origin": "ID",
       "NewOrigin": false,
-      "QualificationDays": 5
+      "QualificationDays": 5,
+      "Fulfilment": "plant"
     },
     {
       "id": "G",
@@ -1809,7 +1908,8 @@
       "HsCode": "7214.99.90",
       "Origin": "KR",
       "NewOrigin": false,
-      "QualificationDays": 0
+      "QualificationDays": 0,
+      "Fulfilment": "plant"
     }
   ],
   "Supplier": [

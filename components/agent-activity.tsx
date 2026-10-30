@@ -18,6 +18,7 @@ const toolLabels: Record<string, string> = {
   find_alternate_sources: "Looking for alternative suppliers",
   find_internal_transfers: "Looking for stock at other plants",
   get_supplier_master: "Checking supplier records",
+  get_blanket_orders: "Checking contracts with quantity left to call off",
   get_supplier_performance: "Reviewing supplier performance",
   get_quotations: "Checking supplier quotations",
   compare_quotations: "Comparing supplier quotations",

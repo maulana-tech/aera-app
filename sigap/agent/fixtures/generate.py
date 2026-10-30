@@ -398,6 +398,14 @@ def build() -> dict:
                 "RequestedDeliveryDate": (AS_OF + timedelta(days=rnd.randint(10, 75))).isoformat(),
                 "LatePenaltyPctPerDay": 0.5, "LatePenaltyCapPct": 10.0,
             })
+            # A backorder is demand already promised and not yet shippable. It
+            # is the exposure that does not show up as a late delivery until
+            # the day it does, so it is carried on the order rather than
+            # inferred from stock afterwards.
+            if rnd2.random() < 0.22:
+                sales[-1]["BackorderQty"] = round(rnd2.uniform(0.15, 0.6) * 100, 1)
+                sales[-1]["BackorderSince"] = (AS_OF - timedelta(
+                    days=rnd2.choice([5, 9, 14, 23, 40]))).isoformat()
     # planted defect: sold product with no bill of materials behind it
     sales.append({"SalesOrder": "0000105990", "Material": "FG-9099",
                   "Customer": "CUS-1002", "CustomerName": "Nusa Otomotif Industri",
@@ -419,6 +427,10 @@ def build() -> dict:
     # aluminium alloy (the ADC12 ingot), 7214.99 a hot-rolled non-alloy steel
     # bar (S45C). LARTAS attaches to the heading, so a scenario without them
     # cannot exercise the rule it is meant to demonstrate.
+    # Fulfilment: a dropship option ships supplier -> customer and never enters
+    # the affected plant, which is the point of it when the plant is the
+    # problem. Added after the rows are built so the literal table above stays
+    # readable as the scenario it documents.
     alternates = [
         {"id": "A", "label": "Air freight 85 t from the incumbent supplier",
          "Supplier": "SUP-2201", "Material": "M-4471", "Quantity": 85.0,
@@ -478,7 +490,36 @@ def build() -> dict:
 
     customs = _customs(orders, random.Random(SEED + 2))
 
+    for a in alternates:
+        a["Fulfilment"] = "plant"
+    # D is the new Vietnamese source; shipping it straight to the customer is a
+    # real mitigation when the receiving plant is the bottleneck.
+    for a in alternates:
+        if a["id"] == "D":
+            a["Fulfilment"] = "dropship"
+
+    # ---- blanket orders ---------------------------------------------------
+    # A long-term contract at a fixed price. It matters because the quantity
+    # may already be bought: a spot purchase beside an unused blanket call-off
+    # is money spent twice.
+    blankets = []
+    for i, (code, _d, _u, _f) in enumerate(MATERIALS[:9]):
+        sup = SUPPLIERS[i % len(SUPPLIERS)][0]
+        blankets.append({
+            "BlanketOrder": f"46000{1200 + i}",
+            "Supplier": sup, "Material": code,
+            "AgreedPriceIDR": rnd2.randrange(28, 62) * 1_000_000,
+            "RemainingQty": round(rnd2.uniform(20, 180), 1),
+            "ValidFrom": (AS_OF - timedelta(days=rnd2.randint(60, 300))).isoformat(),
+            "ValidTo": (AS_OF + timedelta(days=rnd2.randint(20, 300))).isoformat(),
+        })
+    # One that has run out and one that has expired: a contract on file is not
+    # the same as a contract you can call off against.
+    blankets[-1]["RemainingQty"] = 0.0
+    blankets[-2]["ValidTo"] = (AS_OF - timedelta(days=12)).isoformat()
+
     return {"MaterialStock": stock, "PurchaseOrder": orders, "BillOfMaterial": bom,
+            "BlanketOrder": blankets,
             "SalesOrder": sales, "AlternateSource": alternates, "Supplier": suppliers,
             "Quotation": quotations, "CustomsDeclaration": customs,
             "MaterialSubstitute": [dict(r) for r in SUBSTITUTES],

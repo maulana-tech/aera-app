@@ -76,7 +76,7 @@ SPECIALISTS = [
           "on price against lead time, and drafts the purchase order that follows from "
           "the comparison, with the reference rate for a price quoted in another currency.",
           ["get_supplier_master", "get_supplier_performance", "get_quotations",
-           "compare_quotations", "propose_purchase_order", "get_exchange_rate"]),
+           "compare_quotations", "propose_purchase_order", "get_exchange_rate", "get_blanket_orders"]),
     Agent("logistics", "Milo", "Logistics",
           "Models arrival dates that survive contact with reality: port dwell measured on "
           "past customs releases, where an import stands in customs and why it is held, "

@@ -66,6 +66,14 @@ ENTITIES: Dict[str, Dict[str, List[str]]] = {
         "required": ["Supplier", "SupplierName", "Country"],
         "numeric": ["TkdnCertifiedPct"],
     },
+    # A long-term contract at a fixed price. It belongs here because the
+    # quantity may already be bought: a spot purchase placed beside an unused
+    # call-off is money spent twice, and nothing in SAP stops it.
+    "BlanketOrder": {
+        "required": ["BlanketOrder", "Supplier", "Material", "AgreedPriceIDR",
+                     "RemainingQty", "ValidTo"],
+        "numeric": ["AgreedPriceIDR", "RemainingQty"],
+    },
     "Quotation": {
         "required": ["SupplierQuotation", "Supplier", "Material", "OrderQuantity", "NetPrice", "DeliveryTimeInDays"],
         "numeric": ["OrderQuantity", "NetPrice", "DeliveryTimeInDays"],
@@ -114,6 +122,18 @@ EXAMPLES: Dict[str, Dict[str, Any]] = {
     # in the file reads as expired: tools/procurement.py counts an offer nobody
     # can check as one a buyer must re-quote. A template that did not show the
     # column handed companies a book of quotations that was dead on arrival.
+    # A long-term contract at a fixed price. It belongs here because the
+    # quantity may already be bought: a spot purchase placed beside an unused
+    # call-off is money spent twice, and nothing in SAP stops it.
+    "BlanketOrder": {
+        "required": ["BlanketOrder", "Supplier", "Material", "AgreedPriceIDR",
+                     "RemainingQty", "ValidTo"],
+        "numeric": ["AgreedPriceIDR", "RemainingQty"],
+    },
+    "BlanketOrder": {"BlanketOrder": "4600001200", "Supplier": "SUP-2201",
+                     "Material": "M-4471", "AgreedPriceIDR": 32_000_000,
+                     "RemainingQty": 154.9, "ValidFrom": "2026-03-01",
+                     "ValidTo": "2026-12-17"},
     "Quotation": {"SupplierQuotation": "6000000045", "Supplier": "SUP-4417", "Material": "M-4471",
                   "OrderQuantity": 60.0, "NetPrice": 1_560_000, "DeliveryTimeInDays": 9,
                   "Currency": "IDR", "QtnLifecycleStatus": "A",

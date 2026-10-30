@@ -1087,6 +1087,7 @@ _TOOL_LABELS = {
     "find_alternate_sources": "alternative suppliers",
     "find_internal_transfers": "stock at alternative plants",
     "get_supplier_master": "supplier master records",
+    "get_blanket_orders": "contracts with quantity still to call off",
     "get_supplier_performance": "supplier performance history",
     "get_quotations": "supplier quotations",
     "compare_quotations": "quotation comparisons",
