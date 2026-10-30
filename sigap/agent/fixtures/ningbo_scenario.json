@@ -7,7 +7,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 172.8,
       "BaseUnit": "TON",
       "DailyConsumption": 9.6,
-      "Description": "Aluminium alloy ingot ADC12"
+      "Description": "Aluminium alloy ingot ADC12",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-26"
     },
     {
       "Material": "M-4472",
@@ -15,7 +18,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 384.0,
       "BaseUnit": "TON",
       "DailyConsumption": 6.4,
-      "Description": "Aluminium alloy ingot A356"
+      "Description": "Aluminium alloy ingot A356",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-27"
     },
     {
       "Material": "M-4472",
@@ -23,7 +29,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 586.5,
       "BaseUnit": "TON",
       "DailyConsumption": 6.9,
-      "Description": "Aluminium alloy ingot A356"
+      "Description": "Aluminium alloy ingot A356",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-30"
     },
     {
       "Material": "M-4478",
@@ -31,7 +40,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 210.6,
       "BaseUnit": "TON",
       "DailyConsumption": 11.7,
-      "Description": "Aluminium billet 6061"
+      "Description": "Aluminium billet 6061",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-26"
     },
     {
       "Material": "M-5512",
@@ -39,7 +51,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 101.5,
       "BaseUnit": "TON",
       "DailyConsumption": 2.9,
-      "Description": "Steel bar SCM440"
+      "Description": "Steel bar SCM440",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-09-03"
     },
     {
       "Material": "M-5512",
@@ -47,7 +62,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 83.2,
       "BaseUnit": "TON",
       "DailyConsumption": 6.4,
-      "Description": "Steel bar SCM440"
+      "Description": "Steel bar SCM440",
+      "ReplenishmentPolicy": "consignment",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-29"
     },
     {
       "Material": "M-5518",
@@ -55,7 +73,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 420.0,
       "BaseUnit": "TON",
       "DailyConsumption": 12.0,
-      "Description": "Steel bar S45C"
+      "Description": "Steel bar S45C",
+      "ReplenishmentPolicy": "consignment",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-09-03"
     },
     {
       "Material": "M-5524",
@@ -63,7 +84,11 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 115.5,
       "BaseUnit": "TON",
       "DailyConsumption": 3.3,
-      "Description": "Bearing steel SUJ2"
+      "Description": "Bearing steel SUJ2",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-04-17",
+      "DeadstockQty": 81.0
     },
     {
       "Material": "M-5530",
@@ -71,7 +96,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 438.0,
       "BaseUnit": "TON",
       "DailyConsumption": 7.3,
-      "Description": "Cast iron FC250 pig"
+      "Description": "Cast iron FC250 pig",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-30"
     },
     {
       "Material": "M-3308",
@@ -79,15 +107,24 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 10180.8,
       "BaseUnit": "PC",
       "DailyConsumption": 565.6,
-      "Description": "Brake seal kit NBR"
+      "Description": "Brake seal kit NBR",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "FIFO",
+      "LastMovementDate": "2025-08-20",
+      "ShelfLifeDays": 180,
+      "DeadstockQty": 3228.7
     },
     {
       "Material": "M-3308",
       "Plant": "KRW1",
-      "MatlWrhsStkQtyInMatlBaseUnit": 38136.0,
+      "MatlWrhsStkQtyInMatlBaseUnit": 6991.6,
       "BaseUnit": "PC",
       "DailyConsumption": 635.6,
-      "Description": "Brake seal kit NBR"
+      "Description": "Brake seal kit NBR",
+      "ReplenishmentPolicy": "JIT",
+      "Rotation": "FIFO",
+      "LastMovementDate": "2026-08-29",
+      "ShelfLifeDays": 180
     },
     {
       "Material": "M-3312",
@@ -95,7 +132,11 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 41670.0,
       "BaseUnit": "PC",
       "DailyConsumption": 694.5,
-      "Description": "O-ring set EPDM"
+      "Description": "O-ring set EPDM",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "FIFO",
+      "LastMovementDate": "2026-08-26",
+      "ShelfLifeDays": 365
     },
     {
       "Material": "M-3320",
@@ -103,7 +144,11 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 4585.0,
       "BaseUnit": "KG",
       "DailyConsumption": 131.0,
-      "Description": "Rubber compound NR60"
+      "Description": "Rubber compound NR60",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "FIFO",
+      "LastMovementDate": "2026-09-01",
+      "ShelfLifeDays": 270
     },
     {
       "Material": "M-6640",
@@ -111,7 +156,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 1003.2,
       "BaseUnit": "KG",
       "DailyConsumption": 22.8,
-      "Description": "Copper wire 2.0mm"
+      "Description": "Copper wire 2.0mm",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-09-01"
     },
     {
       "Material": "M-6648",
@@ -119,7 +167,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 15220.8,
       "BaseUnit": "PC",
       "DailyConsumption": 845.6,
-      "Description": "Brass fitting M10"
+      "Description": "Brass fitting M10",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-29"
     },
     {
       "Material": "M-7710",
@@ -127,7 +178,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 11545.6,
       "BaseUnit": "PC",
       "DailyConsumption": 262.4,
-      "Description": "Hex bolt M12 class 10.9"
+      "Description": "Hex bolt M12 class 10.9",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-09-03"
     },
     {
       "Material": "M-7710",
@@ -135,7 +189,11 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 5667.2,
       "BaseUnit": "PC",
       "DailyConsumption": 257.6,
-      "Description": "Hex bolt M12 class 10.9"
+      "Description": "Hex bolt M12 class 10.9",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-04-17",
+      "DeadstockQty": 2765.8
     },
     {
       "Material": "M-7716",
@@ -143,7 +201,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 6036.0,
       "BaseUnit": "PC",
       "DailyConsumption": 100.6,
-      "Description": "Flange nut M12"
+      "Description": "Flange nut M12",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-31"
     },
     {
       "Material": "M-7722",
@@ -151,7 +212,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 4026.0,
       "BaseUnit": "PC",
       "DailyConsumption": 91.5,
-      "Description": "Spring washer M12"
+      "Description": "Spring washer M12",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-28"
     },
     {
       "Material": "M-8830",
@@ -159,7 +223,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 2649.5,
       "BaseUnit": "LTR",
       "DailyConsumption": 75.7,
-      "Description": "Epoxy primer, grey"
+      "Description": "Epoxy primer, grey",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-30"
     },
     {
       "Material": "M-8830",
@@ -167,15 +234,21 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 923.0,
       "BaseUnit": "LTR",
       "DailyConsumption": 71.0,
-      "Description": "Epoxy primer, grey"
+      "Description": "Epoxy primer, grey",
+      "ReplenishmentPolicy": "JIT",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-31"
     },
     {
       "Material": "M-8836",
       "Plant": "SBY1",
-      "MatlWrhsStkQtyInMatlBaseUnit": 1276.8,
+      "MatlWrhsStkQtyInMatlBaseUnit": 273.6,
       "BaseUnit": "LTR",
       "DailyConsumption": 45.6,
-      "Description": "Topcoat, black semi-gloss"
+      "Description": "Topcoat, black semi-gloss",
+      "ReplenishmentPolicy": "JIT",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-09-01"
     },
     {
       "Material": "M-8842",
@@ -183,7 +256,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 1152.8,
       "BaseUnit": "LTR",
       "DailyConsumption": 26.2,
-      "Description": "Anti-corrosion wax"
+      "Description": "Anti-corrosion wax",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-27"
     },
     {
       "Material": "M-9910",
@@ -191,7 +267,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 2771.0,
       "BaseUnit": "LTR",
       "DailyConsumption": 32.6,
-      "Description": "Machining coolant"
+      "Description": "Machining coolant",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-27"
     },
     {
       "Material": "M-9916",
@@ -199,7 +278,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 11068.4,
       "BaseUnit": "PC",
       "DailyConsumption": 395.3,
-      "Description": "Grinding wheel 350mm"
+      "Description": "Grinding wheel 350mm",
+      "ReplenishmentPolicy": "consignment",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-09-01"
     },
     {
       "Material": "M-9922",
@@ -207,7 +289,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 9878.4,
       "BaseUnit": "PC",
       "DailyConsumption": 548.8,
-      "Description": "Carbide insert CNMG"
+      "Description": "Carbide insert CNMG",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-09-01"
     },
     {
       "Material": "M-2210",
@@ -215,7 +300,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 15435.2,
       "BaseUnit": "PC",
       "DailyConsumption": 350.8,
-      "Description": "Graphite electrode"
+      "Description": "Graphite electrode",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-28"
     },
     {
       "Material": "M-2216",
@@ -223,7 +311,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 154.8,
       "BaseUnit": "TON",
       "DailyConsumption": 8.6,
-      "Description": "Foundry sand, resin coated"
+      "Description": "Foundry sand, resin coated",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-31"
     },
     {
       "Material": "M-2216",
@@ -231,15 +322,22 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 167.4,
       "BaseUnit": "TON",
       "DailyConsumption": 9.3,
-      "Description": "Foundry sand, resin coated"
+      "Description": "Foundry sand, resin coated",
+      "ReplenishmentPolicy": "consignment",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-26"
     },
     {
       "Material": "M-2222",
       "Plant": "KRW1",
-      "MatlWrhsStkQtyInMatlBaseUnit": 13806.0,
+      "MatlWrhsStkQtyInMatlBaseUnit": 2531.1,
       "BaseUnit": "PC",
       "DailyConsumption": 230.1,
-      "Description": "Ceramic filter 50ppi"
+      "Description": "Ceramic filter 50ppi",
+      "ReplenishmentPolicy": "JIT",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-04-17",
+      "DeadstockQty": 1806.1
     },
     {
       "Material": "M-2228",
@@ -247,7 +345,11 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 1279.6,
       "BaseUnit": "KG",
       "DailyConsumption": 45.7,
-      "Description": "Ladle refractory mix"
+      "Description": "Ladle refractory mix",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2025-08-20",
+      "DeadstockQty": 716.6
     },
     {
       "Material": "M-1105",
@@ -255,7 +357,11 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 235.4,
       "BaseUnit": "SQM",
       "DailyConsumption": 10.7,
-      "Description": "Gasket sheet, compressed"
+      "Description": "Gasket sheet, compressed",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "FIFO",
+      "LastMovementDate": "2026-08-29",
+      "ShelfLifeDays": 180
     },
     {
       "Material": "M-1112",
@@ -263,7 +369,11 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 1386.0,
       "BaseUnit": "MTR",
       "DailyConsumption": 63.0,
-      "Description": "Hydraulic hose 3/8"
+      "Description": "Hydraulic hose 3/8",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "FIFO",
+      "LastMovementDate": "2026-09-03",
+      "ShelfLifeDays": 270
     },
     {
       "Material": "M-1118",
@@ -271,7 +381,11 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 14758.8,
       "BaseUnit": "PC",
       "DailyConsumption": 527.1,
-      "Description": "Dust boot, TPE"
+      "Description": "Dust boot, TPE",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "FIFO",
+      "LastMovementDate": "2026-08-29",
+      "ShelfLifeDays": 270
     },
     {
       "Material": "M-1118",
@@ -279,15 +393,23 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 4224.0,
       "BaseUnit": "PC",
       "DailyConsumption": 70.4,
-      "Description": "Dust boot, TPE"
+      "Description": "Dust boot, TPE",
+      "ReplenishmentPolicy": "consignment",
+      "Rotation": "FIFO",
+      "LastMovementDate": "2026-08-31",
+      "ShelfLifeDays": 365
     },
     {
       "Material": "M-1124",
       "Plant": "KRW1",
-      "MatlWrhsStkQtyInMatlBaseUnit": 2268.2,
+      "MatlWrhsStkQtyInMatlBaseUnit": 824.8,
       "BaseUnit": "PC",
       "DailyConsumption": 103.1,
-      "Description": "Piston seal, PTFE"
+      "Description": "Piston seal, PTFE",
+      "ReplenishmentPolicy": "JIT",
+      "Rotation": "FIFO",
+      "LastMovementDate": "2026-09-03",
+      "ShelfLifeDays": 365
     },
     {
       "Material": "M-1130",
@@ -295,15 +417,21 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 28635.2,
       "BaseUnit": "PC",
       "DailyConsumption": 650.8,
-      "Description": "Bleeder screw M8"
+      "Description": "Bleeder screw M8",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-09-01"
     },
     {
       "Material": "M-1136",
       "Plant": "KRW1",
-      "MatlWrhsStkQtyInMatlBaseUnit": 41286.0,
+      "MatlWrhsStkQtyInMatlBaseUnit": 5504.8,
       "BaseUnit": "PC",
       "DailyConsumption": 688.1,
-      "Description": "Retaining clip, spring steel"
+      "Description": "Retaining clip, spring steel",
+      "ReplenishmentPolicy": "JIT",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-29"
     },
     {
       "Material": "M-1142",
@@ -311,7 +439,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 22352.4,
       "BaseUnit": "PC",
       "DailyConsumption": 798.3,
-      "Description": "Shim plate 0.5mm"
+      "Description": "Shim plate 0.5mm",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-09-01"
     },
     {
       "Material": "M-1148",
@@ -319,7 +450,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 15494.5,
       "BaseUnit": "PC",
       "DailyConsumption": 442.7,
-      "Description": "Guide pin, chrome"
+      "Description": "Guide pin, chrome",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-26"
     },
     {
       "Material": "M-1148",
@@ -327,7 +461,11 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 9633.8,
       "BaseUnit": "PC",
       "DailyConsumption": 437.9,
-      "Description": "Guide pin, chrome"
+      "Description": "Guide pin, chrome",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-06-01",
+      "DeadstockQty": 6977.5
     },
     {
       "Material": "M-1154",
@@ -335,15 +473,21 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 27395.5,
       "BaseUnit": "PC",
       "DailyConsumption": 322.3,
-      "Description": "Bushing, sintered bronze"
+      "Description": "Bushing, sintered bronze",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-28"
     },
     {
       "Material": "M-1160",
       "Plant": "KRW1",
-      "MatlWrhsStkQtyInMatlBaseUnit": 29251.2,
+      "MatlWrhsStkQtyInMatlBaseUnit": 2659.2,
       "BaseUnit": "PC",
       "DailyConsumption": 664.8,
-      "Description": "Needle bearing HK1210"
+      "Description": "Needle bearing HK1210",
+      "ReplenishmentPolicy": "JIT",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-09-01"
     },
     {
       "Material": "M-1166",
@@ -351,7 +495,12 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 10618.2,
       "BaseUnit": "PC",
       "DailyConsumption": 589.9,
-      "Description": "Oil seal 35x52x8"
+      "Description": "Oil seal 35x52x8",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "FIFO",
+      "LastMovementDate": "2025-08-20",
+      "ShelfLifeDays": 180,
+      "DeadstockQty": 5208.2
     },
     {
       "Material": "M-1172",
@@ -359,15 +508,21 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 9590.4,
       "BaseUnit": "PC",
       "DailyConsumption": 532.8,
-      "Description": "Snap ring 52mm"
+      "Description": "Snap ring 52mm",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-27"
     },
     {
       "Material": "M-1178",
       "Plant": "CKR1",
-      "MatlWrhsStkQtyInMatlBaseUnit": 24578.4,
+      "MatlWrhsStkQtyInMatlBaseUnit": 9655.8,
       "BaseUnit": "PC",
       "DailyConsumption": 877.8,
-      "Description": "Dowel pin 8x16"
+      "Description": "Dowel pin 8x16",
+      "ReplenishmentPolicy": "JIT",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-28"
     },
     {
       "Material": "M-1184",
@@ -375,7 +530,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 14220.0,
       "BaseUnit": "PC",
       "DailyConsumption": 237.0,
-      "Description": "Thread insert M8"
+      "Description": "Thread insert M8",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-09-03"
     },
     {
       "Material": "M-1184",
@@ -383,15 +541,23 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 30764.8,
       "BaseUnit": "PC",
       "DailyConsumption": 699.2,
-      "Description": "Thread insert M8"
+      "Description": "Thread insert M8",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-06-01",
+      "DeadstockQty": 10139.9
     },
     {
       "Material": "M-1190",
       "Plant": "CKR1",
-      "MatlWrhsStkQtyInMatlBaseUnit": 31290.0,
+      "MatlWrhsStkQtyInMatlBaseUnit": 3576.0,
       "BaseUnit": "PC",
       "DailyConsumption": 894.0,
-      "Description": "Vent plug, brass"
+      "Description": "Vent plug, brass",
+      "ReplenishmentPolicy": "JIT",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2025-08-20",
+      "DeadstockQty": 2030.6
     },
     {
       "Material": "M-1196",
@@ -399,7 +565,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 14828.0,
       "BaseUnit": "PC",
       "DailyConsumption": 674.0,
-      "Description": "Label, laser etched"
+      "Description": "Label, laser etched",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-29"
     },
     {
       "Material": "M-1202",
@@ -407,7 +576,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 16758.0,
       "BaseUnit": "PC",
       "DailyConsumption": 279.3,
-      "Description": "Packaging crate, returnable"
+      "Description": "Packaging crate, returnable",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-09-03"
     },
     {
       "Material": "M-1202",
@@ -415,7 +587,11 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 4800.0,
       "BaseUnit": "PC",
       "DailyConsumption": 0.0,
-      "Description": "Packaging crate, returnable"
+      "Description": "Packaging crate, returnable",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2025-07-21",
+      "DeadstockQty": 4800.0
     },
     {
       "Material": "M-4471",
@@ -423,7 +599,10 @@
       "BaseUnit": "TON",
       "Description": "Aluminium alloy ingot ADC12",
       "MatlWrhsStkQtyInMatlBaseUnit": 84.0,
-      "DailyConsumption": 9.2
+      "DailyConsumption": 9.2,
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-09-02"
     }
   ],
   "PurchaseOrder": [

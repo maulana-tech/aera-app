@@ -1079,6 +1079,8 @@ _TOOL_LABELS = {
     "forecast_demand": "material demand forecast",
     "get_quality_holds": "stock quality holds",
     "get_safety_stock_policy": "safety stock policy",
+    "get_replenishment_policy": "how the line is replenished",
+    "find_deadstock": "stock nobody has moved",
     "assess_transfer": "stock transfer feasibility",
     "find_alternate_sources": "alternative suppliers",
     "find_internal_transfers": "stock at alternative plants",

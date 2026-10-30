@@ -228,6 +228,11 @@ def build() -> dict:
     consumed = {b["Material"] for b in bom}
 
     # ---- stock ------------------------------------------------------------
+    # A SEPARATE stream for the fields added later. Drawing them from `rnd`
+    # would consume numbers the rest of the file already depends on, and every
+    # order, quotation and customs row downstream would shift - the pinned
+    # scenario with it. New data, new stream, nothing else moves.
+    rnd2 = random.Random(20260904)
     stock = []
     for code, desc, unit, fam in MATERIALS:
         if code == "M-1208":
@@ -244,15 +249,40 @@ def build() -> dict:
                 [8, 11, 13, 18, 22, 28, 35, 44, 60, 85],
                 weights=[2, 3, 3, 12, 14, 16, 15, 13, 12, 10],
             )[0]
-            stock.append({
+            # How the line is replenished changes how its cover READS. A JIT
+            # line is meant to run thin - flagging it as a crisis is a false
+            # alarm that trains people to ignore the real ones.
+            policy = rnd2.choices(["stock", "JIT", "consignment"],
+                                 weights=[76, 18, 6])[0]
+            if policy == "JIT" and cover > 14:
+                cover = rnd2.choice([4, 6, 8, 11])      # thin on purpose
+            # Deadstock: quantity nobody has touched. It is still quantity, and
+            # it is the cheapest source there is - if anyone looks.
+            idle_days = rnd2.choices([0, 0, 0, 0, 95, 140, 210, 380],
+                                    weights=[62, 10, 8, 6, 5, 4, 3, 2])[0]
+            qty = round(rate * cover, 1)
+            row = {
                 "Material": code, "Plant": plant,
-                "MatlWrhsStkQtyInMatlBaseUnit": round(rate * cover, 1),
+                "MatlWrhsStkQtyInMatlBaseUnit": qty,
                 "BaseUnit": unit, "DailyConsumption": rate, "Description": desc,
-            })
+                "ReplenishmentPolicy": policy,
+                "Rotation": "FIFO" if fam in ("chem", "rubber") else "LIFO",
+                "LastMovementDate": (AS_OF - timedelta(days=idle_days or rnd2.randint(1, 9)))
+                                    .isoformat(),
+            }
+            if fam in ("chem", "rubber"):
+                row["ShelfLifeDays"] = rnd2.choice([180, 270, 365])
+            if idle_days:
+                # Only part of a position goes stale; the rest still turns.
+                row["DeadstockQty"] = round(qty * rnd2.uniform(0.25, 0.8), 1)
+            stock.append(row)
     # planted defect: stock nobody consumes
     stock.append({"Material": "M-1202", "Plant": "CKR1",
                   "MatlWrhsStkQtyInMatlBaseUnit": 4800.0, "BaseUnit": "PC",
-                  "DailyConsumption": 0.0, "Description": "Packaging crate, returnable"})
+                  "DailyConsumption": 0.0, "Description": "Packaging crate, returnable",
+                  "ReplenishmentPolicy": "stock", "Rotation": "LIFO",
+                  "LastMovementDate": (AS_OF - timedelta(days=410)).isoformat(),
+                  "DeadstockQty": 4800.0})
     # The documented scenario is pinned, both ends of it. KRW1 is the plant in
     # trouble; SBY1 is the donor whose own floor the transfer breaks, and
     # DESIGN.md quotes its cover to one decimal place, so it cannot drift with
@@ -267,6 +297,13 @@ def build() -> dict:
             stock.append(row)
         row["MatlWrhsStkQtyInMatlBaseUnit"] = qty
         row["DailyConsumption"] = daily
+        # The scenario's own two lines are conventionally stocked, stated
+        # rather than left blank: KRW1 is the plant in trouble, and "no policy
+        # on record" there would make Iris hedge on the one line the whole
+        # demonstration turns on.
+        row.setdefault("ReplenishmentPolicy", "stock")
+        row.setdefault("Rotation", "LIFO")
+        row.setdefault("LastMovementDate", (AS_OF - timedelta(days=2)).isoformat())
 
     # ---- purchase orders --------------------------------------------------
     single_sourced = {"M-3308", "M-5512", "M-2210", "M-1160"}
@@ -630,7 +667,15 @@ def write(data: dict) -> None:
     """CSV per entity for the upload path, and the JSON fixture the tools read."""
     OUT.mkdir(parents=True, exist_ok=True)
     for entity, rows in data.items():
-        keys = list(rows[0])
+        # The union, in first-seen order, not the first row's keys. Optional
+        # columns are the normal case now - a shelf life only on the chemicals,
+        # a deadstock quantity only where something stopped moving - and taking
+        # the header from row one silently dropped every one of them, or threw.
+        keys: list = []
+        for r in rows:
+            for k in r:
+                if k not in keys:
+                    keys.append(k)
         with (OUT / f"{entity}.csv").open("w", newline="") as f:
             w = csv.DictWriter(f, fieldnames=keys)
             w.writeheader()
@@ -671,11 +716,24 @@ def demo() -> None:
     observed = sum(h["Quantity"] for h in recent) / len(recent)
     assert observed > 9.2 * 1.05, (observed, "M-4471 drift is not visible")
 
-    # Thin positions have to be the exception or the safety floor means nothing.
-    covers = [r["MatlWrhsStkQtyInMatlBaseUnit"] / r["DailyConsumption"]
-              for r in data["MaterialStock"] if r["DailyConsumption"]]
+    # Thin positions have to be the exception or the safety floor means nothing
+    # - but a JIT line is SUPPOSED to be thin, and counting it as a breach is
+    # the false alarm this data exists to let Iris avoid. So the measure is of
+    # stocked lines only, which is the measure that carries a warning.
+    stocked = [r for r in data["MaterialStock"]
+               if r["DailyConsumption"] and r.get("ReplenishmentPolicy") != "JIT"]
+    covers = [r["MatlWrhsStkQtyInMatlBaseUnit"] / r["DailyConsumption"] for r in stocked]
     thin = sum(1 for c in covers if c < 14) / len(covers)
-    assert 0.03 < thin < 0.20, f"{thin:.0%} of positions below the floor is not a plant"
+    assert 0.03 < thin < 0.20, f"{thin:.0%} of stocked positions below the floor is not a plant"
+
+    jit = [r for r in data["MaterialStock"]
+           if r.get("ReplenishmentPolicy") == "JIT" and r["DailyConsumption"]]
+    assert jit, "the scenario must carry JIT lines, or Iris cannot tell them apart"
+    jit_thin = sum(1 for r in jit
+                   if r["MatlWrhsStkQtyInMatlBaseUnit"] / r["DailyConsumption"] < 14)
+    assert jit_thin / len(jit) > 0.5, "a JIT line that is not thin is not JIT"
+    dead = [r for r in data["MaterialStock"] if r.get("DeadstockQty")]
+    assert dead, "deadstock must exist, or nobody can be shown the cheapest source"
     assert counts["MaterialStock"] > 40, counts
     assert counts["PurchaseOrder"] > 40, counts
 

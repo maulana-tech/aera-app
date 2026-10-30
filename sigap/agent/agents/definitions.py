@@ -61,8 +61,10 @@ SPECIALISTS = [
           "Owns the demand side. Daily consumption is a variable that moves, not a fixed number.",
           ["get_demand_signal", "get_production_schedule", "forecast_demand"]),
     Agent("inventory", "Iris", "Stock Validity",
-          "Which stock may actually be used: quality holds, rejected batches, safety floors.",
-          ["get_quality_holds", "get_safety_stock_policy", "assess_transfer"]),
+          "Which stock may actually be used: quality holds, rejected batches, safety "
+          "floors, how a line is replenished, and the stock nobody has moved.",
+          ["get_quality_holds", "get_safety_stock_policy", "assess_transfer",
+           "get_replenishment_policy", "find_deadstock"]),
     Agent("sourcing", "Clint", "Sourcing",
           "Finds and qualifies replacement supply: other suppliers, internal stock, fast "
           "freight, and substitute materials with whether each is approved for the product.",

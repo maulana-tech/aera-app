@@ -12,6 +12,8 @@ const toolLabels: Record<string, string> = {
   forecast_demand: "Forecasting material demand",
   get_quality_holds: "Checking stock quality holds",
   get_safety_stock_policy: "Checking safety stock requirements",
+  get_replenishment_policy: "Checking how the line is replenished",
+  find_deadstock: "Looking for stock nobody has moved",
   assess_transfer: "Assessing a stock transfer",
   find_alternate_sources: "Looking for alternative suppliers",
   find_internal_transfers: "Looking for stock at other plants",

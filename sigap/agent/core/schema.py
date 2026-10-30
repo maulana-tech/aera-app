@@ -21,9 +21,18 @@ from typing import Any, Dict, List
 # Per entity: the columns a valid row must carry, and which of those must parse
 # as a number. Everything not listed is optional and passes through.
 ENTITIES: Dict[str, Dict[str, List[str]]] = {
+    # Optional columns that change how a figure is READ rather than what it is:
+    #   ReplenishmentPolicy  JIT | stock | consignment. Four days of cover on a
+    #                        JIT line is the policy working, not an emergency.
+    #   LastMovementDate     how deadstock is found: quantity nobody has touched
+    #                        is still quantity, and it is the cheapest source
+    #                        there is.
+    #   Rotation             FIFO | LIFO. With ShelfLifeDays it decides which
+    #                        lot may actually be issued.
     "MaterialStock": {
         "required": ["Material", "Plant", "MatlWrhsStkQtyInMatlBaseUnit", "DailyConsumption"],
-        "numeric": ["MatlWrhsStkQtyInMatlBaseUnit", "DailyConsumption"],
+        "numeric": ["MatlWrhsStkQtyInMatlBaseUnit", "DailyConsumption",
+                    "ShelfLifeDays", "DeadstockQty"],
     },
     "PurchaseOrder": {
         "required": ["PurchaseOrder", "Material", "Plant", "OrderQuantity", "Supplier", "DeliveryDate"],
