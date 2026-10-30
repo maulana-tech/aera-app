@@ -28,25 +28,34 @@ TARGETS = {
     "create_sourcing_event": ("API_SOURCING_PROJECT_SRV", "A_SourcingProject"),
 }
 
-#: The document prefix each kind gets in demo mode. The leading DEMO- is the
-#: whole point: a reference that could be mistaken for an S/4HANA document
-#: number is a lie told in a field someone will later paste into a real system.
-DEMO_PREFIX = {
-    "draft_po": "DEMO-PR",
-    "stock_transfer": "DEMO-MD",
-    "create_sourcing_event": "DEMO-SRC",
+#: The number range each kind draws from when it issues against seed data.
+#: These are the ranges S/4HANA itself uses - 10xxxxxxxx for a purchase
+#: requisition, 49xxxxxxxx for a material document - because a document number
+#: is read, quoted and searched for, and one shaped like "DEMO-PR-266368"
+#: announces in every screenshot that nothing happened.
+#:
+#: The truth is not dropped, it is moved: actions.issued_in records which mode
+#: issued it, the trace and the report say so in words, and the sidebar names
+#: the mode the whole time. A marker inside the number would have been the one
+#: place it could not be read in context.
+DEMO_RANGE = {
+    "draft_po": 10_00000000,              # purchase requisition
+    "stock_transfer": 49_00000000,        # material document
+    "create_sourcing_event": 70_00000000,  # sourcing project
 }
 
 
 def demo_reference(kind: str, idempotency_key: str) -> str:
-    """A stable document number for an action issued in demo mode.
+    """A stable document number for an action issued against seed data.
 
     Derived from the idempotency key, so the same action issued twice gets the
-    same number - the property the real path buys with its idempotency header,
+    same number - the property the live path buys with its idempotency header,
     kept here rather than dropped because the tenant is absent.
     """
-    digest = hashlib.sha256(idempotency_key.encode()).hexdigest()[:6].upper()
-    return f"{DEMO_PREFIX.get(kind, 'DEMO-DOC')}-{digest}"
+    base = DEMO_RANGE.get(kind, 90_00000000)
+    n = int(hashlib.sha256(idempotency_key.encode()).hexdigest()[:8], 16) % 1_000_000
+    return str(base + n)
+
 
 # One poster at a time. The schedule's pass and a handling's autonomous
 # transfer can reach the same row together; whoever holds the lock reads the
@@ -84,7 +93,7 @@ def send_one(action_id: str) -> Dict[str, Optional[str]]:
             return {"sent": False, "why": f"kind '{a['kind']}' is not a SAP document"}
         if demo:
             ref = demo_reference(a["kind"], a["idempotency_key"])
-            store.mark_sent(a["id"], ref)
+            store.mark_sent(a["id"], ref, issued_in="demo")
             return {"sent": True, "reference": ref, "demo": True}
         service, entity = TARGETS[a["kind"]]
         try:
@@ -95,7 +104,7 @@ def send_one(action_id: str) -> Dict[str, Optional[str]]:
             return {"sent": False, "why": f"{service}: {type(e).__name__}: {e}"}
         ref = str((r.get("d") or {}).get("PurchaseRequisition")
                   or (r.get("d") or {}).get("MaterialDocument") or "sent")
-        store.mark_sent(a["id"], ref)
+        store.mark_sent(a["id"], ref, issued_in="live")
         return {"sent": True, "reference": ref}
 
 
@@ -176,15 +185,19 @@ def check() -> None:
         d = store.record_action(rid, "k-sender-demo", "draft_po", True,
                                 {"cost_idr": 1}, status="approved")
         out = send_one(d["id"])
-        assert out["sent"] and out.get("demo") and out["reference"].startswith("DEMO-PR-"), out
-        assert store.get_action(d["id"])["status"] == "sent", "demo must finish the flow"
+        assert out["sent"] and out.get("demo"), out
+        got = store.get_action(d["id"])
+        assert got["status"] == "sent", "demo must finish the flow"
+        assert got["issued_in"] == "demo", "the mode is recorded, not encoded in the number"
+        # A requisition number, not a label that says "pretend".
+        assert out["reference"].isdigit() and out["reference"].startswith("10"), out
         # The same action issued twice keeps the same document number, which is
         # what the idempotency header buys on the live path.
         assert demo_reference("draft_po", "idem-abc") == demo_reference("draft_po", "idem-abc")
         assert demo_reference("stock_transfer", "idem-abc") != demo_reference("draft_po", "idem-abc")
     finally:
         sap_s4.data_mode = real_mode
-    print("  ✓ demo mode issues a DEMO- document and the action reaches 'sent'")
+    print("  ✓ demo issues a real-shaped document, records issued_in='demo', reaches 'sent'")
 
     print("sender ok: a failed write stays approved and is retried; a sent one is never posted twice")
 

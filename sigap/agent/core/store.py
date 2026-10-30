@@ -257,6 +257,12 @@ def new_id(prefix: str) -> str:
 # applied on connect and the duplicate error is the normal outcome.
 ADDED_LATER = [
     ("uploads", "synthetic", "INTEGER NOT NULL DEFAULT 0"),
+    # Which data mode the document was issued in. It lives in a column rather
+    # than inside the reference because a document number is pasted, quoted and
+    # searched for: a marker carried in the number itself is UX a demonstration
+    # pays for in every screenshot, and the truth belongs in the record where
+    # the report and the trace can read it.
+    ("actions", "issued_in", "TEXT"),
     # What actually happened after the action was sent. Without these the
     # record says what was decided and never what it cost in the end, so the
     # memory Otto reads is a memory of intentions.
@@ -728,11 +734,18 @@ def get_action(action_id: str) -> Optional[dict]:
     return dict(r) | {"payload": json.loads(r["payload"])} if r else None
 
 
-def mark_sent(action_id: str, sap_reference: str) -> None:
-    """Called once an approved action has actually landed in SAP."""
+def mark_sent(action_id: str, sap_reference: str, issued_in: str = "live") -> None:
+    """Called once an approved action has issued.
+
+    `issued_in` is 'live' when S/4HANA took it and 'demo' when it was issued
+    against seed data. The flow is identical; what differs is where the
+    document exists, and that is recorded here rather than encoded into the
+    reference.
+    """
     with connect() as c:
-        c.execute("UPDATE actions SET status='sent', sap_reference=?"
-                  " WHERE id=? AND status='approved'", (sap_reference, action_id))
+        c.execute("UPDATE actions SET status='sent', sap_reference=?, issued_in=?"
+                  " WHERE id=? AND status='approved'",
+                  (sap_reference, issued_in, action_id))
 
 
 # -------------------------------------------------------------------- uploads

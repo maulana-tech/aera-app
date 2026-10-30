@@ -245,8 +245,15 @@ function Overview({
           ["Authority", n.autonomous ? "ran on its own authority, under the limit" : "needs a person's approval"],
           ...(n.created_at ? [["Raised", when(n.created_at)] as [string, ReactNode]] : []),
           ...(n.sap_reference
-            ? [[n.sap_reference.startsWith("DEMO-") ? "Demo document" : "SAP reference",
-                <span key="r" className="font-mono">{n.sap_reference}</span>] as [string, ReactNode]]
+            ? [["Document",
+                <span key="r" className="font-mono">
+                  {n.sap_reference}
+                  {n.issued_in === "demo" && (
+                    <span className="text-muted-foreground ml-2 font-sans text-xs">
+                      issued against seed data (demo mode)
+                    </span>
+                  )}
+                </span>] as [string, ReactNode]]
             : []),
         ]} />
         {n.payload && Object.keys(n.payload).length > 0 && (

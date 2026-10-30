@@ -12,6 +12,8 @@ export type Delivery = {
 export type Action = {
   id: string; kind: string; autonomous: number; status: string;
   payload: Record<string, unknown>; sap_reference: string | null; created_at: string;
+  /** "live" once S/4HANA took it, "demo" when issued against seed data. */
+  issued_in?: "live" | "demo" | null;
   /** Where an approved message to a supplier or a customer goes, or went. */
   delivery?: Delivery;
   /**
@@ -393,6 +395,7 @@ export type TraceNode = {
   /** action: what is being approved, and who has ruled on it */
   title?: string | null; payload?: Record<string, unknown>; created_at?: string | null;
   sap_reference?: string | null;
+  issued_in?: "live" | "demo" | null;
   approvals?: { decision: string; decided_by: string; role: string; note?: string | null; at: string }[];
 };
 export type TraceEdge = {
