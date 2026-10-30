@@ -126,8 +126,16 @@ export type SkillRow = {
   name: string; title: string; description: string;
   agents: string[]; tools: string[]; steps: string[]; external: boolean;
   usage: { calls: number; not_found: number; by_agent: Record<string, number> };
+  /** Written in core/skills.py rather than added here. Built-ins cannot be
+   *  edited or removed from the UI, and only they are reachable over MCP. */
+  builtin: boolean;
 };
-export type SkillsPayload = { skills: SkillRow[]; days: number };
+export type SkillsPayload = {
+  skills: SkillRow[]; days: number;
+  agents: { code: string; nickname: string }[];
+  tools: string[];
+  may_change: boolean;
+};
 
 export type McpTool = { name: string; description: string; read_only: boolean };
 export type McpServer = {

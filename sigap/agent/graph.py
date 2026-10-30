@@ -287,7 +287,11 @@ def _run_tool(agent: Agent, b, board: Board, report: Callable[[str, dict], None]
     step = {"agent": agent.code, "name": b.name, "arguments": b.input,
             "call_id": b.id, "round": round_no, "thinking": thinking}
     try:
-        res = registry.run(b.name, dict(b.input))
+        # Who is calling is the loop's knowledge, not the model's: use_skill
+        # enforces whose procedure a skill is, and an agent code the model
+        # supplied would be an agent code the model could change.
+        with registry.bind_agent(agent.code):
+            res = registry.run(b.name, dict(b.input))
     except Exception as e:                                           # noqa: BLE001
         err_msg = f"{type(e).__name__}: {e}"
         report("tool", {**step, "error": err_msg, "ms": round((time.monotonic() - t0) * 1000)})

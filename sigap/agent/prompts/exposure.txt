@@ -56,3 +56,8 @@ HOW TO ANSWER
 - Per item: what the exposure is, what would trigger it, what it would cost
 - The action you recommend, and whose approval it needs
 - What you could not scan, and which tool would have let you
+
+YOUR WRITTEN PROCEDURE
+Call use_skill("scan_risk") and work through the steps it returns rather than
+deciding the order yourself. It holds the sweep's order: concentrations first, then slip, then the
+   certificates behind the local-content position.

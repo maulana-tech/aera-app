@@ -198,6 +198,7 @@ def list_skills(_m, b, h) -> Tuple[int, dict]:
     nobody wrote is a gap in the catalogue, and it is only visible because
     those calls are recorded rather than dropped.
     """
+    from agents.definitions import ALL
     from core import skills
     _user(h)
     # A GET's query string arrives as its body (see the dispatcher), so the
@@ -206,7 +207,51 @@ def list_skills(_m, b, h) -> Tuple[int, dict]:
         days = max(1, min(365, int((b or {}).get("days") or 30)))
     except (TypeError, ValueError):
         days = 30
-    return 200, {"skills": skills.listing(store.skill_usage(days)), "days": days}
+    return 200, {"skills": skills.listing(store.skill_usage(days)), "days": days,
+                 "agents": [{"code": c, "nickname": a.nickname} for c, a in ALL.items()],
+                 "tools": sorted(registry.all_tools()),
+                 "may_change": _user(h).role in SETTINGS_ROLES}
+
+
+@route("POST", r"/skills")
+def add_skill(_m, b: dict, h) -> Tuple[int, dict]:
+    """{"name","title","description"?,"agents"?,"tools"?,"steps"}.
+
+    Validated before it is saved, with the same checks core/skills.py runs
+    over the built-in catalogue. A skill that names a tool nobody wrote, or
+    that restricts itself to an agent who cannot reach its own tools, is
+    refused here rather than discovered in the middle of a handling.
+    """
+    from core import skills
+    user = _user(h)
+    if user.role not in SETTINGS_ROLES:
+        return 403, {"error": f"role '{user.role}' may not write a skill"}
+    name = str(b.get("name") or "").strip().lower()
+    title = str(b.get("title") or "").strip()
+    agents = [str(a) for a in (b.get("agents") or [])]
+    tools = [str(t) for t in (b.get("tools") or [])]
+    steps = [str(x).strip() for x in (b.get("steps") or []) if str(x).strip()]
+    wrong = skills.validate(name, title, agents, tools, steps)
+    if wrong:
+        return 400, {"error": "; ".join(wrong), "problems": wrong}
+    store.add_stored_skill(name, title, str(b.get("description") or "").strip(),
+                           agents, tools, steps, user.email)
+    return 200, {"skills": skills.listing(store.skill_usage(30))}
+
+
+@route("POST", r"/skills/([a-z0-9_]+)/delete")
+def remove_skill(m, _b, h) -> Tuple[int, dict]:
+    """Only a written one. The catalogue is code and is not deleted here."""
+    from core import skills
+    user = _user(h)
+    if user.role not in SETTINGS_ROLES:
+        return 403, {"error": f"role '{user.role}' may not remove a skill"}
+    name = m.group(1)
+    if name in skills.BUILTIN:
+        return 400, {"error": f"'{name}' is built in; it lives in core/skills.py"}
+    if not store.delete_stored_skill(name):
+        return 404, {"error": f"no skill called '{name}'"}
+    return 200, {"skills": skills.listing(store.skill_usage(30))}
 
 
 # -------------------------------------------------------------- MCP servers
@@ -1212,6 +1257,7 @@ _TOOL_LABELS = {
     "get_exchange_rate": "ECB exchange rate",
     "get_materials": "material master records",
     "get_open_purchase_orders": "open purchase orders",
+    "use_skill": "a written procedure, so the order is not reinvented",
     "get_material_stock": "plant stock availability",
     "get_bom_explosion": "bill of materials (BOM)",
     "get_sales_order_commitments": "customer order commitments",
@@ -1278,6 +1324,7 @@ _TOOL_BADGES = {
     "get_public_holidays": "Calendar",
     "web_brief": "Web",
     "get_exchange_rate": "FX",
+    "use_skill": "Procedure",
     "get_material_stock": "Stock Check",
     "get_open_purchase_orders": "Orders",
     "get_sales_order_commitments": "Sales",
@@ -1966,6 +2013,7 @@ PUBLIC = {("GET", "/health"), ("POST", "/login")}
 #: without naming all 48 by hand. A new shape fails the check rather than
 #: quietly skipping the route that uses it.
 _SAMPLES = ((r"([A-Za-z0-9_]+)", "x1"), (r"([A-Za-z]+)", "Supplier"),
+            (r"([a-z0-9_]+)", "a_skill"),
             (r"([a-z_]+)", "digest"), (r"([a-z]+)", "impact"),
             (r"(\d+)", "0"), (r"(pdf|xlsx)", "pdf"))
 

@@ -132,9 +132,19 @@ def demo() -> None:
     import tools as _tools  # noqa: F401  (registers every tool)
     from core import registry
 
-    declared, installed = set(tools), set(registry.all_tools())
+    # A shared tool is owned by no agent on purpose (registry.SHARED), so it
+    # is not in anybody's list and must be excused from the ownership check -
+    # but not from the labelling checks below, where an unlabelled tool is
+    # just as mute whoever owns it.
+    shared = {t.name for t in registry.shared_tools()}
+    declared, installed = set(tools), set(registry.all_tools()) - shared
     assert not declared - installed, f"claimed but not written: {sorted(declared - installed)}"
     assert not installed - declared, f"written but no agent owns it: {sorted(installed - declared)}"
+    # Shared means shared: every agent must really be able to see it.
+    for code in ALL:
+        reachable = {t.name for t in registry.owned_by(code)}
+        assert shared <= reachable, f"{code} cannot reach {sorted(shared - reachable)}"
+    declared |= shared
     # What a person sees in place of a tool's name: the API's phrase for the
     # activity feed, and the web's label. A tool missing from either shows up
     # as "Running a system check", which says nothing about what it did.
@@ -151,7 +161,8 @@ def demo() -> None:
     nicknames = [a.nickname for a in ALL.values()]
     assert len(nicknames) == len(set(nicknames)), "nicknames must be unique"
     assert len({n[0] for n in nicknames}) == len(nicknames), "first letters must all differ"
-    print(f"definitions ok, {len(ALL)} agents, {len(tools)} tools, veto: {veto[0]}")
+    print(f"definitions ok, {len(ALL)} agents, {len(tools)} tools"
+          + (f" + {len(shared)} shared" if shared else "") + f", veto: {veto[0]}")
     print("  " + " · ".join(f"{a.nickname} ({a.title})" for a in ALL.values()))
 
     # A prompt that still names the limit as a number goes stale the day the

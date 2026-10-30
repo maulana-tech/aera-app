@@ -62,8 +62,20 @@ def get(name: str) -> Tool:
     return _REGISTRY[name]
 
 
+#: An owner meaning "every agent". Almost nothing should be this: a tool every
+#: specialist can reach is a tool no specialist is accountable for, and the
+#: roster's one-owner rule is what keeps a handling's trail readable. It exists
+#: for the few that are about how an agent works rather than what it knows.
+SHARED = "*"
+
+
 def owned_by(agent_code: str) -> List[Tool]:
-    return [t for t in _REGISTRY.values() if t.owner == agent_code]
+    return [t for t in _REGISTRY.values()
+            if t.owner == agent_code or t.owner == SHARED]
+
+
+def shared_tools() -> List[Tool]:
+    return [t for t in _REGISTRY.values() if t.owner == SHARED]
 
 
 def schemas_for_model(agent_code: str) -> List[dict]:
@@ -291,6 +303,29 @@ def bind_board(board: Any) -> Iterator[Any]:
         yield board
     finally:
         _CURRENT_BOARD.reset(token)
+
+
+_CURRENT_AGENT: ContextVar[Optional[str]] = ContextVar("sigap_agent", default=None)
+
+
+def current_agent() -> Optional[str]:
+    """Whose call this is, or None outside a specialist's loop.
+
+    A tool that needs to know is told by the loop rather than by the model: a
+    parameter the model fills with an agent code is a parameter it can fill
+    with somebody else's.
+    """
+    return _CURRENT_AGENT.get()
+
+
+@contextmanager
+def bind_agent(agent_code: str) -> Iterator[str]:
+    """Make `agent_code` the caller for the duration of its tool loop."""
+    token = _CURRENT_AGENT.set(agent_code)
+    try:
+        yield agent_code
+    finally:
+        _CURRENT_AGENT.reset(token)
 
 
 @contextmanager

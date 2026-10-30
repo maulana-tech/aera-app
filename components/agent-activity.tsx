@@ -4,6 +4,7 @@ const toolLabels: Record<string, string> = {
   detect_disruption: "Checking the disruption signal",
   get_materials: "Checking material data",
   get_open_purchase_orders: "Checking open purchase orders",
+  use_skill: "Working through a written procedure",
   get_material_stock: "Checking material stock",
   get_bom_explosion: "Tracing product components",
   get_sales_order_commitments: "Checking customer order commitments",

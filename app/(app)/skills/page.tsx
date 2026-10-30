@@ -2,6 +2,8 @@ import { apiResult, type SkillsPayload } from "@/app/lib";
 import { PageHeader } from "@/components/shell";
 import { StatusBadge } from "@/components/status-badge";
 
+import { Remove, Write } from "./Write";
+
 export const dynamic = "force-dynamic";
 
 export default async function SkillsPage() {
@@ -17,7 +19,8 @@ export default async function SkillsPage() {
             an order somebody decided once, so the order is not re-derived — differently — on
             every handling. Each one names the agents that may run it and the tools it uses,
             and both are checked against the registry: a skill naming a tool that does not
-            exist fails the build rather than a handling.
+            exist fails the build rather than a handling. The five we wrote are code; the
+            ones below them are yours, checked the same way at the moment you save them.
           </>
         }
       />
@@ -37,10 +40,12 @@ export default async function SkillsPage() {
                   {s.external && (
                     <StatusBadge status="done">reachable over MCP and A2A</StatusBadge>
                   )}
+                  {!s.builtin && <StatusBadge status="pending">written here</StatusBadge>}
                   <span className="text-muted-foreground ml-auto font-mono text-[10px]">
                     {s.usage.calls} run{s.usage.calls === 1 ? "" : "s"} in {data.days} days
                     {s.usage.not_found > 0 && ` · ${s.usage.not_found} named but missing`}
                   </span>
+                  {!s.builtin && data.may_change && <Remove name={s.name} />}
                 </div>
 
                 <div className="grid gap-4 px-4 py-4 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -98,6 +103,8 @@ export default async function SkillsPage() {
               </section>
             ))}
           </div>
+
+          <Write data={data} />
 
           <p className="text-muted-foreground mt-6 max-w-3xl text-xs leading-relaxed">
             Every invocation is counted, including the ones that name a skill nobody wrote.

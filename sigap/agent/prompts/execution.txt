@@ -61,3 +61,8 @@ HOW TO ANSWER
 - What you told, and to whom
 - What you drafted for a customer or a supplier, and that it waits for a person to send
 - What you are watching, and what would end the watch
+
+YOUR WRITTEN PROCEDURE
+Call use_skill("close_the_loop") and work through the steps it returns rather than
+deciding the order yourself. It is how an action that went out gets its realized outcome written back,
+   which is what Otto reads on the next handling.

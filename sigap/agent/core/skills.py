@@ -149,17 +149,90 @@ CATALOGUE: List[Skill] = [
 
 BY_NAME: Dict[str, Skill] = {s.name: s for s in CATALOGUE}
 
+#: Names the catalogue owns. A stored skill may not take one: an operator
+#: redefining investigate_disruption would silently change what SIGAP serves
+#: over MCP to callers who were built against the old one.
+BUILTIN = frozenset(BY_NAME)
+
+
+def stored() -> List[Skill]:
+    """Procedures an operator wrote. Never external, never shadowing a built-in."""
+    from core import store
+    try:
+        rows = store.stored_skills()
+    except Exception:                                               # noqa: BLE001
+        return []                                                   # no database yet
+    return [Skill(name=r["name"], title=r["title"], description=r["description"],
+                  agents=r["agents"], tools=r["tools"], steps=r["steps"], external=False)
+            for r in rows if r["name"] not in BUILTIN]
+
+
+def all_skills() -> List[Skill]:
+    return [*CATALOGUE, *stored()]
+
 
 def get(name: str) -> Optional[Skill]:
-    return BY_NAME.get(name)
+    found = BY_NAME.get(name)
+    if found is not None:
+        return found
+    return next((s for s in stored() if s.name == name), None)
+
+
+def validate(name: str, title: str, agents: List[str], tools: List[str],
+             steps: List[str]) -> List[str]:
+    """Everything wrong with a proposed skill, in the operator's words.
+
+    These are the same checks demo() runs over the built-in catalogue. Running
+    them only at build time was fine while every skill was written in code; a
+    skill a person can add has to meet them at the moment of saving, or the
+    guarantee moves from "caught at build" to "discovered at three in the
+    morning on somebody's handling".
+    """
+    from core import registry
+    from agents.definitions import ALL
+    import tools as _tools                                          # noqa: F401
+
+    wrong: List[str] = []
+    slug = (name or "").strip()
+    if not slug or not slug.replace("_", "").isalnum() or not slug.islower():
+        wrong.append("the name must be lower case letters, digits and underscores")
+    if slug in BUILTIN:
+        wrong.append(f"'{slug}' is a built-in skill and cannot be redefined")
+    elif any(s.name == slug for s in stored()):
+        wrong.append(f"a skill called '{slug}' already exists")
+    if not (title or "").strip():
+        wrong.append("it needs a title")
+    if not steps:
+        wrong.append("it needs steps, or it is a label rather than a procedure")
+
+    known = set(registry.all_tools())
+    unknown = [t for t in tools if t not in known]
+    if unknown:
+        wrong.append("no such tool: " + ", ".join(sorted(unknown)))
+    nobody = [a for a in agents if a not in ALL]
+    if nobody:
+        wrong.append("no such agent: " + ", ".join(sorted(nobody)))
+
+    # A skill restricted to an agent must be made of tools that agent can
+    # reach, or it is a procedure nobody can run.
+    for code in agents:
+        if code not in ALL:
+            continue
+        reachable = {t.name for t in registry.owned_by(code)}
+        out_of_reach = [t for t in tools if t in known and t not in reachable]
+        if out_of_reach:
+            wrong.append(f"{ALL[code].nickname} cannot reach "
+                         + ", ".join(sorted(out_of_reach)))
+    return wrong
 
 
 def listing(usage: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-    """The catalogue, each with its usage when the ledger was read."""
+    """Every skill, built-in and written, each with its usage."""
     usage = usage or {}
-    return [{**s.as_dict(), "usage": usage.get(s.name, {"calls": 0, "not_found": 0,
-                                                        "by_agent": {}})}
-            for s in CATALOGUE]
+    builtin = {s.name for s in CATALOGUE}
+    return [{**s.as_dict(), "builtin": s.name in builtin,
+             "usage": usage.get(s.name, {"calls": 0, "not_found": 0, "by_agent": {}})}
+            for s in all_skills()]
 
 
 def demo() -> None:
@@ -200,6 +273,28 @@ def demo() -> None:
     cold = next(o for o in out if o["name"] == "close_the_loop")
     assert cold["usage"] == {"calls": 0, "not_found": 0, "by_agent": {}}, cold
 
+    # What a person may add has to meet the same bar, at the moment of saving.
+    assert validate("find_the_cheapest", "Find it", [], ["get_material_stock"],
+                    ["Look."]) == [], validate(
+                        "find_the_cheapest", "Find it", [], ["get_material_stock"], ["Look."])
+    assert any("built-in" in w for w in
+               validate("scan_risk", "Mine now", [], [], ["Step."])), "a built-in must not be redefined"
+    assert any("no such tool" in w for w in
+               validate("x_y", "T", [], ["conjure_stock"], ["Step."]))
+    assert any("no such agent" in w for w in
+               validate("x_y", "T", ["treasurer"], [], ["Step."]))
+    # The check that matters most: a procedure nobody can run.
+    out_of_reach = validate("x_y", "T", ["compliance"], ["get_material_stock"], ["Step."])
+    assert any("cannot reach" in w for w in out_of_reach), out_of_reach
+    assert any("steps" in w for w in validate("x_y", "T", [], [], []))
+    assert any("lower case" in w for w in validate("Not Slug", "T", [], [], ["Step."]))
+
+    rows = listing()
+    assert all("builtin" in r for r in rows)
+    assert {r["name"] for r in rows if r["builtin"]} == BUILTIN, rows
+
+    print("  a skill a person adds meets the same bar as one we wrote: no unknown tool, "
+          "no unreachable procedure, no built-in overwritten ✓")
     print(f"skills ok, {len(CATALOGUE)} in the catalogue, every tool and agent they "
           "name exists ✓ · a restricted skill is reachable by its own agent ✓ · "
           "the external four match MCP and A2A ✓")

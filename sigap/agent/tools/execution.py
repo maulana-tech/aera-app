@@ -47,10 +47,17 @@ LIMIT = CFG.autonomous_limit_text
 # being acted on, and an untrusted figure there is a reason to ask a person.
 NOT_EVIDENCE = {"precedent.search_past_incidents"}
 
+#: Never evidence whoever called them, so they are matched on the tool name
+#: rather than on the whole board key. A procedure says how to look; it says
+#: nothing about what is there.
+NOT_EVIDENCE_TOOLS = {"use_skill"}
+
 
 def _is_evidence(key: str) -> bool:
     """Whether a board key may count towards what an action rests on."""
     if key in NOT_EVIDENCE:
+        return False
+    if key.rpartition(".")[2] in NOT_EVIDENCE_TOOLS:
         return False
     # `<agent>.mcp__<server>__<tool>`: a tool on a server we do not operate can
     # inform a specialist, but it cannot be the ground an action stands on. We

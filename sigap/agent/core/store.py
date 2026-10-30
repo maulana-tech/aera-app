@@ -171,6 +171,21 @@ CREATE TABLE IF NOT EXISTS mcp_servers (
   added_at    TEXT NOT NULL
 );
 
+-- Procedures written by an operator rather than by us. They live beside
+-- core/skills.py's catalogue and never replace it: a stored skill may not
+-- take a built-in's name, and it is never `external`, because what MCP and
+-- the A2A card offer is a fixed contract other systems were built against.
+CREATE TABLE IF NOT EXISTS skills (
+  name        TEXT PRIMARY KEY,
+  title       TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  agents      TEXT NOT NULL DEFAULT '[]',   -- agent codes; [] = any of them
+  tools       TEXT NOT NULL DEFAULT '[]',   -- registry tool names it composes
+  steps       TEXT NOT NULL DEFAULT '[]',
+  added_by    TEXT NOT NULL,
+  added_at    TEXT NOT NULL
+);
+
 -- One row per skill invocation. Dimensions only, never the caller's text:
 -- which skill, which agent, whether it existed. A model naming a skill that
 -- does not exist is the single most useful row here, so `found` is recorded
@@ -1004,6 +1019,32 @@ def update_mcp_server(sid: str, **fields) -> None:
 def delete_mcp_server(sid: str) -> bool:
     with connect() as c:
         return c.execute("DELETE FROM mcp_servers WHERE id=?", (sid,)).rowcount > 0
+
+
+# ------------------------------------------------------------ written skills
+def stored_skills() -> List[Dict[str, Any]]:
+    """Skills an operator wrote, newest last. Shape matches core.skills.Skill."""
+    with connect() as c:
+        rows = [dict(r) for r in c.execute(
+            "SELECT * FROM skills ORDER BY added_at").fetchall()]
+    for r in rows:
+        for k in ("agents", "tools", "steps"):
+            r[k] = json.loads(r.get(k) or "[]")
+    return rows
+
+
+def add_stored_skill(name: str, title: str, description: str, agents: List[str],
+                     tools: List[str], steps: List[str], by: str) -> None:
+    with connect() as c:
+        c.execute("INSERT INTO skills (name,title,description,agents,tools,steps,"
+                  "added_by,added_at) VALUES (?,?,?,?,?,?,?,?)",
+                  (name, title, description, json.dumps(agents), json.dumps(tools),
+                   json.dumps(steps), by, _now()))
+
+
+def delete_stored_skill(name: str) -> bool:
+    with connect() as c:
+        return c.execute("DELETE FROM skills WHERE name=?", (name,)).rowcount > 0
 
 
 # --------------------------------------------------------------- skill usage
