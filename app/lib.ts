@@ -133,6 +133,10 @@ export type McpTool = { name: string; description: string; read_only: boolean };
 export type McpServer = {
   id: string; name: string; url: string; enabled: boolean;
   agents: string[]; tools: McpTool[]; token_set: boolean;
+  /** How many of `tools` an agent can really call: writers, tools with no
+   *  usable schema and tools whose name is already ours are dropped
+   *  (sigap/agent/core/registry.py, remote_tools). */
+  offered: number;
   last_ok: string | null; last_error: string | null;
   added_by: string; added_at: string;
 };

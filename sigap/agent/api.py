@@ -211,8 +211,16 @@ def list_skills(_m, b, h) -> Tuple[int, dict]:
 
 # -------------------------------------------------------------- MCP servers
 def _mcp_row(r: dict) -> dict:
-    """One server as a browser may see it. Never the token."""
-    return {k: v for k, v in r.items() if k != "token"}
+    """One server as a browser may see it. Never the token.
+
+    `offered` is how many of its tools an agent can actually call, which is
+    not len(tools): a writer, a tool with no usable schema, and a tool whose
+    name is already one of ours are all dropped by the registry. A page that
+    showed only the probed count would promise more than the system does.
+    """
+    offered = sum(1 for t in registry.remote_tools().values()
+                  if t["server"] == r.get("name"))
+    return {k: v for k, v in r.items() if k != "token"} | {"offered": offered}
 
 
 @route("GET", r"/mcp/servers")

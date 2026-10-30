@@ -102,11 +102,13 @@ export function Servers({ data }: { data: McpPayload }) {
                     {s.token_set && " · bearer token set"}
                   </p>
                   <p className="text-muted-foreground mt-1 text-xs">
-                    Reachable by{" "}
                     {s.agents.length ? (
-                      <span className="font-mono">{s.agents.join(", ")}</span>
+                      <>
+                        {s.offered} of {s.tools.length} usable by{" "}
+                        <span className="font-mono">{s.agents.join(", ")}</span>
+                      </>
                     ) : (
-                      "every agent"
+                      "verified, but no agent may use it yet"
                     )}
                     {s.last_error && (
                       <span className="text-destructive"> · {s.last_error}</span>
@@ -226,7 +228,9 @@ export function Servers({ data }: { data: McpPayload }) {
                 })}
               </div>
               <span className="text-muted-foreground block text-xs">
-                None selected means every agent.
+                Pick nobody and the server is registered but reaches no
+                handling. Verifying a server and giving an agent its tools are
+                two separate acts, and the second one is the one that matters.
               </span>
             </div>
           </div>
