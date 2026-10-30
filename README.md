@@ -212,6 +212,92 @@ a signal arrives (BMKG · GDACS · Open-Meteo · POST /events)
 
 ---
 
+## Visual Walkthrough & Core Screenshots
+
+### 1. Decision Queue (Antrean Keputusan & Triage Gangguan)
+Real-time triage untuk setiap insiden rantai pasok (gempa BMKG, penutupan pelabuhan, penahanan bea cukai, kegagalan inspeksi batch). Menampilkan estimasi dampak, status penanganan otomatis, dan biaya model.
+
+![Decision Queue](public/screenshots/01-decision-queue.png)
+
+---
+
+### 2. Multi-Agent Conversation & Live Orchestration Panel ⭐
+
+#### A. Hasil Analisis Percakapan & Rekomendasi
+Hasil konsultasi dengan **Arya** (Lead) menganalisis lampiran file sampel `MaterialStock.csv`. Sistem menghitung sisa hari cover stok material kritis (tabel M-4436, M-4417, M-4456), mengidentifikasi data SAP yang belum lengkap secara jujur, dan merumuskan mitigasi terstruktur.
+
+![Chat Response & Analysis Table](public/screenshots/04a-chat-response.png)
+
+#### B. Panel Live Orchestration (Langkah Kerja Agen di Sisi Kanan)
+Panel kerja spesialis saat menelusuri data: memperlihatkan delegasi dinamis Arya ke 6 agen (Iris, Elsa, Dara, Clint, Prita, Otto), alur penalaran internal (*thinking*), hingga eksekusi 24 data checks dan tool calls nyata per langkah.
+
+![Live Agent Orchestration Panel](public/screenshots/04-chat-agents-orchestration.png)
+
+---
+
+### 3. Disruption Investigation & Multi-Agent Reasoning Trail
+Analisis terperinci terhadap setiap gangguan suplai (seperti penutupan Pelabuhan Ningbo). Menampilkan rekomendasi terstruktur, validasi ketiadaan asumsi liar, serta rekam jejak penalaran agen lintas peran (*Delegation, Data Check, Finding, Summary*).
+
+![Disruption Reasoning Trail](public/screenshots/03-disruption-reasoning.png)
+
+---
+
+### 4. Executive Supply Chain Dashboard
+Dasbor komprehensif untuk memantau kesehatan rantai pasok: proyeksi hari habis stok material kritis, dampak penegakan aturan (*cost of compliance* TKDN), status pengiriman tertunda, dan ringkasan biaya model.
+
+![Dashboard Overview](public/screenshots/02-dashboard.png)
+
+---
+
+### 5. Audit Trail & Decision Log
+Pencatatan setiap langkah eksekusi, persetujuan transaksi berbasis limit wewenang (*server-side authority check*), dan riwayat tindakan ke SAP untuk kepatuhan tata kelola perusahaan (*enterprise governance*).
+
+![Decision Log](public/screenshots/05-audit-trail-log.png)
+
+---
+
+### 6. Agent Council & Tool Registry
+Direktori 12 agen mandiri dengan kesiapan 46/46 tool dan 12/12 prompt tersertifikasi. Dilengkapi board bersama (*shared board*) tempat spesialis bertukar temuan tanpa bottleneck.
+
+![Agent Team Directory](public/screenshots/06-agent-team.png)
+
+---
+
+### 7. Disruption Reports & Document Export
+Pembuatan laporan operasional instan untuk setiap penanganan insiden atau portofolio global, siap diunduh dalam format PDF resmi dan lembar kerja Excel (XLSX).
+
+![Reports Export](public/screenshots/07-reports-export.png)
+
+---
+
+### 8. Master Data Uploads & Provenance Verification
+Modul unggah CSV untuk memperkaya data master perusahaan dengan validasi skema ketat. Mendukung pelabelan sumber data secara transparan (`cached` vs `modelled`).
+
+![Data Uploads](public/screenshots/08-data-uploads.png)
+
+---
+
+### 9. Autonomous Background Watchers & Schedule
+Manajemen 8 jadwal tugas otonom tanpa campur tangan manusia: pemantau gempa BMKG (5 mnt), bahaya global GDACS/NASA (30 mnt), cuaca Open-Meteo (3 jam), audit sertifikat TKDN (harian), pengiriman aksi SAP (10 mnt), dan ringkasan harian (07:30 WIB).
+
+![Schedule Watchers](public/screenshots/09-schedule-watchers.png)
+
+---
+
+### 10. Multi-Model Configuration & Routing
+Pengaturan model AI fleksibel per peran agen (Bedrock Claude Haiku/Sonnet/Opus, AI Core, Mantle DeepSeek, GLM, MiniMax, Qwen, Kimi) lengkap dengan konfigurasi model fallback dan uji respons langsung (*ping test*).
+
+![Models Configuration](public/screenshots/10-models-configuration.png)
+
+---
+
+### 11. Stakeholder Contacts & Multi-Channel Alerts
+Pusat distribusi notifikasi otomatis ke tim internal (Buyer, Planner, Head of Procurement, QA) melalui Email (Composio/Gmail), Slack, Telegram, dan Webhook begitu insiden terjadi.
+
+![Contacts & Alerts](public/screenshots/11-contacts-alerts.png)
+
+---
+
 ## Tech Stack
 
 | Layer | Technology |
