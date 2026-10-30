@@ -63,6 +63,14 @@ const agentNames: Record<string, string> = {
 
 export function toolLabel(name: string): string {
   if (Object.hasOwn(toolLabels, name)) return toolLabels[name];
+  // `mcp__<server>__<tool>` (core/registry.py REMOTE_PREFIX): a tool on an MCP
+  // server SIGAP does not operate. It has to read as borrowed here, because
+  // the generic fallback below would describe it as a system check of ours.
+  if (name.startsWith("mcp__")) {
+    const [server, ...rest] = name.slice(5).split("__");
+    const tool = rest.join("__").replace(/_/g, " ").trim();
+    if (server && tool) return `Asking ${server} (outside SIGAP): ${tool}`;
+  }
   const specialist = name.startsWith("ask_") ? name.slice(4) : "";
   return Object.hasOwn(agentNames, specialist)
     ? `Consulting ${agentNames[specialist]}`

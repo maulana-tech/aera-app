@@ -268,6 +268,7 @@ def add_mcp_server(_m, b: dict, h) -> Tuple[int, dict]:
         return 400, {"error": f"could not reach it: {note}"}
     row = store.add_mcp_server(name, url, token, user.email, agents)
     store.update_mcp_server(row["id"], tools=tools, last_ok=store._now(), last_error=None)
+    registry.forget_remote()
     return 200, {"added": row["id"], "note": note,
                  "servers": [_mcp_row(r) for r in store.mcp_servers()]}
 
@@ -285,6 +286,7 @@ def change_mcp_server(m, b: dict, h) -> Tuple[int, dict]:
     if not fields:
         return 400, {"error": "nothing to change"}
     store.update_mcp_server(sid, **fields)
+    registry.forget_remote()
     return 200, {"servers": [_mcp_row(r) for r in store.mcp_servers()]}
 
 
@@ -300,6 +302,7 @@ def test_mcp_server(m, _b, h) -> Tuple[int, dict]:
     if row is None:
         return 404, {"error": f"no MCP server {sid}"}
     ok, note, tools = mcp_client.probe(row["url"], row.get("token"))
+    registry.forget_remote()
     store.update_mcp_server(sid, tools=tools if ok else row["tools"],
                             last_ok=store._now() if ok else row.get("last_ok"),
                             last_error=None if ok else note)
@@ -311,6 +314,7 @@ def remove_mcp_server(m, _b, h) -> Tuple[int, dict]:
     user = _user(h)
     if user.role not in SETTINGS_ROLES:
         return 403, {"error": f"role '{user.role}' may not remove an MCP server"}
+    registry.forget_remote()
     if not store.delete_mcp_server(m.group(1)):
         return 404, {"error": f"no MCP server {m.group(1)}"}
     return 200, {"servers": [_mcp_row(r) for r in store.mcp_servers()]}
@@ -1244,6 +1248,21 @@ _TOOL_LABELS = {
     "detect_disruption": "disruption signal detection",
 }
 
+def _remote_label(tool_name: str) -> Optional[Tuple[str, str]]:
+    """(what it is, badge) for a tool on a server SIGAP does not operate.
+
+    The activity feed is where a person sees what the agents did. A borrowed
+    tool has to look borrowed there, or the feed quietly claims more than the
+    system actually knows.
+    """
+    if not tool_name.startswith(registry.REMOTE_PREFIX):
+        return None
+    server, sep, bare = tool_name[len(registry.REMOTE_PREFIX):].partition("__")
+    if not sep or not bare:
+        return None
+    return f"{bare.replace('_', ' ').strip()} on {server} (outside SIGAP)", "External"
+
+
 _TOOL_BADGES = {
     "scan_live_hazards": "Hazards",
     "get_port_conditions": "Weather",
@@ -1298,10 +1317,12 @@ def format_orchestration_step(kind: str, d: dict, seq: int) -> dict:
         agent_code = d.get("agent", "")
         agent_name = _AGENT_NICKNAMES.get(agent_code, d.get("name", agent_code.title()))
         tool_name = d.get("name", "")
-        tool_desc = _TOOL_LABELS.get(tool_name, tool_name.replace("_", " "))
+        borrowed = _remote_label(tool_name)
+        tool_desc = (borrowed[0] if borrowed
+                     else _TOOL_LABELS.get(tool_name, tool_name.replace("_", " ")))
         args = d.get("arguments", {})
         arg_summary = " · ".join(f"{k}: {v}" for k, v in list(args.items())[:2])
-        badge = _TOOL_BADGES.get(tool_name, "Data Check")
+        badge = borrowed[1] if borrowed else _TOOL_BADGES.get(tool_name, "Data Check")
         narrative = f"{agent_name} checking {tool_desc}"
         detail = f"{tool_name}{f' ({arg_summary})' if arg_summary else ''} ›"
         return {

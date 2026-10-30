@@ -939,11 +939,14 @@ def _check_failure_paths() -> None:
     from agents.definitions import PromptMissing
 
     # Every agent must be reachable, have a prompt, and expose a valid schema.
-    for code, agent in ALL.items():
-        assert agent.instructions, code               # raises PromptMissing if absent
-        for spec in registry.schemas_for_model(code):
-            assert spec["input_schema"]["additionalProperties"] is False, spec["name"]
-            assert spec["strict"] is True, spec["name"]
+    # Remote tools are pinned off: otherwise this would assert against whatever
+    # MCP servers happen to be registered on the machine running the suite.
+    with registry.no_remote():
+        for code, agent in ALL.items():
+            assert agent.instructions, code           # raises PromptMissing if absent
+            for spec in registry.schemas_for_model(code):
+                assert spec["input_schema"]["additionalProperties"] is False, spec["name"]
+                assert spec["strict"] is True, spec["name"]
 
     # An agent with no prompt raises rather than being sent an empty one.
     ghost = Agent("ghost", "Nemo", "Nobody", "does not exist")

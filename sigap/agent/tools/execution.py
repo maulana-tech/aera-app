@@ -34,6 +34,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional, Tuple
 
 from core.config import CFG
+from core import registry
 from core.provenance import Origin, Result
 from core.registry import register
 from tools.fetcher import as_of, read
@@ -45,6 +46,17 @@ LIMIT = CFG.autonomous_limit_text
 # system's own youth. Everything else on the board describes the situation
 # being acted on, and an untrusted figure there is a reason to ask a person.
 NOT_EVIDENCE = {"precedent.search_past_incidents"}
+
+
+def _is_evidence(key: str) -> bool:
+    """Whether a board key may count towards what an action rests on."""
+    if key in NOT_EVIDENCE:
+        return False
+    # `<agent>.mcp__<server>__<tool>`: a tool on a server we do not operate can
+    # inform a specialist, but it cannot be the ground an action stands on. We
+    # cannot audit it, cannot promise it was read when it says, and cannot put
+    # it in front of a person who has to sign.
+    return registry.REMOTE_PREFIX not in key
 
 
 def _earliest_arrival(material: str) -> Optional[tuple]:
@@ -123,12 +135,12 @@ def autonomy_check(cost_idr: int) -> tuple[bool, str]:
         # That is the weakest case, not the strongest, so it never goes alone.
         return False, "no evidence on record: this was not raised from a handling"
 
-    weak = [k for k in board.untrusted_keys() if k not in NOT_EVIDENCE]
+    weak = [k for k in board.untrusted_keys() if _is_evidence(k)]
     if weak:
         return False, ("the figures under this are not all trusted: "
                        + ", ".join(sorted(weak)))
 
-    if not [k for k in board.origin if k not in NOT_EVIDENCE]:
+    if not [k for k in board.origin if _is_evidence(k)]:
         return False, "nothing was read before deciding"
 
     return True, f"Rp {cost_idr:,} is under the limit and every figure under it is trusted"
@@ -694,7 +706,22 @@ def demo() -> None:
         alone, why = autonomy_check(cheap)
         assert not alone and "nothing was read" in why, why
 
+    # A tool on somebody else's MCP server is CACHED, so it would otherwise
+    # read as trusted and let an action through on nothing we can audit.
+    borrowed = FakeBoard({"inventory.mcp__jira__search_tickets": "cached"})
+    with registry.bind_board(borrowed):
+        alone, why = autonomy_check(cheap)
+        assert not alone, "a third-party MCP answer must not be the only evidence"
+        assert "nothing was read" in why, why
+    # Alongside our own reading it is neither evidence nor an obstacle.
+    mixed = FakeBoard({"impact.get_material_stock": "live",
+                       "inventory.mcp__jira__search_tickets": "missing"})
+    with registry.bind_board(mixed):
+        alone, why = autonomy_check(cheap)
+        assert alone, f"a failed remote lookup must not block a trusted decision: {why}"
+
     print("  autonomy needs a trusted board, not just a small number")
+    print("  a third-party MCP answer can inform a specialist but never ground an action ✓")
     print("  a modelled figure anywhere under the decision sends it to a person")
 
     # ---- a figure from a model, set against the record that judges it ----
