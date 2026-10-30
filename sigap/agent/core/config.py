@@ -75,7 +75,7 @@ class Config:
 
     @property
     def production(self) -> bool:
-        return self.env == "prod"
+        return (self.env or "").strip().lower() in ("prod", "production")
 
     @property
     def sap_ready(self) -> bool:
