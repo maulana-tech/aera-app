@@ -437,6 +437,8 @@ export type Trace = {
  * come and still be checkable. */
 export type VerdictState =
   | "needs_you_now" | "needs_you" | "held" | "failed"
+  /** The costing settled on a plan and no action was raised against it. */
+  | "recommended_only"
   | "owes_outcome" | "running" | "handled";
 export type Verdict = {
   state: VerdictState;

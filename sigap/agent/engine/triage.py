@@ -49,6 +49,7 @@ STATES = (
     "needs_you_now",    # a decision is waiting AND the clock has run out
     "needs_you",        # a decision is waiting
     "held",             # the system refused to decide: it needs data, not a decision
+    "recommended_only", # it settled on a plan and raised nothing to approve
     "failed",           # it broke; somebody has to look
     "owes_outcome",     # it was carried out and nobody wrote down what happened
     "running",          # still working
@@ -61,6 +62,7 @@ ASKS = {
     "needs_you_now": "Approve now",
     "needs_you": "Approve",
     "held": "Needs data",
+    "recommended_only": "Raise it",
     "failed": "Failed",
     "owes_outcome": "Record what happened",
     "running": "Working",
@@ -166,6 +168,9 @@ def facts_from_run(run: dict, today: Optional[date] = None) -> Dict[str, Any]:
             oldest = max(oldest or 0, -d)
 
     sim = last_result(run, "simulate_scenario") or {}
+    # A plan the costing settled on. With no action against it the handling
+    # worked out what to do and then left the doing undone.
+    chosen = sim.get("chosen") if isinstance(sim.get("chosen"), dict) else None
     cc = sim.get("compliance_cost") if isinstance(sim.get("compliance_cost"), dict) else None
     decision = run.get("decision") or {}
     untrusted = decision.get("untrusted_on_board")
@@ -179,6 +184,8 @@ def facts_from_run(run: dict, today: Optional[date] = None) -> Dict[str, Any]:
         "owed": len(owed),
         "oldest_owed_days": oldest,
         "depleted_on": sim.get("depleted_without_action"),
+        "plan_chosen": chosen.get("combination") if chosen else None,
+        "actions_total": len(actions),
         "compliance_cost_idr": int(cc["idr"]) if cc and isinstance(cc.get("idr"), (int, float)) else None,
         "untrusted": len(untrusted) if isinstance(untrusted, list) else 0,
         "today": today,
@@ -221,6 +228,15 @@ def verdict(facts: Dict[str, Any], today: Optional[date] = None) -> Verdict:
         state = "failed"
     elif status == "held":
         state = "held"
+    elif facts.get("plan_chosen") and not int(facts.get("actions_total") or 0):
+        # The costing picked a plan and nothing was ever raised against it.
+        # Calling this "handled" would be the worst kind of wrong: the queue
+        # would show the work finished while the purchase order it recommended
+        # does not exist anywhere. Seen in a real run, where the lead ended by
+        # asking "shall I draft these?" - a question nobody was there to read.
+        state = "recommended_only"
+        because.append(f"plan {facts['plan_chosen']} was chosen and nothing was raised "
+                       "against it, so there is nothing to approve")
     elif pending:
         # Time-bound only when the record actually says when the stock runs
         # out. With no costing step there is no clock, and inventing one would
@@ -519,6 +535,24 @@ def demo() -> None:
     whole = verdict_for_run(store.get_run(r1), t)
     assert whole.state == board[0]["verdict"]["state"], (whole, board[0]["verdict"])
     assert whole.value_idr == board[0]["verdict"]["value_idr"]
+
+    # A handling that chose a plan and raised nothing is not "handled". This
+    # came from a real run: the lead reasoned to option B, listed what needed
+    # approval, and closed by asking "shall I draft these?" - into an empty
+    # room. The queue said handled, and the purchase order existed nowhere.
+    rec = verdict({"status": "done", "pending": 0, "owed": 0,
+                   "plan_chosen": "B+C", "actions_total": 0}, t)
+    assert rec.state == "recommended_only", rec.state
+    assert "nothing was raised" in " ".join(rec.because), rec.because
+    assert RANK["recommended_only"] < RANK["handled"], "it must outrank a finished run"
+    # With an action against it, the ordinary states resume.
+    ok = verdict({"status": "done", "pending": 1, "owed": 0, "pending_value_idr": 94_000_000,
+                  "pending_kinds": ["draft_po"], "plan_chosen": "B+C", "actions_total": 1}, t)
+    assert ok.state in ("needs_you", "needs_you_now"), ok.state
+    # And a handling that chose nothing is still handled, not accused.
+    none = verdict({"status": "done", "pending": 0, "owed": 0, "actions_total": 0}, t)
+    assert none.state == "handled", none.state
+    print("  a plan chosen with nothing raised is not 'handled' ✓")
 
     print("triage ok, states ranked by what is owed ✓ · the figure is always beside the word ✓ "
           "· no costing step means no clock ✓ · clear only when truly clear ✓ "

@@ -20,6 +20,9 @@ const VERDICT_CLS: Record<string, string> = {
   needs_you_now: "border-rose-500/50 hover:border-rose-500/80",
   needs_you:     "border-amber-500/40 hover:border-amber-500/70",
   held:          "border-amber-500/40 hover:border-amber-500/70",
+  // It worked out what to do and raised nothing. Amber, like held: a person
+  // has to act, and the thing they would approve does not exist yet.
+  recommended_only: "border-amber-500/40 hover:border-amber-500/70",
   failed:        "border-rose-500/40 hover:border-rose-500/70",
   owes_outcome:  "border-sky-500/30 hover:border-sky-500/60",
   running:       "border-sky-500/40 hover:border-sky-500/70",
@@ -28,6 +31,7 @@ const VERDICT_TEXT: Record<string, string> = {
   needs_you_now: "text-rose-700 dark:text-rose-400",
   needs_you:     "text-amber-700 dark:text-amber-400",
   held:          "text-amber-700 dark:text-amber-400",
+  recommended_only: "text-amber-700 dark:text-amber-400",
   failed:        "text-rose-700 dark:text-rose-400",
   owes_outcome:  "text-sky-700 dark:text-sky-400",
   running:       "text-sky-700 dark:text-sky-400",
