@@ -1444,6 +1444,7 @@
       "ArrivalDate": "2026-09-11",
       "ExtraCostIDR": 186000000,
       "TkdnAfterPct": 38.2,
+      "HsCode": "7601.20.00",
       "Origin": "CN",
       "NewOrigin": false,
       "QualificationDays": 0
@@ -1457,6 +1458,7 @@
       "ArrivalDate": "2026-09-12",
       "ExtraCostIDR": 94000000,
       "TkdnAfterPct": 41.6,
+      "HsCode": "7601.20.00",
       "Origin": "ID",
       "NewOrigin": false,
       "QualificationDays": 3
@@ -1470,6 +1472,7 @@
       "ArrivalDate": "2026-09-10",
       "ExtraCostIDR": 22000000,
       "TkdnAfterPct": null,
+      "HsCode": "7601.20.00",
       "Origin": "ID",
       "NewOrigin": false,
       "QualificationDays": 0
@@ -1483,6 +1486,7 @@
       "ArrivalDate": "2026-09-26",
       "ExtraCostIDR": 61000000,
       "TkdnAfterPct": 36.1,
+      "HsCode": "7601.20.00",
       "Origin": "VN",
       "NewOrigin": true,
       "QualificationDays": 7
@@ -1496,6 +1500,7 @@
       "ArrivalDate": "2026-09-19",
       "ExtraCostIDR": 48000000,
       "TkdnAfterPct": 34.8,
+      "HsCode": "7601.20.00",
       "Origin": "CN",
       "NewOrigin": false,
       "QualificationDays": 0
@@ -1509,6 +1514,7 @@
       "ArrivalDate": "2026-09-18",
       "ExtraCostIDR": 31000000,
       "TkdnAfterPct": 44.0,
+      "HsCode": "7214.99.90",
       "Origin": "ID",
       "NewOrigin": false,
       "QualificationDays": 5
@@ -1522,6 +1528,7 @@
       "ArrivalDate": "2026-09-16",
       "ExtraCostIDR": 88000000,
       "TkdnAfterPct": 0.0,
+      "HsCode": "7214.99.90",
       "Origin": "KR",
       "NewOrigin": false,
       "QualificationDays": 0

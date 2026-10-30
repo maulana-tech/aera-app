@@ -354,38 +354,42 @@ def build() -> dict:
                       "LatePenaltyPctPerDay": 0.5, "LatePenaltyCapPct": 10.0})
 
     # ---- alternate sources ------------------------------------------------
+    # HS headings are the real ones for these goods: 7601.20 is unwrought
+    # aluminium alloy (the ADC12 ingot), 7214.99 a hot-rolled non-alloy steel
+    # bar (S45C). LARTAS attaches to the heading, so a scenario without them
+    # cannot exercise the rule it is meant to demonstrate.
     alternates = [
         {"id": "A", "label": "Air freight 85 t from the incumbent supplier",
          "Supplier": "SUP-2201", "Material": "M-4471", "Quantity": 85.0,
          "ArrivalDate": "2026-09-11", "ExtraCostIDR": 186_000_000,
-         "TkdnAfterPct": 38.2, "Origin": "CN", "NewOrigin": False, "QualificationDays": 0},
+         "TkdnAfterPct": 38.2, "HsCode": "7601.20.00", "Origin": "CN", "NewOrigin": False, "QualificationDays": 0},
         {"id": "B", "label": "Local supplier PT Logam Andalan, Gresik",
          "Supplier": "SUP-4417", "Material": "M-4471", "Quantity": 60.0,
          "ArrivalDate": "2026-09-12", "ExtraCostIDR": 94_000_000,
-         "TkdnAfterPct": 41.6, "Origin": "ID", "NewOrigin": False, "QualificationDays": 3},
+         "TkdnAfterPct": 41.6, "HsCode": "7601.20.00", "Origin": "ID", "NewOrigin": False, "QualificationDays": 3},
         {"id": "C", "label": "Reallocate stock from plant SBY1",
          "Supplier": "INTERNAL", "Material": "M-4471", "Quantity": 55.0,
          "ArrivalDate": "2026-09-10", "ExtraCostIDR": 22_000_000,
-         "TkdnAfterPct": None, "Origin": "ID", "NewOrigin": False, "QualificationDays": 0},
+         "TkdnAfterPct": None, "HsCode": "7601.20.00", "Origin": "ID", "NewOrigin": False, "QualificationDays": 0},
         {"id": "D", "label": "New import source in Vietnam",
          "Supplier": "SUP-3390", "Material": "M-4471", "Quantity": 80.0,
          "ArrivalDate": "2026-09-26", "ExtraCostIDR": 61_000_000,
-         "TkdnAfterPct": 36.1, "Origin": "VN", "NewOrigin": True, "QualificationDays": 7},
+         "TkdnAfterPct": 36.1, "HsCode": "7601.20.00", "Origin": "VN", "NewOrigin": True, "QualificationDays": 7},
         {"id": "E", "label": "Cheapest source in China",
          "Supplier": "SUP-5501", "Material": "M-4471", "Quantity": 100.0,
          "ArrivalDate": "2026-09-19", "ExtraCostIDR": 48_000_000,
-         "TkdnAfterPct": 34.8, "Origin": "CN", "NewOrigin": False, "QualificationDays": 0},
+         "TkdnAfterPct": 34.8, "HsCode": "7601.20.00", "Origin": "CN", "NewOrigin": False, "QualificationDays": 0},
     ]
     # a second material with real alternatives, so M-4471 is not the only one
     alternates += [
         {"id": "F", "label": "PT Cipta Baja Nusantara, Cilegon",
          "Supplier": "SUP-4418", "Material": "M-5518", "Quantity": 45.0,
          "ArrivalDate": "2026-09-18", "ExtraCostIDR": 31_000_000,
-         "TkdnAfterPct": 44.0, "Origin": "ID", "NewOrigin": False, "QualificationDays": 5},
+         "TkdnAfterPct": 44.0, "HsCode": "7214.99.90", "Origin": "ID", "NewOrigin": False, "QualificationDays": 5},
         {"id": "G", "label": "Busan Forging, expedited",
          "Supplier": "SUP-7701", "Material": "M-5518", "Quantity": 60.0,
          "ArrivalDate": "2026-09-16", "ExtraCostIDR": 88_000_000,
-         "TkdnAfterPct": 0.0, "Origin": "KR", "NewOrigin": False, "QualificationDays": 0},
+         "TkdnAfterPct": 0.0, "HsCode": "7214.99.90", "Origin": "KR", "NewOrigin": False, "QualificationDays": 0},
     ]
 
     suppliers = [{"Supplier": c, "SupplierName": n, "Country": ctry,

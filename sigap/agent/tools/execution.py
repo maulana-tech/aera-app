@@ -29,8 +29,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import date, datetime, timedelta, timezone
 
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
 from core.config import CFG
 from core.provenance import Origin, Result
@@ -273,6 +274,48 @@ def create_stock_transfer(material: str, from_plant: str, to_plant: str,
     return r
 
 
+def _as_date(v: Any) -> Optional[date]:
+    """An ISO date, or None. SAP also writes /Date(ms)/, which sap_map parses;
+    a model writes plain text, which is what this guards against."""
+    if isinstance(v, date):
+        return v
+    try:
+        return date.fromisoformat(str(v)[:10])
+    except (TypeError, ValueError):
+        return None
+
+
+def _arrival_date(supplier: str, material: str, asked: str) -> Tuple[Optional[str], str]:
+    """(the date to use, a note). None means refuse and say why."""
+    want = _as_date(asked)
+    row = None
+    try:
+        from tools.fetcher import read
+        for r in (read("AlternateSource", material=material).value or []):
+            if str(r.get("Supplier") or "").strip() == str(supplier).strip():
+                row = r
+                break
+    except Exception:                                               # noqa: BLE001
+        row = None                        # no source list; fall through to the guard
+
+    on_record = _as_date(row.get("ArrivalDate")) if row else None
+    if on_record:
+        if want == on_record:
+            return on_record.isoformat(), ""
+        return (on_record.isoformat(),
+                f"needed_by taken from the alternate-source record ({on_record.isoformat()}); "
+                f"the value supplied was {asked!r}")
+
+    if want is None:
+        return None, (f"needed_by {asked!r} is not a date, and no alternate-source record "
+                      f"for {supplier}/{material} carries one")
+    today = datetime.now(timezone(timedelta(hours=7))).date()       # WIB, as elsewhere
+    if want < today:
+        return None, (f"needed_by {want.isoformat()} has already passed (today is "
+                      f"{today.isoformat()}), and no alternate-source record carries a date")
+    return want.isoformat(), ""
+
+
 @register("create_draft_po", "execution",
           "Create a DRAFT purchase order. Always waits for buyer approval, never autonomous.",
           {"supplier": {"type": "string"}, "material": {"type": "string"},
@@ -281,8 +324,27 @@ def create_stock_transfer(material: str, from_plant: str, to_plant: str,
           ["supplier", "material", "qty", "needed_by", "cost_idr"])
 def create_draft_po(supplier: str, material: str, qty: float,
                     needed_by: str, cost_idr: int) -> Result:
+    """Draft a purchase order, with the date taken from the record.
+
+    A model asked for a date supplies one, and a plausible-looking date is the
+    hardest kind of wrong answer to notice: a run of this tool produced
+    needed_by=2024-09-16 for a 2026 disruption, two years in the past, while
+    the supplier, material, quantity and cost all matched the source row
+    exactly. Every other field was read; only the date was authored.
+
+    So the date is no longer the model's to author when the data holds it. If
+    an alternate-source row exists for this supplier and material, its
+    ArrivalDate wins and the model's suggestion is recorded as what it was.
+    Without such a row the date must at least be a real date that has not
+    already passed - a purchase order needed last year is not a typo to pass
+    along, it is a refusal.
+    """
+    fixed, note = _arrival_date(supplier, material, needed_by)
+    if fixed is None:
+        return Result(None, Origin.MISSING, "create_draft_po", note=note)
     return _record("draft_po", False, supplier=supplier, material=material,
-                   qty=qty, needed_by=needed_by, cost_idr=cost_idr)
+                   qty=qty, needed_by=fixed, cost_idr=cost_idr,
+                   **({"needed_by_note": note} if note else {}))
 
 
 @register("notify", "execution",
@@ -773,6 +835,21 @@ def demo() -> None:
     print("  a figure from a model is set against the arithmetic that judges it: an "
           "understated move loses its authority ✓ · a date promised to a customer says "
           "what it rests on ✓ · a floor in units is said in the days it buys ✓")
+    # --- a date is read, never authored -------------------------------------
+    # The bug this guards: supplier, material, qty and cost all matched the
+    # source row, and needed_by came back 2024-09-16 for a 2026 disruption.
+    from datetime import date as _d, timedelta as _td
+    past = (_d.today() - _td(days=400)).isoformat()
+    fixed, note = _arrival_date("SUP-NOPE", "M-NOPE", past)
+    assert fixed is None and "already passed" in note, (fixed, note)
+    soon = (_d.today() + _td(days=30)).isoformat()
+    fixed, note = _arrival_date("SUP-NOPE", "M-NOPE", soon)
+    assert fixed == soon and not note, (fixed, note)
+    fixed, note = _arrival_date("SUP-NOPE", "M-NOPE", "next Tuesday")
+    assert fixed is None and "is not a date" in note, (fixed, note)
+    print("  a date the data does not hold is refused, not passed along ✓")
+
+
     print("  the loop closes: a realized figure reaches the report ✓ · prose never becomes "
           "money ✓ · a watch is owed a result ✓")
 

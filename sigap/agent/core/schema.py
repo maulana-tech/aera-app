@@ -37,6 +37,10 @@ ENTITIES: Dict[str, Dict[str, List[str]]] = {
         "required": ["Material", "FinishedGood", "ComponentQuantity"],
         "numeric": ["ComponentQuantity"],
     },
+    # HsCode is optional in the file and required by the ruling: an import
+    # whose classification is not on record cannot be checked against LARTAS,
+    # and tools/compliance.py refuses it rather than waving it through. Keeping
+    # the column optional here lets a domestic-only file stay short.
     "AlternateSource": {
         "required": ["id", "Material", "Supplier", "Quantity", "ArrivalDate", "ExtraCostIDR", "Origin"],
         "numeric": ["Quantity", "ExtraCostIDR"],
