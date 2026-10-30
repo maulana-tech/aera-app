@@ -50,10 +50,24 @@ BUILT_IN: Dict[str, Tuple[Any, str]] = {
     "lartas_restricted_hs_extra_days": (
         15, "built-in assumption: working days a restricted-goods import permit adds "
             "on top of the licence for a new origin"),
+    # Landed cost. Only the NON-creditable charges belong here: import duty
+    # (bea masuk) is a cost, while import VAT and PPh 22 are credited against
+    # output tax and would overstate the import if counted. Duty is set per HS
+    # heading in the tariff book, so the table is keyed the same way and is
+    # empty by default - a rate invented here would be a tariff SIGAP made up.
+    "import_duty_pct_by_hs": (
+        {}, "built-in: no import duty rates are configured. Map HS heading to the MFN "
+            "or preferential rate from the tariff book that applies to you"),
+    "import_handling_idr": (
+        0, "built-in: no port handling, customs brokerage or demurrage is counted. "
+           "Set what one inbound shipment costs you at the port"),
 }
 
 #: Rules whose value is a list of HS headings rather than a figure.
 LIST_RULES = frozenset({"lartas_restricted_hs"})
+
+#: Rules whose value is a map rather than a figure.
+MAP_RULES = frozenset({"import_duty_pct_by_hs"})
 
 #: Rules that are the company's own figures, read from its profile.
 FROM_PROFILE = {"tkdn_contract_floor_pct": "TkdnContractFloorPct",
@@ -155,6 +169,55 @@ def hs_restriction(hs: Optional[str], pack: Optional[dict]) -> Tuple[Optional[st
         if head and flat.startswith(head):
             return str(entry), r
     return None, r
+
+
+def landed_cost(option: dict, pack: Optional[dict]) -> Dict[str, Any]:
+    """What an option really costs to land, and what is still unknown.
+
+    Only NON-creditable charges are added. Import VAT and PPh 22 are credited
+    against output tax, so counting them would overstate every import and
+    produce exactly the bias this function exists to remove - the opposite one
+    from leaving duty out, but a bias all the same.
+
+    A domestic option lands at its own price. An import with no duty rate on
+    record returns landed=None: a rate nobody configured is not zero, and
+    treating it as zero is what makes an imported option look cheapest.
+    """
+    extra = option.get("ExtraCostIDR")
+    out: Dict[str, Any] = {"extra_cost_idr": extra, "duty_idr": None,
+                           "handling_idr": None, "landed_cost_idr": None,
+                           "duty_pct": None, "unknown": []}
+    if (option.get("Origin") or "ID") == "ID":
+        out["landed_cost_idr"] = extra
+        out["duty_idr"] = 0
+        out["handling_idr"] = 0
+        return out
+    if extra is None:
+        out["unknown"].append("ExtraCostIDR")
+        return out
+
+    hs = option.get("HsCode") or hs_for(option.get("Material"), pack)
+    if not hs:
+        out["unknown"].append("HsCode")
+        return out
+    table = rule("import_duty_pct_by_hs", pack)
+    flat = "".join(ch for ch in str(hs) if ch.isdigit())
+    pct = None
+    for head, rate in (table.value or {}).items():
+        h = "".join(ch for ch in str(head) if ch.isdigit())
+        if h and flat.startswith(h):
+            # The most specific heading wins: 7601.20 beats 7601.
+            if pct is None or len(h) > pct[0]:
+                pct = (len(h), float(rate))
+    if pct is None:
+        out["unknown"].append("import_duty_pct_by_hs")
+        return out
+
+    handling = float(rule("import_handling_idr", pack).value or 0)
+    duty = round(float(extra) * pct[1] / 100.0)
+    out.update(duty_pct=pct[1], duty_idr=duty, handling_idr=round(handling),
+               landed_cost_idr=round(float(extra) + duty + handling))
+    return out
 
 
 def collective_leave(pack: Optional[dict]) -> Dict[date, str]:
@@ -553,7 +616,20 @@ def validate_pack(pack: Optional[dict]) -> List[str]:
         if not isinstance(entry, dict) or entry.get("value") is None:
             problems.append(f"rule '{name}' has no value, so it is ignored")
             continue
-        if name in LIST_RULES:
+        if name in MAP_RULES:
+            v = entry["value"]
+            if not isinstance(v, dict):
+                problems.append(f"rule '{name}' value must be an object of HS heading -> "
+                                f"percent, not {v!r}")
+            else:
+                for h, pct in v.items():
+                    if not isinstance(pct, (int, float)) or isinstance(pct, bool):
+                        problems.append(f"rule '{name}': rate for {h!r} must be a number, "
+                                        f"not {pct!r}")
+                    elif not 0 <= float(pct) <= 100:
+                        problems.append(f"rule '{name}': rate for {h!r} is {pct}, which is "
+                                        "not a percentage")
+        elif name in LIST_RULES:
             v = entry["value"]
             if not isinstance(v, list):
                 problems.append(f"rule '{name}' value must be a list of HS headings, not {v!r}")
@@ -755,7 +831,9 @@ def _demo() -> None:
                     ("tkdn_contract_floor_pct", 40.0), ("tkdn_current_pct", 38.2),
                     ("lartas_new_origin_working_days", 10), ("default_port_dwell_days", 4),
                     ("lartas_restricted_hs", ["7308"]),
-                    ("lartas_restricted_hs_extra_days", 15))},
+                    ("lartas_restricted_hs_extra_days", 15),
+                    ("import_duty_pct_by_hs", {"7601": 5.0}),
+                    ("import_handling_idr", 2_500_000))},
                 "collective_leave": [{"date": "2026-10-01", "name": "Test Leave"}],
             }))
             _pack_file = f
