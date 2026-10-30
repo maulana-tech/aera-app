@@ -203,6 +203,81 @@ def get_shipment_status(purchase_order: str) -> Result:
 # about a lane, which no SAP record does. The work is in signals/weather.py and
 # clients/web_data.py; these are the doors to it.
 
+@register("get_shipments_at_port", "logistics",
+          "Which shipments are physically exposed to one port, by bill of lading. A "
+          "port closure does not act on purchase orders, it acts on boxes sitting at "
+          "a quay: an order that has not shipped has no bill of lading and is not at "
+          "the port at all, and treating it as exposed overstates the damage. Returns "
+          "the shipments with a bill of lading loading at that port, their vessel, and "
+          "whether the box is shared.",
+          {"port": {"type": "string", "description": "UN/LOCODE, e.g. CNNGB"},
+           "material": {"type": "string", "description": "optional, one material"}},
+          ["port"])
+def get_shipments_at_port(port: str, material: Optional[str] = None) -> Result:
+    from tools.fetcher import read
+    rows = read("PurchaseOrder", material=material, port=port)
+    if rows.value is None:
+        return Result(None, Origin.MISSING, rows.source, note="no purchase orders to read")
+    afloat, not_shipped, bonded = [], [], []
+    for r in rows.value:
+        entry = {
+            "purchase_order": r.get("PurchaseOrder"), "material": r.get("Material"),
+            "plant": r.get("Plant"), "supplier": r.get("Supplier"),
+            "quantity": r.get("OrderQuantity"), "unit": r.get("BaseUnit"),
+            "bill_of_lading": r.get("BillOfLading"), "vessel": r.get("Vessel"),
+            "consolidation": r.get("Consolidation"),
+            "revised_delivery": r.get("RevisedDeliveryDate"),
+        }
+        if r.get("BondedWarehouse"):
+            entry["bonded_warehouse"] = r["BondedWarehouse"]
+            bonded.append(entry)
+        elif r.get("BillOfLading"):
+            afloat.append(entry)
+        else:
+            not_shipped.append(entry)
+    grouped = sum(1 for e in afloat if e.get("consolidation") == "groupage")
+    note = ""
+    if grouped:
+        note = (f"{grouped} of {len(afloat)} shipment(s) travel as groupage, so they "
+                "release only when the whole container clears, not when our line does")
+    return Result({
+        "port": port,
+        # Exposed means a bill of lading at that port. Everything else is a
+        # different problem with a different fix.
+        "at_port": afloat,
+        "not_shipped": not_shipped,
+        "already_bonded": bonded,
+        "counts": {"at_port": len(afloat), "not_shipped": len(not_shipped),
+                   "already_bonded": len(bonded)},
+    }, rows.origin, rows.source, note=note)
+
+
+@register("find_bonded_stock", "logistics",
+          "Goods already inside the country in a bonded warehouse, with duty suspended. "
+          "This is the fastest source on the board and the one nobody looks for: it "
+          "needs no import licence, no new origin, and no sailing. Duty becomes payable "
+          "when it is drawn into free circulation, so the cost is real but the lead "
+          "time is not.",
+          {"material": {"type": "string", "description": "optional, one material"}},
+          [])
+def find_bonded_stock(material: Optional[str] = None) -> Result:
+    from tools.fetcher import read
+    rows = read("PurchaseOrder", material=material)
+    if rows.value is None:
+        return Result(None, Origin.MISSING, rows.source, note="no purchase orders to read")
+    out = [{
+        "purchase_order": r.get("PurchaseOrder"), "material": r.get("Material"),
+        "plant": r.get("Plant"), "supplier": r.get("Supplier"),
+        "quantity": r.get("OrderQuantity"), "unit": r.get("BaseUnit"),
+        "warehouse": r.get("BondedWarehouse"),
+        "cross_dock": bool(r.get("CrossDock")),
+    } for r in rows.value if r.get("BondedWarehouse")]
+    return Result(out, rows.origin, rows.source,
+                  note=("duty on these is suspended, not waived: it falls due when the "
+                        "goods are drawn into free circulation" if out else
+                        "nothing is sitting in a bonded warehouse"))
+
+
 @register("get_port_conditions", "logistics",
           "Live conditions at a port or plant: the next three days of forecast wind gusts, "
           "rain and (for ports) wave height from Open-Meteo, each day flagged where it "
@@ -291,6 +366,28 @@ def demo() -> None:
     assert {o["status"] for o in open_at_port.value} == {"held", "inspection"}, open_at_port.value
     none = get_customs_status("4500018872")
     assert none.value == [] and "no customs declaration" in none.note
+    # --- a closure acts on boxes, not on orders ---------------------------
+    # An order that has not shipped has no bill of lading and is not at the
+    # port at all. Counting it as exposed is how a six-day closure turns into
+    # a figure nobody can defend.
+    at = get_shipments_at_port("CNNGB").value
+    assert at["counts"]["at_port"] >= 1, at["counts"]
+    assert all(e["bill_of_lading"] for e in at["at_port"]), "exposed means a BoL at that port"
+    assert all(not e.get("bill_of_lading") for e in at["not_shipped"]), at["not_shipped"][:1]
+    assert at["counts"]["at_port"] < (at["counts"]["at_port"] + at["counts"]["not_shipped"]
+                                      + at["counts"]["already_bonded"]), \
+        "if everything were exposed the split would be telling nobody anything"
+
+    # --- bonded is in-country, so it is the fastest source there is ---------
+    bonded = find_bonded_stock().value
+    assert bonded, "the scenario must carry bonded stock or nobody can be shown it"
+    assert all(b["warehouse"] for b in bonded), bonded[:1]
+    # And it must not be double-counted as sitting at the foreign port.
+    bonded_pos = {b["purchase_order"] for b in bonded}
+    assert not bonded_pos & {e["purchase_order"] for e in at["at_port"]}, \
+        "goods already in a bonded warehouse are not also at the loading port"
+    print("  a closure is scoped by bill of lading, and bonded stock is offered first ✓")
+
     print(f"logistics ok, dwell at IDTPP median {measured['median_days']} days over "
           f"{measured['samples']} releases (80th percentile {measured['p80_days']})")
     print("  measured dwell, not a typed-in default ✓ · no history → assumption, named ✓ · "

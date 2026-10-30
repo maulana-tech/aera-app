@@ -329,6 +329,30 @@ def build() -> dict:
             "RevisedDeliveryDate": (promised + timedelta(days=slip)).isoformat(),
             "Status": "in_transit" if slip else rnd.choice(["not_shipped", "in_transit"]),
         })
+        o = orders[-1]
+        # The physical path, which is what a port closure actually acts on.
+        # A bill of lading exists once the goods are on a vessel; a line that
+        # has not shipped has none, and inventing one would say a shipment is
+        # at sea when it is on a dock.
+        if o["Status"] == "in_transit":
+            o["BillOfLading"] = f"BL{rnd2.randint(100000, 999999)}"
+            o["Vessel"] = rnd2.choice(["MV Sinar Jaya", "MV Hanjin Pride", "MV Meratus Tomini",
+                                       "MV Ever Lotus", "MV Pan Ocean"])
+            # Groupage: a shared container is cheaper per tonne and slower,
+            # because it waits for the rest of the box to fill.
+            o["Consolidation"] = rnd2.choices(["FCL", "groupage"], weights=[72, 28])[0]
+        # Bonded: already inside the country with duty suspended. It carries no
+        # import lead time and no new licence, which makes it the fastest
+        # source on the board and the one nobody remembers to look for.
+        if origin != "ID" and rnd2.random() < 0.14:
+            o["BondedWarehouse"] = rnd2.choice(["Gudang Berikat Cakung",
+                                                "Gudang Berikat Marunda",
+                                                "Gudang Berikat Cikarang"])
+            o["Status"] = "bonded"
+        # Cross-docking moves goods straight from inbound to outbound, so the
+        # days a warehouse would have taken are not spent.
+        if rnd2.random() < 0.11:
+            o["CrossDock"] = True
 
     # the Ningbo scenario, fixed so the documented figures still reproduce
     orders.append({"PurchaseOrder": "4500018872", "Material": "M-4471", "Plant": "KRW1",

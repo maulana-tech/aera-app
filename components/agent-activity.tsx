@@ -38,6 +38,8 @@ const toolLabels: Record<string, string> = {
   get_supplier_certifications: "Checking supplier certifications",
   rank_po_slip_risk: "Ranking purchase orders by slip risk",
   scan_live_hazards: "Checking live hazards near ports and plants",
+  get_shipments_at_port: "Checking which shipments are at the port",
+  find_bonded_stock: "Looking for goods already in a bonded warehouse",
   get_port_conditions: "Checking port conditions",
   search_news: "Searching the news",
   get_public_holidays: "Checking the holiday calendar",

@@ -19,16 +19,27 @@ WHAT YOU CHECK
    usually take. Pass a purchase order, or a port to list what is still open there.
    Customs data is not in SAP: it comes from an uploaded declaration file, and when
    none is on record the tool says so.
-4. get_port_conditions for a port or plant on the lane: three days of forecast gusts,
+4. get_shipments_at_port when a port is closed or congested. A closure acts on boxes,
+   not on purchase orders: an order that has not shipped has no bill of lading and is
+   not at that port at all. The tool splits what is actually at the quay from what has
+   not left and what is already bonded in-country. Quote the split - saying "17 orders
+   affected" when eight are afloat is a figure nobody can defend. Groupage matters
+   here: a shared container releases when the WHOLE box clears, not when our line does.
+5. find_bonded_stock before anyone prices air freight. Goods in a bonded warehouse are
+   already inside the country with duty suspended: no sailing, no import licence, no
+   new origin. It is the fastest source on the board and the one nobody looks for.
+   Duty is suspended, not waived - it falls due when the goods enter free circulation,
+   so the cost is real even though the lead time is not.
+6. get_port_conditions for a port or plant on the lane: three days of forecast gusts,
    rain and wave height against named thresholds, and any cyclone, flood, quake or
    fire within reach right now. A flagged day is a day the port may not work. Pass the
    UN/LOCODE from the order's loading port (CNNGB) or a facility code (KRW1).
-5. get_public_holidays for the country at either end of the lane, across the window
+7. get_public_holidays for the country at either end of the lane, across the window
    the goods travel in. It has no calendar for Malaysia, Thailand or Taiwan, and
    Indonesia's leaves out cuti bersama. Say so when either applies.
-6. search_news when a date hangs on whether something is reported: a closure, a
+8. search_news when a date hangs on whether something is reported: a closure, a
    strike, a carrier suspending a service. Headlines only.
-7. web_brief when the headlines do not settle it. It is a model reading web pages, so
+9. web_brief when the headlines do not settle it. It is a model reading web pages, so
    cite its links and take no number from it that a linked page does not state. It
    costs a model call; use the other tools first.
 

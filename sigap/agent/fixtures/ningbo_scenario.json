@@ -628,7 +628,11 @@
       "LoadingPort": "CNNGB",
       "DeliveryDate": "2026-10-09",
       "RevisedDeliveryDate": "2026-10-14",
-      "Status": "in_transit"
+      "Status": "bonded",
+      "BillOfLading": "BL432415",
+      "Vessel": "MV Ever Lotus",
+      "Consolidation": "FCL",
+      "BondedWarehouse": "Gudang Berikat Marunda"
     },
     {
       "PurchaseOrder": "4500018876",
@@ -640,7 +644,11 @@
       "LoadingPort": "CNNGB",
       "DeliveryDate": "2026-09-08",
       "RevisedDeliveryDate": "2026-09-08",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL888402",
+      "Vessel": "MV Sinar Jaya",
+      "Consolidation": "groupage",
+      "CrossDock": true
     },
     {
       "PurchaseOrder": "4500018879",
@@ -652,7 +660,10 @@
       "LoadingPort": "CNNGB",
       "DeliveryDate": "2026-10-08",
       "RevisedDeliveryDate": "2026-10-10",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL181037",
+      "Vessel": "MV Sinar Jaya",
+      "Consolidation": "groupage"
     },
     {
       "PurchaseOrder": "4500018882",
@@ -676,7 +687,10 @@
       "LoadingPort": "THLCH",
       "DeliveryDate": "2026-09-16",
       "RevisedDeliveryDate": "2026-09-16",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL631121",
+      "Vessel": "MV Hanjin Pride",
+      "Consolidation": "FCL"
     },
     {
       "PurchaseOrder": "4500018885",
@@ -688,7 +702,10 @@
       "LoadingPort": "MYPKG",
       "DeliveryDate": "2026-09-09",
       "RevisedDeliveryDate": "2026-09-17",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL873391",
+      "Vessel": "MV Sinar Jaya",
+      "Consolidation": "FCL"
     },
     {
       "PurchaseOrder": "4500018886",
@@ -700,7 +717,10 @@
       "LoadingPort": "CNNGB",
       "DeliveryDate": "2026-10-04",
       "RevisedDeliveryDate": "2026-10-09",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL334851",
+      "Vessel": "MV Hanjin Pride",
+      "Consolidation": "groupage"
     },
     {
       "PurchaseOrder": "4500018888",
@@ -736,7 +756,10 @@
       "LoadingPort": "VNSGN",
       "DeliveryDate": "2026-10-14",
       "RevisedDeliveryDate": "2026-10-22",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL509527",
+      "Vessel": "MV Ever Lotus",
+      "Consolidation": "FCL"
     },
     {
       "PurchaseOrder": "4500018895",
@@ -748,7 +771,10 @@
       "LoadingPort": "CNNGB",
       "DeliveryDate": "2026-09-21",
       "RevisedDeliveryDate": "2026-09-26",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL178004",
+      "Vessel": "MV Sinar Jaya",
+      "Consolidation": "FCL"
     },
     {
       "PurchaseOrder": "4500018897",
@@ -760,7 +786,10 @@
       "LoadingPort": "JPYOK",
       "DeliveryDate": "2026-10-06",
       "RevisedDeliveryDate": "2026-10-06",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL682572",
+      "Vessel": "MV Ever Lotus",
+      "Consolidation": "FCL"
     },
     {
       "PurchaseOrder": "4500018898",
@@ -772,7 +801,10 @@
       "LoadingPort": "CNNGB",
       "DeliveryDate": "2026-09-23",
       "RevisedDeliveryDate": "2026-09-23",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL918946",
+      "Vessel": "MV Hanjin Pride",
+      "Consolidation": "FCL"
     },
     {
       "PurchaseOrder": "4500019311",
@@ -784,7 +816,10 @@
       "LoadingPort": "THLCH",
       "DeliveryDate": "2026-09-08",
       "RevisedDeliveryDate": "2026-09-16",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL739360",
+      "Vessel": "MV Pan Ocean",
+      "Consolidation": "FCL"
     },
     {
       "PurchaseOrder": "4500018903",
@@ -796,7 +831,11 @@
       "LoadingPort": "JPYOK",
       "DeliveryDate": "2026-10-13",
       "RevisedDeliveryDate": "2026-10-13",
-      "Status": "in_transit"
+      "Status": "bonded",
+      "BillOfLading": "BL521504",
+      "Vessel": "MV Hanjin Pride",
+      "Consolidation": "FCL",
+      "BondedWarehouse": "Gudang Berikat Marunda"
     },
     {
       "PurchaseOrder": "4500018906",
@@ -820,7 +859,11 @@
       "LoadingPort": "MYPKG",
       "DeliveryDate": "2026-09-27",
       "RevisedDeliveryDate": "2026-10-05",
-      "Status": "in_transit"
+      "Status": "bonded",
+      "BillOfLading": "BL387980",
+      "Vessel": "MV Hanjin Pride",
+      "Consolidation": "FCL",
+      "BondedWarehouse": "Gudang Berikat Marunda"
     },
     {
       "PurchaseOrder": "4500018910",
@@ -844,7 +887,11 @@
       "LoadingPort": "CNNGB",
       "DeliveryDate": "2026-09-17",
       "RevisedDeliveryDate": "2026-09-22",
-      "Status": "in_transit"
+      "Status": "bonded",
+      "BillOfLading": "BL271204",
+      "Vessel": "MV Meratus Tomini",
+      "Consolidation": "FCL",
+      "BondedWarehouse": "Gudang Berikat Cikarang"
     },
     {
       "PurchaseOrder": "4500018915",
@@ -856,7 +903,11 @@
       "LoadingPort": "VNSGN",
       "DeliveryDate": "2026-09-10",
       "RevisedDeliveryDate": "2026-09-10",
-      "Status": "in_transit"
+      "Status": "bonded",
+      "BillOfLading": "BL995877",
+      "Vessel": "MV Pan Ocean",
+      "Consolidation": "groupage",
+      "BondedWarehouse": "Gudang Berikat Cakung"
     },
     {
       "PurchaseOrder": "4500018916",
@@ -868,7 +919,10 @@
       "LoadingPort": "THLCH",
       "DeliveryDate": "2026-09-17",
       "RevisedDeliveryDate": "2026-09-17",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL778747",
+      "Vessel": "MV Meratus Tomini",
+      "Consolidation": "FCL"
     },
     {
       "PurchaseOrder": "4500018918",
@@ -880,7 +934,10 @@
       "LoadingPort": "IDTPP",
       "DeliveryDate": "2026-09-10",
       "RevisedDeliveryDate": "2026-09-15",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL334485",
+      "Vessel": "MV Meratus Tomini",
+      "Consolidation": "FCL"
     },
     {
       "PurchaseOrder": "4500018919",
@@ -904,7 +961,11 @@
       "LoadingPort": "KRPUS",
       "DeliveryDate": "2026-09-25",
       "RevisedDeliveryDate": "2026-09-25",
-      "Status": "in_transit"
+      "Status": "bonded",
+      "BillOfLading": "BL605858",
+      "Vessel": "MV Meratus Tomini",
+      "Consolidation": "FCL",
+      "BondedWarehouse": "Gudang Berikat Cakung"
     },
     {
       "PurchaseOrder": "4500018925",
@@ -916,7 +977,10 @@
       "LoadingPort": "CNNGB",
       "DeliveryDate": "2026-10-08",
       "RevisedDeliveryDate": "2026-10-10",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL270058",
+      "Vessel": "MV Meratus Tomini",
+      "Consolidation": "FCL"
     },
     {
       "PurchaseOrder": "4500018926",
@@ -928,7 +992,10 @@
       "LoadingPort": "JPYOK",
       "DeliveryDate": "2026-09-19",
       "RevisedDeliveryDate": "2026-09-24",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL112306",
+      "Vessel": "MV Hanjin Pride",
+      "Consolidation": "groupage"
     },
     {
       "PurchaseOrder": "4500018927",
@@ -940,7 +1007,11 @@
       "LoadingPort": "CNNGB",
       "DeliveryDate": "2026-10-10",
       "RevisedDeliveryDate": "2026-10-10",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL989075",
+      "Vessel": "MV Hanjin Pride",
+      "Consolidation": "FCL",
+      "CrossDock": true
     },
     {
       "PurchaseOrder": "4500018928",
@@ -952,7 +1023,10 @@
       "LoadingPort": "IDTPP",
       "DeliveryDate": "2026-09-17",
       "RevisedDeliveryDate": "2026-09-19",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL893132",
+      "Vessel": "MV Sinar Jaya",
+      "Consolidation": "FCL"
     },
     {
       "PurchaseOrder": "4500018929",
@@ -964,7 +1038,10 @@
       "LoadingPort": "IDTPP",
       "DeliveryDate": "2026-10-04",
       "RevisedDeliveryDate": "2026-10-09",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL538598",
+      "Vessel": "MV Meratus Tomini",
+      "Consolidation": "groupage"
     },
     {
       "PurchaseOrder": "4500018931",
@@ -976,7 +1053,10 @@
       "LoadingPort": "JPYOK",
       "DeliveryDate": "2026-09-21",
       "RevisedDeliveryDate": "2026-09-21",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL130999",
+      "Vessel": "MV Hanjin Pride",
+      "Consolidation": "FCL"
     },
     {
       "PurchaseOrder": "4500018932",
@@ -1000,7 +1080,10 @@
       "LoadingPort": "JPYOK",
       "DeliveryDate": "2026-10-07",
       "RevisedDeliveryDate": "2026-10-15",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL839290",
+      "Vessel": "MV Sinar Jaya",
+      "Consolidation": "FCL"
     },
     {
       "PurchaseOrder": "4500018934",
@@ -1012,7 +1095,10 @@
       "LoadingPort": "CNNGB",
       "DeliveryDate": "2026-09-22",
       "RevisedDeliveryDate": "2026-09-27",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL681869",
+      "Vessel": "MV Pan Ocean",
+      "Consolidation": "groupage"
     },
     {
       "PurchaseOrder": "4500018936",
@@ -1024,7 +1110,8 @@
       "LoadingPort": "IDTPP",
       "DeliveryDate": "2026-09-27",
       "RevisedDeliveryDate": "2026-09-27",
-      "Status": "not_shipped"
+      "Status": "not_shipped",
+      "CrossDock": true
     },
     {
       "PurchaseOrder": "4500018938",
@@ -1036,7 +1123,11 @@
       "LoadingPort": "IDTPP",
       "DeliveryDate": "2026-09-13",
       "RevisedDeliveryDate": "2026-09-21",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL378865",
+      "Vessel": "MV Pan Ocean",
+      "Consolidation": "FCL",
+      "CrossDock": true
     },
     {
       "PurchaseOrder": "4500018941",
@@ -1048,7 +1139,10 @@
       "LoadingPort": "MYPKG",
       "DeliveryDate": "2026-09-18",
       "RevisedDeliveryDate": "2026-09-20",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL408963",
+      "Vessel": "MV Sinar Jaya",
+      "Consolidation": "FCL"
     },
     {
       "PurchaseOrder": "4500018944",
@@ -1072,7 +1166,8 @@
       "LoadingPort": "CNNGB",
       "DeliveryDate": "2026-10-13",
       "RevisedDeliveryDate": "2026-10-13",
-      "Status": "not_shipped"
+      "Status": "bonded",
+      "BondedWarehouse": "Gudang Berikat Marunda"
     },
     {
       "PurchaseOrder": "4500018949",
@@ -1084,7 +1179,11 @@
       "LoadingPort": "KRPUS",
       "DeliveryDate": "2026-09-14",
       "RevisedDeliveryDate": "2026-09-22",
-      "Status": "in_transit"
+      "Status": "bonded",
+      "BillOfLading": "BL936169",
+      "Vessel": "MV Pan Ocean",
+      "Consolidation": "groupage",
+      "BondedWarehouse": "Gudang Berikat Cakung"
     },
     {
       "PurchaseOrder": "4500018872",

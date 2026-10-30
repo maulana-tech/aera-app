@@ -1064,6 +1064,8 @@ _AGENT_NICKNAMES = {
 
 _TOOL_LABELS = {
     "scan_live_hazards": "live hazards near ports and plants",
+    "get_shipments_at_port": "which shipments are at the port",
+    "find_bonded_stock": "goods already in a bonded warehouse",
     "get_port_conditions": "port weather and hazards",
     "search_news": "news headlines",
     "get_public_holidays": "public holiday calendar",

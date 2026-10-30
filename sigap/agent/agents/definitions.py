@@ -83,7 +83,8 @@ SPECIALISTS = [
           "transhipment, transport mode. Reads the outside world for the lane: the weather "
           "and hazards at a port, the news, and the holidays at either end.",
           ["get_shipment_status", "estimate_eta", "get_customs_status", "get_port_conditions",
-           "search_news", "get_public_holidays", "web_brief"]),
+           "search_news", "get_public_holidays", "web_brief",
+           "get_shipments_at_port", "find_bonded_stock"]),
     Agent("compliance", "Kira", "Rules",
           "Tests every candidate against TKDN and the contract floor, LARTAS licensing for a "
           "new origin, and the holiday calendar, from the rule pack, and says which rules "
