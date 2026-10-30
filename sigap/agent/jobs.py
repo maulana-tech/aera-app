@@ -69,10 +69,15 @@ def all_jobs(raise_event: RaiseEvent) -> List[Job]:
 
     def sap_send() -> str:
         from clients import sap_s4
-        if not sap_s4.available():
+        # Demo mode has no tenant but does have a document path, so the pass
+        # still runs: an approved action must reach 'sent' in both modes or
+        # the queue fills with work that can never finish.
+        if sap_s4.data_mode() != "demo" and not sap_s4.available():
             return "SAP not connected; nothing sent"
         import sender
-        return f"{sender.send_approved()} action(s) sent"
+        n = sender.send_approved()
+        where = "demo documents" if sap_s4.data_mode() == "demo" else "SAP"
+        return f"{n} action(s) issued to {where}"
 
     return [
         Job("bmkg", "Earthquakes near a plant, from BMKG", bmkg, every=300, signal=True),

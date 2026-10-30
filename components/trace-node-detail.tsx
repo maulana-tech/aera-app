@@ -244,7 +244,10 @@ function Overview({
           ["Value", typeof n.cost_idr === "number" ? rupiah(n.cost_idr) : "-"],
           ["Authority", n.autonomous ? "ran on its own authority, under the limit" : "needs a person's approval"],
           ...(n.created_at ? [["Raised", when(n.created_at)] as [string, ReactNode]] : []),
-          ...(n.sap_reference ? [["SAP reference", <span key="r" className="font-mono">{n.sap_reference}</span>] as [string, ReactNode]] : []),
+          ...(n.sap_reference
+            ? [[n.sap_reference.startsWith("DEMO-") ? "Demo document" : "SAP reference",
+                <span key="r" className="font-mono">{n.sap_reference}</span>] as [string, ReactNode]]
+            : []),
         ]} />
         {n.payload && Object.keys(n.payload).length > 0 && (
           <Part title="What it does">

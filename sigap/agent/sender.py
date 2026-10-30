@@ -14,6 +14,7 @@ same as an action a person approved.
 """
 from __future__ import annotations
 
+import hashlib
 import sys
 import threading
 from typing import Dict, Optional
@@ -27,6 +28,26 @@ TARGETS = {
     "create_sourcing_event": ("API_SOURCING_PROJECT_SRV", "A_SourcingProject"),
 }
 
+#: The document prefix each kind gets in demo mode. The leading DEMO- is the
+#: whole point: a reference that could be mistaken for an S/4HANA document
+#: number is a lie told in a field someone will later paste into a real system.
+DEMO_PREFIX = {
+    "draft_po": "DEMO-PR",
+    "stock_transfer": "DEMO-MD",
+    "create_sourcing_event": "DEMO-SRC",
+}
+
+
+def demo_reference(kind: str, idempotency_key: str) -> str:
+    """A stable document number for an action issued in demo mode.
+
+    Derived from the idempotency key, so the same action issued twice gets the
+    same number - the property the real path buys with its idempotency header,
+    kept here rather than dropped because the tenant is absent.
+    """
+    digest = hashlib.sha256(idempotency_key.encode()).hexdigest()[:6].upper()
+    return f"{DEMO_PREFIX.get(kind, 'DEMO-DOC')}-{digest}"
+
 # One poster at a time. The schedule's pass and a handling's autonomous
 # transfer can reach the same row together; whoever holds the lock reads the
 # status again first, so the other finds it already sent and posts nothing.
@@ -34,10 +55,24 @@ _LOCK = threading.Lock()
 
 
 def send_one(action_id: str) -> Dict[str, Optional[str]]:
-    """Post one approved action now. {"sent": True, "reference": ...}, or
-    {"sent": False, "why": ...} with the action left as it was."""
-    if not sap_s4.available():
-        return {"sent": False, "why": "SAP is not connected (SAP_API_KEY is not set)"}
+    """Issue one approved action now. {"sent": True, "reference": ...}, or
+    {"sent": False, "why": ...} with the action left as it was.
+
+    Two ways to issue, and the flow is the same either way:
+
+      live  POST to S/4HANA, and the reference is the document SAP returns.
+      demo  no tenant to post to, so the document is recorded against the
+            action with a DEMO- reference and the status moves on.
+
+    Demo is not a stub that quietly does nothing. An approved purchase
+    requisition that can never issue is worse than a refusal: the queue shows
+    work that will never finish, the outcome loop never opens, and a
+    demonstration stops precisely where it was meant to prove itself. The
+    honesty is carried by the reference, not by refusing to act.
+    """
+    demo = sap_s4.data_mode() == "demo"
+    if not demo and not sap_s4.available():
+        return {"sent": False, "why": "SAP is not connected (no API key, and not in demo mode)"}
     with _LOCK:
         a = store.get_action(action_id)
         if a is None:
@@ -46,7 +81,11 @@ def send_one(action_id: str) -> Dict[str, Optional[str]]:
             return {"sent": a["status"] == "sent", "reference": a.get("sap_reference"),
                     "why": f"the action is {a['status']}"}
         if a["kind"] not in TARGETS:
-            return {"sent": False, "why": f"kind '{a['kind']}' is not mapped to SAP yet"}
+            return {"sent": False, "why": f"kind '{a['kind']}' is not a SAP document"}
+        if demo:
+            ref = demo_reference(a["kind"], a["idempotency_key"])
+            store.mark_sent(a["id"], ref)
+            return {"sent": True, "reference": ref, "demo": True}
         service, entity = TARGETS[a["kind"]]
         try:
             r = sap_s4.post(service, entity, a["payload"], idempotency_key=a["idempotency_key"])
@@ -61,8 +100,8 @@ def send_one(action_id: str) -> Dict[str, Optional[str]]:
 
 
 def send_approved() -> int:
-    if not sap_s4.available():
-        print("SAP_API_KEY is not set. Nothing sent.")
+    if sap_s4.data_mode() != "demo" and not sap_s4.available():
+        print("SAP is not connected and demo mode is off. Nothing sent.")
         return 0
 
     with store.connect() as c:
@@ -75,8 +114,7 @@ def send_approved() -> int:
         if kind in outreach.KINDS:
             continue                      # an email, sent by outreach.py, not a SAP document
         if kind not in TARGETS:
-            print(f"  skip {a['id']}: kind '{kind}' is not mapped to SAP yet")
-            continue
+            continue                      # not a SAP document; nothing to post
         r = send_one(a["id"])
         if r["sent"]:
             print(f"  ✓ {a['id']} → {TARGETS[kind][0]} · {r['reference']}")
@@ -130,6 +168,24 @@ def check() -> None:
         assert not send_one(p["id"])["sent"] and len(posted) == 1
     finally:
         sap_s4.available, sap_s4.post = real
+
+    # --- demo mode issues a document of its own, and the same one twice ---
+    real_mode = sap_s4.data_mode
+    sap_s4.data_mode = lambda: "demo"
+    try:
+        d = store.record_action(rid, "k-sender-demo", "draft_po", True,
+                                {"cost_idr": 1}, status="approved")
+        out = send_one(d["id"])
+        assert out["sent"] and out.get("demo") and out["reference"].startswith("DEMO-PR-"), out
+        assert store.get_action(d["id"])["status"] == "sent", "demo must finish the flow"
+        # The same action issued twice keeps the same document number, which is
+        # what the idempotency header buys on the live path.
+        assert demo_reference("draft_po", "idem-abc") == demo_reference("draft_po", "idem-abc")
+        assert demo_reference("stock_transfer", "idem-abc") != demo_reference("draft_po", "idem-abc")
+    finally:
+        sap_s4.data_mode = real_mode
+    print("  ✓ demo mode issues a DEMO- document and the action reaches 'sent'")
+
     print("sender ok: a failed write stays approved and is retried; a sent one is never posted twice")
 
 

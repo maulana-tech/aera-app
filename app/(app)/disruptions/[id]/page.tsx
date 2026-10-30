@@ -154,7 +154,14 @@ export default async function DisruptionDetail({ params }: { params: Promise<{ i
                     )}
                     {a.sap_reference && (
                       <span className="text-muted-foreground ml-auto font-mono text-xs">
-                        {a.sap_reference.startsWith("email") ? a.sap_reference : `SAP ${a.sap_reference}`}
+                        {/* A document issued in demo mode must not be labelled
+                            SAP: the prefix is the only thing stopping someone
+                            pasting it into a real system. */}
+                        {a.sap_reference.startsWith("email")
+                          ? a.sap_reference
+                          : a.sap_reference.startsWith("DEMO-")
+                            ? `demo document ${a.sap_reference}`
+                            : `SAP ${a.sap_reference}`}
                       </span>
                     )}
                   </div>
