@@ -26,6 +26,11 @@ class Tool:
     description: str
     schema: Dict[str, Any]
     fn: Callable[..., Result]
+    #: Whether calling it changes the record. Declared, not guessed from the
+    #: name: a caller reaching this registry over MCP sees fifty-odd tools and
+    #: has no other way to tell which three of them raise an action. Reading is
+    #: the default because the overwhelming majority of these only read.
+    writes: bool = False
 
 
 _REGISTRY: Dict[str, Tool] = {}
@@ -33,10 +38,11 @@ _REGISTRY: Dict[str, Tool] = {}
 
 def register(name: str, owner: str, description: str,
              properties: Optional[Dict[str, Any]] = None,
-             required: Optional[List[str]] = None) -> Callable:
+             required: Optional[List[str]] = None,
+             writes: bool = False) -> Callable:
     def wrap(fn: Callable[..., Result]) -> Callable[..., Result]:
         _REGISTRY[name] = Tool(
-            name=name, owner=owner, description=description,
+            name=name, owner=owner, description=description, writes=writes,
             schema={
                 "type": "object",
                 "properties": properties or {},

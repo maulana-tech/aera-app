@@ -210,7 +210,7 @@ def _record(kind: str, autonomous: bool, **details) -> Result:
           {"material": {"type": "string"}, "from_plant": {"type": "string"},
            "to_plant": {"type": "string"}, "qty": {"type": "number"},
            "cost_idr": {"type": "integer"}},
-          ["material", "from_plant", "to_plant", "qty", "cost_idr"])
+          ["material", "from_plant", "to_plant", "qty", "cost_idr"], writes=True)
 def create_stock_transfer(material: str, from_plant: str, to_plant: str,
                           qty: float, cost_idr: int) -> Result:
     # The quantity and the cost both arrive from a model, and the cost is what
@@ -321,7 +321,7 @@ def _arrival_date(supplier: str, material: str, asked: str) -> Tuple[Optional[st
           {"supplier": {"type": "string"}, "material": {"type": "string"},
            "qty": {"type": "number"}, "needed_by": {"type": "string"},
            "cost_idr": {"type": "integer"}},
-          ["supplier", "material", "qty", "needed_by", "cost_idr"])
+          ["supplier", "material", "qty", "needed_by", "cost_idr"], writes=True)
 def create_draft_po(supplier: str, material: str, qty: float,
                     needed_by: str, cost_idr: int) -> Result:
     """Draft a purchase order, with the date taken from the record.
@@ -352,7 +352,7 @@ def create_draft_po(supplier: str, material: str, qty: float,
           "with the evidence that backs it. Internal only: a customer or a supplier is told "
           "through draft_customer_notice or request_supplier_update.",
           {"role": {"type": "string"}, "message": {"type": "string"}},
-          ["role", "message"])
+          ["role", "message"], writes=True)
 def notify(role: str, message: str) -> Result:
     return _record("notify", True, role=role, message=message)
 
@@ -362,7 +362,7 @@ def notify(role: str, message: str) -> Result:
           "poll the carrier: this records that this reference still needs a result, and a "
           "person, or you, closes it with record_outcome once receipt is actually known. "
           "Nothing here observes an arrival, so nothing here can invent one.",
-          {"reference": {"type": "string"}}, ["reference"])
+          {"reference": {"type": "string"}}, ["reference"], writes=True)
 def monitor_shipment(reference: str) -> Result:
     return _record("monitor", True, reference=reference)
 
@@ -384,7 +384,7 @@ def monitor_shipment(reference: str) -> Result:
                                               "range into it. Omit it unless you have the "
                                               "figure: a cost written into `detail` is "
                                               "prose and is never read as money."}},
-          ["action_id", "outcome"])
+          ["action_id", "outcome"], writes=True)
 def record_outcome(action_id: str, outcome: str, detail: str = "",
                    actual_cost_idr: Optional[float] = None) -> Result:
     """Record what happened. The realized cost travels as its own number.
@@ -484,7 +484,7 @@ def _sales_order(number: str) -> Tuple[Optional[dict], Result]:
                        "description": "the notice as the customer will read it, plain text"},
            "new_date": {"type": ["string", "null"],
                         "description": "the delivery date now expected, YYYY-MM-DD, if known"}},
-          ["sales_order", "message"])
+          ["sales_order", "message"], writes=True)
 def draft_customer_notice(sales_order: str, message: str,
                           new_date: Optional[str] = None) -> Result:
     order, orders = _sales_order(sales_order)
@@ -548,7 +548,7 @@ def draft_customer_notice(sales_order: str, message: str,
           "comes, is recorded with record_outcome.",
           {"purchase_order": {"type": "string"},
            "question": {"type": "string", "description": "what is asked, plain text"}},
-          ["purchase_order", "question"])
+          ["purchase_order", "question"], writes=True)
 def request_supplier_update(purchase_order: str, question: str) -> Result:
     found = read("PurchaseOrder", numbers=[purchase_order], open_only=False)
     lines = found.value or []
@@ -584,7 +584,7 @@ def request_supplier_update(purchase_order: str, question: str) -> Result:
           {"material": {"type": "string"},
            "rationale": {"type": "string",
                          "description": "the exposure this closes, in one sentence"}},
-          ["material", "rationale"])
+          ["material", "rationale"], writes=True)
 def create_sourcing_event(material: str, rationale: str) -> Result:
     return _record("create_sourcing_event", False, material=material, rationale=rationale)
 
@@ -596,7 +596,7 @@ def create_sourcing_event(material: str, rationale: str) -> Result:
           {"material": {"type": "string"}, "plant": {"type": "string"},
            "new_level": {"type": "number", "description": "the proposed floor, in base units"},
            "rationale": {"type": "string"}},
-          ["material", "plant", "new_level", "rationale"])
+          ["material", "plant", "new_level", "rationale"], writes=True)
 def propose_safety_stock_change(material: str, plant: str, new_level: float,
                                 rationale: str) -> Result:
     # A safety floor is a number of units, and a number of units means nothing

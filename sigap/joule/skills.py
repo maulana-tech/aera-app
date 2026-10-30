@@ -2,9 +2,10 @@
 
   investigate_disruption   raise an event, answer AT ONCE with the run id
   disruption_status        read a run: status, who worked, the recommendation
+  assess_option            rule one option against TKDN and LARTAS, with the rules
   risk_scan                Vega's exposure scan and the RPT-1.6 slip ranking
 
-Nothing here can approve, and no fourth skill is reachable. Joule carries no
+Nothing here can approve, and no skill that approves is reachable. Joule carries no
 user identity (the destination is `NoAuthentication`), so an approval sent
 through it would be an approval with no approver. Every answer that touches an
 action says where it is approved: on SIGAP web, by a signed-in person.
@@ -34,7 +35,7 @@ import time
 from collections import deque
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-SKILLS = ("investigate_disruption", "disruption_status", "risk_scan")
+SKILLS = ("investigate_disruption", "disruption_status", "assess_option", "risk_scan")
 
 NAMES = {"supervisor": "Arya", "impact": "Elsa", "demand": "Dara", "inventory": "Iris",
          "sourcing": "Clint", "procurement": "Prita", "logistics": "Milo",
@@ -52,6 +53,10 @@ PORTS = {"ningbo": "CNNGB", "shanghai": "CNSHA", "busan": "KRPUS", "pusan": "KRP
 RUN_ID = re.compile(r"\brun_[0-9a-f]{6,}\b")
 LOCODE = re.compile(r"\b([A-Z]{2}[A-Z2-9]{3})\b")
 MATERIAL = re.compile(r"\bM-\d{3,}\b")
+#: An option id as find_alternate_sources returns it: a bare letter, or the
+#: longer ids an uploaded book uses. Matched only when the sentence is asking
+#: about allowance, so "option A" in prose does not hijack an investigation.
+OPTION = re.compile(r"\boption\s+([A-Z]|[A-Z0-9][A-Z0-9_-]{2,})\b")
 SUPPLIER = re.compile(r"\bSUP-\d{3,}\b")
 DAYS = re.compile(r"\b(\d{1,3})\s*(?:days?|hari)\b", re.I)
 
@@ -69,12 +74,18 @@ _DISRUPTION = re.compile(r"\b(investigat\w*|selidik\w*|closed|closure|close|shut
                          r"kekurangan|disrupt\w*|gangguan|missed|cancel\w*|batal|"
                          r"bankrupt\w*|failed|gagal|recall|reject\w*)\b", re.I)
 _AGAIN = re.compile(r"\b(again|new|re-?run|fresh|lagi|ulang|baru)\b", re.I)
+# Asking whether something is ALLOWED is a different question from asking what
+# happened, and it is the one SIGAP answers unlike anything else.
+_ALLOWED = re.compile(r"\b(allowed|permitted|compliant|compliance|clear|cleared|"
+                      r"legal|lartas|tkdn|local content|boleh|diizinkan|patuh|"
+                      r"melanggar|rule|rules|aturan)\b", re.I)
 
 HELP = (
-    "I can do three things with SIGAP, the supply disruption assistant:\n\n"
+    "I can do four things with SIGAP, the supply disruption assistant:\n\n"
     "1. **Investigate a disruption**: *\"Investigate: Ningbo port closed for 6 days\"*\n"
     "2. **Check an investigation**: *\"What is the status of run_1a2b3c4d5e6f?\"*\n"
-    "3. **Scan for risk**: *\"What is about to break this week?\"*\n\n"
+    "3. **Ask whether an option is allowed**: *\"Is option E compliant?\"*\n"
+    "4. **Scan for risk**: *\"What is about to break this week?\"*\n\n"
     "Approvals are not done here. Joule carries no identity, so an approval "
     "happens on SIGAP web, by a signed-in person with the authority for it."
 )
@@ -101,6 +112,10 @@ def classify(text: str) -> Tuple[str, Dict[str, Any]]:
     if run:
         args.setdefault("run_id", run.group(0))
         return "disruption_status", args
+    opt = OPTION.search(raw)
+    if opt and _ALLOWED.search(raw):
+        args["option_id"] = opt.group(1)
+        return "assess_option", args
     if _STATUS.search(raw) and not _AGAIN.search(raw):
         return "disruption_status", args
     if _RISK.search(raw) and not _DISRUPTION.search(raw):
@@ -272,6 +287,58 @@ def render_status(run: dict, web: Optional[str]) -> str:
     return "\n".join(lines)
 
 
+def render_assessment(option_id: str, reply: dict, web: Optional[str]) -> str:
+    """A ruling, written so the reader can argue with it.
+
+    The verdict alone is worthless here: "not allowed" without the rule that
+    stopped it, and without whether anybody verified that rule, is an
+    instruction rather than an answer. So the rules come with it, each marked
+    verified or assumed.
+    """
+    result = reply.get("result") or {}
+    content = (result.get("content") or [{}])[0].get("text") or ""
+    try:
+        body = json.loads(content)
+    except (ValueError, TypeError):
+        body = {}
+    if result.get("isError") or body.get("unavailable"):
+        why = body.get("provenance") or body.get("reason") or "no detail"
+        return (f"SIGAP could not rule on option **{option_id}**: {why}\n\n"
+                "An option it cannot check is not an option it cleared.")
+    v = body.get("value") or {}
+    if not v:
+        return f"SIGAP has no option **{option_id}** on record."
+
+    allowed = v.get("allowed")
+    head = ("**Cleared.**" if allowed else "**Not cleared.**")
+    lines = [f"### Option {option_id}", "", f"{head} {v.get('reason') or ''}", ""]
+    if v.get("tkdn_after_pct") is not None or v.get("tkdn_current_pct") is not None:
+        lines += [f"- Local content after this option: **{v.get('tkdn_after_pct')}%** "
+                  f"against a {v.get('tkdn_contract_floor_pct')}% contract floor", ""]
+    if v.get("earliest_customs_clearance"):
+        lines += [f"- Nothing clears customs before **{v['earliest_customs_clearance']}**", ""]
+
+    rules = v.get("rules") or []
+    if rules:
+        lines += ["**The rules it was judged against**", "",
+                  "| Rule | Value | Verified |", "|---|---|---|"]
+        for r in rules:
+            mark = "yes" if r.get("verified") else "**no, an assumption**"
+            lines.append(f"| {r.get('name')} | {_cell(r.get('value'))} | {mark} |")
+        lines.append("")
+        if any(not r.get("verified") for r in rules):
+            lines += ["> A rule nobody verified is somebody's assumption written down. "
+                      "This ruling is only as strong as the weakest one above.", ""]
+    if v.get("unknown"):
+        lines += ["> Could not be checked: " + ", ".join(str(u) for u in v["unknown"])
+                  + ". An option whose effect cannot be checked has not passed the "
+                    "check.", ""]
+    lines += [f"Provenance: `{body.get('provenance', 'not stated')}`."]
+    if web:
+        lines.append(f"\nApprovals happen on [SIGAP]({web}), by a signed-in person.")
+    return "\n".join(lines)
+
+
 def render_risk(exp: dict, web: Optional[str], top: int = 5) -> str:
     lines = ["**What is about to break**", ""]
     findings = sorted(exp.get("findings") or [], key=lambda f: f.get("value_idr") or 0,
@@ -396,6 +463,13 @@ def answer(text: str, client, web: Optional[str], limiter: RateLimit) -> str:
                 rid = picked["id"]
             return render_status(client.run(rid), web)
 
+        if skill == "assess_option":
+            oid = args.get("option_id")
+            if not oid:
+                return ("Name the option as SIGAP listed it, for example "
+                        "*\"is option E compliant?\"*.\n\n" + HELP)
+            return render_assessment(oid, client.assess_option(oid), web)
+
         if skill == "risk_scan":
             return render_risk(client.exposure(), web)
 
@@ -430,7 +504,12 @@ def demo() -> None:
     assert classify("Which suppliers are single-sourced?")[0] == "risk_scan"
     assert classify("hello there")[0] == "help", "a greeting must raise nothing"
     assert classify('{"skill": "risk_scan"}')[0] == "risk_scan"
-    assert classify('{"skill": "approve_action"}')[0] == "help", "no fourth skill exists"
+    # The invariant is not "there are only N skills" - skills get added. It is
+    # that none of them approves anything, because Joule carries no identity
+    # and an approval with no approver is not an approval.
+    for forbidden in ("approve_action", "approve", "send_po", "release"):
+        assert classify('{"skill": "%s"}' % forbidden)[0] == "help", forbidden
+    assert not any("approve" in s for s in SKILLS), SKILLS
 
     e = event_from_text("Investigate: Ningbo port closed for 6 days, M-4471 at risk")
     assert e["kind"] == "port_closure" and e["payload"]["port"] == "CNNGB", e
@@ -468,6 +547,32 @@ def demo() -> None:
                        "https://sigap.example.org")
     assert "Elsa, Kira" in md and "Rp 94.000.000" in md and "get_material_stock" in md
     assert "/disruptions/run_a" in md and NO_APPROVAL in md
+    # --- "is this allowed" is a different question from "what happened" -----
+    assert classify("Is option E compliant?")[0] == "assess_option"
+    assert classify("Apakah option B boleh dipakai?")[0] == "assess_option"
+    assert classify("Is option E compliant?")[1]["option_id"] == "E"
+    # An option mentioned in passing must not hijack an investigation.
+    assert classify("option E arrived late")[0] == "investigate_disruption"
+    # Naming no option asks for one rather than ruling on nothing.
+    assert "option_id" not in classify("is this compliant?")[1]
+
+    cleared = {"result": {"content": [{"type": "text", "text": json.dumps({
+        "value": {"allowed": True, "reason": "TKDN rises to 41.6%",
+                  "rules": [{"name": "tkdn_contract_floor_pct", "value": 40.0,
+                             "verified": False}]},
+        "provenance": "derived · rule pack"})}]}}
+    out = render_assessment("B", cleared, None)
+    assert "Cleared" in out and "41.6" in out, out
+    # The rule it was judged against travels with the verdict, and an
+    # unverified one says so: a verdict without its rules is an instruction.
+    assert "tkdn_contract_floor_pct" in out and "an assumption" in out, out
+
+    refused = {"result": {"isError": True, "content": [{"type": "text", "text": json.dumps(
+        {"unavailable": True, "provenance": "missing · rule pack"})}]}}
+    gone = render_assessment("Z", refused, None)
+    assert "could not rule" in gone and "not an option it cleared" in gone, gone
+    print("  an option is ruled with its rules, and an uncheckable one is not cleared ✓")
+
     print("skills ok, intent ✓ · help instead of a guess ✓ · event from words ✓ "
           "· rate limit ✓ · duplicate held back ✓ · status keeps origin labels ✓")
 

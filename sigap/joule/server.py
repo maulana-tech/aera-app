@@ -9,7 +9,7 @@ version, the same FastAPI application, the same task lifecycle (working, one
 artifact, completed), so `apiResponse.body.artifacts[0].parts[0].text` in the
 Joule function reads the answer.
 
-What it does is in skills.py: three skills, none of which can approve. This file
+What it does is in skills.py: four skills, none of which can approve. This file
 only wires them to A2A. The SIGAP calls are blocking, so they run in a thread
 and the event loop stays free for the next request.
 
@@ -147,8 +147,9 @@ agent_card = AgentCard(
     name="SIGAP",
     description=(
         "SIGAP, the supply disruption assistant. Starts an investigation of a "
-        "supply disruption, reports how an investigation is going, and scans for "
-        "supply risk that has not happened yet. Read and raise only: approvals "
+        "supply disruption, reports how an investigation is going, rules whether a "
+        "replacement option is allowed under local-content and import law, and scans "
+        "for supply risk that has not happened yet. Read and raise only: approvals "
         "happen on SIGAP web."
     ),
     url=app_url,
@@ -178,6 +179,21 @@ agent_card = AgentCard(
             ),
             tags=["status", "recommendation", "approval"],
             examples=["What is the status of the Ningbo investigation?"],
+            inputModes=["text/plain"],
+            outputModes=["text/markdown"],
+        ),
+        AgentSkill(
+            id="assess_option",
+            name="Is this option allowed?",
+            description=(
+                "Rules one replacement option against Indonesian local content (TKDN) "
+                "and import law (LARTAS), and answers with the rules it was judged "
+                "against - each marked verified or an assumption - rather than a bare "
+                "verdict. An option whose effect cannot be checked is reported as not "
+                "cleared, never as cleared."
+            ),
+            tags=["compliance", "TKDN", "LARTAS", "local content", "import"],
+            examples=["Is option E compliant?", "Apakah option B boleh dipakai?"],
             inputModes=["text/plain"],
             outputModes=["text/markdown"],
         ),
