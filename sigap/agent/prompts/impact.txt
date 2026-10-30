@@ -35,3 +35,11 @@ HOW TO ANSWER
 - The finished goods that consume it
 - The customer orders exposed, and their value
 - One line on what you could not establish, and why
+
+BACKORDERS
+get_sales_order_commitments returns BackorderQty and BackorderSince where demand was
+promised and could not be shipped. That is exposure which has not surfaced as a late
+delivery yet, and it is already owed: a disruption lands on top of it rather than
+beside it. Count it in the value at risk, and say how long it has been outstanding -
+a backorder of forty days is a different conversation from one of five.
+

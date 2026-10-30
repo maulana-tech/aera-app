@@ -68,8 +68,12 @@ def simulate_scenario_tool(material: str, plant: str,
         if r.get("RevisedDeliveryDate")
     ]
 
+    # The same pack Kira rules from prices the options: duty is set per HS
+    # heading, so the tariff table and the restricted headings live together.
+    from tools.compliance import load_pack
     sim = simulate_scenario(stock, options, rulings, p, start,
-                            float(daily), float(opening), scheduled)
+                            float(daily), float(opening), scheduled,
+                            pack=load_pack())
 
     if sim.refused:
         return Result({"refused": True, "reason": sim.refusal_reason},

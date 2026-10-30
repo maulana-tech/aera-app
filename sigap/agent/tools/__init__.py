@@ -20,6 +20,7 @@ from tools import (  # noqa: F401
     precedent,
     procurement,
     simulation,
+    skills,
     sourcing,
     supervisor,
 )

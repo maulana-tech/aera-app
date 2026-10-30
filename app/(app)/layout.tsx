@@ -8,9 +8,16 @@ import { api, me } from "@/app/lib";
 import { redirect } from "next/navigation";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const [user, health] = await Promise.all([
+  // `mode` is a separate read because /health is public: whether you may
+  // CHANGE the data source depends on who you are, and that belongs behind
+  // the session, not in an unauthenticated payload.
+  const [user, health, mode] = await Promise.all([
     me(),
-    api<{ env: string; sap_ready: boolean; model_ready: boolean }>("health"),
+    api<{
+      env: string; sap_ready: boolean; model_ready: boolean;
+      data_mode?: "live" | "demo"; sap_key_set?: boolean;
+    }>("health"),
+    api<{ mode: "live" | "demo"; may_change: boolean }>("mode"),
   ]);
   // Every route but /health needs a session now, so a page without one shows
   // nothing but errors. When the service answers and says who you are not,
@@ -20,7 +27,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <SidebarProvider>
-      <AppSidebar user={user ?? undefined} connection={health ?? undefined} />
+      <AppSidebar
+        user={user ?? undefined}
+        connection={health ?? undefined}
+        mayChangeMode={!!mode?.may_change}
+      />
       <SidebarInset>
         <header className="bg-background/80 sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b px-3 backdrop-blur md:px-4">
           <SidebarTrigger className="-ml-1" />

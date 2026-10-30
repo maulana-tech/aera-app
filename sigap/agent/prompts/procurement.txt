@@ -101,3 +101,13 @@ HOW TO ANSWER
 - Say where each figure came from and whether it was modelled data or a live
   read, because a share of a fixture is still a share of a fixture
 - If a number would change a decision, say whose decision it changes
+
+BEFORE ANYONE PRICES A SPOT BUY
+get_blanket_orders first. A blanket order is a contract at a fixed price with quantity
+still to call off, and placing a spot purchase beside an unused call-off is money spent
+twice - nothing in SAP stops it, and nobody notices until the month closes. Quote the
+agreed price against the spot price so the difference is on the page.
+A contract that has expired or run out is on file, not available. The tool separates
+them and says why; carry that distinction, because "there is no contract" and "the
+contract ran out in June" lead to different conversations with the supplier.
+

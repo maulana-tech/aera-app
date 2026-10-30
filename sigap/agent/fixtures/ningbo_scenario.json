@@ -7,7 +7,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 172.8,
       "BaseUnit": "TON",
       "DailyConsumption": 9.6,
-      "Description": "Aluminium alloy ingot ADC12"
+      "Description": "Aluminium alloy ingot ADC12",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-26"
     },
     {
       "Material": "M-4472",
@@ -15,7 +18,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 384.0,
       "BaseUnit": "TON",
       "DailyConsumption": 6.4,
-      "Description": "Aluminium alloy ingot A356"
+      "Description": "Aluminium alloy ingot A356",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-27"
     },
     {
       "Material": "M-4472",
@@ -23,7 +29,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 586.5,
       "BaseUnit": "TON",
       "DailyConsumption": 6.9,
-      "Description": "Aluminium alloy ingot A356"
+      "Description": "Aluminium alloy ingot A356",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-30"
     },
     {
       "Material": "M-4478",
@@ -31,7 +40,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 210.6,
       "BaseUnit": "TON",
       "DailyConsumption": 11.7,
-      "Description": "Aluminium billet 6061"
+      "Description": "Aluminium billet 6061",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-26"
     },
     {
       "Material": "M-5512",
@@ -39,7 +51,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 101.5,
       "BaseUnit": "TON",
       "DailyConsumption": 2.9,
-      "Description": "Steel bar SCM440"
+      "Description": "Steel bar SCM440",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-09-03"
     },
     {
       "Material": "M-5512",
@@ -47,7 +62,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 83.2,
       "BaseUnit": "TON",
       "DailyConsumption": 6.4,
-      "Description": "Steel bar SCM440"
+      "Description": "Steel bar SCM440",
+      "ReplenishmentPolicy": "consignment",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-29"
     },
     {
       "Material": "M-5518",
@@ -55,7 +73,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 420.0,
       "BaseUnit": "TON",
       "DailyConsumption": 12.0,
-      "Description": "Steel bar S45C"
+      "Description": "Steel bar S45C",
+      "ReplenishmentPolicy": "consignment",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-09-03"
     },
     {
       "Material": "M-5524",
@@ -63,7 +84,11 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 115.5,
       "BaseUnit": "TON",
       "DailyConsumption": 3.3,
-      "Description": "Bearing steel SUJ2"
+      "Description": "Bearing steel SUJ2",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-04-17",
+      "DeadstockQty": 81.0
     },
     {
       "Material": "M-5530",
@@ -71,7 +96,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 438.0,
       "BaseUnit": "TON",
       "DailyConsumption": 7.3,
-      "Description": "Cast iron FC250 pig"
+      "Description": "Cast iron FC250 pig",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-30"
     },
     {
       "Material": "M-3308",
@@ -79,15 +107,24 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 10180.8,
       "BaseUnit": "PC",
       "DailyConsumption": 565.6,
-      "Description": "Brake seal kit NBR"
+      "Description": "Brake seal kit NBR",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "FIFO",
+      "LastMovementDate": "2025-08-20",
+      "ShelfLifeDays": 180,
+      "DeadstockQty": 3228.7
     },
     {
       "Material": "M-3308",
       "Plant": "KRW1",
-      "MatlWrhsStkQtyInMatlBaseUnit": 38136.0,
+      "MatlWrhsStkQtyInMatlBaseUnit": 6991.6,
       "BaseUnit": "PC",
       "DailyConsumption": 635.6,
-      "Description": "Brake seal kit NBR"
+      "Description": "Brake seal kit NBR",
+      "ReplenishmentPolicy": "JIT",
+      "Rotation": "FIFO",
+      "LastMovementDate": "2026-08-29",
+      "ShelfLifeDays": 180
     },
     {
       "Material": "M-3312",
@@ -95,7 +132,11 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 41670.0,
       "BaseUnit": "PC",
       "DailyConsumption": 694.5,
-      "Description": "O-ring set EPDM"
+      "Description": "O-ring set EPDM",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "FIFO",
+      "LastMovementDate": "2026-08-26",
+      "ShelfLifeDays": 365
     },
     {
       "Material": "M-3320",
@@ -103,7 +144,11 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 4585.0,
       "BaseUnit": "KG",
       "DailyConsumption": 131.0,
-      "Description": "Rubber compound NR60"
+      "Description": "Rubber compound NR60",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "FIFO",
+      "LastMovementDate": "2026-09-01",
+      "ShelfLifeDays": 270
     },
     {
       "Material": "M-6640",
@@ -111,7 +156,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 1003.2,
       "BaseUnit": "KG",
       "DailyConsumption": 22.8,
-      "Description": "Copper wire 2.0mm"
+      "Description": "Copper wire 2.0mm",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-09-01"
     },
     {
       "Material": "M-6648",
@@ -119,7 +167,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 15220.8,
       "BaseUnit": "PC",
       "DailyConsumption": 845.6,
-      "Description": "Brass fitting M10"
+      "Description": "Brass fitting M10",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-29"
     },
     {
       "Material": "M-7710",
@@ -127,7 +178,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 11545.6,
       "BaseUnit": "PC",
       "DailyConsumption": 262.4,
-      "Description": "Hex bolt M12 class 10.9"
+      "Description": "Hex bolt M12 class 10.9",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-09-03"
     },
     {
       "Material": "M-7710",
@@ -135,7 +189,11 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 5667.2,
       "BaseUnit": "PC",
       "DailyConsumption": 257.6,
-      "Description": "Hex bolt M12 class 10.9"
+      "Description": "Hex bolt M12 class 10.9",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-04-17",
+      "DeadstockQty": 2765.8
     },
     {
       "Material": "M-7716",
@@ -143,7 +201,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 6036.0,
       "BaseUnit": "PC",
       "DailyConsumption": 100.6,
-      "Description": "Flange nut M12"
+      "Description": "Flange nut M12",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-31"
     },
     {
       "Material": "M-7722",
@@ -151,7 +212,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 4026.0,
       "BaseUnit": "PC",
       "DailyConsumption": 91.5,
-      "Description": "Spring washer M12"
+      "Description": "Spring washer M12",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-28"
     },
     {
       "Material": "M-8830",
@@ -159,7 +223,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 2649.5,
       "BaseUnit": "LTR",
       "DailyConsumption": 75.7,
-      "Description": "Epoxy primer, grey"
+      "Description": "Epoxy primer, grey",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-30"
     },
     {
       "Material": "M-8830",
@@ -167,15 +234,21 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 923.0,
       "BaseUnit": "LTR",
       "DailyConsumption": 71.0,
-      "Description": "Epoxy primer, grey"
+      "Description": "Epoxy primer, grey",
+      "ReplenishmentPolicy": "JIT",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-31"
     },
     {
       "Material": "M-8836",
       "Plant": "SBY1",
-      "MatlWrhsStkQtyInMatlBaseUnit": 1276.8,
+      "MatlWrhsStkQtyInMatlBaseUnit": 273.6,
       "BaseUnit": "LTR",
       "DailyConsumption": 45.6,
-      "Description": "Topcoat, black semi-gloss"
+      "Description": "Topcoat, black semi-gloss",
+      "ReplenishmentPolicy": "JIT",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-09-01"
     },
     {
       "Material": "M-8842",
@@ -183,7 +256,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 1152.8,
       "BaseUnit": "LTR",
       "DailyConsumption": 26.2,
-      "Description": "Anti-corrosion wax"
+      "Description": "Anti-corrosion wax",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-27"
     },
     {
       "Material": "M-9910",
@@ -191,7 +267,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 2771.0,
       "BaseUnit": "LTR",
       "DailyConsumption": 32.6,
-      "Description": "Machining coolant"
+      "Description": "Machining coolant",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-27"
     },
     {
       "Material": "M-9916",
@@ -199,7 +278,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 11068.4,
       "BaseUnit": "PC",
       "DailyConsumption": 395.3,
-      "Description": "Grinding wheel 350mm"
+      "Description": "Grinding wheel 350mm",
+      "ReplenishmentPolicy": "consignment",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-09-01"
     },
     {
       "Material": "M-9922",
@@ -207,7 +289,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 9878.4,
       "BaseUnit": "PC",
       "DailyConsumption": 548.8,
-      "Description": "Carbide insert CNMG"
+      "Description": "Carbide insert CNMG",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-09-01"
     },
     {
       "Material": "M-2210",
@@ -215,7 +300,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 15435.2,
       "BaseUnit": "PC",
       "DailyConsumption": 350.8,
-      "Description": "Graphite electrode"
+      "Description": "Graphite electrode",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-28"
     },
     {
       "Material": "M-2216",
@@ -223,7 +311,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 154.8,
       "BaseUnit": "TON",
       "DailyConsumption": 8.6,
-      "Description": "Foundry sand, resin coated"
+      "Description": "Foundry sand, resin coated",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-31"
     },
     {
       "Material": "M-2216",
@@ -231,15 +322,22 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 167.4,
       "BaseUnit": "TON",
       "DailyConsumption": 9.3,
-      "Description": "Foundry sand, resin coated"
+      "Description": "Foundry sand, resin coated",
+      "ReplenishmentPolicy": "consignment",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-26"
     },
     {
       "Material": "M-2222",
       "Plant": "KRW1",
-      "MatlWrhsStkQtyInMatlBaseUnit": 13806.0,
+      "MatlWrhsStkQtyInMatlBaseUnit": 2531.1,
       "BaseUnit": "PC",
       "DailyConsumption": 230.1,
-      "Description": "Ceramic filter 50ppi"
+      "Description": "Ceramic filter 50ppi",
+      "ReplenishmentPolicy": "JIT",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-04-17",
+      "DeadstockQty": 1806.1
     },
     {
       "Material": "M-2228",
@@ -247,7 +345,11 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 1279.6,
       "BaseUnit": "KG",
       "DailyConsumption": 45.7,
-      "Description": "Ladle refractory mix"
+      "Description": "Ladle refractory mix",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2025-08-20",
+      "DeadstockQty": 716.6
     },
     {
       "Material": "M-1105",
@@ -255,7 +357,11 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 235.4,
       "BaseUnit": "SQM",
       "DailyConsumption": 10.7,
-      "Description": "Gasket sheet, compressed"
+      "Description": "Gasket sheet, compressed",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "FIFO",
+      "LastMovementDate": "2026-08-29",
+      "ShelfLifeDays": 180
     },
     {
       "Material": "M-1112",
@@ -263,7 +369,11 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 1386.0,
       "BaseUnit": "MTR",
       "DailyConsumption": 63.0,
-      "Description": "Hydraulic hose 3/8"
+      "Description": "Hydraulic hose 3/8",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "FIFO",
+      "LastMovementDate": "2026-09-03",
+      "ShelfLifeDays": 270
     },
     {
       "Material": "M-1118",
@@ -271,7 +381,11 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 14758.8,
       "BaseUnit": "PC",
       "DailyConsumption": 527.1,
-      "Description": "Dust boot, TPE"
+      "Description": "Dust boot, TPE",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "FIFO",
+      "LastMovementDate": "2026-08-29",
+      "ShelfLifeDays": 270
     },
     {
       "Material": "M-1118",
@@ -279,15 +393,23 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 4224.0,
       "BaseUnit": "PC",
       "DailyConsumption": 70.4,
-      "Description": "Dust boot, TPE"
+      "Description": "Dust boot, TPE",
+      "ReplenishmentPolicy": "consignment",
+      "Rotation": "FIFO",
+      "LastMovementDate": "2026-08-31",
+      "ShelfLifeDays": 365
     },
     {
       "Material": "M-1124",
       "Plant": "KRW1",
-      "MatlWrhsStkQtyInMatlBaseUnit": 2268.2,
+      "MatlWrhsStkQtyInMatlBaseUnit": 824.8,
       "BaseUnit": "PC",
       "DailyConsumption": 103.1,
-      "Description": "Piston seal, PTFE"
+      "Description": "Piston seal, PTFE",
+      "ReplenishmentPolicy": "JIT",
+      "Rotation": "FIFO",
+      "LastMovementDate": "2026-09-03",
+      "ShelfLifeDays": 365
     },
     {
       "Material": "M-1130",
@@ -295,15 +417,21 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 28635.2,
       "BaseUnit": "PC",
       "DailyConsumption": 650.8,
-      "Description": "Bleeder screw M8"
+      "Description": "Bleeder screw M8",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-09-01"
     },
     {
       "Material": "M-1136",
       "Plant": "KRW1",
-      "MatlWrhsStkQtyInMatlBaseUnit": 41286.0,
+      "MatlWrhsStkQtyInMatlBaseUnit": 5504.8,
       "BaseUnit": "PC",
       "DailyConsumption": 688.1,
-      "Description": "Retaining clip, spring steel"
+      "Description": "Retaining clip, spring steel",
+      "ReplenishmentPolicy": "JIT",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-29"
     },
     {
       "Material": "M-1142",
@@ -311,7 +439,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 22352.4,
       "BaseUnit": "PC",
       "DailyConsumption": 798.3,
-      "Description": "Shim plate 0.5mm"
+      "Description": "Shim plate 0.5mm",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-09-01"
     },
     {
       "Material": "M-1148",
@@ -319,7 +450,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 15494.5,
       "BaseUnit": "PC",
       "DailyConsumption": 442.7,
-      "Description": "Guide pin, chrome"
+      "Description": "Guide pin, chrome",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-26"
     },
     {
       "Material": "M-1148",
@@ -327,7 +461,11 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 9633.8,
       "BaseUnit": "PC",
       "DailyConsumption": 437.9,
-      "Description": "Guide pin, chrome"
+      "Description": "Guide pin, chrome",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-06-01",
+      "DeadstockQty": 6977.5
     },
     {
       "Material": "M-1154",
@@ -335,15 +473,21 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 27395.5,
       "BaseUnit": "PC",
       "DailyConsumption": 322.3,
-      "Description": "Bushing, sintered bronze"
+      "Description": "Bushing, sintered bronze",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-28"
     },
     {
       "Material": "M-1160",
       "Plant": "KRW1",
-      "MatlWrhsStkQtyInMatlBaseUnit": 29251.2,
+      "MatlWrhsStkQtyInMatlBaseUnit": 2659.2,
       "BaseUnit": "PC",
       "DailyConsumption": 664.8,
-      "Description": "Needle bearing HK1210"
+      "Description": "Needle bearing HK1210",
+      "ReplenishmentPolicy": "JIT",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-09-01"
     },
     {
       "Material": "M-1166",
@@ -351,7 +495,12 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 10618.2,
       "BaseUnit": "PC",
       "DailyConsumption": 589.9,
-      "Description": "Oil seal 35x52x8"
+      "Description": "Oil seal 35x52x8",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "FIFO",
+      "LastMovementDate": "2025-08-20",
+      "ShelfLifeDays": 180,
+      "DeadstockQty": 5208.2
     },
     {
       "Material": "M-1172",
@@ -359,15 +508,21 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 9590.4,
       "BaseUnit": "PC",
       "DailyConsumption": 532.8,
-      "Description": "Snap ring 52mm"
+      "Description": "Snap ring 52mm",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-27"
     },
     {
       "Material": "M-1178",
       "Plant": "CKR1",
-      "MatlWrhsStkQtyInMatlBaseUnit": 24578.4,
+      "MatlWrhsStkQtyInMatlBaseUnit": 9655.8,
       "BaseUnit": "PC",
       "DailyConsumption": 877.8,
-      "Description": "Dowel pin 8x16"
+      "Description": "Dowel pin 8x16",
+      "ReplenishmentPolicy": "JIT",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-28"
     },
     {
       "Material": "M-1184",
@@ -375,7 +530,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 14220.0,
       "BaseUnit": "PC",
       "DailyConsumption": 237.0,
-      "Description": "Thread insert M8"
+      "Description": "Thread insert M8",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-09-03"
     },
     {
       "Material": "M-1184",
@@ -383,15 +541,23 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 30764.8,
       "BaseUnit": "PC",
       "DailyConsumption": 699.2,
-      "Description": "Thread insert M8"
+      "Description": "Thread insert M8",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-06-01",
+      "DeadstockQty": 10139.9
     },
     {
       "Material": "M-1190",
       "Plant": "CKR1",
-      "MatlWrhsStkQtyInMatlBaseUnit": 31290.0,
+      "MatlWrhsStkQtyInMatlBaseUnit": 3576.0,
       "BaseUnit": "PC",
       "DailyConsumption": 894.0,
-      "Description": "Vent plug, brass"
+      "Description": "Vent plug, brass",
+      "ReplenishmentPolicy": "JIT",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2025-08-20",
+      "DeadstockQty": 2030.6
     },
     {
       "Material": "M-1196",
@@ -399,7 +565,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 14828.0,
       "BaseUnit": "PC",
       "DailyConsumption": 674.0,
-      "Description": "Label, laser etched"
+      "Description": "Label, laser etched",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-08-29"
     },
     {
       "Material": "M-1202",
@@ -407,7 +576,10 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 16758.0,
       "BaseUnit": "PC",
       "DailyConsumption": 279.3,
-      "Description": "Packaging crate, returnable"
+      "Description": "Packaging crate, returnable",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-09-03"
     },
     {
       "Material": "M-1202",
@@ -415,7 +587,11 @@
       "MatlWrhsStkQtyInMatlBaseUnit": 4800.0,
       "BaseUnit": "PC",
       "DailyConsumption": 0.0,
-      "Description": "Packaging crate, returnable"
+      "Description": "Packaging crate, returnable",
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2025-07-21",
+      "DeadstockQty": 4800.0
     },
     {
       "Material": "M-4471",
@@ -423,7 +599,10 @@
       "BaseUnit": "TON",
       "Description": "Aluminium alloy ingot ADC12",
       "MatlWrhsStkQtyInMatlBaseUnit": 84.0,
-      "DailyConsumption": 9.2
+      "DailyConsumption": 9.2,
+      "ReplenishmentPolicy": "stock",
+      "Rotation": "LIFO",
+      "LastMovementDate": "2026-09-02"
     }
   ],
   "PurchaseOrder": [
@@ -449,7 +628,11 @@
       "LoadingPort": "CNNGB",
       "DeliveryDate": "2026-10-09",
       "RevisedDeliveryDate": "2026-10-14",
-      "Status": "in_transit"
+      "Status": "bonded",
+      "BillOfLading": "BL432415",
+      "Vessel": "MV Ever Lotus",
+      "Consolidation": "FCL",
+      "BondedWarehouse": "Gudang Berikat Marunda"
     },
     {
       "PurchaseOrder": "4500018876",
@@ -461,7 +644,11 @@
       "LoadingPort": "CNNGB",
       "DeliveryDate": "2026-09-08",
       "RevisedDeliveryDate": "2026-09-08",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL888402",
+      "Vessel": "MV Sinar Jaya",
+      "Consolidation": "groupage",
+      "CrossDock": true
     },
     {
       "PurchaseOrder": "4500018879",
@@ -473,7 +660,10 @@
       "LoadingPort": "CNNGB",
       "DeliveryDate": "2026-10-08",
       "RevisedDeliveryDate": "2026-10-10",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL181037",
+      "Vessel": "MV Sinar Jaya",
+      "Consolidation": "groupage"
     },
     {
       "PurchaseOrder": "4500018882",
@@ -497,7 +687,10 @@
       "LoadingPort": "THLCH",
       "DeliveryDate": "2026-09-16",
       "RevisedDeliveryDate": "2026-09-16",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL631121",
+      "Vessel": "MV Hanjin Pride",
+      "Consolidation": "FCL"
     },
     {
       "PurchaseOrder": "4500018885",
@@ -509,7 +702,10 @@
       "LoadingPort": "MYPKG",
       "DeliveryDate": "2026-09-09",
       "RevisedDeliveryDate": "2026-09-17",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL873391",
+      "Vessel": "MV Sinar Jaya",
+      "Consolidation": "FCL"
     },
     {
       "PurchaseOrder": "4500018886",
@@ -521,7 +717,10 @@
       "LoadingPort": "CNNGB",
       "DeliveryDate": "2026-10-04",
       "RevisedDeliveryDate": "2026-10-09",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL334851",
+      "Vessel": "MV Hanjin Pride",
+      "Consolidation": "groupage"
     },
     {
       "PurchaseOrder": "4500018888",
@@ -557,7 +756,10 @@
       "LoadingPort": "VNSGN",
       "DeliveryDate": "2026-10-14",
       "RevisedDeliveryDate": "2026-10-22",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL509527",
+      "Vessel": "MV Ever Lotus",
+      "Consolidation": "FCL"
     },
     {
       "PurchaseOrder": "4500018895",
@@ -569,7 +771,10 @@
       "LoadingPort": "CNNGB",
       "DeliveryDate": "2026-09-21",
       "RevisedDeliveryDate": "2026-09-26",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL178004",
+      "Vessel": "MV Sinar Jaya",
+      "Consolidation": "FCL"
     },
     {
       "PurchaseOrder": "4500018897",
@@ -581,7 +786,10 @@
       "LoadingPort": "JPYOK",
       "DeliveryDate": "2026-10-06",
       "RevisedDeliveryDate": "2026-10-06",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL682572",
+      "Vessel": "MV Ever Lotus",
+      "Consolidation": "FCL"
     },
     {
       "PurchaseOrder": "4500018898",
@@ -593,7 +801,10 @@
       "LoadingPort": "CNNGB",
       "DeliveryDate": "2026-09-23",
       "RevisedDeliveryDate": "2026-09-23",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL918946",
+      "Vessel": "MV Hanjin Pride",
+      "Consolidation": "FCL"
     },
     {
       "PurchaseOrder": "4500019311",
@@ -605,7 +816,10 @@
       "LoadingPort": "THLCH",
       "DeliveryDate": "2026-09-08",
       "RevisedDeliveryDate": "2026-09-16",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL739360",
+      "Vessel": "MV Pan Ocean",
+      "Consolidation": "FCL"
     },
     {
       "PurchaseOrder": "4500018903",
@@ -617,7 +831,11 @@
       "LoadingPort": "JPYOK",
       "DeliveryDate": "2026-10-13",
       "RevisedDeliveryDate": "2026-10-13",
-      "Status": "in_transit"
+      "Status": "bonded",
+      "BillOfLading": "BL521504",
+      "Vessel": "MV Hanjin Pride",
+      "Consolidation": "FCL",
+      "BondedWarehouse": "Gudang Berikat Marunda"
     },
     {
       "PurchaseOrder": "4500018906",
@@ -641,7 +859,11 @@
       "LoadingPort": "MYPKG",
       "DeliveryDate": "2026-09-27",
       "RevisedDeliveryDate": "2026-10-05",
-      "Status": "in_transit"
+      "Status": "bonded",
+      "BillOfLading": "BL387980",
+      "Vessel": "MV Hanjin Pride",
+      "Consolidation": "FCL",
+      "BondedWarehouse": "Gudang Berikat Marunda"
     },
     {
       "PurchaseOrder": "4500018910",
@@ -665,7 +887,11 @@
       "LoadingPort": "CNNGB",
       "DeliveryDate": "2026-09-17",
       "RevisedDeliveryDate": "2026-09-22",
-      "Status": "in_transit"
+      "Status": "bonded",
+      "BillOfLading": "BL271204",
+      "Vessel": "MV Meratus Tomini",
+      "Consolidation": "FCL",
+      "BondedWarehouse": "Gudang Berikat Cikarang"
     },
     {
       "PurchaseOrder": "4500018915",
@@ -677,7 +903,11 @@
       "LoadingPort": "VNSGN",
       "DeliveryDate": "2026-09-10",
       "RevisedDeliveryDate": "2026-09-10",
-      "Status": "in_transit"
+      "Status": "bonded",
+      "BillOfLading": "BL995877",
+      "Vessel": "MV Pan Ocean",
+      "Consolidation": "groupage",
+      "BondedWarehouse": "Gudang Berikat Cakung"
     },
     {
       "PurchaseOrder": "4500018916",
@@ -689,7 +919,10 @@
       "LoadingPort": "THLCH",
       "DeliveryDate": "2026-09-17",
       "RevisedDeliveryDate": "2026-09-17",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL778747",
+      "Vessel": "MV Meratus Tomini",
+      "Consolidation": "FCL"
     },
     {
       "PurchaseOrder": "4500018918",
@@ -701,7 +934,10 @@
       "LoadingPort": "IDTPP",
       "DeliveryDate": "2026-09-10",
       "RevisedDeliveryDate": "2026-09-15",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL334485",
+      "Vessel": "MV Meratus Tomini",
+      "Consolidation": "FCL"
     },
     {
       "PurchaseOrder": "4500018919",
@@ -725,7 +961,11 @@
       "LoadingPort": "KRPUS",
       "DeliveryDate": "2026-09-25",
       "RevisedDeliveryDate": "2026-09-25",
-      "Status": "in_transit"
+      "Status": "bonded",
+      "BillOfLading": "BL605858",
+      "Vessel": "MV Meratus Tomini",
+      "Consolidation": "FCL",
+      "BondedWarehouse": "Gudang Berikat Cakung"
     },
     {
       "PurchaseOrder": "4500018925",
@@ -737,7 +977,10 @@
       "LoadingPort": "CNNGB",
       "DeliveryDate": "2026-10-08",
       "RevisedDeliveryDate": "2026-10-10",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL270058",
+      "Vessel": "MV Meratus Tomini",
+      "Consolidation": "FCL"
     },
     {
       "PurchaseOrder": "4500018926",
@@ -749,7 +992,10 @@
       "LoadingPort": "JPYOK",
       "DeliveryDate": "2026-09-19",
       "RevisedDeliveryDate": "2026-09-24",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL112306",
+      "Vessel": "MV Hanjin Pride",
+      "Consolidation": "groupage"
     },
     {
       "PurchaseOrder": "4500018927",
@@ -761,7 +1007,11 @@
       "LoadingPort": "CNNGB",
       "DeliveryDate": "2026-10-10",
       "RevisedDeliveryDate": "2026-10-10",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL989075",
+      "Vessel": "MV Hanjin Pride",
+      "Consolidation": "FCL",
+      "CrossDock": true
     },
     {
       "PurchaseOrder": "4500018928",
@@ -773,7 +1023,10 @@
       "LoadingPort": "IDTPP",
       "DeliveryDate": "2026-09-17",
       "RevisedDeliveryDate": "2026-09-19",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL893132",
+      "Vessel": "MV Sinar Jaya",
+      "Consolidation": "FCL"
     },
     {
       "PurchaseOrder": "4500018929",
@@ -785,7 +1038,10 @@
       "LoadingPort": "IDTPP",
       "DeliveryDate": "2026-10-04",
       "RevisedDeliveryDate": "2026-10-09",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL538598",
+      "Vessel": "MV Meratus Tomini",
+      "Consolidation": "groupage"
     },
     {
       "PurchaseOrder": "4500018931",
@@ -797,7 +1053,10 @@
       "LoadingPort": "JPYOK",
       "DeliveryDate": "2026-09-21",
       "RevisedDeliveryDate": "2026-09-21",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL130999",
+      "Vessel": "MV Hanjin Pride",
+      "Consolidation": "FCL"
     },
     {
       "PurchaseOrder": "4500018932",
@@ -821,7 +1080,10 @@
       "LoadingPort": "JPYOK",
       "DeliveryDate": "2026-10-07",
       "RevisedDeliveryDate": "2026-10-15",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL839290",
+      "Vessel": "MV Sinar Jaya",
+      "Consolidation": "FCL"
     },
     {
       "PurchaseOrder": "4500018934",
@@ -833,7 +1095,10 @@
       "LoadingPort": "CNNGB",
       "DeliveryDate": "2026-09-22",
       "RevisedDeliveryDate": "2026-09-27",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL681869",
+      "Vessel": "MV Pan Ocean",
+      "Consolidation": "groupage"
     },
     {
       "PurchaseOrder": "4500018936",
@@ -845,7 +1110,8 @@
       "LoadingPort": "IDTPP",
       "DeliveryDate": "2026-09-27",
       "RevisedDeliveryDate": "2026-09-27",
-      "Status": "not_shipped"
+      "Status": "not_shipped",
+      "CrossDock": true
     },
     {
       "PurchaseOrder": "4500018938",
@@ -857,7 +1123,11 @@
       "LoadingPort": "IDTPP",
       "DeliveryDate": "2026-09-13",
       "RevisedDeliveryDate": "2026-09-21",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL378865",
+      "Vessel": "MV Pan Ocean",
+      "Consolidation": "FCL",
+      "CrossDock": true
     },
     {
       "PurchaseOrder": "4500018941",
@@ -869,7 +1139,10 @@
       "LoadingPort": "MYPKG",
       "DeliveryDate": "2026-09-18",
       "RevisedDeliveryDate": "2026-09-20",
-      "Status": "in_transit"
+      "Status": "in_transit",
+      "BillOfLading": "BL408963",
+      "Vessel": "MV Sinar Jaya",
+      "Consolidation": "FCL"
     },
     {
       "PurchaseOrder": "4500018944",
@@ -893,7 +1166,8 @@
       "LoadingPort": "CNNGB",
       "DeliveryDate": "2026-10-13",
       "RevisedDeliveryDate": "2026-10-13",
-      "Status": "not_shipped"
+      "Status": "bonded",
+      "BondedWarehouse": "Gudang Berikat Marunda"
     },
     {
       "PurchaseOrder": "4500018949",
@@ -905,7 +1179,11 @@
       "LoadingPort": "KRPUS",
       "DeliveryDate": "2026-09-14",
       "RevisedDeliveryDate": "2026-09-22",
-      "Status": "in_transit"
+      "Status": "bonded",
+      "BillOfLading": "BL936169",
+      "Vessel": "MV Pan Ocean",
+      "Consolidation": "groupage",
+      "BondedWarehouse": "Gudang Berikat Cakung"
     },
     {
       "PurchaseOrder": "4500018872",
@@ -1156,6 +1434,89 @@
       "ComponentQuantity": 0.0042
     }
   ],
+  "BlanketOrder": [
+    {
+      "BlanketOrder": "460001200",
+      "Supplier": "SUP-2201",
+      "Material": "M-4471",
+      "AgreedPriceIDR": 32000000,
+      "RemainingQty": 154.9,
+      "ValidFrom": "2026-04-25",
+      "ValidTo": "2026-12-17"
+    },
+    {
+      "BlanketOrder": "460001201",
+      "Supplier": "SUP-2207",
+      "Material": "M-4472",
+      "AgreedPriceIDR": 28000000,
+      "RemainingQty": 106.7,
+      "ValidFrom": "2026-02-26",
+      "ValidTo": "2027-05-14"
+    },
+    {
+      "BlanketOrder": "460001202",
+      "Supplier": "SUP-2209",
+      "Material": "M-4478",
+      "AgreedPriceIDR": 43000000,
+      "RemainingQty": 133.2,
+      "ValidFrom": "2026-03-30",
+      "ValidTo": "2027-04-16"
+    },
+    {
+      "BlanketOrder": "460001203",
+      "Supplier": "SUP-2244",
+      "Material": "M-5512",
+      "AgreedPriceIDR": 52000000,
+      "RemainingQty": 106.4,
+      "ValidFrom": "2025-12-02",
+      "ValidTo": "2027-06-08"
+    },
+    {
+      "BlanketOrder": "460001204",
+      "Supplier": "SUP-3390",
+      "Material": "M-5518",
+      "AgreedPriceIDR": 33000000,
+      "RemainingQty": 179.3,
+      "ValidFrom": "2026-01-11",
+      "ValidTo": "2026-09-29"
+    },
+    {
+      "BlanketOrder": "460001205",
+      "Supplier": "SUP-3402",
+      "Material": "M-5524",
+      "AgreedPriceIDR": 39000000,
+      "RemainingQty": 46.3,
+      "ValidFrom": "2026-05-21",
+      "ValidTo": "2027-06-20"
+    },
+    {
+      "BlanketOrder": "460001206",
+      "Supplier": "SUP-4417",
+      "Material": "M-5530",
+      "AgreedPriceIDR": 54000000,
+      "RemainingQty": 73.9,
+      "ValidFrom": "2026-02-19",
+      "ValidTo": "2027-01-19"
+    },
+    {
+      "BlanketOrder": "460001207",
+      "Supplier": "SUP-4418",
+      "Material": "M-3308",
+      "AgreedPriceIDR": 46000000,
+      "RemainingQty": 22.1,
+      "ValidFrom": "2026-02-11",
+      "ValidTo": "2026-08-23"
+    },
+    {
+      "BlanketOrder": "460001208",
+      "Supplier": "SUP-4423",
+      "Material": "M-3312",
+      "AgreedPriceIDR": 59000000,
+      "RemainingQty": 0.0,
+      "ValidFrom": "2026-02-19",
+      "ValidTo": "2026-10-01"
+    }
+  ],
   "SalesOrder": [
     {
       "SalesOrder": "0000104465",
@@ -1167,6 +1528,8 @@
       "RequestedDeliveryDate": "2026-10-30",
       "LatePenaltyPctPerDay": 0.5,
       "LatePenaltyCapPct": 10.0,
+      "BackorderQty": 16.0,
+      "BackorderSince": "2026-08-21",
       "Quantity": 1233
     },
     {
@@ -1227,6 +1590,8 @@
       "RequestedDeliveryDate": "2026-10-01",
       "LatePenaltyPctPerDay": 0.5,
       "LatePenaltyCapPct": 10.0,
+      "BackorderQty": 55.3,
+      "BackorderSince": "2026-08-21",
       "Quantity": 728
     },
     {
@@ -1263,6 +1628,8 @@
       "RequestedDeliveryDate": "2026-09-28",
       "LatePenaltyPctPerDay": 0.5,
       "LatePenaltyCapPct": 10.0,
+      "BackorderQty": 55.7,
+      "BackorderSince": "2026-08-30",
       "Quantity": 135
     },
     {
@@ -1287,6 +1654,8 @@
       "RequestedDeliveryDate": "2026-10-15",
       "LatePenaltyPctPerDay": 0.5,
       "LatePenaltyCapPct": 10.0,
+      "BackorderQty": 29.3,
+      "BackorderSince": "2026-08-21",
       "Quantity": 583
     },
     {
@@ -1371,6 +1740,8 @@
       "RequestedDeliveryDate": "2026-10-15",
       "LatePenaltyPctPerDay": 0.5,
       "LatePenaltyCapPct": 10.0,
+      "BackorderQty": 50.4,
+      "BackorderSince": "2026-08-26",
       "Quantity": 1232
     },
     {
@@ -1444,9 +1815,11 @@
       "ArrivalDate": "2026-09-11",
       "ExtraCostIDR": 186000000,
       "TkdnAfterPct": 38.2,
+      "HsCode": "7601.20.00",
       "Origin": "CN",
       "NewOrigin": false,
-      "QualificationDays": 0
+      "QualificationDays": 0,
+      "Fulfilment": "plant"
     },
     {
       "id": "B",
@@ -1457,9 +1830,11 @@
       "ArrivalDate": "2026-09-12",
       "ExtraCostIDR": 94000000,
       "TkdnAfterPct": 41.6,
+      "HsCode": "7601.20.00",
       "Origin": "ID",
       "NewOrigin": false,
-      "QualificationDays": 3
+      "QualificationDays": 3,
+      "Fulfilment": "plant"
     },
     {
       "id": "C",
@@ -1470,9 +1845,11 @@
       "ArrivalDate": "2026-09-10",
       "ExtraCostIDR": 22000000,
       "TkdnAfterPct": null,
+      "HsCode": "7601.20.00",
       "Origin": "ID",
       "NewOrigin": false,
-      "QualificationDays": 0
+      "QualificationDays": 0,
+      "Fulfilment": "plant"
     },
     {
       "id": "D",
@@ -1483,9 +1860,11 @@
       "ArrivalDate": "2026-09-26",
       "ExtraCostIDR": 61000000,
       "TkdnAfterPct": 36.1,
+      "HsCode": "7601.20.00",
       "Origin": "VN",
       "NewOrigin": true,
-      "QualificationDays": 7
+      "QualificationDays": 7,
+      "Fulfilment": "dropship"
     },
     {
       "id": "E",
@@ -1496,9 +1875,11 @@
       "ArrivalDate": "2026-09-19",
       "ExtraCostIDR": 48000000,
       "TkdnAfterPct": 34.8,
+      "HsCode": "7601.20.00",
       "Origin": "CN",
       "NewOrigin": false,
-      "QualificationDays": 0
+      "QualificationDays": 0,
+      "Fulfilment": "plant"
     },
     {
       "id": "F",
@@ -1509,9 +1890,11 @@
       "ArrivalDate": "2026-09-18",
       "ExtraCostIDR": 31000000,
       "TkdnAfterPct": 44.0,
+      "HsCode": "7214.99.90",
       "Origin": "ID",
       "NewOrigin": false,
-      "QualificationDays": 5
+      "QualificationDays": 5,
+      "Fulfilment": "plant"
     },
     {
       "id": "G",
@@ -1522,9 +1905,11 @@
       "ArrivalDate": "2026-09-16",
       "ExtraCostIDR": 88000000,
       "TkdnAfterPct": 0.0,
+      "HsCode": "7214.99.90",
       "Origin": "KR",
       "NewOrigin": false,
-      "QualificationDays": 0
+      "QualificationDays": 0,
+      "Fulfilment": "plant"
     }
   ],
   "Supplier": [

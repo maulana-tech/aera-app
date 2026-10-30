@@ -246,11 +246,14 @@ def _slip_rows(orders: List[dict]) -> Tuple[List[dict], List[dict]]:
                "LoadingPort": o.get("LoadingPort"),
                "OrderQuantity": float(o.get("OrderQuantity") or 0)}
         status = o.get("Status")
-        # The fixture says in_transit or not_shipped. SAP says open, delivered or
-        # deleted: a delivered line, or an open one whose schedule line has
-        # already moved, has a slip on record; an open one that has not moved
-        # has no news yet.
-        if status == "in_transit" or status == "delivered" or (status == "open" and revised != planned):
+        # The fixture says in_transit, not_shipped or bonded. SAP says open,
+        # delivered or deleted: a delivered line, or an open one whose schedule
+        # line has already moved, has a slip on record; an open one that has
+        # not moved has no news yet.
+        #
+        # Bonded counts as known: the goods are inside the country already, so
+        # whatever the sailing cost in days is history, not a prediction.
+        if status in ("in_transit", "delivered", "bonded") or (status == "open" and revised != planned):
             known.append({**row, "SlipDays": (revised - planned).days})
         elif status in ("not_shipped", "open"):
             waiting.append({**row, "SlipDays": "[PREDICT]", "_planned": planned.isoformat()})

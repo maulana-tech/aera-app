@@ -117,19 +117,62 @@ anything directly from `/chat`.
 | **Arya** 👑 | `supervisor` | Team lead: pulls specialists as findings warrant, judges when evidence is enough, writes the recommendation with its trade-offs and residual risk | 1 | Nothing alone — every action waits for a person |
 | **Elsa** | `impact` | Traces a disruption through orders, stock and the BOM to the customer commitments genuinely at risk | 4 | Read only |
 | **Dara** | `demand` | The demand side: daily consumption as a variable that moves, not a fixed number | 3 | Read only |
-| **Iris** | `inventory` | Which stock may actually be used — quality holds, rejected batches, safety floors | 3 | Read only |
+| **Iris** | `inventory` | Which stock may actually be used — quality holds, rejected batches, safety floors | 5 | Read only |
 | **Clint** | `sourcing` | Replacement supply: other suppliers, internal stock, fast freight, substitute materials with their approval status | 3 | Read only |
-| **Prita** | `procurement` | The supplier book: volume, country, certificate, on-time record; quotations compared on price against lead time; drafts the purchase order | 6 | Read only (drafts wait for approval) |
-| **Milo** | `logistics` | Arrival dates that survive contact with reality — measured customs dwell, port status, weather, news and holidays on the lane | 7 | Read only |
-| **Kira** ⚖️ | `compliance` | Tests every candidate against TKDN, the contract floor, LARTAS licensing and the calendar; says which rules are verified | 2 | **Veto: a rejection here cannot be overturned on cost** |
+| **Prita** | `procurement` | The supplier book: volume, country, certificate, on-time record; quotations compared on price against lead time; drafts the purchase order | 7 | Read only (drafts wait for approval) |
+| **Milo** | `logistics` | Arrival dates that survive contact with reality — measured customs dwell, port status, weather, news and holidays on the lane | 9 | Read only |
+| **Kira** ⚖️ | `compliance` | Tests every candidate against TKDN, the contract floor, LARTAS licensing and the calendar; says which rules are verified | 3 | **Veto: a rejection here cannot be overturned on cost** |
 | **Tara** | `simulation` | Costs the options that cleared the rules, and allocates short material across customer orders. Calls `engine/simulate.py` and `engine/allocate.py` | 2 | Deterministic engines, no model in the arithmetic |
 | **Otto** | `precedent` | Institutional memory: what was done last time something like this happened, and how it turned out | 1 | Read only |
 | **Bram** | `execution` | Writes back to SAP, tells the affected roles, drafts customer and supplier messages, records the outcome | 9 | Within its authority, and only after approval |
 | **Vega** | `exposure` | Prevent mode: hunts risk that has not happened yet, ranked by what it would cost | 4 | Recommends; Bram raises it, a person approves |
 
+51 tools across the twelve: **42 read, 9 write**. Every one of the nine belongs to Bram, so
+eleven agents cannot change a record at all, and nothing leaves the company except as a draft
+a person approves.
+
 Every agent's tools, parameters and prompts are **generated from the registry** into
 [`sigap/AGENT-REFERENCE.md`](sigap/AGENT-REFERENCE.md) by `python3 manage.py docs`, so the
 document cannot disagree with the code.
+
+### What every agent can also do
+
+Two things sit outside the roster above, because they are about how an agent works rather
+than what it knows.
+
+**`use_skill(name)` — work through a written procedure.** A tool is one call; a skill is a
+named procedure that composes several of them in an order somebody decided once, so the order
+is not re-derived, differently, on every handling. Calling it returns the steps and is
+recorded. Three consequences:
+
+- A skill restricted to an agent is *enforced*, not merely described: `close_the_loop` is
+  Bram's, and anybody else asking is told whose it is.
+- A skill asked for by a name nobody wrote is recorded too. That count is the useful one — a
+  model reaching for a procedure that does not exist is a gap in the catalogue and the only
+  evidence of it.
+- A procedure is never evidence. It says how to look, not what is there, so it cannot be what
+  an action rests on (`tools/execution.py`, the same exclusion precedent has).
+
+Five are written in `core/skills.py`; four of those are what `/mcp` and the A2A agent card
+serve. Operators add their own at `/skills`, validated on save with the same checks the
+built-in catalogue meets at build time — no unknown tool, no unknown agent, no procedure
+restricted to an agent that cannot reach its own tools, no skill without steps.
+
+**Tools on MCP servers SIGAP does not operate.** Registered at `/mcp`, granted per agent, and
+namespaced `mcp__<server>__<tool>` before anything sees them. Four limits, each on authority
+rather than plumbing:
+
+| Limit | Why |
+|---|---|
+| Read-only only, and a server that did not annotate its tool counts as a writer | The test is the server's own declaration, never a guess from the tool's name |
+| A remote tool whose bare name is already ours is dropped | A remote `check_local_constraints` can never stand in for Kira's |
+| Never re-exported over our own `/mcp` | We do not hand a caller a third party's tool as though it were SIGAP's |
+| Never evidence | We cannot audit it, and a person has to sign what it would otherwise support |
+
+What connects today is anything speaking **streamable HTTP** with no auth or a static bearer
+token — a JSON body or an SSE frame, both are read. What does not: **stdio** servers (most of
+`awslabs/mcp`), and anything wanting **OAuth 2.1** (Atlassian, Notion) or SigV4. For those the
+route is a local bridge that fronts the stdio server over HTTP.
 
 ### Approval limits
 
@@ -203,8 +246,12 @@ a signal arrives (BMKG · GDACS · Open-Meteo · POST /events)
   wrong with it — deterministic, every finding carries its evidence
 - **Models page**: list, test and switch the model behind each agent (`provider:model` on
   Bedrock, AI Core or Mantle), with a ping that proves it answers
-- **MCP endpoint**: the agent service exposes `/mcp`, so external clients can call the same
-  tools the swarm uses
+- **MCP, both directions**: the agent service exposes `/mcp` — 51 tools with `readOnlyHint`
+  annotations, 3 resources, 4 prompts — so AgentCore Gateway and Joule can call the same tools
+  the swarm uses; and it calls *out* to servers somebody else operates, read-only and granted
+  per agent
+- **Skills**: named procedures agents work through instead of improvising the order, metered
+  including the ones named but never written, and extendable from `/skills`
 - **SAP connector**: reads against the sandbox once `SAP_API_KEY` is set, writes through a
   CSRF-aware sender that only sends what a person approved
 - **Auth**: session tokens signed by `SIGAP_SECRET`, identity from the token, `SIGAP_ENV=prod`
@@ -308,7 +355,7 @@ Pusat distribusi notifikasi otomatis ke tim internal (Buyer, Planner, Head of Pr
 | Persistence | SQLite (`data/sigap.db`): events, runs, steps, actions, approvals, contacts, outbox |
 | Outside feeds | BMKG · GDACS · NASA EONET · USGS · Open-Meteo · holidays · FX · news, each labelled |
 | ERP | SAP S/4HANA Cloud OData (sandbox by default, fixtures when the key is absent) |
-| Interfaces | REST (48 routes, session required except `/health` and `/login`) · MCP (`/mcp`) |
+| Interfaces | REST (61 routes, session required except `/health` and `/login`) · MCP (`/mcp`) |
 | Delivery | Email (SMTP outbox with retries) and team channels, quoted from the record |
 | Containers | Docker Compose: Next.js web, Python agent service, PostgreSQL |
 | CI/CD | GitHub Actions: lint, agent output, Python self-check on every push; SSH deploy from `main` to EC2 |

@@ -348,10 +348,20 @@ def _deterministic_markdown(run: dict) -> str:
                       + ". Until they are recorded the realized side of this handling is "
                         "incomplete.", ""]
 
-        lines += ["## Actions", "", "| Action | Value | Status |", "|---|---|---|"]
+        lines += ["## Actions", "", "| Action | Value | Status | Document |", "|---|---|---|---|"]
         for a in actions:
-            lines.append(f"| {a['kind']} | {_rp(a['payload'].get('cost_idr'))} | {a['status']} |")
+            doc = a.get("sap_reference") or "-"
+            if a.get("issued_in") == "demo":
+                doc += " (demo)"
+            lines.append(f"| {a['kind']} | {_rp(a['payload'].get('cost_idr'))} "
+                         f"| {a['status']} | {doc} |")
         lines.append("")
+        # The document number is shaped like a real one on purpose, so the
+        # report is where the mode is said in words. A reader holding this PDF
+        # is exactly the reader who must not have to guess.
+        if any(a.get("issued_in") == "demo" for a in actions):
+            lines += ["> Documents marked (demo) were issued against seed data, not posted to "
+                      "SAP. The handling ran the same path; only the destination differs.", ""]
 
     evidence = _outside_evidence(run)
     if evidence:

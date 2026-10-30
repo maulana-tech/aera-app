@@ -134,6 +134,52 @@ def get_supplier_master() -> Result:
 
 
 @register(
+    "get_blanket_orders", "procurement",
+    "Long-term contracts with a fixed price and a quantity still to call off. Check "
+    "this before pricing a spot buy: if the quantity is already bought at an agreed "
+    "price, buying it again on the open market is money spent twice. Returns only "
+    "contracts that can actually be used - one that has expired or run out is on file, "
+    "not available - and names the ones it excluded and why.",
+    {"material": {"type": "string", "description": "optional, one material"},
+     "supplier": {"type": "string", "description": "optional, one supplier"}},
+    [])
+def get_blanket_orders(material: Optional[str] = None,
+                       supplier: Optional[str] = None) -> Result:
+    from tools.fetcher import as_of, read
+    rows = read("BlanketOrder", material=material, supplier=supplier)
+    if rows.value is None:
+        return Result(None, Origin.MISSING, rows.source, note="no blanket orders on record")
+    today = as_of()
+    live, not_callable = [], []
+    for r in rows.value:
+        entry = {
+            "blanket_order": r.get("BlanketOrder"), "supplier": r.get("Supplier"),
+            "material": r.get("Material"),
+            "agreed_price_idr": r.get("AgreedPriceIDR"),
+            "remaining_qty": r.get("RemainingQty"),
+            "valid_to": r.get("ValidTo"),
+        }
+        try:
+            ends = date.fromisoformat(str(r.get("ValidTo"))[:10])
+        except (TypeError, ValueError):
+            ends = None
+        if ends is not None and ends < today:
+            not_callable.append({**entry, "why_not": f"expired on {entry['valid_to']}"})
+        elif not float(r.get("RemainingQty") or 0):
+            not_callable.append({**entry, "why_not": "no quantity left to call off"})
+        else:
+            live.append({**entry, "days_left": (ends - today).days if ends else None})
+    live.sort(key=lambda x: -(x["remaining_qty"] or 0))
+    return Result(
+        # Named rather than dropped: "there is no contract" and "the contract
+        # ran out in June" are different facts, and a buyer needs the second.
+        {"callable": live, "not_callable": not_callable},
+        rows.origin, rows.source,
+        note=(f"{len(not_callable)} contract(s) on file cannot be called off"
+              if not_callable else ""))
+
+
+@register(
     "get_supplier_performance", "procurement",
     "How each supplier kept the delivery date on its own purchase orders: how many "
     "slipped, the average and the worst slip, what share of the book it carries, and "
@@ -777,6 +823,21 @@ def demo() -> None:
     assert g["cover_days"] and g["short_at_arrival"] > 0, g
     assert round(g["daily"] * 60 - g["stock"], 1) == g["short_at_arrival"], g
     assert _shortfall("M-NOT-A-MATERIAL", 10) is None, "no rows means no claim"
+
+    # --- a contract already bought is not bought again ---------------------
+    bo = get_blanket_orders()
+    assert bo.value["callable"], "the scenario must carry a callable contract"
+    assert all(float(c["remaining_qty"] or 0) > 0 for c in bo.value["callable"]), \
+        "a contract with nothing left is not callable"
+    assert bo.value["not_callable"], "one expired and one exhausted are planted on purpose"
+    assert all(c["why_not"] for c in bo.value["not_callable"]), \
+        "an excluded contract says why, or a buyer cannot act on it"
+    # The scenario's own material has an unused call-off, which is the point:
+    # a spot buy beside it is money spent twice.
+    m = get_blanket_orders(material="M-4471").value["callable"]
+    assert m and m[0]["agreed_price_idr"], m
+    assert m[0]["days_left"] and m[0]["days_left"] > 0, m
+    print("  an unused call-off is found before a spot buy is priced ✓")
 
     print("procurement ok, zero and reasonless drafts refused ✓ · a supplier the rules "
           "struck out cannot be drafted against ✓ · invented figures refused ✓ "

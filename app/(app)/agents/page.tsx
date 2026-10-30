@@ -70,7 +70,13 @@ export default async function AgentTeam() {
             {summary.model_ready ? "Bedrock ready" : "AWS_REGION not set"}
           </StatusBadge>
           <StatusBadge status={summary.sap_ready ? "done" : "held"}>
-            {summary.sap_ready ? "SAP connected" : "SAP_API_KEY not set"}
+            {summary.sap_ready
+              ? "SAP connected"
+              : summary.data_mode === "demo"
+                ? "SAP off in demo"
+                : summary.sap_key_set
+                  ? "SAP not answering"
+                  : "SAP_API_KEY not set"}
           </StatusBadge>
         </div>
       </header>

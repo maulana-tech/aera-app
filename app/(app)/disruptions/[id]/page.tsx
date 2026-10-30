@@ -154,7 +154,15 @@ export default async function DisruptionDetail({ params }: { params: Promise<{ i
                     )}
                     {a.sap_reference && (
                       <span className="text-muted-foreground ml-auto font-mono text-xs">
-                        {a.sap_reference.startsWith("email") ? a.sap_reference : `SAP ${a.sap_reference}`}
+                        {/* The number is shown plainly either way. Calling it
+                            "SAP ..." when no SAP took it would be the lie; the
+                            mode is carried by issued_in and said in words on
+                            the trace and in the report. */}
+                        {a.sap_reference.startsWith("email")
+                          ? a.sap_reference
+                          : a.issued_in === "demo"
+                            ? a.sap_reference
+                            : `SAP ${a.sap_reference}`}
                       </span>
                     )}
                   </div>

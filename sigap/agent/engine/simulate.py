@@ -71,6 +71,10 @@ class Simulation:
     # What obeying the rules cost, when a struck-out option would have been
     # cheaper. None when nothing blocked was cheaper, which is also an answer.
     compliance_cost: Optional[dict] = None
+    #: Options priced ex-works because no import duty rate was on record for
+    #: their heading. The ranking still includes them; this says the comparison
+    #: is not complete, so nobody reads a cheapest-import result as settled.
+    cost_unknown: List[str] = field(default_factory=list)
 
 
 def simulate_scenario(
@@ -82,12 +86,19 @@ def simulate_scenario(
     daily_consumption: float,
     opening_qty: float,
     scheduled_arrivals: Sequence[Arrival] = (),
+    pack: Optional[dict] = None,
 ) -> Simulation:
     """Cost every option that cleared the rules, plus their combinations.
 
     A plan counts as SAFE when there is no shortfall before the last scheduled
     delivery lands, not forever. The job is to bridge the gap, not to supply
     the plant indefinitely.
+
+    Options are priced at their LANDED cost: an import carries duty and port
+    handling that a domestic option does not, and comparing a delivered price
+    against an import's ex-works price makes the import look cheaper than it
+    can ever be. Where the duty rate is not on record the option keeps its
+    plain cost and says so - a rate nobody configured is not zero.
 
     Refuses to emit figures when a critical input is not trustworthy.
     """
@@ -108,25 +119,41 @@ def simulate_scenario(
 
     viable: List[dict] = []
     blocked: List[dict] = []
+    from tools.compliance import landed_cost
+
+    cost_unknown: List[str] = []
     for o in options.value:
         ruling = compliance_rulings.get(o["id"])
+        land = landed_cost(o, pack)
+        if land["landed_cost_idr"] is None and o.get("ExtraCostIDR") is not None:
+            cost_unknown.append(o["id"])
         row = {
             "id": o["id"], "label": o["label"], "supplier": o["Supplier"],
             "qty": o["Quantity"], "arrives": o["ArrivalDate"],
             "extra_cost_idr": o["ExtraCostIDR"], "tkdn_after": o["TkdnAfterPct"],
+            # The number every comparison below uses. It falls back to the
+            # plain cost so an unpriced duty does not remove the option, but
+            # `cost_unknown` names it so nobody reads the ranking as complete.
+            "landed_cost_idr": land["landed_cost_idr"],
+            "duty_idr": land["duty_idr"], "duty_pct": land["duty_pct"],
+            "handling_idr": land["handling_idr"],
+            "cost_basis": "landed" if land["landed_cost_idr"] is not None else "ex-works",
             "allowed": bool(ruling and ruling.allowed),
             "reason": ruling.reason if ruling else "not yet assessed",
         }
+        row["cost_for_ranking"] = (land["landed_cost_idr"]
+                                   if land["landed_cost_idr"] is not None
+                                   else o["ExtraCostIDR"])
         (viable if row["allowed"] else blocked).append(row)
 
     def plans(pool: List[dict]) -> List[dict]:
         """Every option in `pool` alone, then every pair, priced and covered."""
         candidates: List[dict] = []
         for i, a in enumerate(pool):
-            candidates.append({"members": [a], "cost": a["extra_cost_idr"]})
+            candidates.append({"members": [a], "cost": a["cost_for_ranking"]})
             for b in pool[i + 1:]:
                 candidates.append({"members": [a, b],
-                                   "cost": a["extra_cost_idr"] + b["extra_cost_idr"]})
+                                   "cost": a["cost_for_ranking"] + b["cost_for_ranking"]})
 
         scored: List[dict] = []
         for c in candidates:
@@ -180,6 +207,7 @@ def simulate_scenario(
 
     return Simulation(
         refused=False,
+        cost_unknown=cost_unknown,
         depleted_without_action=baseline.depleted_on,
         options=viable + blocked,
         combinations=scored,
@@ -264,6 +292,29 @@ def demo() -> None:
                              9.2, 84.0, po)
     assert none.compliance_cost is None, none.compliance_cost
     print("  nothing blocked  → no price claimed, rather than a zero")
+
+    # --- landed cost changes which option is cheapest ----------------------
+    # Comparing an import's ex-works price against a delivered domestic one is
+    # the bias this guards: duty and port handling belong on the import side.
+    duty_pack = {"rules": {
+        "import_duty_pct_by_hs": {"value": {"7601": 5.0}, "source": "self-check",
+                                  "verified": False},
+        "import_handling_idr": {"value": 2_500_000, "source": "self-check",
+                                "verified": False}}}
+    landed = simulate_scenario(stock, options, rulings, fx["Profile"], start, 9.2, 84.0, po,
+                               pack=duty_pack)
+    by_id = {o["id"]: o for o in landed.options}
+    e = by_id["E"]
+    assert e["cost_basis"] == "landed", e
+    assert e["landed_cost_idr"] == 48_000_000 + 2_400_000 + 2_500_000, e
+    assert e["duty_pct"] == 5.0 and e["duty_idr"] == 2_400_000, e
+    b = by_id["B"]
+    assert b["landed_cost_idr"] == b["extra_cost_idr"], "a domestic option lands at its price"
+    assert b["duty_idr"] == 0, b
+    # G's heading has no rate on record, so it keeps its plain cost and is named.
+    assert "G" in landed.cost_unknown or "G" not in by_id, landed.cost_unknown
+    print(f"  landed cost     → E ex-works Rp {e['extra_cost_idr']:,} "
+          f"lands at Rp {e['landed_cost_idr']:,} ({e['duty_pct']}% duty + handling)")
 
     print("simulate ok")
 

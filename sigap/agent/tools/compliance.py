@@ -39,7 +39,35 @@ BUILT_IN: Dict[str, Tuple[Any, str]] = {
     "default_port_dwell_days": (
         4, "built-in assumption: days from discharge to release when no customs "
            "history is on record"),
+    # LARTAS hangs on the goods, not on the country. A restriction is attached
+    # to an HS heading in the Permendag annexes, so "we have imported from
+    # Vietnam before" answers a different question from "may this item be
+    # imported at all". Empty by default: an empty list is honest, a list
+    # invented here would be a regulation SIGAP made up.
+    "lartas_restricted_hs": (
+        [], "built-in: no restricted HS headings are configured. Put the headings from "
+            "the Permendag annex that applies to your goods in the rule pack"),
+    "lartas_restricted_hs_extra_days": (
+        15, "built-in assumption: working days a restricted-goods import permit adds "
+            "on top of the licence for a new origin"),
+    # Landed cost. Only the NON-creditable charges belong here: import duty
+    # (bea masuk) is a cost, while import VAT and PPh 22 are credited against
+    # output tax and would overstate the import if counted. Duty is set per HS
+    # heading in the tariff book, so the table is keyed the same way and is
+    # empty by default - a rate invented here would be a tariff SIGAP made up.
+    "import_duty_pct_by_hs": (
+        {}, "built-in: no import duty rates are configured. Map HS heading to the MFN "
+            "or preferential rate from the tariff book that applies to you"),
+    "import_handling_idr": (
+        0, "built-in: no port handling, customs brokerage or demurrage is counted. "
+           "Set what one inbound shipment costs you at the port"),
 }
+
+#: Rules whose value is a list of HS headings rather than a figure.
+LIST_RULES = frozenset({"lartas_restricted_hs"})
+
+#: Rules whose value is a map rather than a figure.
+MAP_RULES = frozenset({"import_duty_pct_by_hs"})
 
 #: Rules that are the company's own figures, read from its profile.
 FROM_PROFILE = {"tkdn_contract_floor_pct": "TkdnContractFloorPct",
@@ -108,6 +136,88 @@ def rule(name: str, pack: Optional[dict] = None) -> Rule:
                     Origin.MODELLED)
     value, why = BUILT_IN[name]
     return Rule(name, value, why, False, Origin.MODELLED)
+
+
+def hs_for(material: Optional[str], pack: Optional[dict]) -> Optional[str]:
+    """The HS heading for a material, from the rule pack.
+
+    A purchasing info record carries no tariff classification - it lives on the
+    material master, and not every tenant exposes it. So the pack may hold
+    `hs_codes: {"M-4471": "7601.20.00"}`, which is how a company that cannot
+    change its master data still gets a ruling that reads the goods.
+    """
+    if not material:
+        return None
+    v = ((pack or {}).get("hs_codes") or {}).get(str(material))
+    return str(v) if v else None
+
+
+def hs_restriction(hs: Optional[str], pack: Optional[dict]) -> Tuple[Optional[str], "Rule"]:
+    """(the heading that matches, the rule used). None means nothing matched.
+
+    Matching is by prefix, because the annexes restrict at heading level while
+    master data carries the full 8 or 10 digits: heading 8481 catches
+    8481.80.99. Dots and spaces are stripped, so "8481.80" and "84818099" ask
+    the same question.
+    """
+    r = rule("lartas_restricted_hs", pack)
+    if not hs:
+        return None, r
+    flat = "".join(ch for ch in str(hs) if ch.isdigit())
+    for entry in (r.value or []):
+        head = "".join(ch for ch in str(entry) if ch.isdigit())
+        if head and flat.startswith(head):
+            return str(entry), r
+    return None, r
+
+
+def landed_cost(option: dict, pack: Optional[dict]) -> Dict[str, Any]:
+    """What an option really costs to land, and what is still unknown.
+
+    Only NON-creditable charges are added. Import VAT and PPh 22 are credited
+    against output tax, so counting them would overstate every import and
+    produce exactly the bias this function exists to remove - the opposite one
+    from leaving duty out, but a bias all the same.
+
+    A domestic option lands at its own price. An import with no duty rate on
+    record returns landed=None: a rate nobody configured is not zero, and
+    treating it as zero is what makes an imported option look cheapest.
+    """
+    extra = option.get("ExtraCostIDR")
+    out: Dict[str, Any] = {"extra_cost_idr": extra, "duty_idr": None,
+                           "handling_idr": None, "landed_cost_idr": None,
+                           "duty_pct": None, "unknown": []}
+    if (option.get("Origin") or "ID") == "ID":
+        out["landed_cost_idr"] = extra
+        out["duty_idr"] = 0
+        out["handling_idr"] = 0
+        return out
+    if extra is None:
+        out["unknown"].append("ExtraCostIDR")
+        return out
+
+    hs = option.get("HsCode") or hs_for(option.get("Material"), pack)
+    if not hs:
+        out["unknown"].append("HsCode")
+        return out
+    table = rule("import_duty_pct_by_hs", pack)
+    flat = "".join(ch for ch in str(hs) if ch.isdigit())
+    pct = None
+    for head, rate in (table.value or {}).items():
+        h = "".join(ch for ch in str(head) if ch.isdigit())
+        if h and flat.startswith(h):
+            # The most specific heading wins: 7601.20 beats 7601.
+            if pct is None or len(h) > pct[0]:
+                pct = (len(h), float(rate))
+    if pct is None:
+        out["unknown"].append("import_duty_pct_by_hs")
+        return out
+
+    handling = float(rule("import_handling_idr", pack).value or 0)
+    duty = round(float(extra) * pct[1] / 100.0)
+    out.update(duty_pct=pct[1], duty_idr=duty, handling_idr=round(handling),
+               landed_cost_idr=round(float(extra) + duty + handling))
+    return out
 
 
 def collective_leave(pack: Optional[dict]) -> Dict[date, str]:
@@ -194,10 +304,18 @@ def check_local_constraints(option_id: str) -> Result:
     used = [floor_rule, current_rule]
 
     # --- TKDN ---
-    # The rule: an option must not WORSEN the local-content position, and must
-    # not push it below the contract floor when we are currently above it. A
-    # company already below the floor does not thereby lose every option, what
-    # is forbidden is making it worse.
+    # The rule: an option must not WORSEN the local-content position, must not
+    # push it below the contract floor from above, and - while the company is
+    # ALREADY below the floor - must actually restore it.
+    #
+    # That last clause reverses an earlier decision, deliberately. This file
+    # used to allow an option that merely held the position: it breached no
+    # rule in the letter, and a company below the floor did not thereby lose
+    # every option. What that permitted, on this scenario's own figures, was
+    # the agent choosing option A - more expensive than B+C, less quantity,
+    # and leaving the company in breach of its contract the whole time. Holding
+    # a breach steady is not compliance, so while below the floor only an
+    # option that climbs back above it clears.
     tkdn = option.get("TkdnAfterPct")
     if tkdn is not None:
         if tkdn < current - 0.05:                       # rounding tolerance
@@ -210,6 +328,12 @@ def check_local_constraints(option_id: str) -> Result:
         elif tkdn < floor <= current:
             allowed = False
             reasons.append(f"TKDN drops to {tkdn}%, contract floor {floor}%")
+        elif current < floor and tkdn < floor:
+            allowed = False
+            reasons.append(
+                f"TKDN stays at {tkdn}% against a {floor}% contract floor. The company is "
+                f"already below it at {current}%, and an option that holds the position "
+                "there does not end the breach")
         elif tkdn >= floor > current:
             reasons.append(f"TKDN rises to {tkdn}%, back above the {floor}% floor")
     elif option.get("Supplier") != "INTERNAL":
@@ -222,7 +346,36 @@ def check_local_constraints(option_id: str) -> Result:
             "not cleared: the TKDN position after this option is not known. SAP holds no "
             "local-content figure; upload AlternateSource with TkdnAfterPct for it")
 
-    # --- LARTAS ---
+    # --- LARTAS: the goods ---
+    # Before asking whether the ORIGIN is new, ask whether the ITEM may be
+    # imported at all. The restriction is attached to an HS heading, so a
+    # ruling that never reads the classification answers the easier question.
+    if (option.get("Origin") or "ID") != "ID":
+        hs = option.get("HsCode") or hs_for(option.get("Material"), pack)
+        match, hs_rule = hs_restriction(hs, pack)
+        used.append(hs_rule)
+        if not hs:
+            # Same stance as an unknown TKDN effect: an option whose legality
+            # cannot be checked has not passed the check.
+            allowed = False
+            unknown.append("HsCode")
+            reasons.append(
+                "not cleared: this is an import and the goods carry no HS code, so LARTAS "
+                "cannot be checked. Put HsCode on the AlternateSource row, or map the "
+                "material under hs_codes in the rule pack")
+        elif match:
+            allowed = False
+            extra = rule("lartas_restricted_hs_extra_days", pack)
+            used.append(extra)
+            reasons.append(
+                f"LARTAS: HS {hs} falls under restricted heading {match}. The import needs a "
+                f"specific permit, about {int(extra.value)} working days on top of any origin "
+                "licence, and it is not cleared until that permit is on record")
+        else:
+            reasons.append(f"LARTAS: HS {hs} is not in the restricted headings on record "
+                           f"({len(hs_rule.value or [])} heading(s) configured)")
+
+    # --- LARTAS: the origin ---
     arrives = date.fromisoformat(option["ArrivalDate"]) if option.get("ArrivalDate") else None
     new_origin = option.get("NewOrigin")
     calendar: Optional[Result] = None
@@ -477,7 +630,33 @@ def validate_pack(pack: Optional[dict]) -> List[str]:
         if not isinstance(entry, dict) or entry.get("value") is None:
             problems.append(f"rule '{name}' has no value, so it is ignored")
             continue
-        if not isinstance(entry["value"], (int, float)) or isinstance(entry["value"], bool):
+        if name in MAP_RULES:
+            v = entry["value"]
+            if not isinstance(v, dict):
+                problems.append(f"rule '{name}' value must be an object of HS heading -> "
+                                f"percent, not {v!r}")
+            else:
+                for h, pct in v.items():
+                    if not isinstance(pct, (int, float)) or isinstance(pct, bool):
+                        problems.append(f"rule '{name}': rate for {h!r} must be a number, "
+                                        f"not {pct!r}")
+                    elif not 0 <= float(pct) <= 100:
+                        problems.append(f"rule '{name}': rate for {h!r} is {pct}, which is "
+                                        "not a percentage")
+        elif name in LIST_RULES:
+            v = entry["value"]
+            if not isinstance(v, list):
+                problems.append(f"rule '{name}' value must be a list of HS headings, not {v!r}")
+            else:
+                for h in v:
+                    digits = "".join(ch for ch in str(h) if ch.isdigit())
+                    # "7601 and 7308" in one string restricts nothing, and would
+                    # be the quietest possible way to disable the check.
+                    if len(digits) < 4 or digits != str(h).replace(".", "").strip():
+                        problems.append(
+                            f"rule '{name}': {h!r} is not an HS heading. At least four "
+                            'digits, one heading per entry, e.g. "7601" or "7601.20"')
+        elif not isinstance(entry["value"], (int, float)) or isinstance(entry["value"], bool):
             problems.append(f"rule '{name}' value must be a number, not {entry['value']!r}")
         if entry.get("verified") and not str(entry.get("source") or "").strip():
             problems.append(
@@ -574,6 +753,23 @@ def get_rule_pack() -> Result:
 
 
 def demo() -> None:
+    """Self-check, with the SAP connector pinned off.
+
+    The options ruled on below are the shipped fixture's, so the fixture is
+    what this must read. Without the pin the result depended on whether the
+    machine running it happened to have a SAP key - which has nothing to do
+    with the rules under test.
+    """
+    from clients import sap_s4 as _sap
+    real_available = _sap.available
+    _sap.available = lambda: False                          # noqa: E731
+    try:
+        _demo()
+    finally:
+        _sap.available = real_available
+
+
+def _demo() -> None:
     import tempfile
 
     p = profile()
@@ -596,10 +792,19 @@ def demo() -> None:
         # No pack installed: every rule is an assumption and the ruling says so.
         assert load_pack() is None
         a = check_local_constraints("A")
-        # An option that keeps TKDN where it is must NOT be rejected just for
-        # being under the floor, that was the bug this check exists to catch.
-        assert a.value["allowed"] is True, a.value["reason"]
+        # Holding the position below the floor is NOT compliance. This used to
+        # assert the opposite - that an option which merely keeps TKDN where it
+        # is must not be rejected - and that permission is what let the agent
+        # choose option A: dearer than B+C, less quantity, and the breach left
+        # running. The decision was reversed on purpose; see check_local_
+        # constraints for the reasoning.
+        assert a.value["allowed"] is False, a.value["reason"]
+        assert "does not end the breach" in a.value["reason"], a.value["reason"]
         assert a.origin is Origin.MODELLED and "not from a verified rule pack" in a.note, a.note
+
+        # An option that climbs back above the floor is the one that clears.
+        b = check_local_constraints("B").value
+        assert b["allowed"] is True and "back above" in b["reason"], b["reason"]
 
         # An option that actively worsens TKDN must be rejected.
         e = check_local_constraints("E").value
@@ -627,7 +832,10 @@ def demo() -> None:
             u = check_local_constraints("IR1-1710")
         finally:
             read = real
-        assert u.value["allowed"] is False and set(u.value["unknown"]) == {"TkdnAfterPct", "NewOrigin"}
+        # HsCode joins the unknowns: an info record carries no tariff heading,
+        # so an import read from SAP alone cannot be checked against LARTAS.
+        assert u.value["allowed"] is False
+        assert set(u.value["unknown"]) == {"TkdnAfterPct", "NewOrigin", "HsCode"}, u.value["unknown"]
         assert u.value["arrival_effective"] > "2026-09-20", "an unknown origin is treated as new"
         # Live option, built-in rules: the ruling is no stronger than its weakest rule.
         assert u.origin is Origin.MODELLED, u.origin
@@ -639,9 +847,16 @@ def demo() -> None:
             src = "test contract, clause 1"
             f.write_text(json.dumps({
                 "version": "test",
+                # A fully derived ruling now needs the restricted headings
+                # verified too: "not restricted", read off an empty and
+                # unchecked list, is an assumption like any other.
                 "rules": {n: {"value": v, "source": src, "verified": True} for n, v in (
                     ("tkdn_contract_floor_pct", 40.0), ("tkdn_current_pct", 38.2),
-                    ("lartas_new_origin_working_days", 10), ("default_port_dwell_days", 4))},
+                    ("lartas_new_origin_working_days", 10), ("default_port_dwell_days", 4),
+                    ("lartas_restricted_hs", ["7308"]),
+                    ("lartas_restricted_hs_extra_days", 15),
+                    ("import_duty_pct_by_hs", {"7601": 5.0}),
+                    ("import_handling_idr", 2_500_000))},
                 "collective_leave": [{"date": "2026-10-01", "name": "Test Leave"}],
             }))
             _pack_file = f
@@ -685,7 +900,9 @@ def demo() -> None:
                 reported = get_rule_pack()
                 assert reported.value["problems"] == problems
                 assert "Problems in the pack" in reported.note
-                assert reported.value["total_rules"] == 4
+                # Derived from the roster, not pinned: adding a rule should not
+                # break this, only a rule that stops being counted.
+                assert reported.value["total_rules"] == len(KNOWN_RULES), reported.value
 
                 # And the cheap read agrees that nothing here is trusted.
                 st = pack_status()
@@ -709,6 +926,22 @@ def demo() -> None:
     finally:
         _public_holidays, _pack_file = real_holidays, None
         scratch.cleanup()
+
+    # --- LARTAS hangs on the goods, not only on the country ---------------
+    assert hs_restriction("8481.80.99", None)[0] is None, "nothing restricted by default"
+    probe = {"rules": {"lartas_restricted_hs":
+                       {"value": ["7601", "7308"], "source": "self-check", "verified": False}}}
+    assert hs_restriction("7601.20.00", probe)[0] == "7601", "matches by heading prefix"
+    assert hs_restriction("76012000", probe)[0] == "7601", "dots and spaces do not matter"
+    assert hs_restriction("7214.99.90", probe)[0] is None, "a different heading is not caught"
+    assert hs_restriction(None, probe)[0] is None, "no code matches nothing"
+    assert hs_for("M-4471", {"hs_codes": {"M-4471": "7601.20.00"}}) == "7601.20.00"
+    a_hs = check_local_constraints("A").value
+    # A is blocked on TKDN, not on LARTAS: the ruling must still have read the
+    # classification and said so, or the two checks would be indistinguishable.
+    assert "7601.20.00" in a_hs["reason"], "the ruling names the classification it read"
+    assert "not in the restricted headings" in a_hs["reason"], a_hs["reason"]
+    print("  LARTAS reads the HS heading, and an import without one is refused ✓")
 
     print("compliance ok, keeps TKDN ✓ · worsens TKDN → blocked ✓ · LARTAS delay over "
           "holidays ✓ · unknown TKDN → not cleared ✓")

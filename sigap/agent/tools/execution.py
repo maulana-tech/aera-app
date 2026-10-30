@@ -29,10 +29,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import date, datetime, timedelta, timezone
 
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
 from core.config import CFG
+from core import registry
 from core.provenance import Origin, Result
 from core.registry import register
 from tools.fetcher import as_of, read
@@ -44,6 +46,24 @@ LIMIT = CFG.autonomous_limit_text
 # system's own youth. Everything else on the board describes the situation
 # being acted on, and an untrusted figure there is a reason to ask a person.
 NOT_EVIDENCE = {"precedent.search_past_incidents"}
+
+#: Never evidence whoever called them, so they are matched on the tool name
+#: rather than on the whole board key. A procedure says how to look; it says
+#: nothing about what is there.
+NOT_EVIDENCE_TOOLS = {"use_skill"}
+
+
+def _is_evidence(key: str) -> bool:
+    """Whether a board key may count towards what an action rests on."""
+    if key in NOT_EVIDENCE:
+        return False
+    if key.rpartition(".")[2] in NOT_EVIDENCE_TOOLS:
+        return False
+    # `<agent>.mcp__<server>__<tool>`: a tool on a server we do not operate can
+    # inform a specialist, but it cannot be the ground an action stands on. We
+    # cannot audit it, cannot promise it was read when it says, and cannot put
+    # it in front of a person who has to sign.
+    return registry.REMOTE_PREFIX not in key
 
 
 def _earliest_arrival(material: str) -> Optional[tuple]:
@@ -122,12 +142,12 @@ def autonomy_check(cost_idr: int) -> tuple[bool, str]:
         # That is the weakest case, not the strongest, so it never goes alone.
         return False, "no evidence on record: this was not raised from a handling"
 
-    weak = [k for k in board.untrusted_keys() if k not in NOT_EVIDENCE]
+    weak = [k for k in board.untrusted_keys() if _is_evidence(k)]
     if weak:
         return False, ("the figures under this are not all trusted: "
                        + ", ".join(sorted(weak)))
 
-    if not [k for k in board.origin if k not in NOT_EVIDENCE]:
+    if not [k for k in board.origin if _is_evidence(k)]:
         return False, "nothing was read before deciding"
 
     return True, f"Rp {cost_idr:,} is under the limit and every figure under it is trusted"
@@ -209,7 +229,7 @@ def _record(kind: str, autonomous: bool, **details) -> Result:
           {"material": {"type": "string"}, "from_plant": {"type": "string"},
            "to_plant": {"type": "string"}, "qty": {"type": "number"},
            "cost_idr": {"type": "integer"}},
-          ["material", "from_plant", "to_plant", "qty", "cost_idr"])
+          ["material", "from_plant", "to_plant", "qty", "cost_idr"], writes=True)
 def create_stock_transfer(material: str, from_plant: str, to_plant: str,
                           qty: float, cost_idr: int) -> Result:
     # The quantity and the cost both arrive from a model, and the cost is what
@@ -273,16 +293,77 @@ def create_stock_transfer(material: str, from_plant: str, to_plant: str,
     return r
 
 
+def _as_date(v: Any) -> Optional[date]:
+    """An ISO date, or None. SAP also writes /Date(ms)/, which sap_map parses;
+    a model writes plain text, which is what this guards against."""
+    if isinstance(v, date):
+        return v
+    try:
+        return date.fromisoformat(str(v)[:10])
+    except (TypeError, ValueError):
+        return None
+
+
+def _arrival_date(supplier: str, material: str, asked: str) -> Tuple[Optional[str], str]:
+    """(the date to use, a note). None means refuse and say why."""
+    want = _as_date(asked)
+    row = None
+    try:
+        from tools.fetcher import read
+        for r in (read("AlternateSource", material=material).value or []):
+            if str(r.get("Supplier") or "").strip() == str(supplier).strip():
+                row = r
+                break
+    except Exception:                                               # noqa: BLE001
+        row = None                        # no source list; fall through to the guard
+
+    on_record = _as_date(row.get("ArrivalDate")) if row else None
+    if on_record:
+        if want == on_record:
+            return on_record.isoformat(), ""
+        return (on_record.isoformat(),
+                f"needed_by taken from the alternate-source record ({on_record.isoformat()}); "
+                f"the value supplied was {asked!r}")
+
+    if want is None:
+        return None, (f"needed_by {asked!r} is not a date, and no alternate-source record "
+                      f"for {supplier}/{material} carries one")
+    today = datetime.now(timezone(timedelta(hours=7))).date()       # WIB, as elsewhere
+    if want < today:
+        return None, (f"needed_by {want.isoformat()} has already passed (today is "
+                      f"{today.isoformat()}), and no alternate-source record carries a date")
+    return want.isoformat(), ""
+
+
 @register("create_draft_po", "execution",
           "Create a DRAFT purchase order. Always waits for buyer approval, never autonomous.",
           {"supplier": {"type": "string"}, "material": {"type": "string"},
            "qty": {"type": "number"}, "needed_by": {"type": "string"},
            "cost_idr": {"type": "integer"}},
-          ["supplier", "material", "qty", "needed_by", "cost_idr"])
+          ["supplier", "material", "qty", "needed_by", "cost_idr"], writes=True)
 def create_draft_po(supplier: str, material: str, qty: float,
                     needed_by: str, cost_idr: int) -> Result:
+    """Draft a purchase order, with the date taken from the record.
+
+    A model asked for a date supplies one, and a plausible-looking date is the
+    hardest kind of wrong answer to notice: a run of this tool produced
+    needed_by=2024-09-16 for a 2026 disruption, two years in the past, while
+    the supplier, material, quantity and cost all matched the source row
+    exactly. Every other field was read; only the date was authored.
+
+    So the date is no longer the model's to author when the data holds it. If
+    an alternate-source row exists for this supplier and material, its
+    ArrivalDate wins and the model's suggestion is recorded as what it was.
+    Without such a row the date must at least be a real date that has not
+    already passed - a purchase order needed last year is not a typo to pass
+    along, it is a refusal.
+    """
+    fixed, note = _arrival_date(supplier, material, needed_by)
+    if fixed is None:
+        return Result(None, Origin.MISSING, "create_draft_po", note=note)
     return _record("draft_po", False, supplier=supplier, material=material,
-                   qty=qty, needed_by=needed_by, cost_idr=cost_idr)
+                   qty=qty, needed_by=fixed, cost_idr=cost_idr,
+                   **({"needed_by_note": note} if note else {}))
 
 
 @register("notify", "execution",
@@ -290,7 +371,7 @@ def create_draft_po(supplier: str, material: str, qty: float,
           "with the evidence that backs it. Internal only: a customer or a supplier is told "
           "through draft_customer_notice or request_supplier_update.",
           {"role": {"type": "string"}, "message": {"type": "string"}},
-          ["role", "message"])
+          ["role", "message"], writes=True)
 def notify(role: str, message: str) -> Result:
     return _record("notify", True, role=role, message=message)
 
@@ -300,7 +381,7 @@ def notify(role: str, message: str) -> Result:
           "poll the carrier: this records that this reference still needs a result, and a "
           "person, or you, closes it with record_outcome once receipt is actually known. "
           "Nothing here observes an arrival, so nothing here can invent one.",
-          {"reference": {"type": "string"}}, ["reference"])
+          {"reference": {"type": "string"}}, ["reference"], writes=True)
 def monitor_shipment(reference: str) -> Result:
     return _record("monitor", True, reference=reference)
 
@@ -322,7 +403,7 @@ def monitor_shipment(reference: str) -> Result:
                                               "range into it. Omit it unless you have the "
                                               "figure: a cost written into `detail` is "
                                               "prose and is never read as money."}},
-          ["action_id", "outcome"])
+          ["action_id", "outcome"], writes=True)
 def record_outcome(action_id: str, outcome: str, detail: str = "",
                    actual_cost_idr: Optional[float] = None) -> Result:
     """Record what happened. The realized cost travels as its own number.
@@ -422,7 +503,7 @@ def _sales_order(number: str) -> Tuple[Optional[dict], Result]:
                        "description": "the notice as the customer will read it, plain text"},
            "new_date": {"type": ["string", "null"],
                         "description": "the delivery date now expected, YYYY-MM-DD, if known"}},
-          ["sales_order", "message"])
+          ["sales_order", "message"], writes=True)
 def draft_customer_notice(sales_order: str, message: str,
                           new_date: Optional[str] = None) -> Result:
     order, orders = _sales_order(sales_order)
@@ -486,7 +567,7 @@ def draft_customer_notice(sales_order: str, message: str,
           "comes, is recorded with record_outcome.",
           {"purchase_order": {"type": "string"},
            "question": {"type": "string", "description": "what is asked, plain text"}},
-          ["purchase_order", "question"])
+          ["purchase_order", "question"], writes=True)
 def request_supplier_update(purchase_order: str, question: str) -> Result:
     found = read("PurchaseOrder", numbers=[purchase_order], open_only=False)
     lines = found.value or []
@@ -522,7 +603,7 @@ def request_supplier_update(purchase_order: str, question: str) -> Result:
           {"material": {"type": "string"},
            "rationale": {"type": "string",
                          "description": "the exposure this closes, in one sentence"}},
-          ["material", "rationale"])
+          ["material", "rationale"], writes=True)
 def create_sourcing_event(material: str, rationale: str) -> Result:
     return _record("create_sourcing_event", False, material=material, rationale=rationale)
 
@@ -534,7 +615,7 @@ def create_sourcing_event(material: str, rationale: str) -> Result:
           {"material": {"type": "string"}, "plant": {"type": "string"},
            "new_level": {"type": "number", "description": "the proposed floor, in base units"},
            "rationale": {"type": "string"}},
-          ["material", "plant", "new_level", "rationale"])
+          ["material", "plant", "new_level", "rationale"], writes=True)
 def propose_safety_stock_change(material: str, plant: str, new_level: float,
                                 rationale: str) -> Result:
     # A safety floor is a number of units, and a number of units means nothing
@@ -632,7 +713,22 @@ def demo() -> None:
         alone, why = autonomy_check(cheap)
         assert not alone and "nothing was read" in why, why
 
+    # A tool on somebody else's MCP server is CACHED, so it would otherwise
+    # read as trusted and let an action through on nothing we can audit.
+    borrowed = FakeBoard({"inventory.mcp__jira__search_tickets": "cached"})
+    with registry.bind_board(borrowed):
+        alone, why = autonomy_check(cheap)
+        assert not alone, "a third-party MCP answer must not be the only evidence"
+        assert "nothing was read" in why, why
+    # Alongside our own reading it is neither evidence nor an obstacle.
+    mixed = FakeBoard({"impact.get_material_stock": "live",
+                       "inventory.mcp__jira__search_tickets": "missing"})
+    with registry.bind_board(mixed):
+        alone, why = autonomy_check(cheap)
+        assert alone, f"a failed remote lookup must not block a trusted decision: {why}"
+
     print("  autonomy needs a trusted board, not just a small number")
+    print("  a third-party MCP answer can inform a specialist but never ground an action ✓")
     print("  a modelled figure anywhere under the decision sends it to a person")
 
     # ---- a figure from a model, set against the record that judges it ----
@@ -773,6 +869,21 @@ def demo() -> None:
     print("  a figure from a model is set against the arithmetic that judges it: an "
           "understated move loses its authority ✓ · a date promised to a customer says "
           "what it rests on ✓ · a floor in units is said in the days it buys ✓")
+    # --- a date is read, never authored -------------------------------------
+    # The bug this guards: supplier, material, qty and cost all matched the
+    # source row, and needed_by came back 2024-09-16 for a 2026 disruption.
+    from datetime import date as _d, timedelta as _td
+    past = (_d.today() - _td(days=400)).isoformat()
+    fixed, note = _arrival_date("SUP-NOPE", "M-NOPE", past)
+    assert fixed is None and "already passed" in note, (fixed, note)
+    soon = (_d.today() + _td(days=30)).isoformat()
+    fixed, note = _arrival_date("SUP-NOPE", "M-NOPE", soon)
+    assert fixed == soon and not note, (fixed, note)
+    fixed, note = _arrival_date("SUP-NOPE", "M-NOPE", "next Tuesday")
+    assert fixed is None and "is not a date" in note, (fixed, note)
+    print("  a date the data does not hold is refused, not passed along ✓")
+
+
     print("  the loop closes: a realized figure reaches the report ✓ · prose never becomes "
           "money ✓ · a watch is owed a result ✓")
 

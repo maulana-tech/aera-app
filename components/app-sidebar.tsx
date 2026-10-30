@@ -56,6 +56,9 @@ const SETTINGS: NavItem[] = [
     href: "/settings",
     icon: Settings2,
     children: [
+      { title: "SAP connection", href: "/sap" },
+      { title: "MCP", href: "/mcp" },
+      { title: "Skills", href: "/skills" },
       { title: "Upload data", href: "/uploads" },
       { title: "Contacts", href: "/contacts" },
       { title: "Models", href: "/models" },
@@ -65,10 +68,11 @@ const SETTINGS: NavItem[] = [
 ];
 
 export function AppSidebar({
-  user, connection, ...props
+  user, connection, mayChangeMode = false, ...props
 }: {
   user?: { name: string; role: string; email: string };
   connection?: Connection;
+  mayChangeMode?: boolean;
 } & React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -82,7 +86,7 @@ export function AppSidebar({
             SIGAP
           </span>
         </Link>
-        <ConnectionStatus c={connection} />
+        <ConnectionStatus c={connection} mayChange={mayChangeMode} />
       </SidebarHeader>
 
       <SidebarContent>

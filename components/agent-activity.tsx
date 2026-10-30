@@ -4,6 +4,7 @@ const toolLabels: Record<string, string> = {
   detect_disruption: "Checking the disruption signal",
   get_materials: "Checking material data",
   get_open_purchase_orders: "Checking open purchase orders",
+  use_skill: "Working through a written procedure",
   get_material_stock: "Checking material stock",
   get_bom_explosion: "Tracing product components",
   get_sales_order_commitments: "Checking customer order commitments",
@@ -12,10 +13,13 @@ const toolLabels: Record<string, string> = {
   forecast_demand: "Forecasting material demand",
   get_quality_holds: "Checking stock quality holds",
   get_safety_stock_policy: "Checking safety stock requirements",
+  get_replenishment_policy: "Checking how the line is replenished",
+  find_deadstock: "Looking for stock nobody has moved",
   assess_transfer: "Assessing a stock transfer",
   find_alternate_sources: "Looking for alternative suppliers",
   find_internal_transfers: "Looking for stock at other plants",
   get_supplier_master: "Checking supplier records",
+  get_blanket_orders: "Checking contracts with quantity left to call off",
   get_supplier_performance: "Reviewing supplier performance",
   get_quotations: "Checking supplier quotations",
   compare_quotations: "Comparing supplier quotations",
@@ -36,6 +40,8 @@ const toolLabels: Record<string, string> = {
   get_supplier_certifications: "Checking supplier certifications",
   rank_po_slip_risk: "Ranking purchase orders by slip risk",
   scan_live_hazards: "Checking live hazards near ports and plants",
+  get_shipments_at_port: "Checking which shipments are at the port",
+  find_bonded_stock: "Looking for goods already in a bonded warehouse",
   get_port_conditions: "Checking port conditions",
   search_news: "Searching the news",
   get_public_holidays: "Checking the holiday calendar",
@@ -58,6 +64,14 @@ const agentNames: Record<string, string> = {
 
 export function toolLabel(name: string): string {
   if (Object.hasOwn(toolLabels, name)) return toolLabels[name];
+  // `mcp__<server>__<tool>` (core/registry.py REMOTE_PREFIX): a tool on an MCP
+  // server SIGAP does not operate. It has to read as borrowed here, because
+  // the generic fallback below would describe it as a system check of ours.
+  if (name.startsWith("mcp__")) {
+    const [server, ...rest] = name.slice(5).split("__");
+    const tool = rest.join("__").replace(/_/g, " ").trim();
+    if (server && tool) return `Asking ${server} (outside SIGAP): ${tool}`;
+  }
   const specialist = name.startsWith("ask_") ? name.slice(4) : "";
   return Object.hasOwn(agentNames, specialist)
     ? `Consulting ${agentNames[specialist]}`

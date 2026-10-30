@@ -228,6 +228,11 @@ def build() -> dict:
     consumed = {b["Material"] for b in bom}
 
     # ---- stock ------------------------------------------------------------
+    # A SEPARATE stream for the fields added later. Drawing them from `rnd`
+    # would consume numbers the rest of the file already depends on, and every
+    # order, quotation and customs row downstream would shift - the pinned
+    # scenario with it. New data, new stream, nothing else moves.
+    rnd2 = random.Random(20260904)
     stock = []
     for code, desc, unit, fam in MATERIALS:
         if code == "M-1208":
@@ -244,15 +249,40 @@ def build() -> dict:
                 [8, 11, 13, 18, 22, 28, 35, 44, 60, 85],
                 weights=[2, 3, 3, 12, 14, 16, 15, 13, 12, 10],
             )[0]
-            stock.append({
+            # How the line is replenished changes how its cover READS. A JIT
+            # line is meant to run thin - flagging it as a crisis is a false
+            # alarm that trains people to ignore the real ones.
+            policy = rnd2.choices(["stock", "JIT", "consignment"],
+                                 weights=[76, 18, 6])[0]
+            if policy == "JIT" and cover > 14:
+                cover = rnd2.choice([4, 6, 8, 11])      # thin on purpose
+            # Deadstock: quantity nobody has touched. It is still quantity, and
+            # it is the cheapest source there is - if anyone looks.
+            idle_days = rnd2.choices([0, 0, 0, 0, 95, 140, 210, 380],
+                                    weights=[62, 10, 8, 6, 5, 4, 3, 2])[0]
+            qty = round(rate * cover, 1)
+            row = {
                 "Material": code, "Plant": plant,
-                "MatlWrhsStkQtyInMatlBaseUnit": round(rate * cover, 1),
+                "MatlWrhsStkQtyInMatlBaseUnit": qty,
                 "BaseUnit": unit, "DailyConsumption": rate, "Description": desc,
-            })
+                "ReplenishmentPolicy": policy,
+                "Rotation": "FIFO" if fam in ("chem", "rubber") else "LIFO",
+                "LastMovementDate": (AS_OF - timedelta(days=idle_days or rnd2.randint(1, 9)))
+                                    .isoformat(),
+            }
+            if fam in ("chem", "rubber"):
+                row["ShelfLifeDays"] = rnd2.choice([180, 270, 365])
+            if idle_days:
+                # Only part of a position goes stale; the rest still turns.
+                row["DeadstockQty"] = round(qty * rnd2.uniform(0.25, 0.8), 1)
+            stock.append(row)
     # planted defect: stock nobody consumes
     stock.append({"Material": "M-1202", "Plant": "CKR1",
                   "MatlWrhsStkQtyInMatlBaseUnit": 4800.0, "BaseUnit": "PC",
-                  "DailyConsumption": 0.0, "Description": "Packaging crate, returnable"})
+                  "DailyConsumption": 0.0, "Description": "Packaging crate, returnable",
+                  "ReplenishmentPolicy": "stock", "Rotation": "LIFO",
+                  "LastMovementDate": (AS_OF - timedelta(days=410)).isoformat(),
+                  "DeadstockQty": 4800.0})
     # The documented scenario is pinned, both ends of it. KRW1 is the plant in
     # trouble; SBY1 is the donor whose own floor the transfer breaks, and
     # DESIGN.md quotes its cover to one decimal place, so it cannot drift with
@@ -267,6 +297,13 @@ def build() -> dict:
             stock.append(row)
         row["MatlWrhsStkQtyInMatlBaseUnit"] = qty
         row["DailyConsumption"] = daily
+        # The scenario's own two lines are conventionally stocked, stated
+        # rather than left blank: KRW1 is the plant in trouble, and "no policy
+        # on record" there would make Iris hedge on the one line the whole
+        # demonstration turns on.
+        row.setdefault("ReplenishmentPolicy", "stock")
+        row.setdefault("Rotation", "LIFO")
+        row.setdefault("LastMovementDate", (AS_OF - timedelta(days=2)).isoformat())
 
     # ---- purchase orders --------------------------------------------------
     single_sourced = {"M-3308", "M-5512", "M-2210", "M-1160"}
@@ -292,6 +329,30 @@ def build() -> dict:
             "RevisedDeliveryDate": (promised + timedelta(days=slip)).isoformat(),
             "Status": "in_transit" if slip else rnd.choice(["not_shipped", "in_transit"]),
         })
+        o = orders[-1]
+        # The physical path, which is what a port closure actually acts on.
+        # A bill of lading exists once the goods are on a vessel; a line that
+        # has not shipped has none, and inventing one would say a shipment is
+        # at sea when it is on a dock.
+        if o["Status"] == "in_transit":
+            o["BillOfLading"] = f"BL{rnd2.randint(100000, 999999)}"
+            o["Vessel"] = rnd2.choice(["MV Sinar Jaya", "MV Hanjin Pride", "MV Meratus Tomini",
+                                       "MV Ever Lotus", "MV Pan Ocean"])
+            # Groupage: a shared container is cheaper per tonne and slower,
+            # because it waits for the rest of the box to fill.
+            o["Consolidation"] = rnd2.choices(["FCL", "groupage"], weights=[72, 28])[0]
+        # Bonded: already inside the country with duty suspended. It carries no
+        # import lead time and no new licence, which makes it the fastest
+        # source on the board and the one nobody remembers to look for.
+        if origin != "ID" and rnd2.random() < 0.14:
+            o["BondedWarehouse"] = rnd2.choice(["Gudang Berikat Cakung",
+                                                "Gudang Berikat Marunda",
+                                                "Gudang Berikat Cikarang"])
+            o["Status"] = "bonded"
+        # Cross-docking moves goods straight from inbound to outbound, so the
+        # days a warehouse would have taken are not spent.
+        if rnd2.random() < 0.11:
+            o["CrossDock"] = True
 
     # the Ningbo scenario, fixed so the documented figures still reproduce
     orders.append({"PurchaseOrder": "4500018872", "Material": "M-4471", "Plant": "KRW1",
@@ -337,6 +398,14 @@ def build() -> dict:
                 "RequestedDeliveryDate": (AS_OF + timedelta(days=rnd.randint(10, 75))).isoformat(),
                 "LatePenaltyPctPerDay": 0.5, "LatePenaltyCapPct": 10.0,
             })
+            # A backorder is demand already promised and not yet shippable. It
+            # is the exposure that does not show up as a late delivery until
+            # the day it does, so it is carried on the order rather than
+            # inferred from stock afterwards.
+            if rnd2.random() < 0.22:
+                sales[-1]["BackorderQty"] = round(rnd2.uniform(0.15, 0.6) * 100, 1)
+                sales[-1]["BackorderSince"] = (AS_OF - timedelta(
+                    days=rnd2.choice([5, 9, 14, 23, 40]))).isoformat()
     # planted defect: sold product with no bill of materials behind it
     sales.append({"SalesOrder": "0000105990", "Material": "FG-9099",
                   "Customer": "CUS-1002", "CustomerName": "Nusa Otomotif Industri",
@@ -354,38 +423,46 @@ def build() -> dict:
                       "LatePenaltyPctPerDay": 0.5, "LatePenaltyCapPct": 10.0})
 
     # ---- alternate sources ------------------------------------------------
+    # HS headings are the real ones for these goods: 7601.20 is unwrought
+    # aluminium alloy (the ADC12 ingot), 7214.99 a hot-rolled non-alloy steel
+    # bar (S45C). LARTAS attaches to the heading, so a scenario without them
+    # cannot exercise the rule it is meant to demonstrate.
+    # Fulfilment: a dropship option ships supplier -> customer and never enters
+    # the affected plant, which is the point of it when the plant is the
+    # problem. Added after the rows are built so the literal table above stays
+    # readable as the scenario it documents.
     alternates = [
         {"id": "A", "label": "Air freight 85 t from the incumbent supplier",
          "Supplier": "SUP-2201", "Material": "M-4471", "Quantity": 85.0,
          "ArrivalDate": "2026-09-11", "ExtraCostIDR": 186_000_000,
-         "TkdnAfterPct": 38.2, "Origin": "CN", "NewOrigin": False, "QualificationDays": 0},
+         "TkdnAfterPct": 38.2, "HsCode": "7601.20.00", "Origin": "CN", "NewOrigin": False, "QualificationDays": 0},
         {"id": "B", "label": "Local supplier PT Logam Andalan, Gresik",
          "Supplier": "SUP-4417", "Material": "M-4471", "Quantity": 60.0,
          "ArrivalDate": "2026-09-12", "ExtraCostIDR": 94_000_000,
-         "TkdnAfterPct": 41.6, "Origin": "ID", "NewOrigin": False, "QualificationDays": 3},
+         "TkdnAfterPct": 41.6, "HsCode": "7601.20.00", "Origin": "ID", "NewOrigin": False, "QualificationDays": 3},
         {"id": "C", "label": "Reallocate stock from plant SBY1",
          "Supplier": "INTERNAL", "Material": "M-4471", "Quantity": 55.0,
          "ArrivalDate": "2026-09-10", "ExtraCostIDR": 22_000_000,
-         "TkdnAfterPct": None, "Origin": "ID", "NewOrigin": False, "QualificationDays": 0},
+         "TkdnAfterPct": None, "HsCode": "7601.20.00", "Origin": "ID", "NewOrigin": False, "QualificationDays": 0},
         {"id": "D", "label": "New import source in Vietnam",
          "Supplier": "SUP-3390", "Material": "M-4471", "Quantity": 80.0,
          "ArrivalDate": "2026-09-26", "ExtraCostIDR": 61_000_000,
-         "TkdnAfterPct": 36.1, "Origin": "VN", "NewOrigin": True, "QualificationDays": 7},
+         "TkdnAfterPct": 36.1, "HsCode": "7601.20.00", "Origin": "VN", "NewOrigin": True, "QualificationDays": 7},
         {"id": "E", "label": "Cheapest source in China",
          "Supplier": "SUP-5501", "Material": "M-4471", "Quantity": 100.0,
          "ArrivalDate": "2026-09-19", "ExtraCostIDR": 48_000_000,
-         "TkdnAfterPct": 34.8, "Origin": "CN", "NewOrigin": False, "QualificationDays": 0},
+         "TkdnAfterPct": 34.8, "HsCode": "7601.20.00", "Origin": "CN", "NewOrigin": False, "QualificationDays": 0},
     ]
     # a second material with real alternatives, so M-4471 is not the only one
     alternates += [
         {"id": "F", "label": "PT Cipta Baja Nusantara, Cilegon",
          "Supplier": "SUP-4418", "Material": "M-5518", "Quantity": 45.0,
          "ArrivalDate": "2026-09-18", "ExtraCostIDR": 31_000_000,
-         "TkdnAfterPct": 44.0, "Origin": "ID", "NewOrigin": False, "QualificationDays": 5},
+         "TkdnAfterPct": 44.0, "HsCode": "7214.99.90", "Origin": "ID", "NewOrigin": False, "QualificationDays": 5},
         {"id": "G", "label": "Busan Forging, expedited",
          "Supplier": "SUP-7701", "Material": "M-5518", "Quantity": 60.0,
          "ArrivalDate": "2026-09-16", "ExtraCostIDR": 88_000_000,
-         "TkdnAfterPct": 0.0, "Origin": "KR", "NewOrigin": False, "QualificationDays": 0},
+         "TkdnAfterPct": 0.0, "HsCode": "7214.99.90", "Origin": "KR", "NewOrigin": False, "QualificationDays": 0},
     ]
 
     suppliers = [{"Supplier": c, "SupplierName": n, "Country": ctry,
@@ -413,7 +490,36 @@ def build() -> dict:
 
     customs = _customs(orders, random.Random(SEED + 2))
 
+    for a in alternates:
+        a["Fulfilment"] = "plant"
+    # D is the new Vietnamese source; shipping it straight to the customer is a
+    # real mitigation when the receiving plant is the bottleneck.
+    for a in alternates:
+        if a["id"] == "D":
+            a["Fulfilment"] = "dropship"
+
+    # ---- blanket orders ---------------------------------------------------
+    # A long-term contract at a fixed price. It matters because the quantity
+    # may already be bought: a spot purchase beside an unused blanket call-off
+    # is money spent twice.
+    blankets = []
+    for i, (code, _d, _u, _f) in enumerate(MATERIALS[:9]):
+        sup = SUPPLIERS[i % len(SUPPLIERS)][0]
+        blankets.append({
+            "BlanketOrder": f"46000{1200 + i}",
+            "Supplier": sup, "Material": code,
+            "AgreedPriceIDR": rnd2.randrange(28, 62) * 1_000_000,
+            "RemainingQty": round(rnd2.uniform(20, 180), 1),
+            "ValidFrom": (AS_OF - timedelta(days=rnd2.randint(60, 300))).isoformat(),
+            "ValidTo": (AS_OF + timedelta(days=rnd2.randint(20, 300))).isoformat(),
+        })
+    # One that has run out and one that has expired: a contract on file is not
+    # the same as a contract you can call off against.
+    blankets[-1]["RemainingQty"] = 0.0
+    blankets[-2]["ValidTo"] = (AS_OF - timedelta(days=12)).isoformat()
+
     return {"MaterialStock": stock, "PurchaseOrder": orders, "BillOfMaterial": bom,
+            "BlanketOrder": blankets,
             "SalesOrder": sales, "AlternateSource": alternates, "Supplier": suppliers,
             "Quotation": quotations, "CustomsDeclaration": customs,
             "MaterialSubstitute": [dict(r) for r in SUBSTITUTES],
@@ -626,7 +732,15 @@ def write(data: dict) -> None:
     """CSV per entity for the upload path, and the JSON fixture the tools read."""
     OUT.mkdir(parents=True, exist_ok=True)
     for entity, rows in data.items():
-        keys = list(rows[0])
+        # The union, in first-seen order, not the first row's keys. Optional
+        # columns are the normal case now - a shelf life only on the chemicals,
+        # a deadstock quantity only where something stopped moving - and taking
+        # the header from row one silently dropped every one of them, or threw.
+        keys: list = []
+        for r in rows:
+            for k in r:
+                if k not in keys:
+                    keys.append(k)
         with (OUT / f"{entity}.csv").open("w", newline="") as f:
             w = csv.DictWriter(f, fieldnames=keys)
             w.writeheader()
@@ -667,11 +781,24 @@ def demo() -> None:
     observed = sum(h["Quantity"] for h in recent) / len(recent)
     assert observed > 9.2 * 1.05, (observed, "M-4471 drift is not visible")
 
-    # Thin positions have to be the exception or the safety floor means nothing.
-    covers = [r["MatlWrhsStkQtyInMatlBaseUnit"] / r["DailyConsumption"]
-              for r in data["MaterialStock"] if r["DailyConsumption"]]
+    # Thin positions have to be the exception or the safety floor means nothing
+    # - but a JIT line is SUPPOSED to be thin, and counting it as a breach is
+    # the false alarm this data exists to let Iris avoid. So the measure is of
+    # stocked lines only, which is the measure that carries a warning.
+    stocked = [r for r in data["MaterialStock"]
+               if r["DailyConsumption"] and r.get("ReplenishmentPolicy") != "JIT"]
+    covers = [r["MatlWrhsStkQtyInMatlBaseUnit"] / r["DailyConsumption"] for r in stocked]
     thin = sum(1 for c in covers if c < 14) / len(covers)
-    assert 0.03 < thin < 0.20, f"{thin:.0%} of positions below the floor is not a plant"
+    assert 0.03 < thin < 0.20, f"{thin:.0%} of stocked positions below the floor is not a plant"
+
+    jit = [r for r in data["MaterialStock"]
+           if r.get("ReplenishmentPolicy") == "JIT" and r["DailyConsumption"]]
+    assert jit, "the scenario must carry JIT lines, or Iris cannot tell them apart"
+    jit_thin = sum(1 for r in jit
+                   if r["MatlWrhsStkQtyInMatlBaseUnit"] / r["DailyConsumption"] < 14)
+    assert jit_thin / len(jit) > 0.5, "a JIT line that is not thin is not JIT"
+    dead = [r for r in data["MaterialStock"] if r.get("DeadstockQty")]
+    assert dead, "deadstock must exist, or nobody can be shown the cheapest source"
     assert counts["MaterialStock"] > 40, counts
     assert counts["PurchaseOrder"] > 40, counts
 

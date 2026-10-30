@@ -58,6 +58,7 @@ import queue
 import re
 import sys
 import threading
+import time
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -169,9 +170,15 @@ def route(method: str, pattern: str) -> Callable:
 @route("GET", r"/health")
 def health(_m, _b, _h) -> Tuple[int, dict]:
     from agents.definitions import ALL
+    from clients import sap_s4
     return 200, {
         "env": CFG.env,
-        "sap_ready": CFG.sap_ready,
+        # Which data source the tools will actually use, and whether a key is
+        # configured at all. In demo mode sap_ready is False even when a key
+        # is present, because False is what every tool will see.
+        "data_mode": sap_s4.data_mode(),
+        "sap_key_set": bool(sap_s4.api_key()),
+        "sap_ready": sap_s4.available(),
         "model_ready": CFG.model_ready,
         "may_use_modelled": CFG.may_use_modelled,
         # The lead's model, as before. `models` has every agent's, since they
@@ -180,6 +187,332 @@ def health(_m, _b, _h) -> Tuple[int, dict]:
         "models": llm.describe(ALL.values()),
         "aux_model": str(llm.aux_spec()),
     }
+
+
+# ------------------------------------------------------------------- skills
+@route("GET", r"/skills")
+def list_skills(_m, b, h) -> Tuple[int, dict]:
+    """The catalogue, with how often each has been run and by whom.
+
+    `not_found` is the figure worth reading: a model reaching for a skill
+    nobody wrote is a gap in the catalogue, and it is only visible because
+    those calls are recorded rather than dropped.
+    """
+    from agents.definitions import ALL
+    from core import skills
+    _user(h)
+    # A GET's query string arrives as its body (see the dispatcher), so the
+    # window is read the same way every other GET reads its inputs.
+    try:
+        days = max(1, min(365, int((b or {}).get("days") or 30)))
+    except (TypeError, ValueError):
+        days = 30
+    return 200, {"skills": skills.listing(store.skill_usage(days)), "days": days,
+                 "agents": [{"code": c, "nickname": a.nickname} for c, a in ALL.items()],
+                 "tools": sorted(registry.all_tools()),
+                 "may_change": _user(h).role in SETTINGS_ROLES}
+
+
+@route("POST", r"/skills")
+def add_skill(_m, b: dict, h) -> Tuple[int, dict]:
+    """{"name","title","description"?,"agents"?,"tools"?,"steps"}.
+
+    Validated before it is saved, with the same checks core/skills.py runs
+    over the built-in catalogue. A skill that names a tool nobody wrote, or
+    that restricts itself to an agent who cannot reach its own tools, is
+    refused here rather than discovered in the middle of a handling.
+    """
+    from core import skills
+    user = _user(h)
+    if user.role not in SETTINGS_ROLES:
+        return 403, {"error": f"role '{user.role}' may not write a skill"}
+    name = str(b.get("name") or "").strip().lower()
+    title = str(b.get("title") or "").strip()
+    agents = [str(a) for a in (b.get("agents") or [])]
+    tools = [str(t) for t in (b.get("tools") or [])]
+    steps = [str(x).strip() for x in (b.get("steps") or []) if str(x).strip()]
+    wrong = skills.validate(name, title, agents, tools, steps)
+    if wrong:
+        return 400, {"error": "; ".join(wrong), "problems": wrong}
+    store.add_stored_skill(name, title, str(b.get("description") or "").strip(),
+                           agents, tools, steps, user.email)
+    return 200, {"skills": skills.listing(store.skill_usage(30))}
+
+
+@route("POST", r"/skills/([a-z0-9_]+)/delete")
+def remove_skill(m, _b, h) -> Tuple[int, dict]:
+    """Only a written one. The catalogue is code and is not deleted here."""
+    from core import skills
+    user = _user(h)
+    if user.role not in SETTINGS_ROLES:
+        return 403, {"error": f"role '{user.role}' may not remove a skill"}
+    name = m.group(1)
+    if name in skills.BUILTIN:
+        return 400, {"error": f"'{name}' is built in; it lives in core/skills.py"}
+    if not store.delete_stored_skill(name):
+        return 404, {"error": f"no skill called '{name}'"}
+    return 200, {"skills": skills.listing(store.skill_usage(30))}
+
+
+# -------------------------------------------------------------- MCP servers
+def _mcp_row(r: dict) -> dict:
+    """One server as a browser may see it. Never the token.
+
+    `offered` is how many of its tools an agent can actually call, which is
+    not len(tools): a writer, a tool with no usable schema, and a tool whose
+    name is already one of ours are all dropped by the registry. A page that
+    showed only the probed count would promise more than the system does.
+    """
+    offered = sum(1 for t in registry.remote_tools().values()
+                  if t["server"] == r.get("name"))
+    return {k: v for k, v in r.items() if k != "token"} | {"offered": offered}
+
+
+@route("GET", r"/mcp/servers")
+def list_mcp_servers(_m, _b, h) -> Tuple[int, dict]:
+    """Servers SIGAP may call OUT to, plus what SIGAP itself serves.
+
+    Both directions on one page on purpose: the question an operator actually
+    has is "what tools exist here and who can reach them", and splitting that
+    across two screens is how a tool nobody audited ends up installed.
+    """
+    from core import registry
+    import mcp
+    user = _user(h)
+    tools = registry.all_tools().values()
+    return 200, {
+        "ours": {
+            "endpoint": "/mcp",
+            "protocol": mcp.PROTOCOL_VERSION,
+            "tools_total": len(tools),
+            "tools_writing": sum(1 for t in tools if t.writes),
+            "resources": [r["uri"] for r in mcp.RESOURCES],
+            "prompts": [p["name"] for p in mcp.PROMPTS],
+        },
+        "servers": [_mcp_row(r) for r in store.mcp_servers()],
+        "may_change": user.role in SETTINGS_ROLES,
+    }
+
+
+@route("POST", r"/mcp/servers")
+def add_mcp_server(_m, b: dict, h) -> Tuple[int, dict]:
+    """{"name","url","token"?,"agents"?}. Probed before it is saved."""
+    from clients import mcp_client
+    user = _user(h)
+    if user.role not in SETTINGS_ROLES:
+        return 403, {"error": f"role '{user.role}' may not add an MCP server"}
+    name = str(b.get("name") or "").strip()
+    url = str(b.get("url") or "").strip()
+    if not name or not url:
+        return 400, {"error": "name and url are both required"}
+    if not url.startswith(("http://", "https://")):
+        return 400, {"error": "url must start with http:// or https://"}
+    if any(r["name"] == name for r in store.mcp_servers()):
+        return 409, {"error": f"a server called '{name}' is already here"}
+    token = str(b.get("token") or "").strip() or None
+    agents = b.get("agents") or []
+    if not isinstance(agents, list):
+        return 400, {"error": "agents must be a list of agent codes"}
+
+    # Probed BEFORE it is saved. A server nobody could reach, sitting enabled
+    # in the list, is a tool an agent will try and a handling will wait on.
+    ok, note, tools = mcp_client.probe(url, token)
+    if not ok:
+        return 400, {"error": f"could not reach it: {note}"}
+    row = store.add_mcp_server(name, url, token, user.email, agents)
+    store.update_mcp_server(row["id"], tools=tools, last_ok=store._now(), last_error=None)
+    registry.forget_remote()
+    return 200, {"added": row["id"], "note": note,
+                 "servers": [_mcp_row(r) for r in store.mcp_servers()]}
+
+
+@route("POST", r"/mcp/servers/([A-Za-z0-9_]+)")
+def change_mcp_server(m, b: dict, h) -> Tuple[int, dict]:
+    """{"enabled"?,"agents"?,"token"?,"url"?}. Absent fields are left alone."""
+    user = _user(h)
+    if user.role not in SETTINGS_ROLES:
+        return 403, {"error": f"role '{user.role}' may not change an MCP server"}
+    sid = m.group(1)
+    if not any(r["id"] == sid for r in store.mcp_servers()):
+        return 404, {"error": f"no MCP server {sid}"}
+    fields = {k: b[k] for k in ("enabled", "agents", "token", "url") if k in b}
+    if not fields:
+        return 400, {"error": "nothing to change"}
+    store.update_mcp_server(sid, **fields)
+    registry.forget_remote()
+    return 200, {"servers": [_mcp_row(r) for r in store.mcp_servers()]}
+
+
+@route("POST", r"/mcp/servers/([A-Za-z0-9_]+)/test")
+def test_mcp_server(m, _b, h) -> Tuple[int, dict]:
+    """Call it now and record what came back, so the list stops guessing."""
+    from clients import mcp_client
+    user = _user(h)
+    if user.role not in SETTINGS_ROLES:
+        return 403, {"error": f"role '{user.role}' may not test an MCP server"}
+    sid = m.group(1)
+    row = next((r for r in store.mcp_servers(include_token=True) if r["id"] == sid), None)
+    if row is None:
+        return 404, {"error": f"no MCP server {sid}"}
+    ok, note, tools = mcp_client.probe(row["url"], row.get("token"))
+    registry.forget_remote()
+    store.update_mcp_server(sid, tools=tools if ok else row["tools"],
+                            last_ok=store._now() if ok else row.get("last_ok"),
+                            last_error=None if ok else note)
+    return 200, {"ok": ok, "note": note, "tools": tools}
+
+
+@route("POST", r"/mcp/servers/([A-Za-z0-9_]+)/delete")
+def remove_mcp_server(m, _b, h) -> Tuple[int, dict]:
+    user = _user(h)
+    if user.role not in SETTINGS_ROLES:
+        return 403, {"error": f"role '{user.role}' may not remove an MCP server"}
+    registry.forget_remote()
+    if not store.delete_mcp_server(m.group(1)):
+        return 404, {"error": f"no MCP server {m.group(1)}"}
+    return 200, {"servers": [_mcp_row(r) for r in store.mcp_servers()]}
+
+
+# --------------------------------------------------------------- SAP settings
+#: Entity used to prove a key works. Small, present on every S/4HANA tenant,
+#: and one row is enough: a quota error answers just as loudly as a 200.
+_SAP_PROBE = ("API_PRODUCT_SRV", "A_Product")
+
+
+def _sap_settings(user) -> dict:
+    """What a browser may know about the SAP credential. Never the key."""
+    from clients import sap_s4
+    return {
+        "base_url": sap_s4.base_url(),
+        "key_set": bool(sap_s4.api_key()),
+        "key_hint": sap_s4.key_hint(),
+        "key_source": sap_s4.key_source(),
+        "data_mode": sap_s4.data_mode(),
+        "may_change": user.role in SETTINGS_ROLES,
+    }
+
+
+@route("GET", r"/settings/sap")
+def get_sap_settings(_m, _b, h) -> Tuple[int, dict]:
+    """Where SIGAP reads enterprise data from, and whether a key is in place.
+
+    The key itself is never in this payload - only whether one is set, its last
+    four characters, and whether it came from the Settings page or the
+    environment. A credential that can leave the server through a GET is a
+    credential that ends up in a browser cache, a screenshot or a log.
+    """
+    return 200, _sap_settings(_user(h))
+
+
+@route("POST", r"/settings/sap")
+def set_sap_settings(_m, b: dict, h) -> Tuple[int, dict]:
+    """{"api_key"?: str, "base_url"?: str}. Empty string clears that one and
+    hands the choice back to the environment.
+
+    A key left out is left alone, so an admin can change the base URL without
+    re-typing the key.
+    """
+    from clients import sap_s4
+    user = _user(h)
+    if user.role not in SETTINGS_ROLES:
+        return 403, {"error": f"role '{user.role}' may not change the SAP connection "
+                              f"(needs {' or '.join(SETTINGS_ROLES)})"}
+    if "api_key" not in b and "base_url" not in b:
+        return 400, {"error": "send api_key, base_url, or both"}
+
+    if "base_url" in b:
+        url = str(b.get("base_url") or "").strip().rstrip("/")
+        if url and not url.startswith(("http://", "https://")):
+            return 400, {"error": "base_url must start with http:// or https://"}
+        store.set_setting("sap.base_url", url, user.email)
+    if "api_key" in b:
+        key = str(b.get("api_key") or "").strip()
+        # Whitespace and a pasted "APIKey: " prefix are the two ways this is
+        # mistyped; both produce a 401 that looks like a bad key.
+        if key.lower().startswith("apikey:"):
+            key = key[len("apikey:"):].strip()
+        store.set_setting("sap.api_key", key, user.email)
+
+    sap_s4.forget_credentials()
+    return 200, _sap_settings(user)
+
+
+@route("POST", r"/settings/sap/test")
+def test_sap_settings(_m, _b, h) -> Tuple[int, dict]:
+    """Call SAP once and say exactly what came back.
+
+    This exists because every failure mode here looks the same from the UI: no
+    key, a wrong key and a spent quota all end as "no data". The sandbox
+    answers a spent quota with HTTP 500 and a QuotaViolation body, not 429, so
+    the message is read rather than the status code.
+    """
+    from clients import sap_s4
+    user = _user(h)
+    if user.role not in SETTINGS_ROLES:
+        return 403, {"error": f"role '{user.role}' may not test the SAP connection"}
+    if not sap_s4.api_key():
+        return 200, {"ok": False, "reason": "no key", "detail": "No SAP API key is set."}
+    # One deliberate call: answer about THIS key, not about a cooldown left
+    # behind by the last one.
+    sap_s4.clear_quota_cooldown()
+    started = time.time()
+    try:
+        rows = sap_s4.rows(sap_s4.get(*_SAP_PROBE, {"$top": "1"}))
+        return 200, {"ok": True, "reason": "answered", "rows": len(rows),
+                     "ms": round((time.time() - started) * 1000),
+                     "base_url": sap_s4.base_url()}
+    except sap_s4.SapError as e:
+        text = str(e)
+        quota = "QuotaViolation" in text or "Rate limit" in text
+        return 200, {
+            "ok": False,
+            "reason": "quota spent" if quota else "refused",
+            "detail": ("The key is valid but its rate quota is spent. It resets on the "
+                       "provider's own schedule; until then Demo mode is the way to run.")
+            if quota else text[:300],
+            "ms": round((time.time() - started) * 1000),
+        }
+    except Exception as e:                                          # noqa: BLE001
+        return 200, {"ok": False, "reason": "unreachable", "detail": str(e)[:300],
+                     "ms": round((time.time() - started) * 1000)}
+
+
+# ------------------------------------------------------------------ data mode
+@route("GET", r"/mode")
+def get_mode(_m, _b, h) -> Tuple[int, dict]:
+    """Which data source the tools read from, and who may change it."""
+    from clients import sap_s4
+    user = _user(h)
+    d = store.data_mode_detail()
+    d["sap_key_set"] = bool(sap_s4.api_key())
+    d["may_change"] = user.role in SETTINGS_ROLES
+    return 200, d
+
+
+@route("POST", r"/mode")
+def set_mode(_m, b: dict, h) -> Tuple[int, dict]:
+    """{"mode": "live" | "demo"}.
+
+    live  - the tools call SAP S/4HANA, and fall back to uploads only where a
+            tool has no SAP source at all.
+    demo  - the tools do not call SAP. They read uploaded data and the modelled
+            fixtures, the same path taken when no API key is configured, and
+            every figure keeps its own origin label.
+
+    Switching does not migrate anything: it changes where the NEXT tool call
+    reads from. Handlings already on record keep the origins they were given.
+    """
+    user = _user(h)
+    if user.role not in SETTINGS_ROLES:
+        return 403, {"error": f"role '{user.role}' may not change the data mode "
+                              f"(needs {' or '.join(SETTINGS_ROLES)})"}
+    mode = str(b.get("mode") or "").strip().lower()
+    if mode not in store.DATA_MODES:
+        return 400, {"error": f"mode must be one of {', '.join(store.DATA_MODES)}"}
+    store.set_setting("data.mode", mode, user.email)
+    d = store.data_mode_detail()
+    d["may_change"] = True
+    return 200, d
 
 
 # ---------------------------------------------------------------------- models
@@ -402,6 +735,7 @@ def summary(_m, b, h) -> Tuple[int, dict]:
         Filtering a state by last month would answer a question nobody asked
         and hide the approval that is late today.
     """
+    from clients import sap_s4
     _user(h)
     from engine import report, triage
     from tools.compliance import pack_status
@@ -463,7 +797,11 @@ def summary(_m, b, h) -> Tuple[int, dict]:
         "oldest_owed_days": max((o["days_waiting"] or 0 for o in owed), default=0),
         "knowledge_base": pack_status(),
         "critical_stock": critical[:5],
-        "sap_ready": CFG.sap_ready,
+        # What the tools will actually do, not merely whether a key exists:
+        # in demo mode they do not call SAP even with one configured.
+        "data_mode": sap_s4.data_mode(),
+        "sap_key_set": bool(sap_s4.api_key()),
+        "sap_ready": sap_s4.available(),
         "model_ready": CFG.model_ready,
     }
 
@@ -857,6 +1195,7 @@ def schedule_switch(m, b: dict, h) -> Tuple[int, dict]:
 @route("GET", r"/agents")
 def list_agents(_m, _b, h) -> Tuple[int, dict]:
     """Team anatomy: who exists, what tools they hold, what is actually wired up."""
+    from clients import sap_s4
     _user(h)
     from agents.definitions import ALL
     from core import registry
@@ -894,7 +1233,9 @@ def list_agents(_m, _b, h) -> Tuple[int, dict]:
             "tools_total": sum(a["tool_count"] for a in out),
             "prompts_written": sum(1 for a in out if a["ready"]),
             "model_ready": CFG.model_ready,
-            "sap_ready": CFG.sap_ready,
+            "data_mode": sap_s4.data_mode(),
+            "sap_key_set": bool(sap_s4.api_key()),
+            "sap_ready": sap_s4.available(),
         },
     }
 
@@ -907,6 +1248,8 @@ _AGENT_NICKNAMES = {
 
 _TOOL_LABELS = {
     "scan_live_hazards": "live hazards near ports and plants",
+    "get_shipments_at_port": "which shipments are at the port",
+    "find_bonded_stock": "goods already in a bonded warehouse",
     "get_port_conditions": "port weather and hazards",
     "search_news": "news headlines",
     "get_public_holidays": "public holiday calendar",
@@ -914,6 +1257,7 @@ _TOOL_LABELS = {
     "get_exchange_rate": "ECB exchange rate",
     "get_materials": "material master records",
     "get_open_purchase_orders": "open purchase orders",
+    "use_skill": "a written procedure, so the order is not reinvented",
     "get_material_stock": "plant stock availability",
     "get_bom_explosion": "bill of materials (BOM)",
     "get_sales_order_commitments": "customer order commitments",
@@ -922,10 +1266,13 @@ _TOOL_LABELS = {
     "forecast_demand": "material demand forecast",
     "get_quality_holds": "stock quality holds",
     "get_safety_stock_policy": "safety stock policy",
+    "get_replenishment_policy": "how the line is replenished",
+    "find_deadstock": "stock nobody has moved",
     "assess_transfer": "stock transfer feasibility",
     "find_alternate_sources": "alternative suppliers",
     "find_internal_transfers": "stock at alternative plants",
     "get_supplier_master": "supplier master records",
+    "get_blanket_orders": "contracts with quantity still to call off",
     "get_supplier_performance": "supplier performance history",
     "get_quotations": "supplier quotations",
     "compare_quotations": "quotation comparisons",
@@ -955,6 +1302,21 @@ _TOOL_LABELS = {
     "detect_disruption": "disruption signal detection",
 }
 
+def _remote_label(tool_name: str) -> Optional[Tuple[str, str]]:
+    """(what it is, badge) for a tool on a server SIGAP does not operate.
+
+    The activity feed is where a person sees what the agents did. A borrowed
+    tool has to look borrowed there, or the feed quietly claims more than the
+    system actually knows.
+    """
+    if not tool_name.startswith(registry.REMOTE_PREFIX):
+        return None
+    server, sep, bare = tool_name[len(registry.REMOTE_PREFIX):].partition("__")
+    if not sep or not bare:
+        return None
+    return f"{bare.replace('_', ' ').strip()} on {server} (outside SIGAP)", "External"
+
+
 _TOOL_BADGES = {
     "scan_live_hazards": "Hazards",
     "get_port_conditions": "Weather",
@@ -962,6 +1324,7 @@ _TOOL_BADGES = {
     "get_public_holidays": "Calendar",
     "web_brief": "Web",
     "get_exchange_rate": "FX",
+    "use_skill": "Procedure",
     "get_material_stock": "Stock Check",
     "get_open_purchase_orders": "Orders",
     "get_sales_order_commitments": "Sales",
@@ -1009,10 +1372,12 @@ def format_orchestration_step(kind: str, d: dict, seq: int) -> dict:
         agent_code = d.get("agent", "")
         agent_name = _AGENT_NICKNAMES.get(agent_code, d.get("name", agent_code.title()))
         tool_name = d.get("name", "")
-        tool_desc = _TOOL_LABELS.get(tool_name, tool_name.replace("_", " "))
+        borrowed = _remote_label(tool_name)
+        tool_desc = (borrowed[0] if borrowed
+                     else _TOOL_LABELS.get(tool_name, tool_name.replace("_", " ")))
         args = d.get("arguments", {})
         arg_summary = " · ".join(f"{k}: {v}" for k, v in list(args.items())[:2])
-        badge = _TOOL_BADGES.get(tool_name, "Data Check")
+        badge = borrowed[1] if borrowed else _TOOL_BADGES.get(tool_name, "Data Check")
         narrative = f"{agent_name} checking {tool_desc}"
         detail = f"{tool_name}{f' ({arg_summary})' if arg_summary else ''} ›"
         return {
@@ -1648,6 +2013,7 @@ PUBLIC = {("GET", "/health"), ("POST", "/login")}
 #: without naming all 48 by hand. A new shape fails the check rather than
 #: quietly skipping the route that uses it.
 _SAMPLES = ((r"([A-Za-z0-9_]+)", "x1"), (r"([A-Za-z]+)", "Supplier"),
+            (r"([a-z0-9_]+)", "a_skill"),
             (r"([a-z_]+)", "digest"), (r"([a-z]+)", "impact"),
             (r"(\d+)", "0"), (r"(pdf|xlsx)", "pdf"))
 

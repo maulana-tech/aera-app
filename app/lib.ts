@@ -12,6 +12,8 @@ export type Delivery = {
 export type Action = {
   id: string; kind: string; autonomous: number; status: string;
   payload: Record<string, unknown>; sap_reference: string | null; created_at: string;
+  /** "live" once S/4HANA took it, "demo" when issued against seed data. */
+  issued_in?: "live" | "demo" | null;
   /** Where an approved message to a supplier or a customer goes, or went. */
   delivery?: Delivery;
   /**
@@ -115,6 +117,56 @@ export type Agent = {
 export type AgentSummary = {
   agent_count: number; tools_installed: number; tools_total: number;
   prompts_written: number; model_ready: boolean; sap_ready: boolean;
+  /** What the tools will do, and whether a key exists at all. `sap_ready` is
+   *  false in demo mode even when `sap_key_set` is true. */
+  data_mode?: "live" | "demo"; sap_key_set?: boolean;
+};
+
+export type SkillRow = {
+  name: string; title: string; description: string;
+  agents: string[]; tools: string[]; steps: string[]; external: boolean;
+  usage: { calls: number; not_found: number; by_agent: Record<string, number> };
+  /** Written in core/skills.py rather than added here. Built-ins cannot be
+   *  edited or removed from the UI, and only they are reachable over MCP. */
+  builtin: boolean;
+};
+export type SkillsPayload = {
+  skills: SkillRow[]; days: number;
+  agents: { code: string; nickname: string }[];
+  tools: string[];
+  may_change: boolean;
+};
+
+export type McpTool = { name: string; description: string; read_only: boolean };
+export type McpServer = {
+  id: string; name: string; url: string; enabled: boolean;
+  agents: string[]; tools: McpTool[]; token_set: boolean;
+  /** How many of `tools` an agent can really call: writers, tools with no
+   *  usable schema and tools whose name is already ours are dropped
+   *  (sigap/agent/core/registry.py, remote_tools). */
+  offered: number;
+  last_ok: string | null; last_error: string | null;
+  added_by: string; added_at: string;
+};
+export type McpPayload = {
+  ours: {
+    endpoint: string; protocol: string;
+    tools_total: number; tools_writing: number;
+    resources: string[]; prompts: string[];
+  };
+  servers: McpServer[];
+  may_change: boolean;
+};
+
+export type SapSettings = {
+  base_url: string; key_set: boolean; key_hint: string;
+  key_source: "settings" | "environment" | "none";
+  data_mode: "live" | "demo"; may_change: boolean;
+};
+
+export type SapTest = {
+  ok: boolean; reason: string; detail?: string;
+  rows?: number; ms?: number; base_url?: string;
 };
 
 export type Column = { k: string; l: string; n?: boolean; rp?: boolean };
@@ -379,6 +431,7 @@ export type TraceNode = {
   /** action: what is being approved, and who has ruled on it */
   title?: string | null; payload?: Record<string, unknown>; created_at?: string | null;
   sap_reference?: string | null;
+  issued_in?: "live" | "demo" | null;
   approvals?: { decision: string; decided_by: string; role: string; note?: string | null; at: string }[];
 };
 export type TraceEdge = {
@@ -420,6 +473,8 @@ export type Trace = {
  * come and still be checkable. */
 export type VerdictState =
   | "needs_you_now" | "needs_you" | "held" | "failed"
+  /** The costing settled on a plan and no action was raised against it. */
+  | "recommended_only"
   | "owes_outcome" | "running" | "handled";
 export type Verdict = {
   state: VerdictState;

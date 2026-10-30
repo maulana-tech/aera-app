@@ -21,9 +21,18 @@ from typing import Any, Dict, List
 # Per entity: the columns a valid row must carry, and which of those must parse
 # as a number. Everything not listed is optional and passes through.
 ENTITIES: Dict[str, Dict[str, List[str]]] = {
+    # Optional columns that change how a figure is READ rather than what it is:
+    #   ReplenishmentPolicy  JIT | stock | consignment. Four days of cover on a
+    #                        JIT line is the policy working, not an emergency.
+    #   LastMovementDate     how deadstock is found: quantity nobody has touched
+    #                        is still quantity, and it is the cheapest source
+    #                        there is.
+    #   Rotation             FIFO | LIFO. With ShelfLifeDays it decides which
+    #                        lot may actually be issued.
     "MaterialStock": {
         "required": ["Material", "Plant", "MatlWrhsStkQtyInMatlBaseUnit", "DailyConsumption"],
-        "numeric": ["MatlWrhsStkQtyInMatlBaseUnit", "DailyConsumption"],
+        "numeric": ["MatlWrhsStkQtyInMatlBaseUnit", "DailyConsumption",
+                    "ShelfLifeDays", "DeadstockQty"],
     },
     "PurchaseOrder": {
         "required": ["PurchaseOrder", "Material", "Plant", "OrderQuantity", "Supplier", "DeliveryDate"],
@@ -37,13 +46,33 @@ ENTITIES: Dict[str, Dict[str, List[str]]] = {
         "required": ["Material", "FinishedGood", "ComponentQuantity"],
         "numeric": ["ComponentQuantity"],
     },
+    # HsCode is optional in the file and required by the ruling: an import
+    # whose classification is not on record cannot be checked against LARTAS,
+    # and tools/compliance.py refuses it rather than waving it through. Keeping
+    # the column optional here lets a domestic-only file stay short.
     "AlternateSource": {
         "required": ["id", "Material", "Supplier", "Quantity", "ArrivalDate", "ExtraCostIDR", "Origin"],
         "numeric": ["Quantity", "ExtraCostIDR"],
     },
+    # TkdnCertifiedPct is NOT required, and that is the point. A foreign
+    # supplier has no Indonesian local-content certificate, so demanding the
+    # column forces whoever fills the file to type 0 - which is a claim
+    # ("certified at zero") rather than the truth ("no certificate on record").
+    # tools/compliance.py already reads the two apart: it blocks a DOMESTIC
+    # supplier that carries no figure, and does not ask a foreign one for one.
+    # Requiring it here contradicted that, and rejected this project's own
+    # fixtures/demo/Supplier.csv - 9 of its 18 rows are foreign.
     "Supplier": {
-        "required": ["Supplier", "SupplierName", "Country", "TkdnCertifiedPct"],
+        "required": ["Supplier", "SupplierName", "Country"],
         "numeric": ["TkdnCertifiedPct"],
+    },
+    # A long-term contract at a fixed price. It belongs here because the
+    # quantity may already be bought: a spot purchase placed beside an unused
+    # call-off is money spent twice, and nothing in SAP stops it.
+    "BlanketOrder": {
+        "required": ["BlanketOrder", "Supplier", "Material", "AgreedPriceIDR",
+                     "RemainingQty", "ValidTo"],
+        "numeric": ["AgreedPriceIDR", "RemainingQty"],
     },
     "Quotation": {
         "required": ["SupplierQuotation", "Supplier", "Material", "OrderQuantity", "NetPrice", "DeliveryTimeInDays"],
@@ -93,6 +122,18 @@ EXAMPLES: Dict[str, Dict[str, Any]] = {
     # in the file reads as expired: tools/procurement.py counts an offer nobody
     # can check as one a buyer must re-quote. A template that did not show the
     # column handed companies a book of quotations that was dead on arrival.
+    # A long-term contract at a fixed price. It belongs here because the
+    # quantity may already be bought: a spot purchase placed beside an unused
+    # call-off is money spent twice, and nothing in SAP stops it.
+    "BlanketOrder": {
+        "required": ["BlanketOrder", "Supplier", "Material", "AgreedPriceIDR",
+                     "RemainingQty", "ValidTo"],
+        "numeric": ["AgreedPriceIDR", "RemainingQty"],
+    },
+    "BlanketOrder": {"BlanketOrder": "4600001200", "Supplier": "SUP-2201",
+                     "Material": "M-4471", "AgreedPriceIDR": 32_000_000,
+                     "RemainingQty": 154.9, "ValidFrom": "2026-03-01",
+                     "ValidTo": "2026-12-17"},
     "Quotation": {"SupplierQuotation": "6000000045", "Supplier": "SUP-4417", "Material": "M-4471",
                   "OrderQuantity": 60.0, "NetPrice": 1_560_000, "DeliveryTimeInDays": 9,
                   "Currency": "IDR", "QtnLifecycleStatus": "A",

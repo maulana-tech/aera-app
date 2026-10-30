@@ -151,6 +151,17 @@ class SigapClient:
     def exposure(self) -> dict:
         return self.request("GET", "/exposure")
 
+    def assess_option(self, option_id: str) -> dict:
+        """Rule one option through MCP, which is the same registry SIGAP's own
+        agents call. Going through /mcp rather than a bespoke endpoint means
+        Joule cannot be handed a different answer from the one Kira gives."""
+        reply = self.request("POST", "/mcp", {
+            "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+            "params": {"name": "check_local_constraints",
+                       "arguments": {"option_id": option_id}},
+        })
+        return reply or {}
+
 
 def _detail(data: Any) -> str:
     if isinstance(data, dict):

@@ -287,7 +287,11 @@ def _run_tool(agent: Agent, b, board: Board, report: Callable[[str, dict], None]
     step = {"agent": agent.code, "name": b.name, "arguments": b.input,
             "call_id": b.id, "round": round_no, "thinking": thinking}
     try:
-        res = registry.run(b.name, dict(b.input))
+        # Who is calling is the loop's knowledge, not the model's: use_skill
+        # enforces whose procedure a skill is, and an agent code the model
+        # supplied would be an agent code the model could change.
+        with registry.bind_agent(agent.code):
+            res = registry.run(b.name, dict(b.input))
     except Exception as e:                                           # noqa: BLE001
         err_msg = f"{type(e).__name__}: {e}"
         report("tool", {**step, "error": err_msg, "ms": round((time.monotonic() - t0) * 1000)})
@@ -939,11 +943,14 @@ def _check_failure_paths() -> None:
     from agents.definitions import PromptMissing
 
     # Every agent must be reachable, have a prompt, and expose a valid schema.
-    for code, agent in ALL.items():
-        assert agent.instructions, code               # raises PromptMissing if absent
-        for spec in registry.schemas_for_model(code):
-            assert spec["input_schema"]["additionalProperties"] is False, spec["name"]
-            assert spec["strict"] is True, spec["name"]
+    # Remote tools are pinned off: otherwise this would assert against whatever
+    # MCP servers happen to be registered on the machine running the suite.
+    with registry.no_remote():
+        for code, agent in ALL.items():
+            assert agent.instructions, code           # raises PromptMissing if absent
+            for spec in registry.schemas_for_model(code):
+                assert spec["input_schema"]["additionalProperties"] is False, spec["name"]
+                assert spec["strict"] is True, spec["name"]
 
     # An agent with no prompt raises rather than being sent an empty one.
     ghost = Agent("ghost", "Nemo", "Nobody", "does not exist")

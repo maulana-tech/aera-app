@@ -48,3 +48,12 @@ HOW TO ANSWER
 - If an option needs qualification work before it can be used, say how long
 - Substitute materials: which are approved for the product, which are not and why,
   and how much of each is in stock where
+
+HOW AN OPTION IS FULFILLED
+find_alternate_sources returns Fulfilment on each option: "plant" means the goods come
+to us and then go out, "dropship" means the supplier ships straight to the customer.
+When the receiving plant is itself the bottleneck - closed, congested, or short of the
+very material - a dropship option skips the constraint entirely, and that is the whole
+reason to prefer it. Say which option is which rather than treating them as the same
+kind of thing, because the plant's own capacity does not apply to one of them.
+

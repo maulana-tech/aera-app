@@ -61,8 +61,10 @@ SPECIALISTS = [
           "Owns the demand side. Daily consumption is a variable that moves, not a fixed number.",
           ["get_demand_signal", "get_production_schedule", "forecast_demand"]),
     Agent("inventory", "Iris", "Stock Validity",
-          "Which stock may actually be used: quality holds, rejected batches, safety floors.",
-          ["get_quality_holds", "get_safety_stock_policy", "assess_transfer"]),
+          "Which stock may actually be used: quality holds, rejected batches, safety "
+          "floors, how a line is replenished, and the stock nobody has moved.",
+          ["get_quality_holds", "get_safety_stock_policy", "assess_transfer",
+           "get_replenishment_policy", "find_deadstock"]),
     Agent("sourcing", "Clint", "Sourcing",
           "Finds and qualifies replacement supply: other suppliers, internal stock, fast "
           "freight, and substitute materials with whether each is approved for the product.",
@@ -74,14 +76,15 @@ SPECIALISTS = [
           "on price against lead time, and drafts the purchase order that follows from "
           "the comparison, with the reference rate for a price quoted in another currency.",
           ["get_supplier_master", "get_supplier_performance", "get_quotations",
-           "compare_quotations", "propose_purchase_order", "get_exchange_rate"]),
+           "compare_quotations", "propose_purchase_order", "get_exchange_rate", "get_blanket_orders"]),
     Agent("logistics", "Milo", "Logistics",
           "Models arrival dates that survive contact with reality: port dwell measured on "
           "past customs releases, where an import stands in customs and why it is held, "
           "transhipment, transport mode. Reads the outside world for the lane: the weather "
           "and hazards at a port, the news, and the holidays at either end.",
           ["get_shipment_status", "estimate_eta", "get_customs_status", "get_port_conditions",
-           "search_news", "get_public_holidays", "web_brief"]),
+           "search_news", "get_public_holidays", "web_brief",
+           "get_shipments_at_port", "find_bonded_stock"]),
     Agent("compliance", "Kira", "Rules",
           "Tests every candidate against TKDN and the contract floor, LARTAS licensing for a "
           "new origin, and the holiday calendar, from the rule pack, and says which rules "
@@ -129,9 +132,19 @@ def demo() -> None:
     import tools as _tools  # noqa: F401  (registers every tool)
     from core import registry
 
-    declared, installed = set(tools), set(registry.all_tools())
+    # A shared tool is owned by no agent on purpose (registry.SHARED), so it
+    # is not in anybody's list and must be excused from the ownership check -
+    # but not from the labelling checks below, where an unlabelled tool is
+    # just as mute whoever owns it.
+    shared = {t.name for t in registry.shared_tools()}
+    declared, installed = set(tools), set(registry.all_tools()) - shared
     assert not declared - installed, f"claimed but not written: {sorted(declared - installed)}"
     assert not installed - declared, f"written but no agent owns it: {sorted(installed - declared)}"
+    # Shared means shared: every agent must really be able to see it.
+    for code in ALL:
+        reachable = {t.name for t in registry.owned_by(code)}
+        assert shared <= reachable, f"{code} cannot reach {sorted(shared - reachable)}"
+    declared |= shared
     # What a person sees in place of a tool's name: the API's phrase for the
     # activity feed, and the web's label. A tool missing from either shows up
     # as "Running a system check", which says nothing about what it did.
@@ -148,7 +161,8 @@ def demo() -> None:
     nicknames = [a.nickname for a in ALL.values()]
     assert len(nicknames) == len(set(nicknames)), "nicknames must be unique"
     assert len({n[0] for n in nicknames}) == len(nicknames), "first letters must all differ"
-    print(f"definitions ok, {len(ALL)} agents, {len(tools)} tools, veto: {veto[0]}")
+    print(f"definitions ok, {len(ALL)} agents, {len(tools)} tools"
+          + (f" + {len(shared)} shared" if shared else "") + f", veto: {veto[0]}")
     print("  " + " · ".join(f"{a.nickname} ({a.title})" for a in ALL.values()))
 
     # A prompt that still names the limit as a number goes stale the day the
