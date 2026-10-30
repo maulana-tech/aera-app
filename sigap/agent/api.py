@@ -189,6 +189,133 @@ def health(_m, _b, _h) -> Tuple[int, dict]:
     }
 
 
+# ------------------------------------------------------------------- skills
+@route("GET", r"/skills")
+def list_skills(_m, b, h) -> Tuple[int, dict]:
+    """The catalogue, with how often each has been run and by whom.
+
+    `not_found` is the figure worth reading: a model reaching for a skill
+    nobody wrote is a gap in the catalogue, and it is only visible because
+    those calls are recorded rather than dropped.
+    """
+    from core import skills
+    _user(h)
+    # A GET's query string arrives as its body (see the dispatcher), so the
+    # window is read the same way every other GET reads its inputs.
+    try:
+        days = max(1, min(365, int((b or {}).get("days") or 30)))
+    except (TypeError, ValueError):
+        days = 30
+    return 200, {"skills": skills.listing(store.skill_usage(days)), "days": days}
+
+
+# -------------------------------------------------------------- MCP servers
+def _mcp_row(r: dict) -> dict:
+    """One server as a browser may see it. Never the token."""
+    return {k: v for k, v in r.items() if k != "token"}
+
+
+@route("GET", r"/mcp/servers")
+def list_mcp_servers(_m, _b, h) -> Tuple[int, dict]:
+    """Servers SIGAP may call OUT to, plus what SIGAP itself serves.
+
+    Both directions on one page on purpose: the question an operator actually
+    has is "what tools exist here and who can reach them", and splitting that
+    across two screens is how a tool nobody audited ends up installed.
+    """
+    from core import registry
+    import mcp
+    user = _user(h)
+    tools = registry.all_tools().values()
+    return 200, {
+        "ours": {
+            "endpoint": "/mcp",
+            "protocol": mcp.PROTOCOL_VERSION,
+            "tools_total": len(tools),
+            "tools_writing": sum(1 for t in tools if t.writes),
+            "resources": [r["uri"] for r in mcp.RESOURCES],
+            "prompts": [p["name"] for p in mcp.PROMPTS],
+        },
+        "servers": [_mcp_row(r) for r in store.mcp_servers()],
+        "may_change": user.role in SETTINGS_ROLES,
+    }
+
+
+@route("POST", r"/mcp/servers")
+def add_mcp_server(_m, b: dict, h) -> Tuple[int, dict]:
+    """{"name","url","token"?,"agents"?}. Probed before it is saved."""
+    from clients import mcp_client
+    user = _user(h)
+    if user.role not in SETTINGS_ROLES:
+        return 403, {"error": f"role '{user.role}' may not add an MCP server"}
+    name = str(b.get("name") or "").strip()
+    url = str(b.get("url") or "").strip()
+    if not name or not url:
+        return 400, {"error": "name and url are both required"}
+    if not url.startswith(("http://", "https://")):
+        return 400, {"error": "url must start with http:// or https://"}
+    if any(r["name"] == name for r in store.mcp_servers()):
+        return 409, {"error": f"a server called '{name}' is already here"}
+    token = str(b.get("token") or "").strip() or None
+    agents = b.get("agents") or []
+    if not isinstance(agents, list):
+        return 400, {"error": "agents must be a list of agent codes"}
+
+    # Probed BEFORE it is saved. A server nobody could reach, sitting enabled
+    # in the list, is a tool an agent will try and a handling will wait on.
+    ok, note, tools = mcp_client.probe(url, token)
+    if not ok:
+        return 400, {"error": f"could not reach it: {note}"}
+    row = store.add_mcp_server(name, url, token, user.email, agents)
+    store.update_mcp_server(row["id"], tools=tools, last_ok=store._now(), last_error=None)
+    return 200, {"added": row["id"], "note": note,
+                 "servers": [_mcp_row(r) for r in store.mcp_servers()]}
+
+
+@route("POST", r"/mcp/servers/([A-Za-z0-9_]+)")
+def change_mcp_server(m, b: dict, h) -> Tuple[int, dict]:
+    """{"enabled"?,"agents"?,"token"?,"url"?}. Absent fields are left alone."""
+    user = _user(h)
+    if user.role not in SETTINGS_ROLES:
+        return 403, {"error": f"role '{user.role}' may not change an MCP server"}
+    sid = m.group(1)
+    if not any(r["id"] == sid for r in store.mcp_servers()):
+        return 404, {"error": f"no MCP server {sid}"}
+    fields = {k: b[k] for k in ("enabled", "agents", "token", "url") if k in b}
+    if not fields:
+        return 400, {"error": "nothing to change"}
+    store.update_mcp_server(sid, **fields)
+    return 200, {"servers": [_mcp_row(r) for r in store.mcp_servers()]}
+
+
+@route("POST", r"/mcp/servers/([A-Za-z0-9_]+)/test")
+def test_mcp_server(m, _b, h) -> Tuple[int, dict]:
+    """Call it now and record what came back, so the list stops guessing."""
+    from clients import mcp_client
+    user = _user(h)
+    if user.role not in SETTINGS_ROLES:
+        return 403, {"error": f"role '{user.role}' may not test an MCP server"}
+    sid = m.group(1)
+    row = next((r for r in store.mcp_servers(include_token=True) if r["id"] == sid), None)
+    if row is None:
+        return 404, {"error": f"no MCP server {sid}"}
+    ok, note, tools = mcp_client.probe(row["url"], row.get("token"))
+    store.update_mcp_server(sid, tools=tools if ok else row["tools"],
+                            last_ok=store._now() if ok else row.get("last_ok"),
+                            last_error=None if ok else note)
+    return 200, {"ok": ok, "note": note, "tools": tools}
+
+
+@route("POST", r"/mcp/servers/([A-Za-z0-9_]+)/delete")
+def remove_mcp_server(m, _b, h) -> Tuple[int, dict]:
+    user = _user(h)
+    if user.role not in SETTINGS_ROLES:
+        return 403, {"error": f"role '{user.role}' may not remove an MCP server"}
+    if not store.delete_mcp_server(m.group(1)):
+        return 404, {"error": f"no MCP server {m.group(1)}"}
+    return 200, {"servers": [_mcp_row(r) for r in store.mcp_servers()]}
+
+
 # --------------------------------------------------------------- SAP settings
 #: Entity used to prove a key works. Small, present on every S/4HANA tenant,
 #: and one row is enough: a quota error answers just as loudly as a 200.

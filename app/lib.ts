@@ -122,6 +122,30 @@ export type AgentSummary = {
   data_mode?: "live" | "demo"; sap_key_set?: boolean;
 };
 
+export type SkillRow = {
+  name: string; title: string; description: string;
+  agents: string[]; tools: string[]; steps: string[]; external: boolean;
+  usage: { calls: number; not_found: number; by_agent: Record<string, number> };
+};
+export type SkillsPayload = { skills: SkillRow[]; days: number };
+
+export type McpTool = { name: string; description: string; read_only: boolean };
+export type McpServer = {
+  id: string; name: string; url: string; enabled: boolean;
+  agents: string[]; tools: McpTool[]; token_set: boolean;
+  last_ok: string | null; last_error: string | null;
+  added_by: string; added_at: string;
+};
+export type McpPayload = {
+  ours: {
+    endpoint: string; protocol: string;
+    tools_total: number; tools_writing: number;
+    resources: string[]; prompts: string[];
+  };
+  servers: McpServer[];
+  may_change: boolean;
+};
+
 export type SapSettings = {
   base_url: string; key_set: boolean; key_hint: string;
   key_source: "settings" | "environment" | "none";

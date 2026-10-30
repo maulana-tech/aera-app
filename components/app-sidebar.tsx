@@ -57,6 +57,8 @@ const SETTINGS: NavItem[] = [
     icon: Settings2,
     children: [
       { title: "SAP connection", href: "/sap" },
+      { title: "MCP", href: "/mcp" },
+      { title: "Skills", href: "/skills" },
       { title: "Upload data", href: "/uploads" },
       { title: "Contacts", href: "/contacts" },
       { title: "Models", href: "/models" },

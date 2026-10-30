@@ -21,6 +21,7 @@ from core import identity
 CHECKS = [
     "core/config.py", "core/provenance.py", "core/registry.py", "core/identity.py",
     "core/store.py", "core/exploration.py", "core/admission.py", "core/aux.py", "core/schema.py",
+    "core/skills.py",
     "core/llm.py", "core/topology.py", "clients/aicore.py",
     "engine/simulate.py", "engine/audit.py", "engine/matching.py",
     "engine/forecast.py", "engine/planner.py", "engine/dispatch.py",
@@ -32,7 +33,7 @@ CHECKS = [
     "tools/simulation.py", "tools/exposure.py", "tools/precedent.py", "tools/procurement.py",
     "agents/definitions.py", "graph.py", "mcp.py",
     "signals/bmkg.py", "signals/watch.py",
-    "clients/feeds.py", "clients/web_data.py", "clients/sap_map.py",
+    "clients/feeds.py", "clients/web_data.py", "clients/sap_map.py", "clients/mcp_client.py",
     "signals/places.py", "signals/hazards.py", "signals/weather.py",
     "clients/composio.py", "clients/channels.py", "core/schedule.py", "notify.py --check", "api.py --check",
     "outreach.py --check", "sender.py --check", "jobs.py",

@@ -150,6 +150,41 @@ CREATE TABLE IF NOT EXISTS contacts (
 -- Which model each role runs on, as picked on the Models page (core/llm.py,
 -- choose()). Key is model.<lead|specialists|fallback|aux|agent code>. A key
 -- that is absent hands that choice back to the environment.
+-- MCP servers this deployment may call out to. SIGAP is already an MCP
+-- SERVER - AgentCore Gateway and Joule call in - and this is the other
+-- direction: tools somebody else operates, offered to our agents.
+--
+-- The token is stored here rather than in .env because these are added at
+-- runtime by an admin, and a deployment that needs a redeploy to add a tool
+-- is a deployment nobody adds tools to. It is never returned by any read.
+CREATE TABLE IF NOT EXISTS mcp_servers (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL UNIQUE,
+  url         TEXT NOT NULL,
+  token       TEXT,                  -- bearer, write-only
+  enabled     INTEGER NOT NULL DEFAULT 1,
+  agents      TEXT NOT NULL DEFAULT '[]',   -- agent codes allowed to use it; [] = all
+  tools       TEXT NOT NULL DEFAULT '[]',   -- last tools/list, cached for the page
+  last_ok     TEXT,
+  last_error  TEXT,
+  added_by    TEXT NOT NULL,
+  added_at    TEXT NOT NULL
+);
+
+-- One row per skill invocation. Dimensions only, never the caller's text:
+-- which skill, which agent, whether it existed. A model naming a skill that
+-- does not exist is the single most useful row here, so `found` is recorded
+-- rather than the call being dropped.
+CREATE TABLE IF NOT EXISTS skill_usage (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  skill      TEXT NOT NULL,
+  agent      TEXT NOT NULL,
+  run_id     TEXT,
+  found      INTEGER NOT NULL,
+  at         TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_skill_usage ON skill_usage(skill, at);
+
 CREATE TABLE IF NOT EXISTS settings (
   key        TEXT PRIMARY KEY,
   value      TEXT NOT NULL,
@@ -911,6 +946,99 @@ def data_mode_detail() -> Dict[str, Any]:
     return {"mode": data_mode(), "modes": list(DATA_MODES),
             "set_by": r["updated_by"] if r else None,
             "set_at": r["updated_at"] if r else None}
+
+
+# ----------------------------------------------------------- MCP servers out
+def mcp_servers(include_token: bool = False) -> List[Dict[str, Any]]:
+    """Every server we may call out to. The token is left out unless asked for
+    by the caller that is about to use it - a list that carries credentials is
+    a list that ends up in a browser."""
+    with connect() as c:
+        rows = [dict(r) for r in c.execute(
+            "SELECT * FROM mcp_servers ORDER BY added_at").fetchall()]
+    out = []
+    for r in rows:
+        r["agents"] = json.loads(r.get("agents") or "[]")
+        r["tools"] = json.loads(r.get("tools") or "[]")
+        r["enabled"] = bool(r["enabled"])
+        r["token_set"] = bool(r.get("token"))
+        if not include_token:
+            r.pop("token", None)
+        out.append(r)
+    return out
+
+
+def add_mcp_server(name: str, url: str, token: Optional[str], by: str,
+                   agents: Optional[List[str]] = None) -> dict:
+    sid = new_id("mcp")
+    with connect() as c:
+        c.execute("INSERT INTO mcp_servers (id,name,url,token,enabled,agents,tools,"
+                  "added_by,added_at) VALUES (?,?,?,?,1,?,'[]',?,?)",
+                  (sid, name, url, token or None,
+                   json.dumps(agents or []), by, _now()))
+    return {"id": sid, "name": name, "url": url}
+
+
+def update_mcp_server(sid: str, **fields) -> None:
+    """Set only what was passed. A token of '' clears it; absent leaves it."""
+    allowed = {"name", "url", "token", "enabled", "agents", "tools",
+               "last_ok", "last_error"}
+    sets, args = [], []
+    for k, v in fields.items():
+        if k not in allowed:
+            continue
+        if k in ("agents", "tools"):
+            v = json.dumps(v)
+        if k == "enabled":
+            v = int(bool(v))
+        if k == "token" and v == "":
+            v = None
+        sets.append(f"{k}=?")
+        args.append(v)
+    if not sets:
+        return
+    with connect() as c:
+        c.execute(f"UPDATE mcp_servers SET {', '.join(sets)} WHERE id=?", (*args, sid))
+
+
+def delete_mcp_server(sid: str) -> bool:
+    with connect() as c:
+        return c.execute("DELETE FROM mcp_servers WHERE id=?", (sid,)).rowcount > 0
+
+
+# --------------------------------------------------------------- skill usage
+def record_skill_use(skill: str, agent: str, found: bool,
+                     run_id: Optional[str] = None) -> None:
+    """Best effort: a lost metering row must never break a skill invocation."""
+    try:
+        with connect() as c:
+            c.execute("INSERT INTO skill_usage (skill,agent,run_id,found,at)"
+                      " VALUES (?,?,?,?,?)",
+                      (skill, agent, run_id, int(bool(found)), _now()))
+    except Exception:                                               # noqa: BLE001
+        pass
+
+
+def skill_usage(days: int = 30) -> Dict[str, Dict[str, Any]]:
+    """Per skill: how often, by whom, and how often it was named and missing.
+
+    The missing count is the useful one. A model reaching for a skill that
+    does not exist is a gap in the catalogue, and dropping those rows would
+    hide exactly the thing worth knowing.
+    """
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="seconds")
+    with connect() as c:
+        rows = [dict(r) for r in c.execute(
+            "SELECT skill, agent, found, COUNT(*) AS n FROM skill_usage"
+            " WHERE at >= ? GROUP BY skill, agent, found", (since,)).fetchall()]
+    out: Dict[str, Dict[str, Any]] = {}
+    for r in rows:
+        e = out.setdefault(r["skill"], {"calls": 0, "not_found": 0, "by_agent": {}})
+        e["calls"] += r["n"]
+        if not r["found"]:
+            e["not_found"] += r["n"]
+        e["by_agent"][r["agent"]] = e["by_agent"].get(r["agent"], 0) + r["n"]
+    return out
 
 
 # ------------------------------------------------------------- model choice
