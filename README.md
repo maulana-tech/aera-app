@@ -61,6 +61,9 @@ He has run this drill before and knows the answer will be wrong by Tuesday, beca
 moved. What he needs is not another dashboard. It is the analysis done, the rule check applied,
 the cost worked out, and a recommendation waiting for his signature — with the evidence attached.
 
+#Username : admin@kpn.co.id
+password : secret123
+
 ---
 
 ## The Problem
