@@ -41,6 +41,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <ThemeToggle />
           </div>
         </header>
+        {health && !health.model_ready && (
+          <div className="border-b border-amber-500/40 bg-amber-500/10 px-4 py-2 text-xs text-amber-900 md:px-6 dark:text-amber-200">
+            The team cannot think yet: the supervisor&apos;s model ({health.model}) cannot be called. Work is recorded and
+            held. Add <span className="font-mono">NEARAI_API_KEY</span> to <span className="font-mono">aera/agent/.secrets/near.env</span>,
+            restart the agent service, then use <span className="font-medium">Run again</span> on held work.
+          </div>
+        )}
         {children}
       </SidebarInset>
       <NotificationToast />

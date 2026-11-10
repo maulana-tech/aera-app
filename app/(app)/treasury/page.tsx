@@ -8,6 +8,7 @@ import { ActionCard } from "@/components/action-card";
 import { KillSwitch } from "@/components/kill-switch";
 import { Empty, Fact, Metric, PageHeader, Rail, Section } from "@/components/shell";
 import { StatusBadge } from "@/components/status-badge";
+import { SyncButton } from "@/components/run-controls";
 import { ApproveOnChain, FreezeOnChain, RefundOnChain, WalletStatus } from "./VaultActions";
 
 export const dynamic = "force-dynamic";
@@ -57,9 +58,11 @@ export default async function TreasuryPage() {
         title="Treasury"
         lead={onChain
           ? "Money moves only through the vault contract. The agent holds a function-call key: it can ask for a payment, never send one past the caps. Anything above them waits here for an approver's wallet."
-          : "SIMULATED: no vault is configured. Payments and orders are recorded but no money moves on any chain. Configure AERA_NEAR_VAULT and the agent key to go on chain."}
+          : "SIMULATED: no vault is configured. Payments and orders are recorded but no money moves on any chain. Configure AERA_VAULT_CONTRACT and the agent's function-call key (manage.py near-setup) to go on chain."}
         aside={<StatusBadge status={onChain ? "vault" : "simulated"} className="text-xs">{onChain ? `VAULT · ${t.network}` : "SIMULATED rail"}</StatusBadge>}
       />
+
+      {onChain && <div className="mt-4"><SyncButton /></div>}
 
       {!onChain && (
         <div className="mt-6 rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">

@@ -98,7 +98,7 @@ export async function me(): Promise<Me | null> {
 /** Owner and admin edit the business, the team and payout details. */
 export const mayManage = (u: Me | null | undefined) => u?.role === "owner" || u?.role === "admin";
 /** Anyone with a limit may stop the business; only a manager may resume it. */
-export const mayStop = (u: Me | null | undefined) => (u?.limit_usd ?? 0) > 0;
+export const mayStop = (u: Me | null | undefined) => u?.role === "approver" || u?.role === "owner" || u?.role === "admin";
 
 export type Health = {
   env: string; model_ready: boolean; model: string; private_mode: boolean; aux_model: string;

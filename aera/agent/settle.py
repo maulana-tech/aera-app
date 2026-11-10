@@ -80,7 +80,17 @@ def _pay(a: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _refund(a: Dict[str, Any]) -> Dict[str, Any]:
-    return {"ok": True, "summary": "approved; an approver signs vault.refund from their wallet (Treasury page)"}
+    if chain.configured():
+        return {"ok": True, "summary": "approved; an approver signs vault.refund from their wallet (Treasury page)"}
+    p = a["payload"]
+    order = store.get_order(p["order_id"]) or {}
+    pay = store.record_payment("refund", "simulated", str(order.get("customer") or p.get("to") or "?"),
+                               float(p["amount_usd"]), "usdc", "sent", action_id=a["id"],
+                               detail={"simulated": True, "order_id": p["order_id"]})
+    store.move_action(a["id"], "sent", reference=f"simulated:{pay['id']}")
+    if order:
+        store.update_order(order["id"], status="refunded")
+    return {"ok": True, "summary": f"SIMULATED refund of ${float(p['amount_usd']):.2f} (no vault configured)"}
 
 
 def _message(a: Dict[str, Any]) -> Dict[str, Any]:
@@ -207,7 +217,7 @@ def order_paid(order_id: str, *, payer: Any, amount_usd: float, offering: Any, t
 def run_once() -> str:
     done = 0
     for a in store.list_actions(status="approved"):
-        if a["kind"] in ("payment", "message", "deliver_order"):
+        if a["kind"] in ("payment", "message", "deliver_order") or (a["kind"] == "refund" and not chain.configured()):
             if execute(a["id"]).get("ok"):
                 done += 1
     moved = reconcile()

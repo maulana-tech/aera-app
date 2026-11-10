@@ -22,6 +22,7 @@ const LABELS: Record<string, string> = {
   mcp: "MCP",
   skills: "Skills",
   contacts: "Contacts",
+  users: "Accounts",
   models: "Models",
   schedule: "Schedule",
 };

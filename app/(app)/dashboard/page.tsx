@@ -8,6 +8,7 @@ import {
 } from "@/app/lib";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { Bars, Figure, type Datum } from "@/components/charts";
+import { GettingStarted } from "@/components/getting-started";
 import { KillSwitch } from "@/components/kill-switch";
 import { Empty, Metric, PageHeader, Section } from "@/components/shell";
 import { StatusBadge } from "@/components/status-badge";
@@ -31,12 +32,14 @@ export default async function Dashboard() {
   }
   if (noBusiness(biz.data)) redirect("/onboarding");
 
-  const [led, pending, runs, health, user] = await Promise.all([
+  const [led, pending, runs, health, user, accounts, orders] = await Promise.all([
     api<Ledger>("ledger?days=30"),
     api<{ actions: Action[] }>("actions?status=pending"),
     api<{ runs: RunRow[] }>("runs"),
     api<Health>("health"),
     me(),
+    api<{ users: { role: string }[] }>("users"),
+    api<{ orders: { status: string }[] }>("orders"),
   ]);
   const p = biz.data.profile;
   const money = led?.money ?? [];
@@ -71,6 +74,21 @@ export default async function Dashboard() {
           {health && <StatusBadge status={health.model_ready ? "done" : "held"}>model {health.model_ready ? "ready" : "not set"}</StatusBadge>}
         </>}
       />
+
+      <GettingStarted steps={[
+        { done: true, title: "Describe the business", detail: "" },
+        { done: (biz.data.history?.length ?? 0) > 0, title: "Compose the team", detail: "Review who the Composer picked.", href: "/agents", cta: "Team" },
+        { done: !!health?.model_ready, title: "Connect the models (NEAR AI Cloud)",
+          detail: "Put NEARAI_API_KEY in aera/agent/.secrets/near.env and restart the agent service. Until then work is held.",
+          href: "/models", cta: "Models" },
+        { done: health?.rail === "vault", title: "Connect the vault (NEAR)",
+          detail: "Deploy aera-vault and give the agent a function-call key: python3 manage.py near-setup prints every command. Until then payments are simulated.",
+          href: "/treasury", cta: "Treasury" },
+        { done: (accounts?.users ?? []).some((u) => u.role === "approver"), title: "Add an approver",
+          detail: "Someone other than the owner who approves payments above the team's limit.", href: "/users", cta: "Accounts" },
+        { done: (orders?.orders ?? []).length > 0, title: "Take the first order",
+          detail: "Send a customer the checkout link.", href: "/orders", cta: "Checkout links" },
+      ]} />
 
       {p.kill_switch && (
         <div className="mt-6"><KillSwitch on mayStop={mayStop(user)} mayResume={mayManage(user)} /></div>

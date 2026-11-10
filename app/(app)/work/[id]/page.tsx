@@ -9,6 +9,7 @@ import { ActionCard } from "@/components/action-card";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { GuardianRulings } from "@/components/guardian-rulings";
 import { Markdown } from "@/components/markdown";
+import { RetryButton } from "@/components/run-controls";
 import { Fact, Rail, Section } from "@/components/shell";
 import { StatusBadge } from "@/components/status-badge";
 import TraceView from "@/components/trace-view";
@@ -66,6 +67,9 @@ export default async function WorkRun({ params, searchParams }: {
         <h1 className="mt-2 text-xl font-semibold tracking-tight md:text-2xl">{r.title}</h1>
         {payloadText && <p className="text-muted-foreground mt-1.5 max-w-3xl text-sm leading-relaxed whitespace-pre-wrap">{payloadText}</p>}
         {r.error && <p className="mt-2 font-mono text-xs text-rose-600 dark:text-rose-400">{r.error}</p>}
+        {(r.status === "held" || r.status === "failed") && (
+          <div className="mt-3"><RetryButton workItemId={r.work_item_id} /></div>
+        )}
       </header>
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">

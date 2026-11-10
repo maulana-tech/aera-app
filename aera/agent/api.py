@@ -1118,6 +1118,61 @@ def login(_m, b: dict, _h) -> Tuple[int, dict]:
                           "role": u.role, "limit_usd": u.limit_usd}}
 
 
+@route("GET", r"/setup")
+def setup_status(_m, _b, _h) -> Tuple[int, dict]:
+    """Public: whether this install still needs its first owner."""
+    return 200, {"needs_owner": identity.user_count() == 0}
+
+
+@route("POST", r"/setup")
+def first_owner(_m, b: dict, _h) -> Tuple[int, dict]:
+    """Create the FIRST account, as owner. Only while no account exists:
+    after that, accounts are added by an owner (POST /users)."""
+    if identity.user_count() > 0:
+        return 409, {"error": "this install already has accounts; sign in"}
+    email, name, pw = (str(b.get(k) or "").strip() for k in ("email", "name", "password"))
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email) or not name:
+        return 400, {"error": "a name and a valid email are required"}
+    if len(pw) < 10:
+        return 400, {"error": "the password needs at least 10 characters"}
+    u = identity.add_user(email, name, "owner", pw)
+    return 201, {"token": identity.issue_token(u),
+                 "user": {"name": u.name, "email": u.email, "role": u.role, "limit_usd": u.limit_usd}}
+
+
+@route("GET", r"/users")
+def users(_m, _b, h) -> Tuple[int, dict]:
+    u = _user(h)
+    return 200, {"users": identity.list_users(), "roles": identity.ROLE_LIMITS, "may_change": u.may_manage}
+
+
+@route("POST", r"/users")
+def add_user_route(_m, b: dict, h) -> Tuple[int, dict]:
+    u = _user(h)
+    if not u.may_manage:
+        return 403, {"error": "only an owner adds accounts"}
+    email, name, role, pw = (str(b.get(k) or "").strip() for k in ("email", "name", "role", "password"))
+    if role not in identity.ROLE_LIMITS:
+        return 400, {"error": "role is one of " + ", ".join(identity.ROLE_LIMITS)}
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email) or not name or len(pw) < 10:
+        return 400, {"error": "name, a valid email and a password of 10+ characters are required"}
+    try:
+        n = identity.add_user(email, name, role, pw)
+    except Exception as e:                                           # noqa: BLE001
+        return 409, {"error": f"could not add: {e}"}
+    return 201, {"user": {"id": n.id, "email": n.email, "name": n.name, "role": n.role, "limit_usd": n.limit_usd}}
+
+
+@route("POST", r"/users/([A-Za-z0-9_]+)/delete")
+def remove_user(m, _b, h) -> Tuple[int, dict]:
+    u = _user(h)
+    if not u.may_manage:
+        return 403, {"error": "only an owner removes accounts"}
+    if m.group(1) == u.id:
+        return 400, {"error": "you cannot remove yourself"}
+    return (200, {"removed": True}) if identity.deactivate_user(m.group(1)) else (404, {"error": "no such account"})
+
+
 @route("GET", r"/me")
 def me(_m, _b, h) -> Tuple[int, dict]:
     u = _user(h)
@@ -1333,6 +1388,20 @@ def new_work(_m, b: dict, h) -> Tuple[int, dict]:
     store.set_work_status(wid, "running")
     rid = start_work(item)
     return 201, {"work_item": wid, "run": rid}
+
+
+@route("POST", r"/work/([A-Za-z0-9_]+)/retry")
+def retry_work(m, _b, h) -> Tuple[int, dict]:
+    """Run a held or failed work item again (e.g. after the model key was added)."""
+    _user(h)
+    item = store.get_work_item(m.group(1))
+    if not item:
+        return 404, {"error": "no such work item"}
+    if item["status"] not in ("held", "failed"):
+        return 409, {"error": f"the work item is {item['status']}; only held or failed work is retried"}
+    if not CFG.model_ready:
+        return 503, {"error": f"the supervisor's model cannot be called: {llm.ready(llm.spec_for_code('supervisor'))[1]}"}
+    return 201, {"work_item": item["id"], "run": start_work(item)}
 
 
 @route("GET", r"/work")
@@ -1724,7 +1793,7 @@ class Handler(BaseHTTPRequestHandler):
 
 #: Routes that may be reached without a session token.
 PUBLIC_PREFIX = "/public/"
-PUBLIC = {("GET", "/health"), ("POST", "/login")}
+PUBLIC = {("GET", "/health"), ("POST", "/login"), ("GET", "/setup"), ("POST", "/setup")}
 
 _SAMPLES = ((r"([A-Za-z0-9_]+)", "x1"), (r"([A-Za-z]+)", "Thing"), (r"([a-z0-9_]+)", "a_skill"),
             (r"([a-z_]+)", "digest"), (r"([a-z]+)", "impact"), (r"(\d+)", "0"), (r"(pdf|xlsx)", "pdf"),
@@ -1782,6 +1851,9 @@ def demo() -> None:
     op = login(None, {"email": "op@lumen.example", "password": "pw-for-the-check"}, {})[1]["token"]
     H, O = {"Authorization": f"Bearer {tok}"}, {"Authorization": f"Bearer {op}"}
 
+    assert first_owner(None, {"email": "x@y.example", "name": "X", "password": "0123456789"}, {})[0] == 409, \
+        "the first-owner door closes once an account exists"
+    assert setup_status(None, {}, {})[1]["needs_owner"] is False
     code, out = save_business(None, {"profile": business.EXAMPLE}, O)
     assert code == 403, "an operator cannot rewrite the business"
     code, out = save_business(None, {"profile": business.EXAMPLE}, H)

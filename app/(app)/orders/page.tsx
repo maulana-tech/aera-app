@@ -4,6 +4,7 @@ import {
   api, apiResult, explorer, mayManage, me, usd, when, type BusinessPayload, type Health, type Order, type WorkItem,
 } from "@/app/lib";
 import { AutoRefresh } from "@/components/auto-refresh";
+import { CheckoutLinks } from "@/components/checkout-links";
 import { Empty, PageHeader } from "@/components/shell";
 import { StatusBadge } from "@/components/status-badge";
 import { MarkPaid } from "./MarkPaid";
@@ -35,6 +36,13 @@ export default async function OrdersPage() {
           <StatusBadge status={simulated ? "simulated" : "vault"}>{simulated ? "SIMULATED rail" : `vault · ${health?.network}`}</StatusBadge>
         </>}
       />
+
+      <details className="mt-6 rounded-lg border px-4 py-3" open={list.length === 0}>
+        <summary className="cursor-pointer text-sm font-medium">Share checkout links</summary>
+        <div className="mt-3">
+          <CheckoutLinks offerings={biz?.profile.offerings ?? []} open={!biz?.profile.kill_switch} />
+        </div>
+      </details>
 
       {!orders.data ? (
         <p className="text-muted-foreground mt-6 text-sm">{orders.error}</p>

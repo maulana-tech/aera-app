@@ -149,6 +149,25 @@ def add_user(email: str, name: str, role: str, password: str) -> User:
     return User(uid, email.lower(), name, role)
 
 
+def user_count() -> int:
+    prepare()
+    with connect() as c:
+        return int(c.execute("SELECT count(*) FROM users WHERE active=1").fetchone()[0])
+
+
+def list_users() -> list:
+    prepare()
+    with connect() as c:
+        rows = c.execute("SELECT id, email, name, role, created_at FROM users WHERE active=1 ORDER BY created_at").fetchall()
+    return [dict(r) | {"limit_usd": float(ROLE_LIMITS.get(r["role"], 0))} for r in rows]
+
+
+def deactivate_user(uid: str) -> bool:
+    prepare()
+    with connect() as c:
+        return c.execute("UPDATE users SET active=0 WHERE id=?", (uid,)).rowcount > 0
+
+
 def log_in(email: str, password: str) -> User:
     prepare()
     with connect() as c:

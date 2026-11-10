@@ -40,6 +40,7 @@ const SETTINGS: NavItem[] = [
       { title: "Skills", href: "/skills" },
       { title: "Schedule", href: "/schedule" },
       { title: "Contacts", href: "/contacts" },
+      { title: "Accounts", href: "/users" },
       { title: "Log", href: "/log" },
     ],
   },
