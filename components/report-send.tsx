@@ -35,7 +35,7 @@ export function ReportSend({ base, title, excel = true, period, periodLabel }: {
 
   useEffect(() => {
     if (!open || contacts) return;
-    fetch("/api/sigap/contacts")
+    fetch("/api/aera/contacts")
       .then((r) => r.json())
       .then((d) => setContacts(d.contacts ?? []))
       .catch(() => setError("The contact list could not be read."));
@@ -48,7 +48,7 @@ export function ReportSend({ base, title, excel = true, period, periodLabel }: {
     setError("");
     setResult("");
     try {
-      const res = await fetch(`/api/sigap/${base}/send`, {
+      const res = await fetch(`/api/aera/${base}/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ contacts: chosen, me, formats, note, ...(period ?? {}) }),
@@ -135,7 +135,7 @@ export function ReportSend({ base, title, excel = true, period, periodLabel }: {
               <p className="text-muted-foreground mt-2 text-xs leading-relaxed">
                 The emailed workbook holds the record: the decision, the actions, the approvals,
                 the steps. The rows each tool read — supplier prices among them — stay inside
-                SIGAP; download the workbook here for those.
+                AERA; download the workbook here for those.
               </p>
             )}
           </fieldset>

@@ -267,7 +267,7 @@ function UsageBarPopover({
   const promptShare = sessionTotal > 0 ? sessionInput / sessionTotal : 0;
   const responseShare = sessionTotal > 0 ? sessionOutput / sessionTotal : 0;
 
-  // Real backend configuration limits (api.py CONTEXT_TURNS, graph.py max_tokens, config.py SIGAP_COST_CAP_IDR)
+  // Real backend configuration limits (api.py CONTEXT_TURNS, graph.py max_tokens, config.py AERA_COST_CAP_IDR)
   const costCapIdr = usage?.cost_cap_idr ?? DEFAULT_COST_CAP_IDR;
   const contextTurnsLimit = usage?.context_turns ?? DEFAULT_CONTEXT_TURNS;
   const maxOutputTokens = usage?.max_output_tokens ?? DEFAULT_MAX_OUTPUT_TOKENS;
@@ -296,7 +296,7 @@ function UsageBarPopover({
     sessionCostIdr,
   );
 
-  // Real session cost vs SIGAP_COST_CAP_IDR (Rp 500,000)
+  // Real session cost vs AERA_COST_CAP_IDR (Rp 500,000)
   const sessionCostRatio = costCapIdr > 0 ? sessionCostIdr / costCapIdr : 0;
   const allCostRatio = costCapIdr > 0 ? allCostIdr / costCapIdr : 0;
   const remainingBudgetIdr = Math.max(0, costCapIdr - sessionCostIdr);
@@ -385,7 +385,7 @@ function UsageBarPopover({
 
           <div className="bg-border my-3.5 h-px" />
 
-          {/* 2. Real System & Session Limits enforced by SIGAP (Full = colored, Exhausted = grey) */}
+          {/* 2. Real System & Session Limits enforced by AERA (Full = colored, Exhausted = grey) */}
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-2 text-xs">
               <span className="text-muted-foreground truncate" title={activeModel ?? undefined}>
@@ -429,13 +429,13 @@ function UsageBarPopover({
 
           <div className="bg-border my-3.5 h-px" />
 
-          {/* 3. Real Session Cost Cap (SIGAP_COST_CAP_IDR in config.py / graph.py) */}
+          {/* 3. Real Session Cost Cap (AERA_COST_CAP_IDR in config.py / graph.py) */}
           <div className="space-y-2.5">
             <div className="flex items-center justify-between gap-2 text-xs">
               <span className="inline-flex items-center gap-1.5 font-medium">
                 Session budget cap
                 <span
-                  title={`Enforced by SIGAP_COST_CAP_IDR (Rp ${costCapIdr.toLocaleString()} per session/event).`}
+                  title={`Enforced by AERA_COST_CAP_IDR (Rp ${costCapIdr.toLocaleString()} per session/event).`}
                   className="text-muted-foreground inline-flex cursor-help"
                 >
                   <CircleHelp className="size-3.5" />
@@ -561,7 +561,7 @@ export default function Conversation({
   }, [text]);
 
   useEffect(() => {
-    fetch("/api/sigap/health")
+    fetch("/api/aera/health")
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (d?.model) setModelId(String(d.model));
@@ -572,7 +572,7 @@ export default function Conversation({
   const loadThreads = useCallback(async () => {
     if (!signedIn) return;
     try {
-      const r = await fetch(`/api/sigap/agents/${code}/conversations`);
+      const r = await fetch(`/api/aera/agents/${code}/conversations`);
       if (r.ok) {
         const d = await r.json();
         setThreads(d.conversations ?? []);
@@ -613,7 +613,7 @@ export default function Conversation({
       while (Date.now() - pollStart < 120000 && pollingRef.current === cid) {
         await new Promise((res) => setTimeout(res, 2000));
         try {
-          const checkRes = await fetch(`/api/sigap/conversations/${cid}`, {
+          const checkRes = await fetch(`/api/aera/conversations/${cid}`, {
             cache: "no-store",
           });
           if (checkRes.ok) {
@@ -649,7 +649,7 @@ export default function Conversation({
     // Mark the external request as loading before restoring its result.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setRestoring(true);
-    fetch(`/api/sigap/conversations/${threadId}`, { cache: "no-store" })
+    fetch(`/api/aera/conversations/${threadId}`, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (!alive) return;
@@ -702,7 +702,7 @@ export default function Conversation({
     pollingRef.current = null;
     setRestoring(true);
     try {
-      const r = await fetch(`/api/sigap/conversations/${next}`, { cache: "no-store" });
+      const r = await fetch(`/api/aera/conversations/${next}`, { cache: "no-store" });
       if (r.ok) {
         const d = await r.json();
         setId(next);
@@ -720,7 +720,7 @@ export default function Conversation({
   }
 
   async function remove(target: string) {
-    await fetch(`/api/sigap/conversations/${target}/delete`, { method: "POST" });
+    await fetch(`/api/aera/conversations/${target}/delete`, { method: "POST" });
     setThreads((t) => t.filter((x) => x.id !== target));
     if (target === id) startNew();
     loadThreads();
@@ -760,7 +760,7 @@ export default function Conversation({
       agentName: name,
     });
     try {
-      const r = await fetch(`/api/sigap/agents/${code}/ask`, {
+      const r = await fetch(`/api/aera/agents/${code}/ask`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -877,7 +877,7 @@ export default function Conversation({
           while (Date.now() - pollStart < 120000) {
             await new Promise((res) => setTimeout(res, 2000));
             try {
-              const checkRes = await fetch(`/api/sigap/conversations/${activeCid}`);
+              const checkRes = await fetch(`/api/aera/conversations/${activeCid}`);
               if (checkRes.ok) {
                 const checkData = await checkRes.json();
                 const msgs = checkData.messages ?? [];

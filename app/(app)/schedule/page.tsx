@@ -10,9 +10,9 @@ export default async function SchedulePage() {
   return (
     <main className="w-full px-4 py-4 md:px-6 md:py-8">
       <PageHeader title="Schedule" lead={<>
-          What SIGAP does on its own. The watchers raise an event when something lands near a
+          What AERA does on its own. The watchers raise an event when something lands near a
           port or a plant, and an event starts a handling that spends model credit. The outbox
-          delivers alerts, the sender moves approved actions into SAP, and the digest goes out
+          delivers alerts, the sender issues approved actions as documents, and the digest goes out
           every morning. Times are Jakarta time (WIB).
         </>} />
 

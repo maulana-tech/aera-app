@@ -32,7 +32,7 @@ export function Outbound({ actionId, status, delivery, mayResend }: {
     setBusy(true);
     setError("");
     try {
-      const res = await fetch(`/api/sigap/actions/${actionId}/resend`, { method: "POST" });
+      const res = await fetch(`/api/aera/actions/${actionId}/resend`, { method: "POST" });
       const d = await res.json();
       if (!res.ok) throw new Error(d.why ?? d.error ?? "failed");
       router.refresh();
@@ -52,11 +52,11 @@ export function Outbound({ actionId, status, delivery, mayResend }: {
     line = `Not delivered to ${delivery.to}: ${delivery.error ?? delivery.status}.`;
   } else if (delivery.to) {
     line = status === "pending"
-      ? `Once approved, SIGAP emails it to ${delivery.to}${delivery.why ? ` (${delivery.why})` : ""}.`
+      ? `Once approved, AERA emails it to ${delivery.to}${delivery.why ? ` (${delivery.why})` : ""}.`
       : `Will be emailed to ${delivery.to}.`;
   } else {
     line = status === "pending"
-      ? `Once approved it will not be sent by SIGAP: ${delivery.why}.`
+      ? `Once approved it will not be sent by AERA: ${delivery.why}.`
       : `Not sent: ${delivery.why}.`;
   }
 

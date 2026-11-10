@@ -3,7 +3,7 @@
 import { GrainGradient } from "@paper-design/shaders-react";
 import { useState } from "react";
 
-import { SigapMark } from "@/components/sigap-mark";
+import { AeraMark } from "@/components/aera-mark";
 import type { FormEvent, ReactNode } from "react";
 
 const termsText = (
@@ -147,9 +147,9 @@ export default function AuthSectionOne({
               href="#"
               className="mb-0 inline-flex h-12 max-w-full items-center gap-3 rounded-[10px] border border-white/25 px-5 text-base font-medium text-white/85 backdrop-blur-sm transition-colors hover:border-white/45 hover:text-white xl:mb-32 xl:px-6 xl:text-2xl"
             >
-              <SigapMark className="size-5 shrink-0 xl:size-7" />
+              <AeraMark className="size-5 shrink-0 xl:size-7" />
               <span className="truncate whitespace-nowrap">
-                SIGAP | Supply Chain Agentic AI
+                AERA | Supply Chain Agentic AI
               </span>
             </a>
           </div>

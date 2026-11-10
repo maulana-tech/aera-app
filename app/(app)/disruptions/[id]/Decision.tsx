@@ -23,7 +23,7 @@ export default function Decision({ actionId, valueIdr, limitIdr, role, approvers
     setError("");
     try {
       // Identity is NOT sent from here. The server takes it from the session token.
-      const res = await fetch(`/api/sigap/actions/${actionId}/decision`, {
+      const res = await fetch(`/api/aera/actions/${actionId}/decision`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ decision }),

@@ -74,7 +74,7 @@ export default function Outcome({ actionId, predictedIdr, outcome, outcomeAt, de
     setError("");
     try {
       // Identity is NOT sent from here. The server takes it from the session token.
-      const res = await fetch(`/api/sigap/actions/${actionId}/outcome`, {
+      const res = await fetch(`/api/aera/actions/${actionId}/outcome`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({

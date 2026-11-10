@@ -26,7 +26,7 @@ export default async function DisruptionDetail({ params }: { params: Promise<{ i
   const run = await api<Run>(`runs/${id}`);
   if (!run) notFound();
   const user = await me();
-  // The exploration graph for this run (empty unless SIGAP_GRAPH was on).
+  // The exploration graph for this run (empty unless AERA_GRAPH was on).
   const graph = await api<ExplorationGraph>(`runs/${id}/graph`);
 
   const steps = run.steps ?? [];
@@ -135,7 +135,7 @@ export default async function DisruptionDetail({ params }: { params: Promise<{ i
         {actions.length === 0 ? (
           <Empty
             what="No action was raised."
-            why="Nothing reached the point of proposing a change to SAP."
+            why="Nothing reached the point of proposing a change."
           />
         ) : (
           <ul className="max-w-4xl space-y-3">
@@ -152,17 +152,9 @@ export default async function DisruptionDetail({ params }: { params: Promise<{ i
                         ran on its own authority, under the limit
                       </span>
                     )}
-                    {a.sap_reference && (
+                    {a.reference && (
                       <span className="text-muted-foreground ml-auto font-mono text-xs">
-                        {/* The number is shown plainly either way. Calling it
-                            "SAP ..." when no SAP took it would be the lie; the
-                            mode is carried by issued_in and said in words on
-                            the trace and in the report. */}
-                        {a.sap_reference.startsWith("email")
-                          ? a.sap_reference
-                          : a.issued_in === "demo"
-                            ? a.sap_reference
-                            : `SAP ${a.sap_reference}`}
+                        {a.reference}
                       </span>
                     )}
                   </div>

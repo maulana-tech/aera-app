@@ -26,14 +26,14 @@ export function ReportFiles({
   return (
     <>
       <Button asChild size={size} variant={primary ? "default" : "outline"}>
-        <a href={`/api/sigap/${base}.pdf${q}`} download>
+        <a href={`/api/aera/${base}.pdf${q}`} download>
           <FileText />
           PDF
         </a>
       </Button>
       {excel && (
         <Button asChild size={size} variant="outline">
-          <a href={`/api/sigap/${base}.xlsx${q}`} download
+          <a href={`/api/aera/${base}.xlsx${q}`} download
              title={sheets ? `A workbook with ${sheets} sheets` : "A workbook of every table in this report"}>
             <FileSpreadsheet />
             Excel{sheets ? <span className="text-muted-foreground font-mono text-[10px]">{sheets}</span> : null}

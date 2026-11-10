@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: SIGAP release bucket, GitHub OIDC deployment role, and EC2 runtime profile
+Description: AERA release bucket, GitHub OIDC deployment role, and EC2 runtime profile
 Parameters:
   GitHubRepository:
     Type: String
@@ -75,7 +75,7 @@ Resources:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
                 token.actions.githubusercontent.com:sub: !Sub 'repo:${GitHubRepository}:environment:production'
       Policies:
-        - PolicyName: DeploySigap
+        - PolicyName: DeployAera
           PolicyDocument:
             Version: '2012-10-17'
             Statement:

@@ -32,8 +32,8 @@ unset EC2_SSH_KEY EC2_KNOWN_HOSTS
 ssh-keygen -y -P '' -f "$ssh_dir/key" >/dev/null 2>&1 || { echo 'EC2_SSH_KEY must be a valid private key without a passphrase'; exit 1; }
 ssh-keygen -F sigap-ec2 -f "$ssh_dir/known_hosts" >/dev/null || { echo 'EC2_KNOWN_HOSTS must contain the verified sigap-ec2 host key'; exit 1; }
 # Check sudo before sending a large archive; GitHub cannot enter a password.
-remote_dir=$(ssh "${ssh_options[@]}" -T "$target" 'sudo -n true && mktemp -d /tmp/sigap-upload.XXXXXXXXXX')
-[[ $remote_dir =~ ^/tmp/sigap-upload\.[a-zA-Z0-9]+$ ]] || { remote_dir=''; echo 'Unexpected remote upload directory'; exit 1; }
+remote_dir=$(ssh "${ssh_options[@]}" -T "$target" 'sudo -n true && mktemp -d /tmp/aera-upload.XXXXXXXXXX')
+[[ $remote_dir =~ ^/tmp/aera-upload\.[a-zA-Z0-9]+$ ]] || { remote_dir=''; echo 'Unexpected remote upload directory'; exit 1; }
 scp "${ssh_options[@]}" "$archive" "$target:$remote_dir/release.tar.gz"
 digest=$(sha256sum "$archive" | cut -d ' ' -f1)
 ssh "${ssh_options[@]}" -T "$target" "bash -s -- '$remote_dir' '$RELEASE_ID' '$digest'" <<'REMOTE'

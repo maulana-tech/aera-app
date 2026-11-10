@@ -66,7 +66,7 @@ const DESK: Record<string, { work: string; note?: string; examples: string[] }> 
   },
   execution: {
     work: "Actions raised, and what became of them",
-    examples: ["Which actions await approval?", "Has anything been sent to SAP?"],
+    examples: ["Which actions await approval?", "Which documents have been issued?"],
   },
   exposure: {
     work: "Latent risk",

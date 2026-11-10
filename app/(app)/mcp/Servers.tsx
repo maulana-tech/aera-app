@@ -31,7 +31,7 @@ export function Servers({ data }: { data: McpPayload }) {
     setBusy(what);
     setError("");
     try {
-      const res = await fetch(`/api/sigap/${path}`, {
+      const res = await fetch(`/api/aera/${path}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body ?? {}),
@@ -72,7 +72,7 @@ export function Servers({ data }: { data: McpPayload }) {
     <div className="mt-8 space-y-6">
       <section className="rounded-lg border">
         <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
-          <p className="text-sm font-medium">Servers SIGAP calls out to</p>
+          <p className="text-sm font-medium">Servers AERA calls out to</p>
           <span className="text-muted-foreground text-xs">
             {data.servers.length === 0
               ? "none yet — the agents use their own tools only"

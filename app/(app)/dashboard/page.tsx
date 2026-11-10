@@ -239,15 +239,14 @@ export default async function Dashboard({ searchParams }: {
         />
       </section>
 
-      {(!s.model_ready || !s.sap_ready) && (
+      {!s.model_ready && (
         <div className="mt-8 rounded-lg border p-4">
           <p className="text-sm font-medium">Not fully connected</p>
           <div className="mt-2 flex flex-wrap gap-2">
-            {!s.model_ready && <StatusBadge status="held">AWS_REGION not set</StatusBadge>}
-            {!s.sap_ready && <StatusBadge status="held">SAP_API_KEY not set</StatusBadge>}
+            <StatusBadge status="held">AWS_REGION not set</StatusBadge>
           </div>
           <p className="text-muted-foreground mt-2 text-xs leading-relaxed">
-            While both are empty the system makes no decisions at all, and does not
+            Until a model is connected the system makes no decisions at all, and does not
             pretend to. The charts below still label where every figure came from.
           </p>
         </div>

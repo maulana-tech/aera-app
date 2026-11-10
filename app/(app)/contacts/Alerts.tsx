@@ -33,7 +33,7 @@ export function Alerts({ data }: { data: NotificationsPayload }) {
     setResult("");
     setLink("");
     try {
-      const res = await fetch("/api/sigap/notifications/connect", { method: "POST" });
+      const res = await fetch("/api/aera/notifications/connect", { method: "POST" });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error ?? "failed");
       // This used to window.open() the link here and say "sign in, then come
@@ -56,7 +56,7 @@ export function Alerts({ data }: { data: NotificationsPayload }) {
     setError("");
     setResult("");
     try {
-      const res = await fetch("/api/sigap/notifications/test", { method: "POST" });
+      const res = await fetch("/api/aera/notifications/test", { method: "POST" });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error ?? "failed");
       setResult(`${d.queued} queued · ${d.delivery}`);
@@ -113,7 +113,7 @@ export function Alerts({ data }: { data: NotificationsPayload }) {
                         Open the Google sign-in page
                       </a>
                       <span className="text-muted-foreground">
-                        {" "}— whoever signs in there is the mailbox SIGAP sends from. Come back
+                        {" "}— whoever signs in there is the mailbox AERA sends from. Come back
                         and refresh this page afterwards. The link expires in a few minutes.
                       </span>
                     </p>

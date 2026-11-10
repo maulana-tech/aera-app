@@ -38,14 +38,12 @@ const toolLabels: Record<string, string> = {
   propose_safety_stock_change: "Proposing a safety stock adjustment",
   scan_supply_exposure: "Checking supply risks",
   get_supplier_certifications: "Checking supplier certifications",
-  rank_po_slip_risk: "Ranking purchase orders by slip risk",
   scan_live_hazards: "Checking live hazards near ports and plants",
   get_shipments_at_port: "Checking which shipments are at the port",
   find_bonded_stock: "Looking for goods already in a bonded warehouse",
   get_port_conditions: "Checking port conditions",
   search_news: "Searching the news",
   get_public_holidays: "Checking the holiday calendar",
-  web_brief: "Asking a web search",
   get_exchange_rate: "Checking the exchange rate",
   record_outcome: "Recording what actually happened",
   get_customs_status: "Checking customs status",
@@ -65,12 +63,12 @@ const agentNames: Record<string, string> = {
 export function toolLabel(name: string): string {
   if (Object.hasOwn(toolLabels, name)) return toolLabels[name];
   // `mcp__<server>__<tool>` (core/registry.py REMOTE_PREFIX): a tool on an MCP
-  // server SIGAP does not operate. It has to read as borrowed here, because
+  // server AERA does not operate. It has to read as borrowed here, because
   // the generic fallback below would describe it as a system check of ours.
   if (name.startsWith("mcp__")) {
     const [server, ...rest] = name.slice(5).split("__");
     const tool = rest.join("__").replace(/_/g, " ").trim();
-    if (server && tool) return `Asking ${server} (outside SIGAP): ${tool}`;
+    if (server && tool) return `Asking ${server} (outside AERA): ${tool}`;
   }
   const specialist = name.startsWith("ask_") ? name.slice(4) : "";
   return Object.hasOwn(agentNames, specialist)

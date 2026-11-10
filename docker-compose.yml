@@ -2,7 +2,7 @@ services:
   # 1. Database Service (PostgreSQL)
   database:
     image: postgres:16-alpine
-    container_name: sigap-database
+    container_name: aera-database
     restart: always
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-sigap}
@@ -11,7 +11,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - sigap_network
+      - aera_network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sigap} -d ${POSTGRES_DB:-sigap}"]
       interval: 5s
@@ -20,44 +20,44 @@ services:
 
   # 2. Agent Backend Service (Python API)
   agents:
-    image: ${IMAGE_AGENTS:-sigap-agents:local}
+    image: ${IMAGE_AGENTS:-aera-agents:local}
     build:
-      context: ./sigap/agent
+      context: ./aera/agent
       dockerfile: Dockerfile
-    container_name: sigap-agents
+    container_name: aera-agents
     restart: always
     environment:
-      - SIGAP_HOST=0.0.0.0
+      - AERA_HOST=0.0.0.0
       - PORT=8787
-      - SIGAP_ENV=${SIGAP_ENV:-production}
+      - AERA_ENV=${AERA_ENV:-production}
       - DATABASE_URL=postgresql://${POSTGRES_USER:-sigap}@database:5432/${POSTGRES_DB:-sigap}
-      - SIGAP_DB=/app/data/sigap.db
+      - AERA_DB=/app/data/sigap.db
     env_file:
-      - ./sigap/agent/.env
+      - ./aera/agent/.env
     volumes:
       - agent_data:/app/data
     networks:
-      - sigap_network
+      - aera_network
     depends_on:
       database:
         condition: service_healthy
 
   # 3. Web Frontend Service (Next.js Standalone)
-  sigap:
-    image: ${IMAGE_WEB:-sigap-web:local}
+  aera:
+    image: ${IMAGE_WEB:-aera-web:local}
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: sigap-web
+    container_name: aera-web
     restart: always
     ports:
       - "127.0.0.1:3000:3000"
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - SIGAP_API=http://agents:8787
+      - AERA_API=http://agents:8787
     networks:
-      - sigap_network
+      - aera_network
     depends_on:
       - agents
 
@@ -68,6 +68,6 @@ volumes:
     driver: local
 
 networks:
-  sigap_network:
+  aera_network:
     driver: bridge
 

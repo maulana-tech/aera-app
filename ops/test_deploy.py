@@ -14,9 +14,9 @@ class DeploymentTest(unittest.TestCase):
             base = Path(directory)
             root = base / "project"
             units = base / "systemd"
-            env = root / "sigap/agent/.env"
+            env = root / "aera/agent/.env"
             env.parent.mkdir(parents=True)
-            env.write_text("SIGAP_DB=/var/lib/sigap/sigap.db\n")
+            env.write_text("AERA_DB=/var/lib/sigap/sigap.db\n")
             current = root / "current"
             if not first_release:
                 old = root / "releases/old"
@@ -24,15 +24,15 @@ class DeploymentTest(unittest.TestCase):
                 current.symlink_to(old)
             overrides = []
             for service in ("agent", "web"):
-                override = units / f"sigap-{service}.service.d/10-release.conf"
+                override = units / f"aera-{service}.service.d/10-release.conf"
                 override.parent.mkdir(parents=True)
                 if not first_release:
                     override.write_text(f"old {service}\n")
                 overrides.append(override)
             archive = base / "release.tar.gz"
             with tarfile.open(archive, "w:gz") as bundle:
-                for name in ("standalone/server.js", "sigap/agent/api.py",
-                             "sigap/agent/requirements.txt"):
+                for name in ("standalone/server.js", "aera/agent/api.py",
+                             "aera/agent/requirements.txt"):
                     data = b"# offline fixture\n"
                     member = tarfile.TarInfo(name)
                     member.size = len(data)
@@ -41,7 +41,7 @@ class DeploymentTest(unittest.TestCase):
             script = script.replace("[[ $EUID == 0 ]]", "[[ 1 == 1 ]]")
             script = script.replace("/opt/sigap-project", str(root))
             script = script.replace("/etc/systemd/system", str(units))
-            script = script.replace("/var/lock/sigap-deploy.lock", str(base / "lock"))
+            script = script.replace("/var/lock/aera-deploy.lock", str(base / "lock"))
             local_script = base / "deploy.sh"
             local_script.write_text(script)
             binaries = base / "bin"
@@ -79,7 +79,7 @@ class DeploymentTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(current.resolve(), root / "releases" / release_id)
                 self.assertIn("current/standalone", overrides[1].read_text())
-            self.assertEqual(env.read_text(), "SIGAP_DB=/var/lib/sigap/sigap.db\n")
+            self.assertEqual(env.read_text(), "AERA_DB=/var/lib/sigap/sigap.db\n")
 
     def test_success(self):
         self.exercise()

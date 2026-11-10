@@ -34,7 +34,7 @@ yarn-error.log*
 .env*
 # The example carries no values, and SETUP.md tells you to copy it.
 !.env.example
-!sigap/agent/.env.example
+!aera/agent/.env.example
 
 # vercel
 .vercel
@@ -47,11 +47,11 @@ __pycache__/
 .venv/
 *.pyc
 .env
-sigap/agent/.env
-sigap/agent/data/
+aera/agent/.env
+aera/agent/data/
 
 # Hackathon service keys. Fetched from the keybroker, never committed.
-sigap/agent/.secrets/
+aera/agent/.secrets/
 
 # Any secrets bundle, anywhere. A zip is the shape secrets travel in when
 # somebody is sharing them, and the one that slips past a rule written for
@@ -62,8 +62,8 @@ secrets.zip
 *.secrets.zip
 secrets/
 
-# Joule CLI debug dumps. They can carry credentials.
-sigap/agent/debug-*.json
+# CLI debug dumps. They can carry credentials.
+aera/agent/debug-*.json
 
 # Source artwork for the brand mark. The traced SVGs are committed in public/logo/; the
 # original upload stays out of the repo.
@@ -74,10 +74,10 @@ socrates-logo.zip
 .codegraph/
 
 # Kira's rule pack: contract terms and supplier certificates, per installation.
-# The format and an example are committed beside it (sigap/references/).
-sigap/references/rule-pack.json
+# The format and an example are committed beside it (aera/references/).
+aera/references/rule-pack.json
 
 # A local run of main.py writes its trace here (its documented --out default).
 # Nothing in the app reads the file — the UI fetches traces from GET /runs/{id}/trace —
 # so it is a run artifact, not a fixture.
-app/sigap/trace.json
+app/aera/trace.json

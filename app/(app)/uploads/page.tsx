@@ -17,11 +17,10 @@ export default async function UploadsPage() {
   return (
     <main className="w-full px-4 py-4 md:px-6 md:py-8">
       <PageHeader title="Upload data" lead={<>
-          Until SAP is connected, company data can come in as CSV. This is not a substitute
-          for the SAP connection. Once <span className="font-mono">SAP_API_KEY</span> is set,
-          the tools read live data and an upload of anything SAP holds is ignored. What S/4HANA
-          does not hold is still read from here: customs declarations, approved substitutes,
-          and a partner&apos;s email where its business partner has none.
+          Company data comes in as CSV. Every tool reads the latest upload of its table, and
+          falls back to the shipped sample data only where nothing has been uploaded. That
+          includes stock, orders and suppliers as well as customs declarations, approved
+          substitutes and partner emails.
         </>} />
 
       <div className="mt-8 grid gap-10 xl:grid-cols-2 xl:gap-12">

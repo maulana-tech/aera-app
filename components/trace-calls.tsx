@@ -184,7 +184,7 @@ export function CallDetail({ c, runId, compact = false }: { c: TraceCall; runId:
     setLoading(true);
     setErr(null);
     try {
-      const r = await fetch(`/api/sigap/runs/${runId}/steps/${c.seq}`);
+      const r = await fetch(`/api/aera/runs/${runId}/steps/${c.seq}`);
       const body = await r.json();
       if (!r.ok) throw new Error(body.error ?? `HTTP ${r.status}`);
       const value = body.detail?.result;
@@ -199,7 +199,7 @@ export function CallDetail({ c, runId, compact = false }: { c: TraceCall; runId:
   }
 
   async function download() {
-    const r = await fetch(`/api/sigap/runs/${runId}/steps/${c.seq}`);
+    const r = await fetch(`/api/aera/runs/${runId}/steps/${c.seq}`);
     const blob = new Blob([JSON.stringify(await r.json(), null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);

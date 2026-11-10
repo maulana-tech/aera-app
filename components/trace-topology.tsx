@@ -42,7 +42,6 @@ const STRIPE: Record<string, string> = {
   agent: "border-l-sky-500",
   tool: "border-l-zinc-400 dark:border-l-zinc-500",
   action: "border-l-rose-500",
-  sap: "border-l-emerald-500",
   upload: "border-l-cyan-500",
   fixture: "border-l-amber-500",
   profile: "border-l-amber-400",
@@ -301,12 +300,11 @@ function titleFor(n: TraceNode): string {
 
 function Legend() {
   const items: { cls: string; label: string }[] = [
-    { cls: "bg-emerald-500", label: "SAP" },
     { cls: "bg-cyan-500", label: "upload" },
     { cls: "bg-amber-500", label: "fixture / profile" },
     { cls: "bg-teal-500", label: "outside feed" },
     { cls: "bg-violet-500", label: "engine (calculation)" },
-    { cls: "bg-fuchsia-500", label: "SIGAP record" },
+    { cls: "bg-fuchsia-500", label: "AERA record" },
     { cls: "bg-rose-500", label: "action" },
   ];
   return (

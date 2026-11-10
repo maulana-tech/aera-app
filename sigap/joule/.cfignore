@@ -1,9 +1,0 @@
-.env
-shim.env
-.venv/
-__pycache__/
-*.pyc
-*.pyo
-.python-version
-joule/
-README.md

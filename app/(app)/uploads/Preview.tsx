@@ -21,7 +21,7 @@ type Preview = UploadRecord & {
 /* A row count is a claim. This is the drawer that lets somebody check it.
  *
  * The list used to say "1,395 rows" and nothing else, so the only way to see
- * what SIGAP had actually been given was to open the CSV again — and the file
+ * what AERA had actually been given was to open the CSV again — and the file
  * on a laptop is not necessarily the file in the record. The rows are fetched
  * when the drawer opens rather than with the page, because a page listing
  * twenty uploads would otherwise carry every one of them.
@@ -37,7 +37,7 @@ export function PreviewUpload({ upload, children }: {
   useEffect(() => {
     if (!open || data) return;
     let live = true;
-    fetch(`/api/sigap/uploads/${upload.id}/rows`)
+    fetch(`/api/aera/uploads/${upload.id}/rows`)
       .then(async (r) => {
         const d = await r.json();
         if (!r.ok) throw new Error(d.error ?? `HTTP ${r.status}`);

@@ -18,7 +18,7 @@ export function DeleteUpload({ id }: { id: string }) {
       aria-label="Delete upload"
       onClick={async () => {
         setBusy(true);
-        await fetch(`/api/sigap/uploads/${id}/delete`, { method: "POST" });
+        await fetch(`/api/aera/uploads/${id}/delete`, { method: "POST" });
         router.refresh();
         setBusy(false);
       }}

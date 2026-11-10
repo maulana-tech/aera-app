@@ -14,7 +14,7 @@ import type { ExplorationGraph, GraphEdge, GraphNode } from "@/app/lib";
 /* The exploration graph as a layered DAG.
  *
  * SmartX renders its topology on an SVG canvas; here the nodes are HTML so they
- * can carry the one thing SIGAP's graph has that  does not — a fact's
+ * can carry the one thing AERA's graph has that  does not — a fact's
  * provenance badge — and stay legible in both themes without fighting SVG fill
  * colours. The edges are a single SVG layer painted behind the nodes: React
  * renders every path, there is no d3.select touching the DOM.
@@ -94,7 +94,7 @@ export function ExplorationGraph({ graph }: { graph: ExplorationGraph | null }) 
       <div className="rounded-lg border border-dashed p-6 text-sm">
         <p className="font-medium">The exploration graph was not recorded.</p>
         <p className="text-muted-foreground mt-1.5 leading-relaxed">
-          It is written only when <code className="font-mono text-xs">SIGAP_GRAPH=1</code> is set
+          It is written only when <code className="font-mono text-xs">AERA_GRAPH=1</code> is set
           for the agent service. With it on, this shows the leads, facts, options and rulings
           of the handling as the chain that produced them.
         </p>

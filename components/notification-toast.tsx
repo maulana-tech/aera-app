@@ -21,9 +21,9 @@ type StoredPending = {
   startedAt: number;
 };
 
-const STORAGE_KEY = "sigap:pending_ai_task";
-const EVENT_START = "sigap:ai-output-start";
-const EVENT_DONE = "sigap:ai-output-done";
+const STORAGE_KEY = "aera:pending_ai_task";
+const EVENT_START = "aera:ai-output-start";
+const EVENT_DONE = "aera:ai-output-done";
 
 /**
  * Register that an AI query is actively generating.
@@ -186,7 +186,7 @@ export function NotificationToast() {
       if (!targetCid || targetCid === "new") {
         try {
           const listRes = await fetch(
-            `/api/sigap/agents/${stored.agentCode}/conversations`,
+            `/api/aera/agents/${stored.agentCode}/conversations`,
             { cache: "no-store" }
           );
           if (listRes.ok) {
@@ -209,7 +209,7 @@ export function NotificationToast() {
 
       // Check if the conversation has completed
       try {
-        const convRes = await fetch(`/api/sigap/conversations/${targetCid}`, {
+        const convRes = await fetch(`/api/aera/conversations/${targetCid}`, {
           cache: "no-store",
         });
         if (!convRes.ok) return;

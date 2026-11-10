@@ -5,7 +5,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { gist } from "@/lib/gist";
 import { cn } from "@/lib/utils";
 
-// Jakarta, like every other stamp SIGAP shows and writes.
+// Jakarta, like every other stamp AERA shows and writes.
 const formatStartedAt = (iso: string) => wib(iso);
 
 function formatTrigger(trigger?: string | null): string {
@@ -59,7 +59,7 @@ export function DisruptionCard({ r }: { r: RunRow }) {
     bodyContent = gist(r.decision.recommendation);
     bodyCls = "text-foreground/80";
   } else if (isRunning) {
-    bodyContent = "Specialists actively scanning SAP purchase orders, inventory buffers, and logistics exposure...";
+    bodyContent = "Specialists actively scanning purchase orders, inventory buffers, and logistics exposure...";
     bodyCls = "text-muted-foreground/75 italic";
   } else {
     bodyContent = "Handling logged in decision queue. Awaiting agent assignment.";

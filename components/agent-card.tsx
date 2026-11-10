@@ -301,7 +301,7 @@ type AgentBotStyle = {
 };
 
 /**
- * Each of the 12 SIGAP agents gets a distinct Bloub silhouette, expression, and color
+ * Each of the 12 AERA agents gets a distinct Bloub silhouette, expression, and color
  * tailored to their role on the supply-chain response team.
  */
 const AGENT_BOT_STYLES: Record<string, AgentBotStyle> = {
@@ -325,7 +325,7 @@ const AGENT_BOT_STYLES: Record<string, AgentBotStyle> = {
   Tara: { shape: "galet", expression: "fier", color: "#f0b429", rotDeg: 15 },
   // 10. Otto (Precedent / Memory) — Warm brown egg, wise seen-it-all historian
   Otto: { shape: "egg", expression: "somnolent", color: "#8b5e3c", rotDeg: -8 },
-  // 11. Bram (Execution / SAP) — Electric cyan pentagon, cheerful action executor
+  // 11. Bram (Execution) — Electric cyan pentagon, cheerful action executor
   Bram: { shape: "pentagone", expression: "hilare", color: "#06b6d4", rotDeg: 8 },
   // 12. Vega (Exposure / Risk Scanner) — Royal-indigo octagon with large wide-open scanner eyes
   Vega: { shape: "octogone", expression: "effraye", color: "#4f46e5", rotDeg: 0 },

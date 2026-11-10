@@ -25,7 +25,7 @@ import { WIB, wib, type Trace, type TraceCall, type TraceEdge, type TraceNode } 
 
 const SWATCH: Record<string, string> = {
   event: "bg-slate-400", agent: "bg-sky-500", tool: "bg-zinc-400", action: "bg-rose-500",
-  sap: "bg-emerald-500", upload: "bg-cyan-500", fixture: "bg-amber-500", profile: "bg-amber-400",
+  upload: "bg-cyan-500", fixture: "bg-amber-500", profile: "bg-amber-400",
   rules: "bg-orange-500", engine: "bg-violet-500", record: "bg-fuchsia-500",
   model: "bg-indigo-500", external: "bg-teal-500",
 };
@@ -40,13 +40,12 @@ const kindOf = (n: TraceNode) =>
 
 // What each kind of source is, in the words a buyer would use.
 const SOURCE_WHAT: Record<string, string> = {
-  sap: "An SAP S/4HANA service, read over its OData API.",
-  upload: "A file someone uploaded on the Data page. It fills what SAP does not hold.",
-  fixture: "Sample data that ships with SIGAP, not a company record. Connect SAP or upload a file to replace it.",
+  upload: "A file someone uploaded on the Data page.",
+  fixture: "Sample data that ships with AERA, not a company record. Upload a file to replace it.",
   profile: "An assumed value from the company profile, not a reading.",
-  rules: "The rule tables SIGAP checks against: TKDN, LARTAS, contract clauses.",
-  engine: "A calculation in SIGAP's own code, made from figures read elsewhere.",
-  record: "SIGAP's own records: past handlings, events and actions.",
+  rules: "The rule tables AERA checks against: TKDN, LARTAS, contract clauses.",
+  engine: "A calculation in AERA's own code, made from figures read elsewhere.",
+  record: "AERA's own records: past handlings, events and actions.",
   model: "An answer written by a language model, not a system of record.",
   external: "A public outside feed.",
 };
@@ -244,16 +243,9 @@ function Overview({
           ["Value", typeof n.cost_idr === "number" ? rupiah(n.cost_idr) : "-"],
           ["Authority", n.autonomous ? "ran on its own authority, under the limit" : "needs a person's approval"],
           ...(n.created_at ? [["Raised", when(n.created_at)] as [string, ReactNode]] : []),
-          ...(n.sap_reference
+          ...(n.reference
             ? [["Document",
-                <span key="r" className="font-mono">
-                  {n.sap_reference}
-                  {n.issued_in === "demo" && (
-                    <span className="text-muted-foreground ml-2 font-sans text-xs">
-                      issued against seed data (demo mode)
-                    </span>
-                  )}
-                </span>] as [string, ReactNode]]
+                <span key="r" className="font-mono">{n.reference}</span>] as [string, ReactNode]]
             : []),
         ]} />
         {n.payload && Object.keys(n.payload).length > 0 && (

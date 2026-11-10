@@ -16,7 +16,7 @@ export default async function AgentTeam() {
       <main className="w-full px-6 py-16">
         <h1 className="text-xl font-semibold">The agent service is not responding</h1>
         <pre className="bg-muted mt-4 rounded-lg border p-4 font-mono text-sm">
-          cd sigap/agent{"\n"}python3 api.py
+          cd aera/agent{"\n"}python3 api.py
         </pre>
       </main>
     );
@@ -68,15 +68,6 @@ export default async function AgentTeam() {
           </div>
           <StatusBadge status={summary.model_ready ? "done" : "held"}>
             {summary.model_ready ? "Bedrock ready" : "AWS_REGION not set"}
-          </StatusBadge>
-          <StatusBadge status={summary.sap_ready ? "done" : "held"}>
-            {summary.sap_ready
-              ? "SAP connected"
-              : summary.data_mode === "demo"
-                ? "SAP off in demo"
-                : summary.sap_key_set
-                  ? "SAP not answering"
-                  : "SAP_API_KEY not set"}
           </StatusBadge>
         </div>
       </header>

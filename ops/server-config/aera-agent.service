@@ -1,0 +1,17 @@
+[Unit]
+Description=AERA Agent Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/sigap-project/aera/agent
+EnvironmentFile=/opt/sigap-project/aera/agent/.env
+ExecStart=/opt/sigap-project/aera/agent/.venv/bin/python /opt/sigap-project/aera/agent/api.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

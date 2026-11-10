@@ -8,38 +8,38 @@ release_id=${2:?release ID required}
 root=/opt/sigap-project
 release="$root/releases/$release_id"
 current="$root/current"
-env_file="$root/sigap/agent/.env"
-secrets_dir="$root/sigap/agent/.secrets"
+env_file="$root/aera/agent/.env"
+secrets_dir="$root/aera/agent/.secrets"
 [[ -f $env_file ]] || { echo "Missing server configuration: $env_file"; exit 1; }
 for tool in node python3 curl flock runuser; do command -v "$tool" >/dev/null; done
 [[ $(node -p 'process.versions.node.split(".")[0]') == 20 ]] || { echo 'Install Node.js 20 on EC2'; exit 1; }
 # ponytail: one EC2 deployment lock; use an orchestrator for multiple instances.
-exec 9>/var/lock/sigap-deploy.lock
+exec 9>/var/lock/aera-deploy.lock
 flock -w 120 9
 mkdir -p "$root/releases"
 [[ ! -e $release ]] || { echo 'Release already exists; rerun the GitHub workflow'; exit 1; }
 mkdir "$release"
 tar -xzf "$archive" -C "$release" --no-same-owner
-[[ -f $release/standalone/server.js && -f $release/sigap/agent/api.py ]]
-ln -s "$env_file" "$release/sigap/agent/.env"
+[[ -f $release/standalone/server.js && -f $release/aera/agent/api.py ]]
+ln -s "$env_file" "$release/aera/agent/.env"
 # core/config.py reads .env, .secrets/bedrock.env and .secrets/notify.env. Only
 # the first was ever linked, so anything kept in .secrets reached the laptop and
 # never the server: the deployed Contacts page reported email "via smtp,
 # connectable false" because COMPOSIO_API_KEY was not there to be read. Linked
 # the same way as .env, and optional, because a server may keep everything in
 # .env instead.
-if [[ -d $secrets_dir ]]; then ln -s "$secrets_dir" "$release/sigap/agent/.secrets"; fi
+if [[ -d $secrets_dir ]]; then ln -s "$secrets_dir" "$release/aera/agent/.secrets"; fi
 chown -R ubuntu:ubuntu "$release"
-runuser -u ubuntu -- python3 -m venv "$release/sigap/agent/.venv"
-runuser -u ubuntu -- "$release/sigap/agent/.venv/bin/pip" install \
-  -r "$release/sigap/agent/requirements.txt" boto3
-runuser -u ubuntu -- "$release/sigap/agent/.venv/bin/python" -c \
-  'import sys; sys.path.insert(0, sys.argv[1]); from core.config import CFG; assert CFG.database == "/var/lib/sigap/sigap.db", "Set absolute SIGAP_DB in the server .env"' \
-  "$release/sigap/agent"
+runuser -u ubuntu -- python3 -m venv "$release/aera/agent/.venv"
+runuser -u ubuntu -- "$release/aera/agent/.venv/bin/pip" install \
+  -r "$release/aera/agent/requirements.txt" boto3
+runuser -u ubuntu -- "$release/aera/agent/.venv/bin/python" -c \
+  'import sys; sys.path.insert(0, sys.argv[1]); from core.config import CFG; assert CFG.database == "/var/lib/sigap/sigap.db", "Set absolute AERA_DB in the server .env"' \
+  "$release/aera/agent"
 
 # Overrides preserve the existing unit's user, environment, and restart settings.
-agent_override=/etc/systemd/system/sigap-agent.service.d/10-release.conf
-web_override=/etc/systemd/system/sigap-web.service.d/10-release.conf
+agent_override=/etc/systemd/system/aera-agent.service.d/10-release.conf
+web_override=/etc/systemd/system/aera-web.service.d/10-release.conf
 mkdir -p "$(dirname "$agent_override")" "$(dirname "$web_override")"
 backup=$(mktemp -d)
 previous=$(readlink "$current" || true)
@@ -66,7 +66,7 @@ rollback() {
       if [[ -f $backup/$name ]]; then cp "$backup/$name" "$path"; else rm -f "$path"; fi
     done
     systemctl daemon-reload || true
-    systemctl restart sigap-agent sigap-web || true
+    systemctl restart aera-agent aera-web || true
   fi
   rm -rf "$backup"
   exit "$code"
@@ -78,10 +78,10 @@ switched=1
 mv -Tf "$current.new" "$current"
 cat > "$agent_override" <<UNIT
 [Service]
-WorkingDirectory=$current/sigap/agent
+WorkingDirectory=$current/aera/agent
 ExecStart=
-ExecStart=$current/sigap/agent/.venv/bin/python $current/sigap/agent/api.py
-Environment=SIGAP_DB=/var/lib/sigap/sigap.db
+ExecStart=$current/aera/agent/.venv/bin/python $current/aera/agent/api.py
+Environment=AERA_DB=/var/lib/sigap/sigap.db
 UNIT
 cat > "$web_override" <<UNIT
 [Service]
@@ -91,13 +91,13 @@ ExecStart=/usr/bin/node $current/standalone/server.js
 Environment=NODE_ENV=production
 Environment=HOSTNAME=127.0.0.1
 Environment=PORT=3000
-Environment=SIGAP_API=http://127.0.0.1:8787
+Environment=AERA_API=http://127.0.0.1:8787
 UNIT
 systemctl daemon-reload
-systemctl restart sigap-agent sigap-web
+systemctl restart aera-agent aera-web
 healthy=0
 for attempt in $(seq 1 30); do
-  if systemctl is-active --quiet sigap-agent sigap-web && \
+  if systemctl is-active --quiet aera-agent aera-web && \
       curl --fail --silent --max-time 5 http://127.0.0.1:8787/health >/dev/null && \
       curl --fail --silent --max-time 5 http://127.0.0.1:3000/login >/dev/null; then
     healthy=1

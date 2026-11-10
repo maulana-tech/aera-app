@@ -20,7 +20,6 @@ const SELECT =
   "disabled:cursor-not-allowed disabled:opacity-60 dark:bg-input/30";
 
 function rate(m: ModelListing): string {
-  if (m.via === "SAP AI Core") return "AI Core capacity";
   const [i, o] = m.usd_per_mtok;
   return `$${i} / $${o} per MTok`;
 }
@@ -83,7 +82,7 @@ export function ModelChoice({ data }: { data: ModelsPayload }) {
     }
     if (Object.keys(agents).length) body.agents = agents;
     try {
-      const res = await fetch("/api/sigap/models", {
+      const res = await fetch("/api/aera/models", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
@@ -101,7 +100,7 @@ export function ModelChoice({ data }: { data: ModelsPayload }) {
   async function test(model: string) {
     setTesting(model);
     try {
-      const res = await fetch("/api/sigap/models/test", {
+      const res = await fetch("/api/aera/models/test", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ model }),
@@ -194,7 +193,7 @@ export function ModelChoice({ data }: { data: ModelsPayload }) {
       <section>
         <h2 className="text-sm font-medium">Per agent</h2>
         <p className="text-muted-foreground mt-1 max-w-2xl text-xs leading-relaxed">
-          An agent set here, or by its own SIGAP_MODEL_&lt;CODE&gt; variable, leaves its role&apos;s model.
+          An agent set here, or by its own AERA_MODEL_&lt;CODE&gt; variable, leaves its role&apos;s model.
         </p>
         <ul className="mt-3 divide-y rounded-lg border">
           {data.team.map((t) => (
@@ -212,7 +211,7 @@ export function ModelChoice({ data }: { data: ModelsPayload }) {
                 onChange={(e) => pick(t.agent, e.target.value)} aria-label={`Model for ${t.name}`}
               >
                 <option value="">
-                  {t.source === `SIGAP_MODEL_${t.agent.toUpperCase()}`
+                  {t.source === `AERA_MODEL_${t.agent.toUpperCase()}`
                     ? `From .env: ${name(t.model)}`
                     : "Follows its role"}
                 </option>

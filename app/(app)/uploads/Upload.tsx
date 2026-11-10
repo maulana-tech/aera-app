@@ -40,7 +40,7 @@ export default function Upload({ signedIn }: { signedIn: boolean }) {
     setBusy(true);
     setMessage(null);
     try {
-      const res = await fetch("/api/sigap/uploads", {
+      const res = await fetch("/api/aera/uploads", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({

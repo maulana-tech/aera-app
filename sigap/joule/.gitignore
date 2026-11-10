@@ -1,7 +1,0 @@
-# Local settings for the shim and for the Joule capability. Both can name the
-# service user, the destination and the team's IAS group: keep them out of git.
-shim.env
-joule/joule.env
-joule/build/
-.venv/
-__pycache__/

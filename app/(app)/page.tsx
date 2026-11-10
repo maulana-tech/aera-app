@@ -9,8 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function Queue() {
   const [data, health] = await Promise.all([
     api<{ runs: RunRow[]; board?: Board }>("runs"),
-    api<{ env: string; sap_ready: boolean; model_ready: boolean;
-          data_mode?: "live" | "demo"; sap_key_set?: boolean }>("health"),
+    api<{ env: string; model_ready: boolean }>("health"),
   ]);
 
   if (!data) {
@@ -18,7 +17,7 @@ export default async function Queue() {
       <main className="w-full px-6 py-16">
         <h1 className="text-xl font-semibold">The agent service is not responding</h1>
         <pre className="mt-4 rounded-lg border border-border bg-card p-4 font-mono text-sm">
-          cd sigap/agent{"\n"}python3 api.py
+          cd aera/agent{"\n"}python3 api.py
         </pre>
       </main>
     );
@@ -54,18 +53,6 @@ export default async function Queue() {
           <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
             <AutoRefresh active={runs.some((r) => r.status === "running")} />
             <Badge variant="outline" className="font-mono text-[10px]">{health.env}</Badge>
-            {/* "not set" would be a lie in demo mode: the key is set, the
-                tools are simply told not to call it. */}
-            <StatusBadge status={health.sap_ready ? "done" : "held"}>
-              SAP{" "}
-              {health.sap_ready
-                ? "connected"
-                : health.data_mode === "demo"
-                  ? "off in demo"
-                  : health.sap_key_set
-                    ? "not answering"
-                    : "not set"}
-            </StatusBadge>
             <StatusBadge status={health.model_ready ? "done" : "held"}>
               model {health.model_ready ? "ready" : "not set"}
             </StatusBadge>

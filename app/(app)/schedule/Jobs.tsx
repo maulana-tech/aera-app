@@ -30,7 +30,7 @@ export function JobList({ data }: { data: SchedulePayload }) {
     setBusy(path);
     setError("");
     try {
-      const res = await fetch(`/api/sigap/schedule/${path}`, {
+      const res = await fetch(`/api/aera/schedule/${path}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body ?? {}),
@@ -52,8 +52,8 @@ export function JobList({ data }: { data: SchedulePayload }) {
       {(!data.enabled || !data.watch) && (
         <p className="text-muted-foreground rounded-lg border border-dashed p-4 text-sm">
           {!data.enabled
-            ? "Nothing runs on its own here: SIGAP_SCHEDULE=0. A job can still be run by hand."
-            : "The watchers are off here (SIGAP_WATCH=0), so no feed raises an event on its own. Alerts, the SAP sender and the digest still run."}
+            ? "Nothing runs on its own here: AERA_SCHEDULE=0. A job can still be run by hand."
+            : "The watchers are off here (AERA_WATCH=0), so no feed raises an event on its own. Alerts, the sender and the digest still run."}
         </p>
       )}
       {!data.may_change && (

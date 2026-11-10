@@ -24,7 +24,7 @@ test("double underscores are bold, as markdown says", () => {
 test("markdown is stripped as markdown", () => {
   assert.equal(gist("**Order** from *Siam* with `qty 232.7`."),
                "Order from Siam with qty 232.7.");
-  assert.equal(gist("See [the quotation](https://sap.example/6000000848) first."),
+  assert.equal(gist("See [the quotation](https://erp.example/6000000848) first."),
                "See the quotation first.");
   assert.equal(gist("- Split the order across B and C."),
                "Split the order across B and C.");

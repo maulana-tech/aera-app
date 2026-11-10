@@ -1,4 +1,4 @@
-export const UPSTREAM = process.env.SIGAP_API ?? "http://127.0.0.1:8787";
+export const UPSTREAM = process.env.AERA_API ?? "http://127.0.0.1:8787";
 
 export type Step = {
   seq: number; stage: string; agent: string; agent_name: string;
@@ -11,9 +11,7 @@ export type Delivery = {
 };
 export type Action = {
   id: string; kind: string; autonomous: number; status: string;
-  payload: Record<string, unknown>; sap_reference: string | null; created_at: string;
-  /** "live" once S/4HANA took it, "demo" when issued against seed data. */
-  issued_in?: "live" | "demo" | null;
+  payload: Record<string, unknown>; reference: string | null; created_at: string;
   /** Where an approved message to a supplier or a customer goes, or went. */
   delivery?: Delivery;
   /**
@@ -77,7 +75,7 @@ export async function apiResult<T>(path: string): Promise<
   { data: T; error: null } | { data: null; error: string }
 > {
   const { cookies } = await import("next/headers");
-  const token = (await cookies()).get("sigap_session")?.value;
+  const token = (await cookies()).get("aera_session")?.value;
   try {
     const r = await fetch(`${UPSTREAM}/${path}`, {
       cache: "no-store",
@@ -116,10 +114,7 @@ export type Agent = {
 };
 export type AgentSummary = {
   agent_count: number; tools_installed: number; tools_total: number;
-  prompts_written: number; model_ready: boolean; sap_ready: boolean;
-  /** What the tools will do, and whether a key exists at all. `sap_ready` is
-   *  false in demo mode even when `sap_key_set` is true. */
-  data_mode?: "live" | "demo"; sap_key_set?: boolean;
+  prompts_written: number; model_ready: boolean;
 };
 
 export type SkillRow = {
@@ -143,7 +138,7 @@ export type McpServer = {
   agents: string[]; tools: McpTool[]; token_set: boolean;
   /** How many of `tools` an agent can really call: writers, tools with no
    *  usable schema and tools whose name is already ours are dropped
-   *  (sigap/agent/core/registry.py, remote_tools). */
+   *  (aera/agent/core/registry.py, remote_tools). */
   offered: number;
   last_ok: string | null; last_error: string | null;
   added_by: string; added_at: string;
@@ -156,17 +151,6 @@ export type McpPayload = {
   };
   servers: McpServer[];
   may_change: boolean;
-};
-
-export type SapSettings = {
-  base_url: string; key_set: boolean; key_hint: string;
-  key_source: "settings" | "environment" | "none";
-  data_mode: "live" | "demo"; may_change: boolean;
-};
-
-export type SapTest = {
-  ok: boolean; reason: string; detail?: string;
-  rows?: number; ms?: number; base_url?: string;
 };
 
 export type Column = { k: string; l: string; n?: boolean; rp?: boolean };
@@ -312,7 +296,7 @@ export type Summary = {
   critical_stock: { material: string; description: string; plant: string;
                     days_left: number | null; depleted_on: string | null }[];
   recent: { title: string; status: string; started_at: string }[];
-  sap_ready: boolean; model_ready: boolean;
+  model_ready: boolean;
 };
 export type Upload = {
   id: string; entity: string; filename: string; rows: number;
@@ -395,7 +379,7 @@ export type AuditReport = {
 
 /* The exploration graph (core/exploration.py): a persisted, typed DAG of one
  * run's handling. Served by GET /runs/:id/graph. Nodes carry their kind and,
- * for facts, the provenance SIGAP never lets go unlabelled. */
+ * for facts, the provenance AERA never lets go unlabelled. */
 export type GraphNode = {
   node_id: string;
   kind: "event" | "lead" | "fact" | "option" | "ruling";
@@ -430,8 +414,7 @@ export type TraceNode = {
   trigger?: string | null; started_at?: string | null;
   /** action: what is being approved, and who has ruled on it */
   title?: string | null; payload?: Record<string, unknown>; created_at?: string | null;
-  sap_reference?: string | null;
-  issued_in?: "live" | "demo" | null;
+  reference?: string | null;
   approvals?: { decision: string; decided_by: string; role: string; note?: string | null; at: string }[];
 };
 export type TraceEdge = {

@@ -12,11 +12,6 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
-    // sigap/deck is its own workspace with its own toolchain, and `dist/` is its
-    // build output. Linting a bundle produces errors about minified code that
-    // nobody can act on - 16 of them, all from deck/dist - and the deck's own
-    // source answers to the open-slide rules, not Next's.
-    "sigap/deck/**",
   ]),
 ]);
 

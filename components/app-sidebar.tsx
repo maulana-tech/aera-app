@@ -7,7 +7,7 @@ import {
   ScrollText, Settings2, Users,
 } from "lucide-react";
 
-import { SigapMark } from "@/components/sigap-mark";
+import { AeraMark } from "@/components/aera-mark";
 import { NavMain, type NavItem } from "@/components/nav-main";
 import { NavUser } from "@/components/nav-user";
 import { ConnectionStatus, type Connection } from "@/components/connection-status";
@@ -56,7 +56,6 @@ const SETTINGS: NavItem[] = [
     href: "/settings",
     icon: Settings2,
     children: [
-      { title: "SAP connection", href: "/sap" },
       { title: "MCP", href: "/mcp" },
       { title: "Skills", href: "/skills" },
       { title: "Upload data", href: "/uploads" },
@@ -68,11 +67,10 @@ const SETTINGS: NavItem[] = [
 ];
 
 export function AppSidebar({
-  user, connection, mayChangeMode = false, ...props
+  user, connection, ...props
 }: {
   user?: { name: string; role: string; email: string };
   connection?: Connection;
-  mayChangeMode?: boolean;
 } & React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -81,12 +79,12 @@ export function AppSidebar({
           href="/"
           className="flex items-center gap-2 rounded-md px-2 py-1.5 outline-none transition-colors hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring"
         >
-          <SigapMark className="size-6 shrink-0" />
+          <AeraMark className="size-6 shrink-0" />
           <span className="truncate text-sm font-semibold tracking-[-0.03em] group-data-[collapsible=icon]:hidden">
-            SIGAP
+            AERA
           </span>
         </Link>
-        <ConnectionStatus c={connection} mayChange={mayChangeMode} />
+        <ConnectionStatus c={connection} />
       </SidebarHeader>
 
       <SidebarContent>

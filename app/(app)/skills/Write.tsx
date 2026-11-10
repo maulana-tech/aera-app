@@ -37,7 +37,7 @@ export function Write({ data }: { data: SkillsPayload }) {
     setBusy(what);
     setProblems([]);
     try {
-      const res = await fetch(`/api/sigap/${path}`, {
+      const res = await fetch(`/api/aera/${path}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body ?? {}),
@@ -240,7 +240,7 @@ export function Remove({ name }: { name: string }) {
       disabled={busy}
       onClick={async () => {
         setBusy(true);
-        await fetch(`/api/sigap/skills/${name}/delete`, { method: "POST" });
+        await fetch(`/api/aera/skills/${name}/delete`, { method: "POST" });
         setBusy(false);
         router.refresh();
       }}

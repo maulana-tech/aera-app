@@ -59,7 +59,7 @@ const fromContact = (c: Contact): Draft => ({
 
 /* One form for adding and for changing a contact. Name, email and role are
  * what an alert needs; the rest is how to reach a person when it cannot wait
- * for email, and none of it is sent anywhere by SIGAP. */
+ * for email, and none of it is sent anywhere by AERA. */
 function ContactForm({ initial, submitLabel, onSave, onCancel }: {
   initial: Draft; submitLabel: string;
   onSave: (d: Draft) => Promise<void>; onCancel?: () => void;
@@ -146,7 +146,7 @@ function ContactForm({ initial, submitLabel, onSave, onCancel }: {
 }
 
 async function save(path: string, d: Draft) {
-  const res = await fetch(`/api/sigap/${path}`, {
+  const res = await fetch(`/api/aera/${path}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
@@ -210,7 +210,7 @@ function Reach({ icon, label, value, href, extra }: {
   );
 }
 
-/* A contact opened: how to reach them, what they are told, and what SIGAP
+/* A contact opened: how to reach them, what they are told, and what AERA
  * has actually sent them, read fresh each time it opens. */
 function ContactDetail({ contact, open, onOpenChange, canChange }: {
   contact: Contact; open: boolean; onOpenChange: (v: boolean) => void; canChange: boolean;
@@ -224,7 +224,7 @@ function ContactDetail({ contact, open, onOpenChange, canChange }: {
   useEffect(() => {
     if (!open) return;
     let live = true;
-    fetch(`/api/sigap/contacts/${contact.id}`)
+    fetch(`/api/aera/contacts/${contact.id}`)
       .then((r) => r.json())
       .then((d) => live && setSent(d.sent ?? []))
       .catch(() => live && setSent([]));
@@ -234,7 +234,7 @@ function ContactDetail({ contact, open, onOpenChange, canChange }: {
   async function remove() {
     setBusy(true);
     setError("");
-    const res = await fetch(`/api/sigap/contacts/${contact.id}/delete`, { method: "POST" });
+    const res = await fetch(`/api/aera/contacts/${contact.id}/delete`, { method: "POST" });
     setBusy(false);
     if (!res.ok) {
       setError((await res.json()).error ?? "failed");

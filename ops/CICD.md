@@ -1,4 +1,4 @@
-# CI/CD SIGAP lewat SSH: GitHub → EC2
+# CI/CD AERA lewat SSH: GitHub → EC2
 
 Push ke **semua branch** menjalankan CI. PR menuju `main` juga menjalankan CI.
 Deployment hanya berjalan setelah CI lulus untuk push ke `main` atau manual run
@@ -12,15 +12,15 @@ Tidak perlu upgrade account hanya untuk menjalankan script deployment SSH.
 
 ## 1. Siapkan server
 
-Target mengikuti runbook `sigap/AGENT-ONLY-EXTERNAL-DEPLOYMENT.md`:
+Target mengikuti runbook `aera/AGENT-ONLY-EXTERNAL-DEPLOYMENT.md`:
 
 - EC2 Ubuntu **x86_64**, user SSH `ubuntu`, port **22**.
 - Node.js **20** (minimal **20.9.0**) tersedia di `/usr/bin/node`; Python **3.10+**, `python3-venv`,
   `curl`, `flock`, dan `tar` tersedia. AWS CLI tidak diperlukan untuk deploy SSH.
-- Unit `sigap-agent.service` dan `sigap-web.service` sudah berjalan sebagai `ubuntu`.
+- Unit `aera-agent.service` dan `aera-web.service` sudah berjalan sebagai `ubuntu`.
 - User `ubuntu` bisa menjalankan `sudo -n true` tanpa password dan tanpa TTY.
-- `.env` tetap di `/opt/sigap-project/sigap/agent/.env`.
-- `.env` dapat berisi `SIGAP_DB=/app/data/sigap.db`; Docker Compose juga memaksa
+- `.env` tetap di `/opt/sigap-project/aera/agent/.env`.
+- `.env` dapat berisi `AERA_DB=/app/data/sigap.db`; Docker Compose juga memaksa
   path tersebut agar database berada pada volume `agent_data` dan bertahan saat container
   dibuat ulang.
 - Jika systemd menggunakan `EnvironmentFile`, gunakan `KEY=value` dengan komentar
@@ -35,7 +35,7 @@ Verifikasi lewat koneksi SSH admin yang sudah dipercaya:
 /usr/bin/node --version
 python3 --version
 sudo -n true
-sudo systemctl is-active sigap-agent sigap-web
+sudo systemctl is-active aera-agent aera-web
 curl --fail http://127.0.0.1:8787/health
 curl --fail http://127.0.0.1:3000/login
 ```
@@ -48,16 +48,16 @@ Jalankan di laptop, bukan di GitHub atau lewat chat:
 
 ```bash
 mkdir -p ~/.ssh
-ssh-keygen -t ed25519 -N '' -C 'github-sigap-deploy' -f ~/.ssh/sigap-github-deploy
+ssh-keygen -t ed25519 -N '' -C 'github-aera-deploy' -f ~/.ssh/aera-github-deploy
 ```
 
-Melalui sesi SSH admin, tambahkan isi file **`sigap-github-deploy.pub`** ke
+Melalui sesi SSH admin, tambahkan isi file **`aera-github-deploy.pub`** ke
 `/home/ubuntu/.ssh/authorized_keys` di EC2. Jangan menimpa key admin yang sudah ada.
 Tambahkan prefix `restrict` pada baris key tersebut untuk menonaktifkan forwarding
 serta PTY; SSH noninteraktif dan transfer SFTP/SCP tetap tersedia:
 
 ```text
-restrict ssh-ed25519 AAAA... github-sigap-deploy
+restrict ssh-ed25519 AAAA... github-aera-deploy
 ```
 
 File `.ssh/authorized_keys` harus dimiliki `ubuntu`, permission direktori `.ssh`
@@ -67,7 +67,7 @@ File `.ssh/authorized_keys` harus dimiliki `ubuntu`, permission direktori `.ssh`
 Coba koneksi dengan key baru dan host key server yang sudah diverifikasi:
 
 ```bash
-ssh -i ~/.ssh/sigap-github-deploy -o BatchMode=yes ubuntu@<IP-ATAU-DNS-EC2> 'sudo -n true'
+ssh -i ~/.ssh/aera-github-deploy -o BatchMode=yes ubuntu@<IP-ATAU-DNS-EC2> 'sudo -n true'
 ```
 
 ## 3. Ambil host key EC2 yang dipercaya
@@ -107,7 +107,7 @@ Pada tab **Secrets**, klik **New repository secret**:
 
 | Nama | Isi |
 |---|---|
-| `EC2_SSH_KEY` | Seluruh isi private key `~/.ssh/sigap-github-deploy`, termasuk BEGIN/END dan newline |
+| `EC2_SSH_KEY` | Seluruh isi private key `~/.ssh/aera-github-deploy`, termasuk BEGIN/END dan newline |
 | `EC2_KNOWN_HOSTS` | Satu baris public host key server dengan prefix `sigap-ec2` dari langkah 3 |
 
 Private key harus tanpa passphrase karena workflow noninteraktif. Private key
@@ -162,7 +162,7 @@ konfigurasi service awal dipulihkan. ENV dan database disimpan di luar release.
 
 Restart menyebabkan jeda singkat. Rollback kode tidak membatalkan perubahan
 schema/data. Endpoint `/health` hanya membuktikan backend hidup; tidak menguji
-panggilan Bedrock atau SAP asli. Release lokal lama tetap disimpan untuk rollback;
+panggilan Bedrock asli. Release lokal lama tetap disimpan untuk rollback;
 hapus release yang tidak aktif secara berkala agar disk tidak penuh.
 
 ## Validasi offline

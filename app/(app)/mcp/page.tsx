@@ -13,8 +13,8 @@ export default async function McpPage() {
         title="MCP"
         lead={
           <>
-            SIGAP is an MCP server and an MCP client. Other agents call in — AWS AgentCore
-            Gateway and SAP Joule both speak it — and SIGAP calls out to tools somebody else
+            AERA is an MCP server and an MCP client. Other agents call in — AWS AgentCore
+            Gateway speaks it — and AERA calls out to tools somebody else
             operates. Both directions are on this page on purpose: the question an operator
             actually has is which tools exist here and who can reach them, and splitting that
             across two screens is how a tool nobody audited ends up installed.
@@ -30,7 +30,7 @@ export default async function McpPage() {
         <>
           <section className="mt-8 rounded-lg border">
             <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
-              <p className="text-sm font-medium">What SIGAP serves</p>
+              <p className="text-sm font-medium">What AERA serves</p>
               <span className="text-muted-foreground ml-auto font-mono text-[10px]">
                 {data.ours.endpoint} · protocol {data.ours.protocol}
               </span>
@@ -40,7 +40,7 @@ export default async function McpPage() {
                 <p className="text-2xl font-semibold tracking-tight">{data.ours.tools_total}</p>
                 <p className="text-muted-foreground mt-0.5 text-xs leading-relaxed">
                   tools, of which <b>{data.ours.tools_writing}</b> raise an action. Each one
-                  carries a readOnlyHint, so a client that did not write SIGAP can tell a read
+                  carries a readOnlyHint, so a client that did not write AERA can tell a read
                   from a write instead of treating all of them as dangerous.
                 </p>
               </div>
@@ -81,7 +81,7 @@ export default async function McpPage() {
               a remote tool called <span className="font-mono">check_local_constraints</span>{" "}
               can never shadow Kira&apos;s. Whatever it returns is labelled with the server it
               came from and is never promoted to live: a figure from a tool we do not operate
-              is not a figure from SAP, however confident it sounds. And a server that says
+              is not a figure from our own records, however confident it sounds. And a server that says
               nothing about whether a tool writes is read as a writer, because the cautious
               reading is the right one when the answer decides whether an agent may call it
               unattended.

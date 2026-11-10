@@ -2,8 +2,7 @@ node_modules
 .next
 .git
 .github
-sigap
-materi
+aera
 ops
 data
 .env*.local

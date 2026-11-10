@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 
-const UPSTREAM = process.env.SIGAP_API ?? "http://127.0.0.1:8787";
+const UPSTREAM = process.env.AERA_API ?? "http://127.0.0.1:8787";
 
 export async function POST(req: Request) {
   const body = await req.text();
@@ -20,7 +20,7 @@ export async function POST(req: Request) {
   if (!r.ok) return Response.json(data, { status: r.status });
 
   // httpOnly so no script on the page can read the token.
-  (await cookies()).set("sigap_session", data.token, {
+  (await cookies()).set("aera_session", data.token, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -31,6 +31,6 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE() {
-  (await cookies()).delete("sigap_session");
+  (await cookies()).delete("aera_session");
   return Response.json({ signedOut: true });
 }

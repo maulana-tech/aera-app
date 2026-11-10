@@ -18,7 +18,7 @@ class SshDeploymentTest(unittest.TestCase):
                 "scp": 'echo "scp $*" >> "$TEST_LOG"',
                 "ssh": '''echo "ssh $*" >> "$TEST_LOG"
 case "$*" in
-  *mktemp*) echo /tmp/sigap-upload.ABC123 ;;
+  *mktemp*) echo /tmp/aera-upload.ABC123 ;;
   *"bash -s"*) cat >/dev/null; exit "$TEST_DEPLOY_EXIT" ;;
 esac''',
             }.items():
@@ -53,7 +53,7 @@ esac''',
     def test_remote_failure_is_preserved_and_upload_cleaned(self):
         result, calls = self.run_transport(fail_deploy=True)
         self.assertEqual(result.returncode, 7)
-        self.assertIn("rm -rf -- '/tmp/sigap-upload.ABC123'", calls)
+        self.assertIn("rm -rf -- '/tmp/aera-upload.ABC123'", calls)
 
     def test_invalid_host_never_connects(self):
         result, calls = self.run_transport(host="host;echo bad")
