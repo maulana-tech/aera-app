@@ -147,6 +147,25 @@ def reconcile() -> int:
             if pay["action_id"]:
                 store.move_action(pay["action_id"], "failed", reason=f"vault: {st} {req.get('reason') or ''}")
             moved += 1
+    # The vault answers "sent" when it STARTS the transfer; a transfer the token
+    # then refuses comes back as "failed" in on_transfer. So a vault payment
+    # marked sent in the last day is read once more, and a failure is recorded.
+    from datetime import datetime, timedelta, timezone
+    since = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    for pay in store.list_payments(status="sent"):
+        if pay["rail"] != "vault" or pay["direction"] != "out" or not pay.get("request_id") \
+                or pay["created_at"] < since or (pay.get("detail") or {}).get("confirmed"):
+            continue
+        try:
+            req = chain.view("get_request", {"request_id": pay["request_id"]})
+        except Exception:                                              # noqa: BLE001
+            continue
+        st = (req or {}).get("status")
+        if st == "failed":
+            store.update_payment(pay["id"], "failed", detail={"vault": req})
+            moved += 1
+        elif st in ("sent", "approved"):
+            store.update_payment(pay["id"], "sent", detail={"confirmed": True})
     return moved
 
 
