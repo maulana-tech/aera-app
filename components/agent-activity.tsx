@@ -1,63 +1,36 @@
 import { Markdown } from "@/components/markdown";
 
 const toolLabels: Record<string, string> = {
-  detect_disruption: "Checking the disruption signal",
-  get_materials: "Checking material data",
-  get_open_purchase_orders: "Checking open purchase orders",
-  use_skill: "Working through a written procedure",
-  get_material_stock: "Checking material stock",
-  get_bom_explosion: "Tracing product components",
-  get_sales_order_commitments: "Checking customer order commitments",
-  get_demand_signal: "Checking demand signals",
-  get_production_schedule: "Checking the production schedule",
-  forecast_demand: "Forecasting material demand",
-  get_quality_holds: "Checking stock quality holds",
-  get_safety_stock_policy: "Checking safety stock requirements",
-  get_replenishment_policy: "Checking how the line is replenished",
-  find_deadstock: "Looking for stock nobody has moved",
-  assess_transfer: "Assessing a stock transfer",
-  find_alternate_sources: "Looking for alternative suppliers",
-  find_internal_transfers: "Looking for stock at other plants",
-  get_supplier_master: "Checking supplier records",
-  get_blanket_orders: "Checking contracts with quantity left to call off",
-  get_supplier_performance: "Reviewing supplier performance",
-  get_quotations: "Checking supplier quotations",
-  compare_quotations: "Comparing supplier quotations",
-  propose_purchase_order: "Preparing a purchase order proposal",
-  get_shipment_status: "Checking shipment status",
-  estimate_eta: "Estimating arrival dates",
-  check_local_constraints: "Checking compliance requirements",
-  check_supplier_constraints: "Ruling on the supplier",
-  simulate_scenario: "Comparing scenario costs",
-  search_past_incidents: "Reviewing similar past incidents",
-  create_stock_transfer: "Requesting a stock transfer",
-  create_draft_po: "Preparing a draft purchase order",
-  notify: "Sending a notification",
-  monitor_shipment: "Monitoring the shipment",
-  create_sourcing_event: "Preparing a sourcing event",
-  propose_safety_stock_change: "Proposing a safety stock adjustment",
-  scan_supply_exposure: "Checking supply risks",
-  get_supplier_certifications: "Checking supplier certifications",
-  scan_live_hazards: "Checking live hazards near ports and plants",
-  get_shipments_at_port: "Checking which shipments are at the port",
-  find_bonded_stock: "Looking for goods already in a bonded warehouse",
-  get_port_conditions: "Checking port conditions",
-  search_news: "Searching the news",
-  get_public_holidays: "Checking the holiday calendar",
+  check_action: "Ruling on an outward action",
+  check_counterparty: "Checking who would be paid",
+  deliver_order: "Delivering a paid order",
+  draft_message: "Drafting a message",
+  find_contact: "Looking up a contact",
+  freeze_payments: "Freezing payments",
+  get_business_profile: "Reading the business profile",
   get_exchange_rate: "Checking the exchange rate",
-  record_outcome: "Recording what actually happened",
-  get_customs_status: "Checking customs status",
-  find_substitute_materials: "Looking for substitute materials",
-  allocate_short_supply: "Deciding which customer orders to serve first",
-  get_rule_pack: "Reading the rule pack",
-  draft_customer_notice: "Drafting a customer notice",
-  request_supplier_update: "Drafting a request to the supplier",
+  get_order: "Reading an order",
+  get_public_holidays: "Checking the holiday calendar",
+  get_work_item: "Reading the work item",
+  ledger_summary: "Reading the ledger",
+  list_business_files: "Listing the business's files",
+  list_orders: "Listing orders",
+  pay_vendor: "Paying a vendor on record",
+  propose_refund: "Proposing a refund",
+  read_business_file: "Reading a business file",
+  read_document: "Reading a document",
+  read_web_page: "Reading a web page (as untrusted text)",
+  save_contact: "Saving a contact",
+  search_news: "Searching the news",
+  search_past_work: "Reviewing how past work went",
+  treasury_status: "Checking the vault and today's spend",
+  use_skill: "Working through a written procedure",
+  write_document: "Writing a document",
 };
 
+/* The core roles' names are fixed; a specialist's name comes with its step. */
 const agentNames: Record<string, string> = {
-  supervisor: "Arya", impact: "Elsa", demand: "Dara", inventory: "Iris",
-  sourcing: "Clint", procurement: "Prita", logistics: "Milo", compliance: "Kira",
-  simulation: "Tara", precedent: "Otto", execution: "Bram", exposure: "Vega",
+  supervisor: "Arya", guardian: "Kira", treasurer: "Tara",
 };
 
 export function toolLabel(name: string): string {
@@ -71,9 +44,8 @@ export function toolLabel(name: string): string {
     if (server && tool) return `Asking ${server} (outside AERA): ${tool}`;
   }
   const specialist = name.startsWith("ask_") ? name.slice(4) : "";
-  return Object.hasOwn(agentNames, specialist)
-    ? `Consulting ${agentNames[specialist]}`
-    : "Running a system check";
+  if (specialist) return `Consulting ${Object.hasOwn(agentNames, specialist) ? agentNames[specialist] : specialist}`;
+  return name.replace(/_/g, " ");
 }
 
 export function stepAgentName(step: { agent: string; agent_name: string }): string {
@@ -82,7 +54,9 @@ export function stepAgentName(step: { agent: string; agent_name: string }): stri
 
 const stageLabels: Record<string, string> = {
   DELEGATE: "Delegation",
-  TOOL: "Data Check",
+  TOOL: "Tool",
+  MODEL: "Model call",
+  SUMMARY: "Outcome",
   FINDING: "Finding",
   SPECIALIST_START: "Delegation",
   SPECIALIST_DONE: "Finding",

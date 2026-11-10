@@ -13,6 +13,9 @@ import {
 export type Connection = {
   env: string;
   model_ready: boolean;
+  private_mode?: boolean;
+  rail?: "vault" | "simulated";
+  network?: string;
 };
 
 /** Stands in for sidebar-07's team switcher: what matters here isn't which team,
@@ -54,9 +57,16 @@ export function ConnectionStatus({ c }: { c?: Connection }) {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem disabled className="opacity-100">
-              <Circle className="size-2 fill-emerald-500 text-emerald-500" />
-              <span className="flex-1">Company data</span>
-              <span className="text-muted-foreground font-mono text-[10px]">uploads · fixtures</span>
+              <Circle className={`size-2 ${c?.rail === "vault" ? "fill-emerald-500 text-emerald-500" : "fill-amber-500 text-amber-500"}`} />
+              <span className="flex-1">Money rail</span>
+              <span className="text-muted-foreground font-mono text-[10px]">
+                {c?.rail === "vault" ? `vault · ${c.network}` : "SIMULATED"}
+              </span>
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled className="opacity-100">
+              <Circle className={`size-2 ${c?.private_mode ? "fill-emerald-500 text-emerald-500" : "fill-amber-500 text-amber-500"}`} />
+              <span className="flex-1">Private AI</span>
+              <span className="text-muted-foreground font-mono text-[10px]">{c?.private_mode ? "TEE only" : "off"}</span>
             </DropdownMenuItem>
             <DropdownMenuItem disabled className="opacity-100">
               <Circle className={`size-2 ${ready ? "fill-emerald-500 text-emerald-500" : "fill-amber-500 text-amber-500"}`} />
@@ -68,8 +78,8 @@ export function ConnectionStatus({ c }: { c?: Connection }) {
             <DropdownMenuSeparator />
             <p className="text-muted-foreground px-2 py-1.5 text-xs leading-relaxed">
               {ready
-                ? "Figures come from your uploads and the shipped fixtures, and each one says whether it is uploaded, derived or modelled."
-                : "Until a model is connected, the system makes no decisions at all."}
+                ? "Every agent reasons on a NEAR AI Cloud model; each call carries an attestation proof you can re-check on the run."
+                : "Until a model is connected, the team makes no decisions at all: work is held, not guessed."}
             </p>
           </DropdownMenuContent>
         </DropdownMenu>

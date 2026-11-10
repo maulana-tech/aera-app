@@ -9,10 +9,12 @@ async function forward(req: Request, path: string[], method: "GET" | "POST") {
   const headers: Record<string, string> = { "content-type": "application/json" };
   const accept = req.headers.get("accept");
   if (accept) headers.accept = accept;
-  if (token) headers.Authorization = `Bearer ${token}`;
-  // The query string is part of the request, not decoration: the operations
-  // report takes its period there, and a download that lost it would quietly
-  // cover a different period than the page it was downloaded from.
+  // /public/* is the customer-facing surface (offerings, checkout, order
+  // status, ledger): it needs no session, and a visitor's request never
+  // carries an operator's token even when one happens to be signed in.
+  if (token && path[0] !== "public") headers.Authorization = `Bearer ${token}`;
+  // The query string is part of the request, not decoration: filters such as
+  // ?status=pending and ?days=30 ride there.
   const { search } = new URL(req.url);
 
   try {
@@ -36,8 +38,8 @@ async function forward(req: Request, path: string[], method: "GET" | "POST") {
       });
     }
 
-    // Bytes, not text: a report comes back as a PDF or a workbook, and decoding
-    // one as UTF-8 would corrupt it. The file name rides on Content-Disposition.
+    // Bytes, not text: a deliverable may come back as a PDF or a workbook, and
+    // decoding one as UTF-8 would corrupt it. The name rides on Content-Disposition.
     const disposition = r.headers.get("content-disposition");
     return new Response(await r.arrayBuffer(), {
       status: r.status,

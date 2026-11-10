@@ -73,7 +73,7 @@ socrates-logo.zip
 *.db
 .codegraph/
 
-# Kira's rule pack: contract terms and supplier certificates, per installation.
+# Per-installation policy files.
 # The format and an example are committed beside it (aera/references/).
 aera/references/rule-pack.json
 

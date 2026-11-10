@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Tuple
 
 #: Who is asking. Several of these feeds refuse urllib's default agent string.
-USER_AGENT = "AERA/0.1 (supply disruption response; +https://github.com/maulana-tech/socrates)"
+USER_AGENT = "AERA/0.1 (autonomous business agents; +https://github.com/maulana-tech/socrates)"
 
 
 class FeedError(RuntimeError):

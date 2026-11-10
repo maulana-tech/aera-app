@@ -3,11 +3,11 @@
 import { useMemo, useState } from "react";
 
 import { AgentBadge } from "@/components/agent-card";
-import { PanZoom } from "@/components/exploration-graph";
+import { PanZoom } from "@/components/pan-zoom";
 import { OriginBadge } from "@/components/status-badge";
 import { useChartWidth } from "@/hooks/use-chart-width";
 import { cn } from "@/lib/utils";
-import type { Trace, TraceEdge, TraceNode } from "@/app/lib";
+import { usd, type Trace, type TraceEdge, type TraceNode } from "@/app/lib";
 
 /* One handling as a topology, read left to right the way the work flowed:
  *
@@ -50,6 +50,7 @@ const STRIPE: Record<string, string> = {
   record: "border-l-fuchsia-500",
   model: "border-l-indigo-500",
   external: "border-l-teal-500",
+  chain: "border-l-emerald-500",
 };
 
 const ORIGIN_STROKE: Record<string, string> = {
@@ -237,7 +238,7 @@ function NodeBody({ n }: { n: TraceNode }) {
           <span className="text-muted-foreground font-mono text-[10px]">
             {n.calls} tool call{n.calls === 1 ? "" : "s"}
             {n.stats?.seconds != null ? ` · ${n.stats.seconds}s` : ""}
-            {n.stats?.idr ? ` · Rp ${n.stats.idr.toLocaleString("en-US")}` : ""}
+            {n.stats?.usd ? ` · ${usd(n.stats.usd)}` : ""}
           </span>
           {n.origin && <span className="ml-auto origin-right scale-90"><OriginBadge origin={n.origin} /></span>}
         </div>
@@ -275,7 +276,7 @@ function NodeBody({ n }: { n: TraceNode }) {
         <p className="truncate font-mono text-[11px] font-medium leading-tight">{n.label}</p>
         <p className="text-muted-foreground font-mono text-[10px]">
           {n.status}{n.autonomous ? " · on its own authority" : ""}
-          {typeof n.cost_idr === "number" ? ` · Rp ${n.cost_idr.toLocaleString("en-US")}` : ""}
+          {typeof n.value_usd === "number" ? ` · ${usd(n.value_usd)}` : ""}
         </p>
       </>
     );
@@ -300,8 +301,10 @@ function titleFor(n: TraceNode): string {
 
 function Legend() {
   const items: { cls: string; label: string }[] = [
-    { cls: "bg-cyan-500", label: "upload" },
-    { cls: "bg-amber-500", label: "fixture / profile" },
+    { cls: "bg-cyan-500", label: "business file" },
+    { cls: "bg-amber-500", label: "profile / sample" },
+    { cls: "bg-emerald-500", label: "vault (chain)" },
+    { cls: "bg-orange-500", label: "guardian rules" },
     { cls: "bg-teal-500", label: "outside feed" },
     { cls: "bg-violet-500", label: "engine (calculation)" },
     { cls: "bg-fuchsia-500", label: "AERA record" },

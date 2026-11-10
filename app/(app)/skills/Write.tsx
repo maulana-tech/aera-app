@@ -107,7 +107,7 @@ export function Write({ data }: { data: SkillsPayload }) {
               </label>
               <input
                 className={`${FIELD} mt-1`}
-                placeholder="check_the_bonded_stock"
+                placeholder="check_a_deliverable"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
@@ -121,7 +121,7 @@ export function Write({ data }: { data: SkillsPayload }) {
               </label>
               <input
                 className={`${FIELD} mt-1`}
-                placeholder="Check what is already in bond"
+                placeholder="Check a deliverable before it ships"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
               />
@@ -134,7 +134,7 @@ export function Write({ data }: { data: SkillsPayload }) {
             </label>
             <input
               className={`${FIELD} mt-1`}
-              placeholder="Bonded goods clear faster than a new import, so look there before pricing freight."
+              placeholder="Every claim in a paid deliverable needs a source a customer could open."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
@@ -147,8 +147,8 @@ export function Write({ data }: { data: SkillsPayload }) {
             <textarea
               className={`${FIELD} mt-1 h-28 py-2 leading-relaxed`}
               placeholder={
-                "Find what is sitting in bond for this material.\n" +
-                "Rule it before pricing it: bonded is not the same as cleared.\n" +
+                "Read the order and the inputs the customer gave.\n" +
+                "Check every claim against a source before it goes in the deliverable.\n" +
                 "Say what could not be checked rather than treating it as checked."
               }
               value={steps}

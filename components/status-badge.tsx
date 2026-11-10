@@ -19,6 +19,22 @@ const COLOURS: Record<string, string> = {
   late:      "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400",
   short:     "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400",
   cancelled: "border-border bg-muted text-muted-foreground",
+  // Work, money and the team.
+  blocked:   "border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-400",
+  partial:   "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  attested:  "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  paid:      "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  awaiting_payment: "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  pending_onchain:  "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  working:   "border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-400",
+  submitted: "border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-400",
+  refunded:  "border-border bg-muted text-muted-foreground",
+  active:    "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  draft:     "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  disabled:  "border-border bg-muted text-muted-foreground",
+  new:       "border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-400",
+  simulated: "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  vault:     "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
 };
 
 /** A status marker. The colour carries meaning, so the word is always written too. */

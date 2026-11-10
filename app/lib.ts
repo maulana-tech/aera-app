@@ -1,74 +1,48 @@
 export const UPSTREAM = process.env.AERA_API ?? "http://127.0.0.1:8787";
 
-export type Step = {
-  seq: number; stage: string; agent: string; agent_name: string;
-  summary: string; tools: string[]; origin: string | null; source: string | null;
-  detail: Record<string, unknown>; at: string;
-};
-export type Delivery = {
-  to: string | null; status: string; why?: string; error?: string | null;
-  reference?: string | null; sent_at?: string | null; meant_for?: string | null;
-};
-export type Action = {
-  id: string; kind: string; autonomous: number; status: string;
-  payload: Record<string, unknown>; reference: string | null; created_at: string;
-  /** Where an approved message to a supplier or a customer goes, or went. */
-  delivery?: Delivery;
-  /**
-   * What actually happened, once somebody read reality: one of delivered, late,
-   * short, failed, cancelled (store.OUTCOMES). Null until recorded, and written
-   * only once. `outcome_detail.actual_idr` is the realized cost when it is
-   * known as a figure — absent means not known, never zero.
-   */
-  outcome?: string | null;
-  outcome_at?: string | null;
-  outcome_detail?: Record<string, unknown> | null;
-};
-export type Approval = {
-  id: number; action_id: string; decided_by: string; role: string;
-  decision: string; note: string | null; at: string;
-};
-export type Run = {
-  id: string; title: string; kind: string; trigger: string;
-  signal_source?: string;
-  mode: "autonomous" | "guided"; status: string;
-  started_at: string; finished_at: string | null;
-  token_cost_idr: number; decision: { recommendation?: string; reason?: string; agents_called?: string[]; untrusted_on_board?: string[] } | null; error: string | null;
-  steps?: Step[]; actions?: Action[]; approvals?: Approval[];
+/* ------------------------------------------------------------------ format */
+
+/** Money is USD everywhere. Small amounts (model spend) keep their cents. */
+export const usd = (n: number | null | undefined, opts: { precise?: boolean } = {}) => {
+  const v = Number(n ?? 0);
+  const digits = opts.precise || (v !== 0 && Math.abs(v) < 1) ? 4 : 2;
+  return "$" + v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: digits });
 };
 
-export const idr = (n: number) => "Rp " + (n ?? 0).toLocaleString("en-US");
-
-/* Jakarta, always, and labelled.
- *
- * The stamps are UTC and the PDFs and workbooks are written in WIB
- * (engine/report.py), so a page that formatted in the reader's own zone put a
- * different time on the same event than its own download did — invisible in
- * Jakarta and wrong everywhere else. One formatter, one zone, and the zone is
- * written out so nobody has to guess which one they are reading.
- */
-export const WIB = "Asia/Jakarta";
-export function wib(t?: string | null, opts: {
+/* UTC, always, and labelled. The server renders the page and the browser
+ * hydrates it; formatting in the reader's own zone would make the two
+ * disagree, and a record that reads differently on two screens is not one. */
+export const ZONE = "UTC";
+export function when(t?: string | null, opts: {
   /** false for the date alone */
   time?: boolean;
   /** seconds too, for a trace where the order of two calls is the point */
   seconds?: boolean;
-  /** drop the "WIB" marker where a column header or nearby line already says it */
+  /** drop the "UTC" marker where a column header or nearby line already says it */
   mark?: boolean;
 } = {}): string {
   if (!t) return "-";
   const at = new Date(t);
   if (Number.isNaN(at.getTime())) return t;
-  const date = at.toLocaleDateString("en-GB", { timeZone: WIB, day: "2-digit", month: "short", year: "numeric" });
+  const date = at.toLocaleDateString("en-GB", { timeZone: ZONE, day: "2-digit", month: "short", year: "numeric" });
   if (opts.time === false) return date;
   const time = at.toLocaleTimeString("en-GB", {
-    timeZone: WIB, hour: "2-digit", minute: "2-digit",
+    timeZone: ZONE, hour: "2-digit", minute: "2-digit",
     ...(opts.seconds ? { second: "2-digit" } : {}),
   });
-  return `${date} ${time}${opts.mark === false ? "" : " WIB"}`;
+  return `${date} ${time}${opts.mark === false ? "" : " UTC"}`;
 }
 
-export type Me = { name: string; email: string; role: string; limit_idr: number };
+/** NearBlocks, for a transaction or an account, on the network in force. */
+export function explorer(network: string | null | undefined, kind: "txns" | "address", id: string) {
+  const base = network === "mainnet" ? "https://nearblocks.io" : "https://testnet.nearblocks.io";
+  return `${base}/${kind}/${id}`;
+}
+
+/** A proof's model is "nearai:org/model"; the attestation route takes "org/model". */
+export const bareModel = (m: string) => m.replace(/^[a-z]+:/, "");
+
+/* ------------------------------------------------------------------ fetch */
 
 /** Call the agent service, carrying the session token from the httpOnly cookie. */
 export async function apiResult<T>(path: string): Promise<
@@ -102,20 +76,241 @@ export async function api<T>(path: string): Promise<T | null> {
   return (await apiResult<T>(path)).data;
 }
 
+/** The customer-facing routes (/public/*): no session, never a token. */
+export async function publicApi<T>(path: string): Promise<T | null> {
+  try {
+    const r = await fetch(`${UPSTREAM}/public/${path}`, { cache: "no-store" });
+    return r.ok ? ((await r.json()) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+/* ------------------------------------------------------------------ people */
+
+export type Role = "viewer" | "operator" | "approver" | "owner" | "admin";
+export type Me = { name: string; email: string; role: Role; limit_usd: number };
+
 export async function me(): Promise<Me | null> {
   return api<Me>("me");
 }
 
+/** Owner and admin edit the business, the team and payout details. */
+export const mayManage = (u: Me | null | undefined) => u?.role === "owner" || u?.role === "admin";
+/** Anyone with a limit may stop the business; only a manager may resume it. */
+export const mayStop = (u: Me | null | undefined) => (u?.limit_usd ?? 0) > 0;
+
+export type Health = {
+  env: string; model_ready: boolean; model: string; private_mode: boolean; aux_model: string;
+  vault: string | null; network: string; rail: "vault" | "simulated";
+};
+
+/* ---------------------------------------------------------------- business */
+
+export type Delivery = "pdf" | "xlsx" | "message" | "file" | "service";
+export const DELIVERIES: Delivery[] = ["pdf", "xlsx", "message", "file", "service"];
+export const CHANNELS = ["web_checkout", "intents_checkout", "email", "telegram", "chat", "mcp"] as const;
+export const APPROVAL_KINDS = [
+  "refund", "new_vendor", "discount", "message_to_new_contact", "payment", "message", "deliver_order",
+] as const;
+
+export type Offering = {
+  id: string; title: string; description?: string; price_usd: number;
+  delivery: Delivery | string; sla_hours: number; inputs: string[];
+};
+export type ExtraRole = string | { title: string; brief?: string; capabilities?: string[] };
+export type Profile = {
+  name: string;
+  mission: string;
+  language: string;
+  offerings: Offering[];
+  customers: string;
+  channels: string[];
+  goals: string[];
+  team: { preset: string; include: string[]; exclude: string[]; extra_roles: ExtraRole[] };
+  constraints: {
+    autonomous_spend_usd: { per_payment: number; per_day: number };
+    inference_max_usd_per_day: number;
+    min_price_usd: number;
+    forbidden: string[];
+    approval_required: string[];
+  };
+  revenue_split: { account: string; bps: number; label?: string }[];
+  privacy: { sensitive: string[]; tee_only: boolean };
+  kill_switch: boolean;
+};
+export type ProfileVersion = { version: number; active: number; changed_by: string; note: string | null; at: string };
+export type BusinessPayload = {
+  profile: Profile;
+  version: number | null;
+  problems: string[];
+  history: ProfileVersion[];
+  context: string;
+  may_change: boolean;
+  example: Profile;
+};
+/** True when nothing has been described yet. */
+export const noBusiness = (b: BusinessPayload | null) => !b || b.version == null || !b.profile.name;
+
+/* -------------------------------------------------------------------- team */
+
+export type AgentStatus = "active" | "draft" | "disabled";
+export type TeamAgent = {
+  code: string; nickname: string; title: string; brief: string; role: string;
+  core: boolean; veto: boolean; prompt: string; capabilities: string[];
+  tools?: Record<string, string[]>;
+  effort?: string; status: AgentStatus; version?: number;
+  model?: string; origin: "composer" | "person" | "model" | string;
+  updated_by?: string; updated_at?: string;
+};
+export type Capability = { name: string; description: string; locked_to: string | null; tools: string[] };
+export type LibraryRole = { key: string; nickname: string; title: string; brief: string; capabilities: string[] };
+export type TeamPayload = {
+  agents: TeamAgent[]; capabilities: Capability[]; library: LibraryRole[]; may_change: boolean;
+};
+export type TeamDiff = { add: TeamAgent[]; remove: TeamAgent[]; change: { code: string; fields: string[] }[] };
+export type ComposeResult = { team: TeamAgent[]; diff: TeamDiff };
+
+/** GET /agents: the roster as the chat and per-agent pages read it. */
 export type Tool = { name: string; installed: boolean; description: string | null };
 export type Agent = {
   code: string; nickname: string; title: string; brief: string; effort: string;
-  veto: boolean; lead: boolean; ready: boolean; tools: Tool[];
-  installed: number; tool_count: number; used_in: number;
+  veto: boolean; core: boolean; lead: boolean; ready: boolean; capabilities: string[];
+  tools: Tool[]; installed: number; tool_count: number; runs: number; model: string; version: number;
 };
-export type AgentSummary = {
-  agent_count: number; tools_installed: number; tools_total: number;
-  prompts_written: number; model_ready: boolean;
+
+/* -------------------------------------------------------------------- work */
+
+export type WorkKind = "request" | "goal" | "payable" | "order";
+export const WORK_KINDS: WorkKind[] = ["request", "goal", "payable", "order"];
+export type WorkItem = {
+  id: string; kind: WorkKind | string; title: string; source: string;
+  payload: Record<string, unknown>; dedup_key: string | null;
+  status: string; received_at: string; run_id: string | null;
 };
+
+export type Step = {
+  id?: number; run_id?: string;
+  seq: number; stage: string; agent: string; agent_name: string;
+  summary: string; tools: string[]; origin: string | null; source: string | null;
+  detail: Record<string, unknown>; at: string;
+};
+
+export type GuardianReason = { rule: string; verdict: Verdict; detail: string; origin?: string | null };
+export type Verdict = "allow" | "warn" | "block";
+export type GuardianCheck = {
+  id: string; run_id: string | null; action_id: string | null; kind: "action" | "counterparty" | string;
+  subject: string; verdict: Verdict; reasons: GuardianReason[]; at: string;
+};
+
+export type ActionStatus = "pending" | "approved" | "rejected" | "sent" | "failed" | "blocked";
+export type Action = {
+  id: string; run_id: string; idempotency_key: string;
+  kind: "payment" | "refund" | "message" | "deliver_order" | string;
+  autonomous: boolean; value_usd: number;
+  payload: Record<string, unknown> & { guardian?: { verdict?: Verdict; reasons?: GuardianReason[] } };
+  status: ActionStatus | string; reason: string | null; reference: string | null;
+  outcome: string | null; outcome_detail: Record<string, unknown> | null; outcome_at: string | null;
+  created_at: string; work_title?: string;
+};
+export type Approval = {
+  id: number; action_id: string; decided_by: string; role: string;
+  decision: string; note: string | null; at: string;
+};
+
+export type ProofCheck = { name: string; status: "pass" | "fail" | "skipped" | string; detail: string; scope?: string };
+export type ProofVerdict = "pending" | "attested" | "partial" | "failed";
+export type Proof = {
+  id: string; run_id: string | null; step_seq: number | null; agent: string; model: string;
+  chat_id: string; signing_address: string | null; req_sha256: string | null; resp_sha256: string | null;
+  checks: ProofCheck[]; verdict: ProofVerdict | string; created_at: string; verified_at: string | null;
+};
+export type Attestation =
+  | { model: string; nonce: string; checks: ProofCheck[]; verdict: string; error?: undefined }
+  | { model: string; error: string; nonce?: undefined; checks?: undefined; verdict?: undefined };
+
+export type CostByModel = Record<string, { input: number; output: number; usd: number; calls: number }>;
+export type Decision = {
+  status?: string; recommendation?: string; reason?: string; retryable?: boolean;
+  agents_called?: string[]; cost_usd?: number; cost_by_model?: CostByModel;
+  trusted_on_board?: string[]; untrusted_on_board?: string[];
+};
+export type RunStatus = "running" | "done" | "partial" | "held" | "failed";
+export type RunRow = {
+  id: string; work_item_id: string; status: RunStatus | string;
+  started_at: string; finished_at: string | null; cost_usd: number;
+  team_version: Record<string, number>; profile_version: number | null;
+  decision: Decision | null; error: string | null;
+  title: string; kind: string; work_source: string;
+  step_count: number; tool_count: number; action_count: number; attested: number; proofs: number;
+};
+export type Run = Omit<RunRow, "step_count" | "tool_count" | "action_count" | "attested" | "proofs"> & {
+  work_payload: Record<string, unknown>;
+  steps: Step[]; actions: Action[]; approvals: Approval[]; guardian: GuardianCheck[]; proofs: Proof[];
+};
+
+/* ------------------------------------------------------------------- money */
+
+export type OrderStatus = "awaiting_payment" | "paid" | "working" | "delivered" | "refunded" | "failed";
+export type Order = {
+  id: string; offering: string; customer: string | null; inputs: Record<string, string>;
+  amount_usd: number; status: OrderStatus | string; work_item_id: string | null;
+  paid_tx: string | null; delivery: Record<string, unknown> | null;
+  created_at: string; updated_at: string;
+};
+export type Payment = {
+  id: string; action_id: string | null; direction: "out" | "in" | "split" | "refund" | string;
+  rail: "vault" | "intents" | "simulated" | string; request_id: string | null;
+  counterparty: string; amount_usd: number; token: string; status: string;
+  tx_hash: string | null; detail: Record<string, unknown>; created_at: string; settled_at: string | null;
+};
+export type VaultPolicy = {
+  owner: string; agent: string; token: string; per_tx_cap: string; daily_cap: string;
+  spent_today: string; day: number; frozen: boolean;
+  split: { account_id: string; bps: number }[];
+  approvers: { account_id: string; role: string; limit: string }[];
+};
+export type Treasury = {
+  network: string; vault: string | null; agent: string | null; token: string;
+  rail: "vault" | "simulated"; caps: { per_payment: number; per_day: number };
+  paid_today_usd: number; kill_switch: boolean;
+  pending_actions: Action[]; pending_onchain: Payment[]; approved_refunds: Action[]; payments: Payment[];
+  policy?: VaultPolicy | null; balance_usd?: number | null; explorer?: string;
+};
+/** USDC has 6 decimals; vault figures arrive in base units. */
+export const fromBase = (base: string | number | null | undefined) => Number(base ?? 0) / 1e6;
+export const toBase = (amountUsd: number) => String(Math.round(amountUsd * 1e6));
+
+export type LedgerEntry = {
+  id?: string; direction: string; rail: string; counterparty?: string; amount_usd: number;
+  token: string; status: string; tx_hash: string | null; created_at: string;
+};
+export type Ledger = {
+  days: number;
+  money: { direction: string; status: string; total: number; n: number }[];
+  model_spend_usd: number;
+  decisions: { autonomous: number; status: string; n: number }[];
+  blocked_by_guardian: number;
+  entries: LedgerEntry[];
+  proofs: Partial<Record<ProofVerdict, number>>;
+};
+
+export type PublicOfferings = {
+  business: string | null; mission: string | null; open: boolean; offerings: Offering[];
+  vault: string | null; token: string; network: string;
+};
+export type Checkout = {
+  order: Order;
+  pay: {
+    amount_usd: number; token: string; simulated?: boolean;
+    ft_transfer_call?: { receiver_id: string; amount: string; msg: string };
+  };
+};
+export type PublicOrder = Pick<Order, "id" | "offering" | "status" | "amount_usd" | "created_at" | "updated_at">;
+
+export type BusinessFile = { id: string; name: string; mime: string; size: number; uploaded_by: string; uploaded_at: string };
+
+/* ---------------------------------------------------------------- settings */
 
 export type SkillRow = {
   name: string; title: string; description: string;
@@ -153,157 +348,14 @@ export type McpPayload = {
   may_change: boolean;
 };
 
-export type Column = { k: string; l: string; n?: boolean; rp?: boolean };
+export type Column = { k: string; l: string; n?: boolean; usd?: boolean };
 
-/* One chart payload per domain, discriminated on `kind`.
- *
- * A view carries at most one chart, and the shape of that chart is a property
- * of the domain, so a union with a tag is what the data actually is. A bag of
- * optional fields would let a page ask for the demand band on stock data and
- * find out at render time.
- */
-export type DemandChartData = {
-  kind: "demand";
-  material: string; plant: string; unit: string; confidence: number;
-  planned_rate: number | null; mape_pct: number | null;
-  observed: { on: string; qty: number; mean: number }[];
-  window_days?: number;
-  points: { on: string; point: number; lower: number; upper: number }[];
-};
-export type CoverChartData = {
-  kind: "cover";
-  unit: string;
-  /** every line the table shows, so the chart can say how much it left out */
-  total: number;
-  threshold: number;
-  threshold_label: string;
-  items: {
-    material: string; plant: string; description: string;
-    days: number; qty: number; unit: string; daily: number;
-    depleted_on: string | null;
-  }[];
-};
-export type ArrivalChartData = {
-  kind: "arrival";
-  total: number;
-  /** the scenario's as-of date, which is what "today" means on this page */
-  today: string;
-  items: {
-    reference: string; material: string; port: string; status: string;
-    booked: string; revised: string; slip: number;
-  }[];
-};
-/* Concentration, as a Pareto: each supplier's share of the purchase-order book
- * against the running total. Both series are percentages of the same book, so
- * they share one axis — a second scale would let a bar and a line wear the same
- * unit and mean two different things.
- */
-export type PortfolioChartData = {
-  kind: "portfolio";
-  /** suppliers on the approved list */
-  total: number;
-  /** of those, the ones that actually hold orders */
-  active: number;
-  /** the cumulative share the rule is drawn at */
-  rule_pct: number;
-  /** how many suppliers it takes to reach rule_pct — the point of the chart */
-  cover_n: number;
-  items: {
-    supplier: string; name: string; country: string;
-    share: number; cumulative: number;
-    volume: number; unit: string | null;
-    orders: number; late: number; slip: number | null; tkdn: number | null;
-  }[];
-};
-/* The quotation comparison: price against lead time, one dot per offer.
- *
- * Those two are different units, and there is no honest way to put them on one
- * axis or on two that share a name — a rupiah and a day drawn as a bar and a
- * line would be two scales arguing about which is which. A scatter sidesteps it:
- * one axis each, and the shape of the cloud is the trade-off itself. Bottom-left
- * is cheap and quick, which is where nobody stays for long.
- */
-export type OffersChartData = {
-  kind: "offers";
-  material: string;
-  /** the purchasing unit the price is quoted in, such as TON */
-  unit: string;
-  /** the quantity every offer in this comparison was priced for */
-  qty: number;
-  /** offers still valid on the as-of date */
-  live: number;
-  total: number;
-  points: {
-    supplier: string; name: string; country: string;
-    price: number; lead: number;
-    live: boolean;
-    /** on the line nothing beats on both axes at once */
-    on_line: boolean;
-    tkdn: number | null;
-  }[];
-};
-export type DomainChart =
-  | DemandChartData | CoverChartData | ArrivalChartData | PortfolioChartData
-  | OffersChartData;
-
-/** One table row. Keys are the column `k`s, so a view can hand its columns and
- *  its rows straight to DataTable without remapping either. */
-export type Row = Record<string, unknown>;
-
-/* One section of an agent's desk: a heading, the finding under it, a table, and
- * a chart when the domain has one. Most domains have exactly one section and
- * return its fields flat; a desk with two questions to answer returns `sections`
- * instead, and the page renders both shapes the same way.
- */
-export type ViewSection = {
-  title: string;
-  note?: string;
-  columns: Column[];
-  rows: Row[];
-  origin: string;
-  source: string;
-  chart?: DomainChart;
-};
-
-export type View = {
-  domain: string; agent: string;
-  columns?: Column[]; rows?: Row[];
-  origin?: string; source?: string; note?: string;
-  chart?: DomainChart;
-  sections?: ViewSection[];
-};
-export type Summary = {
-  /** the window the FLOW figures below cover; null means every handling on record */
-  period?: { from: string | null; to: string | null; days: number | null; label: string } | null;
-  period_label?: string;
-  runs: Record<string, number>; actions: Record<string, number>;
-  approved_value_idr: number; pending_value_idr: number; model_cost_idr: number;
-  /** actions the system carried out on its own authority, under the limit */
-  autonomous_actions?: number;
-  /** the same board line the decision queue leads with */
-  board?: Board;
-  /** what obeying the rules cost, across every handling that priced it */
-  rules_cost_idr?: number;
-  rules_cost_cases?: number;
-  /** the open half of the record */
-  outcomes_owed?: number;
-  oldest_owed_days?: number;
-  /** how much of what the rulings rest on is still assumption */
-  knowledge_base?: {
-    pack: string | null; total: number; verified: number;
-    unverified: string[]; problems: string[];
-  };
-  critical_stock: { material: string; description: string; plant: string;
-                    days_left: number | null; depleted_on: string | null }[];
-  recent: { title: string; status: string; started_at: string }[];
-  model_ready: boolean;
-};
-export type Upload = {
-  id: string; entity: string; filename: string; rows: number;
-  uploaded_by: string; uploaded_at: string; synthetic?: number;
-};
+export type ContactRole = "customer" | "vendor" | "contributor" | "team" | "approver";
+export const CONTACT_ROLES: ContactRole[] = ["customer", "vendor", "contributor", "team", "approver"];
 export type Contact = {
-  id: string; name: string; role: string; email: string; notify_for: string;
+  id: string; name: string; role: ContactRole | string; email: string; notify_for: string;
+  near_account?: string | null; payout_chain?: string | null; payout_address?: string | null;
+  address_changed_at?: string | null;
   phone?: string | null; title?: string | null; department?: string | null;
   notes?: string | null; created_at?: string; updated_at?: string | null;
 };
@@ -356,48 +408,7 @@ export type ModelsPayload = {
   env: { lead: string; specialists: string | null; fallback: string | null; aux: string };
   tested: Record<string, ModelTest>;
   may_change: boolean;
-  idr_per_usd: number;
 };
-
-export type Finding = {
-  severity: "critical" | "serious" | "warning" | "note";
-  category: string;
-  title: string;
-  detail: string;
-  evidence: string[];
-  value_idr: number | null;
-  action: string;
-};
-export type AuditReport = {
-  findings: Finding[];
-  counts: Record<string, number>;
-  coverage: Record<string, number>;
-  origins: Record<string, { origin: string; source: string; note: string }>;
-  weakest_origin: string;
-  note: string;
-};
-
-/* The exploration graph (core/exploration.py): a persisted, typed DAG of one
- * run's handling. Served by GET /runs/:id/graph. Nodes carry their kind and,
- * for facts, the provenance AERA never lets go unlabelled. */
-export type GraphNode = {
-  node_id: string;
-  kind: "event" | "lead" | "fact" | "option" | "ruling";
-  state: string | null;
-  label: string | null;
-  subject: string | null;
-  lead_key: string | null;
-  origin: string | null;   // fact nodes: live | cached | derived | modelled | missing
-  source: string | null;
-  payload: string | null;  // JSON string
-  priority: number | null;
-};
-export type GraphEdge = {
-  src: string;
-  rel: "spawns" | "derived_from" | "yields" | "rules_on" | "covers";
-  dst: string;
-};
-export type ExplorationGraph = { nodes: GraphNode[]; edges: GraphEdge[] };
 
 /* ---- trace: one handling as a topology (GET /runs/{id}/trace) ---- */
 export type TraceNodeKind = "event" | "agent" | "tool" | "source" | "action";
@@ -406,9 +417,9 @@ export type TraceNode = {
   calls: number; errors: number; ms: number;
   agent?: string; tool?: string; origin?: string | null; state?: string;
   source?: string; source_kind?: string; tasks?: number;
-  status?: string; autonomous?: boolean; cost_idr?: number | null; action_id?: string;
+  status?: string; autonomous?: boolean; value_usd?: number | null; action_id?: string;
   stats?: TraceStats;
-  /** agent: its role, from agents/definitions.py */
+  /** agent: its role */
   brief?: string | null;
   /** event */
   trigger?: string | null; started_at?: string | null;
@@ -424,8 +435,8 @@ export type TraceEdge = {
 };
 export type TraceStats = {
   model?: string; models?: string[]; rounds?: number; input_tokens?: number;
-  output_tokens?: number; idr?: number; seconds?: number;
-  by_model?: Record<string, { input: number; output: number; idr: number; calls: number }>;
+  output_tokens?: number; usd?: number; seconds?: number;
+  by_model?: CostByModel;
 };
 export type TraceCall = {
   seq: number; kind: "delegate" | "tool" | "finding" | "summary" | "fallback" | string;
@@ -440,50 +451,13 @@ export type TraceCall = {
 };
 export type Trace = {
   run: {
-    id: string; title: string; kind: string; trigger: string; status: string; mode: string;
+    id: string; title: string; kind: string; trigger: string | null; status: string; mode: string | null;
     started_at: string; finished_at: string | null; error: string | null;
-    cost_idr: number | null; cost_by_model?: TraceStats["by_model"] | null;
+    cost_usd: number | null; cost_by_model?: CostByModel | null;
   };
   totals: {
     steps: number; tool_calls: number; errors: number; agents: number; sources: number;
     actions: number; tool_ms: number; by_origin: Record<string, number>;
   };
   nodes: TraceNode[]; edges: TraceEdge[]; calls: TraceCall[];
-};
-/* What a handling still asks of a person, computed from the record by
- * engine/triage.py — never asked of a model. The word always travels with the
- * figures that earned it, so `headline` and `because` can be shown as they
- * come and still be checkable. */
-export type VerdictState =
-  | "needs_you_now" | "needs_you" | "held" | "failed"
-  /** The costing settled on a plan and no action was raised against it. */
-  | "recommended_only"
-  | "owes_outcome" | "running" | "handled";
-export type Verdict = {
-  state: VerdictState;
-  /** sort key: lower is more owed */
-  rank: number;
-  headline: string;
-  because: string[];
-  value_idr: number;
-  approver: string | null;
-  days_of_cover: number | null;
-  depleted_on: string | null;
-  untrusted: number;
-  owed: number;
-  oldest_owed_days: number | null;
-  compliance_cost_idr: number | null;
-};
-export type Board = {
-  counts: Record<VerdictState, number>;
-  needs_a_person: number;
-  value_idr: number;
-  /** true only when nothing waits, nothing is held, nothing failed and nothing owes an outcome */
-  clear: boolean;
-  line: string;
-};
-
-export type RunRow = Run & {
-  step_count: number; tool_count: number; action_count?: number;
-  verdict?: Verdict;
 };

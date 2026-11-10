@@ -185,7 +185,7 @@ export function Servers({ data }: { data: McpPayload }) {
           <p className="text-sm font-medium">Add a server</p>
           <p className="text-muted-foreground mt-1 max-w-3xl text-xs leading-relaxed">
             It is called once before it is saved. A server nobody could reach, sitting enabled
-            in this list, is a tool an agent will try and a handling will wait on.
+            in this list, is a tool an agent will try and a run will wait on.
           </p>
           <div className="mt-3 grid gap-3 sm:grid-cols-3">
             <label className="space-y-1.5">
@@ -229,7 +229,7 @@ export function Servers({ data }: { data: McpPayload }) {
               </div>
               <span className="text-muted-foreground block text-xs">
                 Pick nobody and the server is registered but reaches no
-                handling. Verifying a server and giving an agent its tools are
+                run. Verifying a server and giving an agent its tools are
                 two separate acts, and the second one is the one that matters.
               </span>
             </div>

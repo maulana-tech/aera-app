@@ -13,16 +13,13 @@ import {
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar,
 } from "@/components/ui/sidebar";
 
-const AUTHORITY: Record<string, string> = {
-  planner: "read only",
-  buyer: "up to Rp 500 million",
-  procurement_lead: "up to Rp 10 billion",
-  admin: "up to Rp 10 billion",
-};
+/** What a role may approve (core/identity.py ROLE_LIMITS); the service checks it again. */
+const authority = (u: { role: string; limit_usd?: number }) =>
+  !u.limit_usd ? `${u.role} · read only` : `${u.role} · up to $${u.limit_usd.toLocaleString("en-US")}`;
 
 export function NavUser({
   user,
-}: { user?: { name: string; role: string; email: string } }) {
+}: { user?: { name: string; role: string; email: string; limit_usd?: number } }) {
   const { isMobile } = useSidebar();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -60,7 +57,7 @@ export function NavUser({
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-semibold">{user.name}</span>
-                <span className="truncate text-xs">{AUTHORITY[user.role] ?? user.role}</span>
+                <span className="truncate text-xs">{authority(user)}</span>
               </div>
               <ChevronsUpDown className="ml-auto size-4" />
             </SidebarMenuButton>
@@ -76,7 +73,7 @@ export function NavUser({
                 <span className="truncate font-semibold">{user.name}</span>
                 <span className="truncate text-xs font-mono">{user.email}</span>
                 <span className="mt-1 truncate text-xs text-muted-foreground">
-                  Authority: {AUTHORITY[user.role] ?? user.role}
+                  Authority: {authority(user)}
                 </span>
               </div>
             </DropdownMenuLabel>

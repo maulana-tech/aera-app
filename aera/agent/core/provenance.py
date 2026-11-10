@@ -2,7 +2,7 @@
 
 The house rule: every tool returns a Result, never a bare value. If an input
 on a critical path is not LIVE/CACHED/DERIVED, the calculator must not emit a
-rupiah figure at all (see engine/simulate.py).
+money figure at all.
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ class Origin(str, Enum):
     MISSING = "missing"    # the lead stops here rather than guessing
 
 
-#: Origins that may back a rupiah figure shown to a user.
+#: Origins that may back a money figure shown to a user.
 TRUSTED = frozenset({Origin.LIVE, Origin.CACHED, Origin.DERIVED})
 
 #: Weakest first. A finding is never more trustworthy than the weakest thing it rests on.
@@ -36,7 +36,7 @@ def weakest(*origins: Origin) -> Origin:
 class Result:
     value: Any
     origin: Origin
-    source: str                      # "API_MATERIAL_STOCK_SRV" / "TKDN register"
+    source: str                      # "Google News" / "business profile v3"
     fetched_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     note: str = ""
 

@@ -1,4 +1,4 @@
-import { api, apiResult, type Contact, type NotificationsPayload } from "@/app/lib";
+import { api, apiResult, mayManage, me, type Contact, type NotificationsPayload } from "@/app/lib";
 import { PageHeader } from "@/components/shell";
 import { Alerts, RecentAlerts } from "./Alerts";
 import { AddContact, ContactList } from "./Manage";
@@ -6,18 +6,21 @@ import { AddContact, ContactList } from "./Manage";
 export const dynamic = "force-dynamic";
 
 export default async function ContactsPage() {
-  const [d, alerts] = await Promise.all([
+  const [d, alerts, user] = await Promise.all([
     api<{ contacts: Contact[] }>("contacts"),
     apiResult<NotificationsPayload>("notifications"),
+    me(),
   ]);
   const mayChange = alerts.data?.may_change ?? false;
+  const payoutEditable = mayManage(user);
 
   return (
     <main className="w-full px-4 py-4 md:px-6 md:py-8">
       <PageHeader
         title="Contacts"
-        lead="Who is told when a disruption hits. This product works off events. The
-              recommendation has to come to people, not wait to be opened."
+        lead="The people and accounts the business deals with: customers, vendors, contributors,
+              the team and approvers. A vendor's payout account lives here and only here; the team
+              pays what is on record, never an address from a message."
       />
 
       <div className="mt-8 grid gap-10 xl:grid-cols-2 xl:gap-12">
@@ -31,18 +34,18 @@ export default async function ContactsPage() {
           )}
           <section>
             <h2 className="text-sm font-medium">
-              Recipients ({d?.contacts.length ?? 0})
+              Contacts ({d?.contacts.length ?? 0})
             </h2>
-            <ContactList contacts={d?.contacts ?? []} canDelete={mayChange} />
+            <ContactList contacts={d?.contacts ?? []} canDelete={mayChange} payoutEditable={payoutEditable} />
           </section>
         </div>
         <div className="min-w-0 space-y-10">
           {mayChange ? (
-            <AddContact />
+            <AddContact payoutEditable={payoutEditable} />
           ) : (
             <p className="text-muted-foreground rounded-lg border border-dashed p-6 text-sm">
-              Only an admin or a procurement lead can add or remove a contact: a contact receives
-              what was decided and what it is worth.
+              Only an owner or admin can add or change a contact: a contact may be paid, and may
+              receive what was decided and what it is worth.
             </p>
           )}
           {alerts.data && <RecentAlerts recent={alerts.data.recent} />}

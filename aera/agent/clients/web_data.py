@@ -11,7 +11,7 @@ Three sources, each for one job and each labelled for what it is:
   fx         Frankfurter, which republishes the European Central Bank's
              reference rates: one rate per working day, about 16:00 CET. A
              reference rate, not a dealing rate. The ECB publishes no VND.
-  holidays   Nager.Date, public holidays by country. A port or a supplier's
+  holidays   Nager.Date, public holidays by country. A customer's or a vendor's
              office closed for Golden Week is a delay nobody announces. It has
              no calendar for Malaysia, Thailand or Taiwan, and Indonesia's
              omits cuti bersama, the collective leave days set by joint
@@ -198,7 +198,7 @@ SAMPLE_HOLIDAYS_CN = [
 
 
 def demo() -> None:
-    q = "Ningbo port typhoon"
+    q = "Vietnam coffee exports"
     news_url = NEWS_URL.format(q=urllib.parse.quote_plus(f"{q} when:7d"))
     fx_url = FX_URL.format(base="USD", quote="IDR")
     cn26, cn27 = (HOLIDAY_URL.format(year=y, country="CN") for y in (2026, 2027))

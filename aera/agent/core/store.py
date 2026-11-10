@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS agents (
   updated_at  TEXT NOT NULL
 );
 
--- Everything the team is asked to do. Replaces the old disruption events.
+-- Everything the team is asked to do. 
 CREATE TABLE IF NOT EXISTS work_items (
   id          TEXT PRIMARY KEY,
   kind        TEXT NOT NULL,             -- order | request | goal | payable

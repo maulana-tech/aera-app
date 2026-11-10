@@ -216,13 +216,13 @@ def demo() -> None:
         os.environ["AERA_TELEGRAM_BOT_TOKEN"], os.environ["AERA_TELEGRAM_CHAT_ID"] = "T0K", "42"
         TELEGRAM_API = base
         assert team_channels() == ["slack", "telegram", "webhook"]
-        send("slack", "team", "Ningbo closed", "body")
-        send("telegram", "team", "Ningbo closed", "x" * 5000)
-        send("webhook", "team", "Ningbo closed", "body", {"run_id": "run_1"})
+        send("slack", "team", "Order ord_1 delivered", "body")
+        send("telegram", "team", "Order ord_1 delivered", "x" * 5000)
+        send("webhook", "team", "Order ord_1 delivered", "body", {"run_id": "run_1"})
         slack, tg, hook = got
-        assert slack["body"]["text"].startswith("*Ningbo closed*")
+        assert slack["body"]["text"].startswith("*Order ord_1 delivered*")
         assert tg["path"] == "/botT0K/sendMessage" and len(tg["body"]["text"]) == TELEGRAM_MAX
-        assert hook["body"] == {"subject": "Ningbo closed", "text": "body", "run_id": "run_1"}
+        assert hook["body"] == {"subject": "Order ord_1 delivered", "text": "body", "run_id": "run_1"}
         os.environ["AERA_WEBHOOK_URL"] = base + "/broken"
         try:
             send("webhook", "team", "s", "b")

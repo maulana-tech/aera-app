@@ -16,7 +16,7 @@ const CHANNELS = [
 
 const when = (t: string) =>
   new Date(t).toLocaleString("en-GB", {
-    timeZone: "Asia/Jakarta", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
+    timeZone: "UTC", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
   });
 
 export function Alerts({ data }: { data: NotificationsPayload }) {
@@ -73,7 +73,7 @@ export function Alerts({ data }: { data: NotificationsPayload }) {
       <div>
         <h2 className="text-sm font-medium">Channels</h2>
         <p className="text-muted-foreground mt-1 max-w-2xl text-xs leading-relaxed">
-          When a handling finishes, is held, or fails, the people below whose kinds match are
+          When a run finishes, is held, or fails, the people below whose kinds match are
           told, and so is every team channel that is set up. Every figure in the message comes
           from the record. Channels are set up in <span className="font-mono">.secrets/notify.env</span>{" "}
           on the server (ENV.md, Alerts).
@@ -140,7 +140,7 @@ export function Alerts({ data }: { data: NotificationsPayload }) {
 }
 
 /* What went out and to whom, newest first: alerts, reports sent by email and
- * approved messages to suppliers and customers. */
+ * approved messages to vendors and customers. */
 export function RecentAlerts({ recent }: { recent: NotificationsPayload["recent"] }) {
   return (
     <section>
@@ -160,7 +160,7 @@ export function RecentAlerts({ recent }: { recent: NotificationsPayload["recent"
               <p className="text-muted-foreground mt-0.5 truncate font-mono text-[10px]">
                 {n.kind === "outreach" ? "to a partner · " : ""}
                 {n.channel}
-                {n.channel === "email" && ` · ${n.address}`} · {when(n.created_at)} WIB
+                {n.channel === "email" && ` · ${n.address}`} · {when(n.created_at)} UTC
                 {n.attempts > 1 && ` · ${n.attempts} attempts`}
                 {n.attachments && n.attachments.length > 0 &&
                   ` · ${n.attachments.map((a) => a.format.toUpperCase()).join(" + ")} attached`}

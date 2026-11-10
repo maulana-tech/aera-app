@@ -2,19 +2,14 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { apiResult, idr, type Trace } from "@/app/lib";
+import { apiResult, usd, when as stamp, type Trace } from "@/app/lib";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { OriginBadge, StatusBadge } from "@/components/status-badge";
-import TraceView from "./TraceView";
+import TraceView from "@/components/trace-view";
 
 export const dynamic = "force-dynamic";
 
-const when = (t: string | null) =>
-  t ? new Date(t).toLocaleString("en-GB", {
-    dateStyle: "short",
-    timeStyle: "medium",
-    timeZone: "Asia/Jakarta",
-  }) : "";
+const when = (t: string | null) => (t ? stamp(t, { seconds: true }) : "");
 
 export default async function TracePage({
   params, searchParams,
@@ -63,7 +58,7 @@ export default async function TracePage({
             ["Steps", String(t.totals.steps)],
             ["Tool calls", `${t.totals.tool_calls}${t.totals.errors ? ` (${t.totals.errors} failed)` : ""}`],
             ["Agents · sources", `${t.totals.agents} · ${t.totals.sources}`],
-            ["Model time", t.run.cost_idr ? idr(t.run.cost_idr) : "-"],
+            ["Model spend", t.run.cost_usd ? usd(t.run.cost_usd) : "-"],
           ].map(([k, v]) => (
             <div key={k}>
               <dt className="text-muted-foreground text-xs">{k}</dt>
@@ -80,14 +75,14 @@ export default async function TracePage({
                 : <span key={o} className="text-muted-foreground font-mono text-[11px]">{o} · {n}</span>)}
           </div>
         )}
-        <Link href={`/disruptions/${t.run.id}`} className="text-muted-foreground hover:text-foreground mt-3 inline-block text-xs underline underline-offset-2">
-          The decision for this handling
+        <Link href={`/work/${t.run.id}`} className="text-muted-foreground hover:text-foreground mt-3 inline-block text-xs underline underline-offset-2">
+          The outcome, actions and proofs for this run
         </Link>
       </header>
 
       {t.calls.length === 0 ? (
         <p className="text-muted-foreground mt-8 text-sm">
-          Nothing was recorded for this handling: the team has not taken a step yet, or it was
+          Nothing was recorded for this run: the team has not taken a step yet, or it was
           held before it started.
         </p>
       ) : (

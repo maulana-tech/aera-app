@@ -14,11 +14,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AERA Decision queue",
+  title: { default: "AERA", template: "%s · AERA" },
   description:
-    "Autonomous supply-disruption response. Investigates the impact, assembles the "
-    + "options, strikes out the ones that break the rules, then issues the documents "
-    + "once approved.",
+    "AERA: Autonomous Enterprise, Run by Agents. Describe a business and a team of agents runs it: "
+    + "on TEE-attested models, inside on-chain spending limits a person sets.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

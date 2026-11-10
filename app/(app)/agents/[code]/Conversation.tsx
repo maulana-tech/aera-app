@@ -35,6 +35,7 @@ import {
 } from "@/components/orchestration-timeline";
 import { OriginBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
+import { usd } from "@/app/lib";
 
 type Attachment = {
   name: string;
@@ -51,7 +52,7 @@ type Reply = {
   tools_used: string[];
   board: Record<string, { origin: string; source: string }>;
   untrusted: string[];
-  cost_idr: number;
+  cost_usd: number;
   conversation_id?: string;
   thinking_time?: number;
   steps?: OrchestrationStep[];
@@ -74,26 +75,26 @@ type Thread = {
   messages: number;
   updated_at: string;
   total_tokens?: number;
-  cost_idr?: number;
+  cost_usd?: number;
 };
 
 type UsageOverview = {
   input_tokens: number;
   output_tokens: number;
   total_tokens: number;
-  cost_idr: number;
+  cost_usd: number;
   replies: number;
-  runs_cost_idr: number;
-  cost_cap_idr: number;
+  runs_cost_usd: number;
+  cost_cap_usd: number;
   max_output_tokens: number;
   context_turns: number;
   max_rounds: number;
-  input_idr_per_million: number;
-  output_idr_per_million: number;
+  input_usd_per_million: number;
+  output_usd_per_million: number;
   model: string;
 };
 
-const DEFAULT_COST_CAP_IDR = 500_000;
+const DEFAULT_COST_CAP_USD = 1;
 const DEFAULT_CONTEXT_TURNS = 12;
 const DEFAULT_MAX_OUTPUT_TOKENS = 8_000;
 
@@ -254,21 +255,21 @@ function UsageBarPopover({
     (m): m is { from: "agent"; reply: Reply } => m.from === "agent",
   );
 
-  // Real token & cost figures from Bedrock responses in this conversation
+  // Real token & cost figures from model responses in this conversation
   const sessionInput = agentReplies.reduce((s, m) => s + (m.reply.tokens?.input ?? 0), 0);
   const sessionOutput = agentReplies.reduce((s, m) => s + (m.reply.tokens?.output ?? 0), 0);
   const sessionTotal = agentReplies.reduce(
     (s, m) => s + (m.reply.tokens?.total ?? (m.reply.tokens ? m.reply.tokens.input + m.reply.tokens.output : 0)),
     0,
   );
-  const sessionCostIdr = agentReplies.reduce((s, m) => s + (m.reply.cost_idr ?? 0), 0);
+  const sessionCostUsd = agentReplies.reduce((s, m) => s + (m.reply.cost_usd ?? 0), 0);
   const sessionThinkingSeconds = agentReplies.reduce((s, m) => s + (m.reply.thinking_time ?? 0), 0);
 
   const promptShare = sessionTotal > 0 ? sessionInput / sessionTotal : 0;
   const responseShare = sessionTotal > 0 ? sessionOutput / sessionTotal : 0;
 
-  // Real backend configuration limits (api.py CONTEXT_TURNS, graph.py max_tokens, config.py AERA_COST_CAP_IDR)
-  const costCapIdr = usage?.cost_cap_idr ?? DEFAULT_COST_CAP_IDR;
+  // Real backend configuration limits (api.py CONTEXT_TURNS, graph.py max_tokens, config.py AERA_COST_CAP_USD)
+  const costCapUsd = usage?.cost_cap_usd ?? DEFAULT_COST_CAP_USD;
   const contextTurnsLimit = usage?.context_turns ?? DEFAULT_CONTEXT_TURNS;
   const maxOutputTokens = usage?.max_output_tokens ?? DEFAULT_MAX_OUTPUT_TOKENS;
   const activeModel = usage?.model || modelId || null;
@@ -286,21 +287,21 @@ function UsageBarPopover({
 
   // Real cumulative usage across all stored conversations in SQLite
   const threadsTokensSum = threads.reduce((s, t) => s + (t.total_tokens ?? 0), 0);
-  const threadsCostSum = threads.reduce((s, t) => s + (t.cost_idr ?? 0), 0);
+  const threadsCostSum = threads.reduce((s, t) => s + (t.cost_usd ?? 0), 0);
   const allTokens = Math.max(usage?.total_tokens ?? 0, threadsTokensSum, sessionTotal);
   const allInputTokens = Math.max(usage?.input_tokens ?? 0, sessionInput);
   const allOutputTokens = Math.max(usage?.output_tokens ?? 0, sessionOutput);
-  const allCostIdr = Math.max(
-    (usage?.cost_idr ?? 0) + (usage?.runs_cost_idr ?? 0),
+  const allCostUsd = Math.max(
+    (usage?.cost_usd ?? 0) + (usage?.runs_cost_usd ?? 0),
     threadsCostSum,
-    sessionCostIdr,
+    sessionCostUsd,
   );
 
-  // Real session cost vs AERA_COST_CAP_IDR (Rp 500,000)
-  const sessionCostRatio = costCapIdr > 0 ? sessionCostIdr / costCapIdr : 0;
-  const allCostRatio = costCapIdr > 0 ? allCostIdr / costCapIdr : 0;
-  const remainingBudgetIdr = Math.max(0, costCapIdr - sessionCostIdr);
-  const budgetRemainingRatio = costCapIdr > 0 ? remainingBudgetIdr / costCapIdr : 0;
+  // Real session cost vs AERA_COST_CAP_USD
+  const sessionCostRatio = costCapUsd > 0 ? sessionCostUsd / costCapUsd : 0;
+  const allCostRatio = costCapUsd > 0 ? allCostUsd / costCapUsd : 0;
+  const remainingBudgetUsd = Math.max(0, costCapUsd - sessionCostUsd);
+  const budgetRemainingRatio = costCapUsd > 0 ? remainingBudgetUsd / costCapUsd : 0;
 
   return (
     <PopoverPrimitive.Root>
@@ -323,7 +324,7 @@ function UsageBarPopover({
           sideOffset={8}
           className="bg-popover text-popover-foreground ring-foreground/10 z-50 w-80 rounded-xl p-4 shadow-xl ring-1 outline-none"
         >
-          {/* 1. Real Session Tokens (Prompt vs Response from Bedrock usage) */}
+          {/* 1. Real Session Tokens (Prompt vs Response from model usage) */}
           <div className="space-y-2">
             <button
               type="button"
@@ -429,20 +430,20 @@ function UsageBarPopover({
 
           <div className="bg-border my-3.5 h-px" />
 
-          {/* 3. Real Session Cost Cap (AERA_COST_CAP_IDR in config.py / graph.py) */}
+          {/* 3. Real Session Cost Cap (AERA_COST_CAP_USD in config.py / graph.py) */}
           <div className="space-y-2.5">
             <div className="flex items-center justify-between gap-2 text-xs">
               <span className="inline-flex items-center gap-1.5 font-medium">
                 Session budget cap
                 <span
-                  title={`Enforced by AERA_COST_CAP_IDR (Rp ${costCapIdr.toLocaleString()} per session/event).`}
+                  title={`Enforced by AERA_COST_CAP_USD (${usd(costCapUsd)} per run).`}
                   className="text-muted-foreground inline-flex cursor-help"
                 >
                   <CircleHelp className="size-3.5" />
                 </span>
               </span>
               <span className="text-muted-foreground font-mono text-[11px]">
-                Rp {remainingBudgetIdr.toLocaleString()} left ({formatPercent(budgetRemainingRatio)})
+                {usd(remainingBudgetUsd)} left ({formatPercent(budgetRemainingRatio)})
               </span>
             </div>
 
@@ -455,12 +456,12 @@ function UsageBarPopover({
 
             <div className="text-muted-foreground space-y-0.5 text-[11px]">
               <p>
-                Session spend: <span className="text-foreground font-mono">Rp {sessionCostIdr.toLocaleString()}</span> / Rp {costCapIdr.toLocaleString()} ({formatPercent(sessionCostRatio)} used)
+                Session spend: <span className="text-foreground font-mono">{usd(sessionCostUsd)}</span> / {usd(costCapUsd)} ({formatPercent(sessionCostRatio)} used)
               </p>
               <p>
                 All sessions ({threads.length || 1} conv):{" "}
                 <span className="text-foreground font-mono">
-                  {allTokens.toLocaleString()} tok · Rp {allCostIdr.toLocaleString()}
+                  {allTokens.toLocaleString()} tok · {usd(allCostUsd)}
                 </span>{" "}
                 ({formatPercent(allCostRatio)})
               </p>
@@ -497,7 +498,7 @@ function UsageBarPopover({
                         {m.reply.thinking_time !== undefined
                           ? `${m.reply.thinking_time.toFixed(1)}s · `
                           : ""}
-                        Rp {(m.reply.cost_idr ?? 0).toLocaleString()}
+                        {usd((m.reply.cost_usd ?? 0))}
                       </span>
                     </div>
                   ))

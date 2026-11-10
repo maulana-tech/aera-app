@@ -1,13 +1,13 @@
-import { api, me, type Agent, type AgentSummary } from "@/app/lib";
+import { api, me, type Agent } from "@/app/lib";
 import ChatSurface from "./ChatSurface";
 import { AgentBadge } from "@/components/agent-card";
 
 export const dynamic = "force-dynamic";
 
 const EXAMPLES = [
-  "Any disruption still unhandled?",
-  "Which material is most critical this week?",
-  "If Ningbo closes for another week, what happens?",
+  "What is waiting for a person right now?",
+  "How much did we earn and spend this week?",
+  "Draft this week's free sample for our customers",
 ];
 
 export default async function Chat(
@@ -15,7 +15,7 @@ export default async function Chat(
 ) {
   const { c } = await searchParams;
   const [team, user] = await Promise.all([
-    api<{ agents: Agent[]; summary: AgentSummary }>("agents"),
+    api<{ agents: Agent[] }>("agents"),
     me(),
   ]);
   const arya = team?.agents.find((a) => a.lead);
@@ -55,7 +55,7 @@ export default async function Chat(
         <ChatSurface
           code={arya.code}
           name={arya.nickname}
-          work="Routing"
+          work="Supervisor"
           examples={EXAMPLES}
           signedIn={!!user}
           threadId={c ?? null}

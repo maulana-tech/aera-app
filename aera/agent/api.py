@@ -268,7 +268,7 @@ def list_mcp_servers(_m, _b, h) -> Tuple[int, dict]:
             "tools_total": len(tools),
             "tools_writing": sum(1 for t in tools if t.writes),
             "resources": [r["uri"] for r in mcp.RESOURCES],
-            "prompts": [p["name"] for p in mcp.PROMPTS],
+            "prompts": [p["name"] for p in mcp._prompt_list()],
         },
         "servers": [_mcp_row(r) for r in store.mcp_servers()],
         "may_change": user.role in SETTINGS_ROLES,
@@ -526,20 +526,29 @@ def create_contact(_m, b: dict, h) -> Tuple[int, dict]:
         _settings_user(h)
     except _Refused as e:
         return 403, {"error": str(e)}
-    for field in ("name", "role", "email"):
+    for field in ("name", "role"):
         if not b.get(field):
             return 400, {"error": f"'{field}' is required"}
+    if b["role"] in ("team", "approver") and not b.get("email"):
+        return 400, {"error": "a team contact needs an email"}
     bad = _contact_fields(b)
     if bad:
         return 400, {"error": bad}
-    return 201, store.add_contact(b["name"].strip(), b["role"], b["email"].strip(),
-                                  b.get("notify_for", "*"),
-                                  **{k: str(b.get(k) or "").strip()[:1000] for k in store.CONTACT_DETAILS})
+    extra = [k for k in store.CONTACT_FIELDS if k not in ("name", "role", "email", "notify_for")]
+    return 201, store.add_contact(b["name"].strip(), b["role"], str(b.get("email") or "").strip(),
+                                  b.get("notify_for", "*" if b["role"] in ("team", "approver") else ""),
+                                  **{k: str(b.get(k) or "").strip()[:1000] for k in extra})
 
 
 def _contact_fields(b: dict) -> Optional[str]:
     """What is wrong with a contact as given, or None."""
-    if b.get("email") is not None and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+",
+    from core import chain
+    if b.get("role") is not None and b["role"] not in ("customer", "vendor", "contributor", "team", "approver"):
+        return "role is one of customer, vendor, contributor, team, approver"
+    acct = str(b.get("near_account") or "").strip()
+    if acct and not chain.valid_account(acct.lower()):
+        return f"'{acct}' is not a valid NEAR account id"
+    if b.get("email") and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+",
                                                        str(b["email"]).strip()):
         return f"'{b['email']}' is not an email address"
     phone = str(b.get("phone") or "").strip()
@@ -570,8 +579,9 @@ def change_contact(m, b: dict, h) -> Tuple[int, dict]:
     bad = _contact_fields(b)
     if bad:
         return 400, {"error": bad}
-    fields = {k: str(b[k]).strip()[:1000] for k in ("name", "role", "email", "notify_for",
-                                                     *store.CONTACT_DETAILS) if k in b and b[k] is not None}
+    fields = {k: str(b[k]).strip()[:1000] for k in store.CONTACT_FIELDS if k in b and b[k] is not None}
+    if "near_account" in fields:
+        fields["near_account"] = fields["near_account"].lower()
     c = store.update_contact(m.group(1), **fields)
     return (200, c) if c else (404, {"error": "not found"})
 
@@ -1190,8 +1200,8 @@ def kill_switch(_m, b: dict, h) -> Tuple[int, dict]:
     from core import business, chain
     u = _user(h)
     on = bool(b.get("on"))
-    if on and u.limit_usd <= 0:
-        return 403, {"error": "a viewer cannot pull the kill switch"}
+    if on and u.role not in ("approver", "owner", "admin"):
+        return 403, {"error": f"a {u.role} cannot pull the kill switch (approver or owner)"}
     if not on and not u.may_manage:
         return 403, {"error": "only an owner can resume the business"}
     p = business.current()
@@ -1475,6 +1485,15 @@ def treasury(_m, _b, h) -> Tuple[int, dict]:
     return 200, out
 
 
+@route("POST", r"/treasury/sync")
+def treasury_sync(_m, _b, h) -> Tuple[int, dict]:
+    """Run settlement now: after an approver signed in their wallet, the record
+    catches up without waiting for the next pass."""
+    import settle
+    _user(h)
+    return 200, {"done": settle.run_once()}
+
+
 @route("GET", r"/ledger")
 def ledger(_m, b: dict, h) -> Tuple[int, dict]:
     _user(h)
@@ -1487,12 +1506,14 @@ def guardian_log(_m, b: dict, h) -> Tuple[int, dict]:
     return 200, {"checks": store.list_checks(limit=100, verdict=b.get("verdict") or None)}
 
 
-@route("GET", r"/attestation/([A-Za-z0-9_.\-/]+)")
+@route("GET", r"/attestation/([A-Za-z0-9_.:\-/]+)")
 def attestation(m, _b, h) -> Tuple[int, dict]:
     """A fresh report for one model, checked with a nonce made now."""
     from core import attest
     _user(h)
     model = m.group(1)
+    if model.startswith("nearai:"):
+        model = model[len("nearai:"):]
     try:
         nonce = attest.new_nonce()
         rep = attest.fetch_report(model, nonce=nonce, use_cache=False) \
@@ -1707,7 +1728,7 @@ PUBLIC = {("GET", "/health"), ("POST", "/login")}
 
 _SAMPLES = ((r"([A-Za-z0-9_]+)", "x1"), (r"([A-Za-z]+)", "Thing"), (r"([a-z0-9_]+)", "a_skill"),
             (r"([a-z_]+)", "digest"), (r"([a-z]+)", "impact"), (r"(\d+)", "0"), (r"(pdf|xlsx)", "pdf"),
-            (r"([A-Za-z0-9_\-]+)", "ord_x"), (r"([A-Za-z0-9_.\-/]+)", "z-ai/glm-5.3"))
+            (r"([A-Za-z0-9_\-]+)", "ord_x"), (r"([A-Za-z0-9_.:\-/]+)", "z-ai/glm-5.3"))
 
 
 def _sample_path(pattern) -> str:
@@ -1798,11 +1819,18 @@ def demo() -> None:
     assert code == 200 and d["action"]["status"] == "sent", d
     print("  approval: role limit from the token ✓ · blocked is final ✓ · approved executes ✓")
 
-    assert kill_switch(None, {"on": True}, O)[0] == 200
-    assert kill_switch(None, {"on": False}, O)[0] == 403, "only an owner resumes"
+    assert kill_switch(None, {"on": True}, O)[0] == 403, "an operator cannot stop the business"
+    assert kill_switch(None, {"on": True}, H)[0] == 200
+    identity.add_user("ap@lumen.example", "Ap", "approver", "pw-for-the-check")
+    ap = login(None, {"email": "ap@lumen.example", "password": "pw-for-the-check"}, {})[1]["token"]
+    assert kill_switch(None, {"on": False}, {"Authorization": f"Bearer {ap}"})[0] == 403, "only an owner resumes"
+    assert create_contact(None, {"name": "V", "role": "vendor", "near_account": "Bad Acct"}, H)[0] == 400
+    code, cv = create_contact(None, {"name": "V", "role": "vendor", "near_account": "vendor.testnet"}, H)
+    assert code == 201 and cv["near_account"] == "vendor.testnet", cv
+    assert create_contact(None, {"name": "V", "role": "vendor", "near_account": "v2.testnet"}, O)[0] == 403
     assert public_checkout(None, {"offering": "brief", "inputs": {"industry": "x", "country": "y"}}, {})[0] == 409
     assert kill_switch(None, {"on": False}, H)[0] == 200
-    print("  kill switch: anyone with authority stops, only an owner resumes ✓")
+    print("  kill switch: approvers and owners stop, only an owner resumes ✓ · contacts validated ✓")
     print(f"  {len(ROUTES)} routes · {len(guarded)} refuse an anonymous caller ✓")
     print("api ok")
 

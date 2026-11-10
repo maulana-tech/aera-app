@@ -10,8 +10,8 @@ import { Button } from "@/components/ui/button";
 const wib = (t: string | null) =>
   t
     ? new Date(t).toLocaleString("en-GB", {
-        timeZone: "Asia/Jakarta", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
-      }) + " WIB"
+        timeZone: "UTC", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
+      }) + " UTC"
     : "never";
 
 function state(j: ScheduledJob): { status: string; label: string } {

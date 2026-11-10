@@ -301,34 +301,26 @@ type AgentBotStyle = {
 };
 
 /**
- * Each of the 12 AERA agents gets a distinct Bloub silhouette, expression, and color
- * tailored to their role on the supply-chain response team.
+ * Each AERA agent gets a distinct Bloub silhouette, expression and colour.
+ * The three core roles are fixed; library specialists have their own; a
+ * custom role falls back to one picked from its name, so it is stable.
  */
 const AGENT_BOT_STYLES: Record<string, AgentBotStyle> = {
-  // 1. Arya (Supervisor / Team Lead) — Classic Grok ink-black sphere, confident leader
+  // Core: Arya plans, Kira can veto, Tara holds the money.
   Arya: { shape: "cercle", expression: "attentif", color: "#0a0a0c", rotDeg: 0 },
-  // 2. Elsa (Impact) — Orange rounded triangle, wide-eyed alert on disruption impact
-  Elsa: { shape: "triangle", expression: "surpris", color: "#f08a24", rotDeg: 0 },
-  // 3. Dara (Demand) — Rose-pink cloud, curious head-tilt tracking demand shifts
-  Dara: { shape: "nuage", expression: "curieux", color: "#e152b0", rotDeg: -6 },
-  // 4. Iris (Inventory / Stock Validity) — Turquoise squircle crate, focused inspector
-  Iris: { shape: "squircle", expression: "neutre", color: "#2fbfa0", rotDeg: -8 },
-  // 5. Clint (Sourcing) — Emerald capsule, upbeat scout finding replacement sources
-  Clint: { shape: "capsule", expression: "heureux", color: "#3ecf8e", rotDeg: -14 },
-  // 6. Prita (Procurement) — Violet hexagon, shrewd one-brow-raised quote negotiator
-  Prita: { shape: "hexagone", expression: "mefiant", color: "#8b5cf6", rotDeg: 12 },
-  // 7. Milo (Logistics) — Ocean-blue droplet, energetic maritime tracker
-  Milo: { shape: "goutte", expression: "excite", color: "#3b93f0", rotDeg: 0 },
-  // 8. Kira (Compliance / Veto) — Crimson diamond shield, fierce rule enforcer
   Kira: { shape: "diamond", expression: "colere", color: "#e8483f", rotDeg: 0 },
-  // 9. Tara (Simulation / Costing) — Amber-gold pebble, proud & precise calculator
   Tara: { shape: "galet", expression: "fier", color: "#f0b429", rotDeg: 15 },
-  // 10. Otto (Precedent / Memory) — Warm brown egg, wise seen-it-all historian
-  Otto: { shape: "egg", expression: "somnolent", color: "#8b5e3c", rotDeg: -8 },
-  // 11. Bram (Execution) — Electric cyan pentagon, cheerful action executor
-  Bram: { shape: "pentagone", expression: "hilare", color: "#06b6d4", rotDeg: 8 },
-  // 12. Vega (Exposure / Risk Scanner) — Royal-indigo octagon with large wide-open scanner eyes
-  Vega: { shape: "octogone", expression: "effraye", color: "#4f46e5", rotDeg: 0 },
+  // The role library (agents/roles.py).
+  Nova: { shape: "goutte", expression: "curieux", color: "#3b93f0", rotDeg: 0 },
+  Wira: { shape: "squircle", expression: "neutre", color: "#2fbfa0", rotDeg: -8 },
+  Lina: { shape: "hexagone", expression: "mefiant", color: "#8b5cf6", rotDeg: 12 },
+  Sena: { shape: "capsule", expression: "heureux", color: "#3ecf8e", rotDeg: -14 },
+  Dewi: { shape: "nuage", expression: "heureux", color: "#e152b0", rotDeg: -6 },
+  Maya: { shape: "triangle", expression: "excite", color: "#f08a24", rotDeg: 0 },
+  Odi: { shape: "pentagone", expression: "hilare", color: "#06b6d4", rotDeg: 8 },
+  Prita: { shape: "octogone", expression: "mefiant", color: "#4f46e5", rotDeg: 0 },
+  Desi: { shape: "egg", expression: "curieux", color: "#c026d3", rotDeg: -8 },
+  Quin: { shape: "squircle", expression: "attentif", color: "#8b5e3c", rotDeg: 6 },
 };
 
 const FALLBACK_STYLES: AgentBotStyle[] = Object.values(AGENT_BOT_STYLES);
@@ -399,14 +391,14 @@ export function AgentBadge({
   large?: boolean;
   size?: "xs" | "sm" | "lg";
   showTooltip?: boolean;
-  /** The role, e.g. "Impact". A name alone does not say what the agent does. */
+  /** The role, e.g. "Researcher". A name alone does not say what the agent does. */
   title?: string;
   /** Makes the badge a link. The hover lift already promises one. */
   href?: string;
   /**
    * "end" hangs the tooltip off the badge's right edge instead of centring it.
    * A row of badges pinned to the right margin clips a centred tooltip: the
-   * last one read "Vega · Risk Scann" before this existed.
+   * last one read "Quin · Quality Rev" before this existed.
    */
   align?: "center" | "end";
 }) {
@@ -475,7 +467,6 @@ export function AgentBadge({
 }
 
 export function AgentCard({ a }: { a: Agent }) {
-  const complete = a.installed === a.tool_count;
   return (
     <Link
       href={`/agents/${a.code}`}
@@ -498,14 +489,8 @@ export function AgentCard({ a }: { a: Agent }) {
           <p className="text-muted-foreground mt-1.5 line-clamp-2 text-xs leading-relaxed">
             {a.brief}
           </p>
-          <p
-            className={`mt-2 font-mono text-[10px] ${
-              complete ? "text-muted-foreground" : "text-amber-700 dark:text-amber-400"
-            }`}
-          >
-            {a.installed}/{a.tool_count} tools
-            {!a.ready && " · no prompt"}
-            {a.used_in > 0 && ` · ${a.used_in} disruptions`}
+          <p className="text-muted-foreground mt-2 font-mono text-[10px]">
+            {a.tool_count} tools{a.runs > 0 && ` · in ${a.runs} runs`}
           </p>
         </div>
       </div>

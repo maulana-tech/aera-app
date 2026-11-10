@@ -13,10 +13,10 @@ import {
   Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { WIB, wib, type Trace, type TraceCall, type TraceEdge, type TraceNode } from "@/app/lib";
+import { ZONE, usd, when as stamp, type Trace, type TraceCall, type TraceEdge, type TraceNode } from "@/app/lib";
 
 /* A trace node opened in a drawer, the way a node of the exploration graph
- * opens on the disruption page: what the node is, its numbers, what it is
+ * opens on the work page: what the node is, its numbers, what it is
  * connected to (each one a click away), and every step that went through it,
  * each expandable to its full arguments and result.
  *
@@ -27,7 +27,7 @@ const SWATCH: Record<string, string> = {
   event: "bg-slate-400", agent: "bg-sky-500", tool: "bg-zinc-400", action: "bg-rose-500",
   upload: "bg-cyan-500", fixture: "bg-amber-500", profile: "bg-amber-400",
   rules: "bg-orange-500", engine: "bg-violet-500", record: "bg-fuchsia-500",
-  model: "bg-indigo-500", external: "bg-teal-500",
+  model: "bg-indigo-500", external: "bg-teal-500", chain: "bg-emerald-500",
 };
 
 const swatchOf = (n: TraceNode) =>
@@ -40,14 +40,15 @@ const kindOf = (n: TraceNode) =>
 
 // What each kind of source is, in the words a buyer would use.
 const SOURCE_WHAT: Record<string, string> = {
-  upload: "A file someone uploaded on the Data page.",
-  fixture: "Sample data that ships with AERA, not a company record. Upload a file to replace it.",
-  profile: "An assumed value from the company profile, not a reading.",
-  rules: "The rule tables AERA checks against: TKDN, LARTAS, contract clauses.",
+  upload: "A file someone added to the business's own files.",
+  fixture: "Sample data that ships with AERA, not a business record.",
+  profile: "A value from the business profile, written by a person.",
+  rules: "The guardian's checks against the profile's limits, forbidden list and privacy rules.",
   engine: "A calculation in AERA's own code, made from figures read elsewhere.",
-  record: "AERA's own records: past handlings, events and actions.",
+  record: "AERA's own records: work items, orders, contacts and actions.",
   model: "An answer written by a language model, not a system of record.",
-  external: "A public outside feed.",
+  external: "A public outside feed, read as untrusted text.",
+  chain: "The NEAR vault contract, read live from the chain.",
 };
 
 // An agent's state, in the colours a run's status already uses.
@@ -61,12 +62,11 @@ const REL_OUT: Record<TraceEdge["rel"], string> = {
   triggers: "Triggers", delegates: "Asks", calls: "Calls", reads: "Reads from", raises: "Raises",
 };
 
-const rupiah = (n: number) => `Rp ${n.toLocaleString("en-US")}`;
 const seconds = (ms: number) => (ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${ms} ms`);
-// Jakarta, with seconds: a trace is read for the order of things.
-const when = (t: string | null | undefined) => (t ? wib(t, { seconds: true }) : "");
+// UTC, with seconds: a trace is read for the order of things.
+const when = (t: string | null | undefined) => (t ? stamp(t, { seconds: true }) : "");
 const time = (t: string | null) =>
-  t ? new Date(t).toLocaleTimeString("en-GB", { hour12: false, timeZone: WIB }) : "";
+  t ? new Date(t).toLocaleTimeString("en-GB", { hour12: false, timeZone: ZONE }) : "";
 
 // Long lists open short; the rest is one click away.
 const FIRST_STEPS = 25;
@@ -191,7 +191,7 @@ function Overview({
           ["Failed", n.errors],
           ["Tasks received", n.agent === "supervisor" ? null : n.tasks ?? null],
           ["Time", s.seconds != null ? `${s.seconds} s` : null],
-          ["Model cost", s.idr != null ? rupiah(s.idr) : null],
+          ["Model cost", s.usd != null ? usd(s.usd) : null],
           ["Model turns", s.rounds ?? null],
         ]} />
         {s.model && (
@@ -240,11 +240,11 @@ function Overview({
       <>
         {n.title && <p className="text-sm leading-relaxed">{n.title}</p>}
         <Facts rows={[
-          ["Value", typeof n.cost_idr === "number" ? rupiah(n.cost_idr) : "-"],
+          ["Value", typeof n.value_usd === "number" ? usd(n.value_usd) : "-"],
           ["Authority", n.autonomous ? "ran on its own authority, under the limit" : "needs a person's approval"],
           ...(n.created_at ? [["Raised", when(n.created_at)] as [string, ReactNode]] : []),
           ...(n.reference
-            ? [["Document",
+            ? [["Reference",
                 <span key="r" className="font-mono">{n.reference}</span>] as [string, ReactNode]]
             : []),
         ]} />
@@ -268,10 +268,10 @@ function Overview({
             </ul>
           </Part>
         )}
-        <Link href={`/disruptions/${runId}`}
+        <Link href={`/work/${runId}`}
               className={cn("inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium",
                 pending ? "bg-foreground text-background hover:bg-foreground/90" : "hover:bg-muted")}>
-          {pending ? "Decide on it in the decision queue" : "Open the decision for this handling"}
+          {pending ? "Decide on it on the work page" : "Open the work page"}
           <ArrowRight className="size-3" />
         </Link>
       </>
@@ -288,9 +288,9 @@ function Overview({
         ["Steps", trace.totals.steps],
         ["Tool calls", trace.totals.tool_calls],
       ]} />
-      <Link href={`/disruptions/${runId}`}
+      <Link href={`/work/${runId}`}
             className="hover:bg-muted inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium">
-        Open the decision for this handling<ArrowRight className="size-3" />
+        Open the work page<ArrowRight className="size-3" />
       </Link>
     </>
   );

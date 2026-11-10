@@ -424,7 +424,7 @@ def price_usd(usage) -> float:
 
 
 def price_idr(usage) -> float:
-    """Rupiah for one call's usage, at the rate of the model that served it.
+    """Rupiah for one call's usage (legacy; prices are kept in USD, see price_usd), at the rate of the model that served it.
     Cache reads and writes are priced as input: overstated, never understated."""
     spec = getattr(usage, "spec", None)
     inp = ((getattr(usage, "input_tokens", 0) or 0)

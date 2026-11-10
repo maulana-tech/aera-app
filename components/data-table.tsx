@@ -1,7 +1,6 @@
 import { OriginBadge } from "@/components/status-badge";
-import type { Column } from "@/app/lib";
+import { usd, type Column } from "@/app/lib";
 
-const idr = (n: number) => "Rp " + n.toLocaleString("en-US");
 
 function cell(v: unknown, c: Column) {
   if (v === null || v === undefined || v === "")
@@ -12,7 +11,7 @@ function cell(v: unknown, c: Column) {
         {v ? "yes" : "no"}
       </span>
     );
-  if (c.rp && typeof v === "number") return <span className="tabular-nums">{idr(v)}</span>;
+  if (c.usd && typeof v === "number") return <span className="tabular-nums">{usd(v)}</span>;
   if (c.n) return <span className="tabular-nums">{String(v)}</span>;
   return <>{String(v)}</>;
 }
@@ -47,7 +46,7 @@ export function DataTable({
                   <th
                     key={c.k}
                     className={`text-muted-foreground px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider ${
-                      c.n || c.rp ? "text-right" : "text-left"
+                      c.n || c.usd ? "text-right" : "text-left"
                     }`}
                   >
                     {c.l}
@@ -61,7 +60,7 @@ export function DataTable({
                   {columns.map((c) => (
                     <td
                       key={c.k}
-                      className={`px-4 py-2.5 ${c.n || c.rp ? "text-right" : "text-left"}`}
+                      className={`px-4 py-2.5 ${c.n || c.usd ? "text-right" : "text-left"}`}
                     >
                       {cell(row[c.k], c)}
                     </td>

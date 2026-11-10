@@ -149,7 +149,7 @@ export default function AuthSectionOne({
             >
               <AeraMark className="size-5 shrink-0 xl:size-7" />
               <span className="truncate whitespace-nowrap">
-                AERA | Supply Chain Agentic AI
+                AERA | Autonomous Enterprise, Run by Agents
               </span>
             </a>
           </div>

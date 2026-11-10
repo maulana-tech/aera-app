@@ -785,7 +785,7 @@ def demo() -> None:
 
     # The workbook: every part well-formed XML, names legal and distinct, numbers numeric.
     book = xlsx([
-        Sheet("Summary", ["Field", "Value"], [["Title", "Ningbo closed"], ["Cost IDR", 15_000_000]], pairs=True),
+        Sheet("Summary", ["Field", "Value"], [["Title", "Order ord_1"], ["Cost USD", 15]], pairs=True),
         Sheet("get_material_stock: calls/[all]", ["Material", "Plant", "Qty"],
               [["M-4471", "SBY1", 172.8], ["M-4471", "KRW1", 84], ["A & B <c>", None, True]]),
         Sheet("get_material_stock: calls/[all]", ["x"], [[1]]),
@@ -804,10 +804,10 @@ def demo() -> None:
     assert 'autoFilter ref="A1:C4"' in sheet2 and 'state="frozen"' in sheet2
 
     # The document: a valid PDF whose cross-reference table points at every object.
-    d = Doc("Ningbo-Zhoushan port closed → 5 days ✅", subtitle="maritime advisory · **typhoon**")
+    d = Doc("Market brief: coffee in Vietnam → 5 pages ✅", subtitle="order ord_1 · **delivered**")
     d.facts([("Kind", "port_closure"), ("Started", "2026-10-24 10:18"), ("Status", "done"),
              ("Cost", "Rp 1,435")])
-    d.h2("Decision").md("**What happened:** a typhoon.\n\n- one\n- two *soft*\n\n| A | B |\n|---|--:|\n| x | 1 |\n\n> caveat\n\n---\n### Next")
+    d.h2("Decision").md("**What happened:** a paid order.\n\n- one\n- two *soft*\n\n| A | B |\n|---|--:|\n| x | 1 |\n\n> caveat\n\n---\n### Next")
     d.table(["#", "Step", "Text"], [[i, "Data check", "word " * 40] for i in range(80)], align=["r", "l", "l"])
     pdf = d.render()
     assert pdf.startswith(b"%PDF-1.4") and pdf.rstrip().endswith(b"%%EOF")

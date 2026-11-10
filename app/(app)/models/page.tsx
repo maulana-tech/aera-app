@@ -13,7 +13,7 @@ export default async function ModelsPage() {
           Which model each agent thinks with. Kira&apos;s veto, Tara&apos;s figures and every origin
           label are code, not the model, so a cheaper model can make a recommendation worse but
           cannot make an action allowed. A change applies to the next model call, including the
-          remaining rounds of a handling already running.
+          remaining rounds of a run already going.
         </>} />
 
       {data ? (

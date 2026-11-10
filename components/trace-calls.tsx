@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Markdown } from "@/components/markdown";
 import { OriginBadge } from "@/components/status-badge";
 import { cn } from "@/lib/utils";
-import type { Trace, TraceCall, TraceNode } from "@/app/lib";
+import { usd, type Trace, type TraceCall, type TraceNode } from "@/app/lib";
 
 /* Every step of a handling, in order, with what it carried in full.
  *
@@ -29,10 +29,10 @@ export const KIND_LABEL: Record<string, string> = {
 const time = (t: string | null) =>
   t ? new Date(t).toLocaleTimeString("en-GB", {
     hour12: false,
-    timeZone: "Asia/Jakarta",
+    timeZone: "UTC",
   }) : "";
 
-const rupiah = (n: number) => `Rp ${n.toLocaleString("en-US")}`;
+
 
 export function brief(c: TraceCall): string {
   if (c.kind === "tool") {
@@ -99,7 +99,7 @@ export function TraceCalls({
             {o} {n}
           </button>
         ))}
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search tool, material, note…"
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search tool, agent, note…"
                className="bg-background h-7 w-56 rounded-md border px-2 text-xs" />
         {node && (
           <span className="bg-muted inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs">
@@ -219,7 +219,7 @@ export function CallDetail({ c, runId, compact = false }: { c: TraceCall; runId:
         {c.fetched_at && (
           <Field k="read at">
             <span suppressHydrationWarning>
-              {new Date(c.fetched_at).toLocaleString("en-GB", { timeZone: "Asia/Jakarta" })}
+              {new Date(c.fetched_at).toLocaleString("en-GB", { timeZone: "UTC" })}
             </span>
           </Field>
         )}
@@ -239,14 +239,14 @@ export function CallDetail({ c, runId, compact = false }: { c: TraceCall; runId:
             <span className="font-mono">{c.stats.model}</span>
             {c.stats.rounds != null && ` · ${c.stats.rounds} turn${c.stats.rounds === 1 ? "" : "s"}`}
             {c.stats.input_tokens != null && ` · ${c.stats.input_tokens.toLocaleString("en-US")} in / ${(c.stats.output_tokens ?? 0).toLocaleString("en-US")} out tokens`}
-            {c.stats.idr != null && ` · ${rupiah(c.stats.idr)}`}
+            {c.stats.usd != null && ` · ${usd(c.stats.usd)}`}
             {c.stats.seconds != null && ` · ${c.stats.seconds}s`}
           </Field>
         )}
         {c.stats?.by_model && (
           <Field k="by model">
             {Object.entries(c.stats.by_model).map(([m, v]) => (
-              <div key={m} className="font-mono text-[11px]">{m}: {v.calls} calls · {rupiah(v.idr)}</div>
+              <div key={m} className="font-mono text-[11px]">{m}: {v.calls} calls · {usd(v.usd)}</div>
             ))}
           </Field>
         )}

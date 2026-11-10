@@ -10,10 +10,9 @@ export default async function SchedulePage() {
   return (
     <main className="w-full px-4 py-4 md:px-6 md:py-8">
       <PageHeader title="Schedule" lead={<>
-          What AERA does on its own. The watchers raise an event when something lands near a
-          port or a plant, and an event starts a handling that spends model credit. The outbox
-          delivers alerts, the sender issues approved actions as documents, and the digest goes out
-          every morning. Times are Jakarta time (WIB).
+          What AERA does on its own: hands new work to the team, settles payments with the vault,
+          verifies TEE attestation proofs, delivers alerts and sends the morning digest. A job that
+          starts work spends model credit. Times are UTC.
         </>} />
 
       {data ? (

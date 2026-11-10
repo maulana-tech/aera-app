@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 const ROLES = [
   { key: "lead", label: "Lead and veto", hint: "Arya decides what to do. Kira decides what may be done." },
   { key: "specialists", label: "Specialists", hint: "The ten agents that gather the evidence and compute." },
-  { key: "fallback", label: "Fallback", hint: "Answers when an agent's own model fails, for the rest of that handling." },
+  { key: "fallback", label: "Fallback", hint: "Answers when an agent's own model fails, for the rest of that run." },
   { key: "aux", label: "Summaries", hint: "The one-paragraph report summaries. No tools." },
 ] as const;
 
