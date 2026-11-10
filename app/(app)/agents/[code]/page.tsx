@@ -52,7 +52,7 @@ export default async function AgentPage({ params }: { params: Promise<{ code: st
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <AgentBadge nickname={a.nickname} large />
           <h1 className="text-xl font-semibold tracking-tight md:text-2xl">{a.nickname}</h1>
-          <span className="text-muted-foreground text-sm">{a.title}</span>
+          {a.title !== a.nickname && <span className="text-muted-foreground text-sm">{a.title}</span>}
           <RoleMarks a={a} />
           {a.status !== "active" && <StatusBadge status={a.status} />}
           <div className="ml-auto">
@@ -89,7 +89,7 @@ export default async function AgentPage({ params }: { params: Promise<{ code: st
 
       {guardian && (
         <Section title="Recent rulings">
-          <GuardianRulings checks={guardian.checks.slice(0, 20)} empty="Kira has not ruled on anything yet." />
+          <GuardianRulings checks={guardian.checks.slice(0, 20)} empty="Guardian has not ruled on anything yet." />
         </Section>
       )}
     </main>

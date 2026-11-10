@@ -9,7 +9,7 @@ What this does NOT do, on purpose:
   * It does not trust the other server's description of itself. A remote tool
     arrives with a name and a schema; it is namespaced as `server.tool` before
     anything sees it, so a remote tool called `check_local_constraints` can
-    never shadow Kira's.
+    never shadow Guardian's.
   * It does not launder provenance. Everything that comes back is Origin.CACHED
     at best and carries the server it came from, because a figure from a tool
     we do not operate is not a figure from our own records, however confident it sounds.

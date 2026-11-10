@@ -123,7 +123,7 @@ def build(run: dict, agents: Optional[Dict[str, Tuple[str, ...]]] = None) -> dic
     event = node("event", kind="event", label=run.get("title") or "work item",
                  sub=run.get("kind") or "", trigger=run.get("work_source"),
                  status=run.get("status"), started_at=run.get("started_at"))
-    lead = node("agent:supervisor", kind="agent", agent="supervisor", label="Arya",
+    lead = node("agent:supervisor", kind="agent", agent="supervisor", label="Supervisor",
                 sub="Supervisor", state="working")
     edge(event["id"], lead["id"], "triggers", 0)
 
@@ -272,7 +272,7 @@ def demo() -> None:
         "id": "run_x", "title": "Order ord_1: brief", "kind": "order", "status": "done",
         "steps": [
             {"seq": 1, "stage": "DELEGATE", "agent": "researcher",
-             "detail": {"agent": "researcher", "name": "Nova", "task": "research it", "by": "supervisor"}},
+             "detail": {"agent": "researcher", "name": "Researcher", "task": "research it", "by": "supervisor"}},
             {"seq": 2, "stage": "TOOL", "agent": "researcher", "tools": ["search_news"],
              "detail": {"agent": "researcher", "name": "search_news", "arguments": {"query": "coffee"},
                         "result": rows, "origin": "live", "source": "Google News + fixture:Sample", "ms": 900}},
@@ -282,19 +282,19 @@ def demo() -> None:
             {"seq": 4, "stage": "TOOL", "agent": "researcher", "tools": ["read_web_page"],
              "detail": {"agent": "researcher", "name": "read_web_page", "arguments": {}, "error": "URLError"}},
             {"seq": 5, "stage": "FINDING", "agent": "researcher",
-             "detail": {"agent": "researcher", "name": "Nova", "summary": "3 facts", "tool_calls": 3}},
+             "detail": {"agent": "researcher", "name": "Researcher", "summary": "3 facts", "tool_calls": 3}},
             {"seq": 6, "stage": "DELEGATE", "agent": "treasurer",
-             "detail": {"agent": "treasurer", "name": "Tara", "task": "pay the data vendor"}},
+             "detail": {"agent": "treasurer", "name": "Treasurer", "task": "pay the data vendor"}},
             {"seq": 7, "stage": "TOOL", "agent": "treasurer", "tools": ["pay_vendor"],
              "detail": {"agent": "treasurer", "name": "pay_vendor", "arguments": {},
                         "result": {"id": "act_1", "kind": "payment"}, "origin": "derived", "source": "action record"}},
             {"seq": 8, "stage": "FINDING", "agent": "treasurer",
-             "detail": {"agent": "treasurer", "name": "Tara", "summary": "waiting", "tool_calls": 0}},
+             "detail": {"agent": "treasurer", "name": "Treasurer", "summary": "waiting", "tool_calls": 0}},
         ],
         "actions": [{"id": "act_1", "kind": "payment", "status": "pending", "value_usd": 40.0, "payload": {}}],
         "approvals": [{"action_id": "act_1", "decision": "escalated", "decided_by": "a@b", "role": "operator", "at": "t"}],
     }
-    t = build(run, {"researcher": ("Nova", "Researcher", "Finds facts.")})
+    t = build(run, {"researcher": ("Researcher", "Researcher", "Finds facts.")})
     ids = {n["id"]: n for n in t["nodes"]}
     e = {(x["from"], x["to"], x["rel"]): x for x in t["edges"]}
     assert ("event", "agent:supervisor", "triggers") in e

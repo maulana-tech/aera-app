@@ -26,10 +26,10 @@ Built for **NEAR Hackathon 2026**: *Autonomous Business*, *Privacy & Private AI*
  customer ── checkout ─▶ vault.ft_on_transfer ─▶ order paid ─▶ work item ┤
  schedule (goals) / chat / API ─────────────────────────────▶ work item ┤
                                                                          ▼
-          Arya (supervisor) ─ask_<code>─▶ specialists (Nova, Wira, Quin, Odi, …)
+          Supervisor ─ask_<code>─▶ specialists (Researcher, Writer, Quality Review, Fulfilment, …)
                  │                         │ tools by CAPABILITY, granted per agent
-                 ├──▶ Kira (guardian, veto) ── core/guardian.py ── rules in code
-                 └──▶ Tara (treasurer) ── pay_vendor ─▶ core/actions.py ─▶ settle.py ─▶ vault
+                 ├──▶ Guardian ── core/guardian.py ── rules in code
+                 └──▶ Treasurer ── pay_vendor ─▶ core/actions.py ─▶ settle.py ─▶ vault
                                                                        (function-call key only)
  every model call ─▶ NEAR AI Cloud (TEE) ─▶ core/attest.py ─▶ tee_proofs ─▶ Verified panel
 ```
@@ -55,7 +55,7 @@ session token and the service URL off the browser.
 1. A work item arrives (`work_items`, deduplicated: a paid order is worked once).
 2. `jobs.work` claims it (one `UPDATE … WHERE status='new'`), checks the kill switch and the
    daily inference cap, and opens a run recording the team and profile versions used.
-3. `graph.run`: Arya delegates one specialist at a time (`ask_<code>`); each runs its own tool
+3. `graph.run`: the Supervisor delegates one specialist at a time (`ask_<code>`); each runs its own tool
    loop; findings land on a board with their origin (`live | cached | derived | modelled | missing`).
 4. Anything outward goes through `core/actions.raise_action` with a verdict from
    `core/guardian.py`: **block** → recorded `blocked`, final; **warn** → `pending` for a person;

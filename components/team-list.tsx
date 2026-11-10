@@ -51,7 +51,7 @@ export function TeamRows({ agents, action }: {
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span className="text-sm font-medium">{a.nickname}</span>
-              <span className="text-muted-foreground text-xs">{a.title}</span>
+              {a.title !== a.nickname && <span className="text-muted-foreground text-xs">{a.title}</span>}
               <RoleMarks a={a} />
               {a.status !== "active" && <StatusBadge status={a.status} />}
             </div>

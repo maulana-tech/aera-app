@@ -79,7 +79,7 @@ export default async function McpPage() {
             <p className="text-muted-foreground mt-1.5 max-w-3xl text-xs leading-relaxed">
               A tool from somebody else&apos;s server is namespaced before anything sees it, so
               a remote tool called <span className="font-mono">check_local_constraints</span>{" "}
-              can never shadow Kira&apos;s. Whatever it returns is labelled with the server it
+              can never shadow Guardian&apos;s. Whatever it returns is labelled with the server it
               came from and is never promoted to live: a figure from a tool we do not operate
               is not a figure from our own records, however confident it sounds. And a server that says
               nothing about whether a tool writes is read as a writer, because the cautious

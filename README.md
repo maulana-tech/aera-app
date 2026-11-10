@@ -48,11 +48,11 @@
    on its own, what it must never do, which data is sensitive, and who gets a revenue share. A model
    can draft this from a paragraph; a person saves it. Every edit is a new version.
 2. **The team.** The Composer (`aera/agent/core/team.py`) picks roles from a library of ten, always
-   adds the three core roles — **Arya** (supervisor), **Kira** (guardian, veto), **Tara** (treasurer)
+   adds the three core roles — **Supervisor**, **Guardian**, **Treasurer**
    — and grants each agent *capabilities*, never raw tools. Money and veto are locked to their owners
    in code.
 3. **Work.** A customer pays on the public checkout (`ft_transfer_call` to the vault), the order
-   becomes a work item, and Arya delegates: research, write, review, deliver. Goals in the profile
+   becomes a work item, and the Supervisor delegates: research, write, review, deliver. Goals in the profile
    become work on a schedule; anyone can ask the team something.
 4. **Money.** Revenue is split on chain the moment it arrives. The team pays its own costs (data,
    APIs, other agents) within the profile's limits; above them a person approves. Refunds always

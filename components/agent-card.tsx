@@ -306,21 +306,21 @@ type AgentBotStyle = {
  * custom role falls back to one picked from its name, so it is stable.
  */
 const AGENT_BOT_STYLES: Record<string, AgentBotStyle> = {
-  // Core: Arya plans, Kira can veto, Tara holds the money.
-  Arya: { shape: "cercle", expression: "attentif", color: "#0a0a0c", rotDeg: 0 },
-  Kira: { shape: "diamond", expression: "colere", color: "#e8483f", rotDeg: 0 },
-  Tara: { shape: "galet", expression: "fier", color: "#f0b429", rotDeg: 15 },
+  // Core: Supervisor plans, Guardian can veto, Treasurer holds the money.
+  Supervisor: { shape: "cercle", expression: "attentif", color: "#0a0a0c", rotDeg: 0 },
+  Guardian: { shape: "diamond", expression: "colere", color: "#e8483f", rotDeg: 0 },
+  Treasurer: { shape: "galet", expression: "fier", color: "#f0b429", rotDeg: 15 },
   // The role library (agents/roles.py).
-  Nova: { shape: "goutte", expression: "curieux", color: "#3b93f0", rotDeg: 0 },
-  Wira: { shape: "squircle", expression: "neutre", color: "#2fbfa0", rotDeg: -8 },
-  Lina: { shape: "hexagone", expression: "mefiant", color: "#8b5cf6", rotDeg: 12 },
-  Sena: { shape: "capsule", expression: "heureux", color: "#3ecf8e", rotDeg: -14 },
-  Dewi: { shape: "nuage", expression: "heureux", color: "#e152b0", rotDeg: -6 },
-  Maya: { shape: "triangle", expression: "excite", color: "#f08a24", rotDeg: 0 },
-  Odi: { shape: "pentagone", expression: "hilare", color: "#06b6d4", rotDeg: 8 },
-  Prita: { shape: "octogone", expression: "mefiant", color: "#4f46e5", rotDeg: 0 },
-  Desi: { shape: "egg", expression: "curieux", color: "#c026d3", rotDeg: -8 },
-  Quin: { shape: "squircle", expression: "attentif", color: "#8b5e3c", rotDeg: 6 },
+  Researcher: { shape: "goutte", expression: "curieux", color: "#3b93f0", rotDeg: 0 },
+  Writer: { shape: "squircle", expression: "neutre", color: "#2fbfa0", rotDeg: -8 },
+  Analyst: { shape: "hexagone", expression: "mefiant", color: "#8b5cf6", rotDeg: 12 },
+  Sales: { shape: "capsule", expression: "heureux", color: "#3ecf8e", rotDeg: -14 },
+  "Customer Support": { shape: "nuage", expression: "heureux", color: "#e152b0", rotDeg: -6 },
+  Marketing: { shape: "triangle", expression: "excite", color: "#f08a24", rotDeg: 0 },
+  Fulfilment: { shape: "pentagone", expression: "hilare", color: "#06b6d4", rotDeg: 8 },
+  Procurement: { shape: "octogone", expression: "mefiant", color: "#4f46e5", rotDeg: 0 },
+  Designer: { shape: "egg", expression: "curieux", color: "#c026d3", rotDeg: -8 },
+  "Quality Review": { shape: "squircle", expression: "attentif", color: "#8b5e3c", rotDeg: 6 },
 };
 
 const FALLBACK_STYLES: AgentBotStyle[] = Object.values(AGENT_BOT_STYLES);
@@ -398,7 +398,7 @@ export function AgentBadge({
   /**
    * "end" hangs the tooltip off the badge's right edge instead of centring it.
    * A row of badges pinned to the right margin clips a centred tooltip: the
-   * last one read "Quin · Quality Rev" before this existed.
+   * last one read "Quality Review · Quality Rev" before this existed.
    */
   align?: "center" | "end";
 }) {
@@ -451,14 +451,14 @@ export function AgentBadge({
               align === "end" ? "right-3" : "left-1/2 -translate-x-1/2"
             }`}
           />
-          {title ? `${nickname} · ${title}` : nickname}
+          {title && title !== nickname ? `${nickname} · ${title}` : nickname}
         </span>
       )}
     </>
   );
 
   return href ? (
-    <Link href={href} className={wrapClass} aria-label={title ? `${nickname}, ${title}` : nickname}>
+    <Link href={href} className={wrapClass} aria-label={title && title !== nickname ? `${nickname}, ${title}` : nickname}>
       {body}
     </Link>
   ) : (
@@ -477,7 +477,7 @@ export function AgentCard({ a }: { a: Agent }) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <h3 className="font-medium leading-none">{a.nickname}</h3>
-            <span className="text-muted-foreground text-xs">{a.title}</span>
+            {a.title !== a.nickname && <span className="text-muted-foreground text-xs">{a.title}</span>}
             {a.lead && <Crown className="size-3.5 shrink-0" />}
             {a.veto && (
               <Badge variant="outline" className="h-5 gap-1 px-1.5 font-mono text-[9px]">

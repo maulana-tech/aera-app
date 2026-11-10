@@ -30,7 +30,7 @@ const toolLabels: Record<string, string> = {
 
 /* The core roles' names are fixed; a specialist's name comes with its step. */
 const agentNames: Record<string, string> = {
-  supervisor: "Arya", guardian: "Kira", treasurer: "Tara",
+  supervisor: "Supervisor", guardian: "Guardian", treasurer: "Treasurer",
 };
 
 export function toolLabel(name: string): string {

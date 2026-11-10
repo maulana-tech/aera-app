@@ -13,11 +13,11 @@ import { errorText, post } from "@/lib/post";
 const HINT: Record<WorkKind, string> = {
   request: "Something to do now: a question, a task, a message to answer.",
   goal: "A standing target the team works towards.",
-  payable: "A bill or a cost the team should pay. It goes through Kira and Tara.",
+  payable: "A bill or a cost the team should pay. It goes through Guardian and Treasurer.",
   order: "An order taken by hand. Paid orders normally arrive through checkout.",
 };
 
-/** Give the team something to do. Arya plans it the moment it is saved. */
+/** Give the team something to do. Supervisor plans it the moment it is saved. */
 export function NewWork({ disabled }: { disabled?: boolean }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);

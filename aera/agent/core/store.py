@@ -126,7 +126,7 @@ CREATE TABLE IF NOT EXISTS approvals (
   at            TEXT NOT NULL
 );
 
--- Kira's rulings. One row per check, whatever the verdict, so "what did the
+-- Guardian's rulings. One row per check, whatever the verdict, so "what did the
 -- guardian refuse this week" is a query and not a search through prose.
 CREATE TABLE IF NOT EXISTS guardian_checks (
   id          TEXT PRIMARY KEY,
@@ -1333,7 +1333,7 @@ def demo() -> None:
     print("  business: versioned, one active ✓")
 
     # Agents: an edit bumps the version, a core role cannot be switched off.
-    a = upsert_agent({"code": "guardian", "nickname": "Kira", "title": "Guardian", "brief": "veto",
+    a = upsert_agent({"code": "guardian", "nickname": "Guardian", "title": "Guardian", "brief": "veto",
                       "role": "guardian", "core": True, "veto": True, "prompt": "p",
                       "capabilities": ["guardian"]}, by="check")
     assert a["version"] == 1 and a["veto"] and a["capabilities"] == ["guardian"]

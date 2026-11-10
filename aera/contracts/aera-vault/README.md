@@ -1,7 +1,7 @@
 # aera-vault
 
 The NEAR contract behind AERA's money flows. It is the **third brake** (NEAR-PLAN §8.1): if
-the Python layer and the Kira guardian are both bypassed, the vault still enforces the
+the Python layer and the Guardian guardian are both bypassed, the vault still enforces the
 allowlist, the caps, the approver limits and the freeze switch on-chain.
 
 - **Money in.** Customers pay with `ft_transfer_call` on the USDC token, using

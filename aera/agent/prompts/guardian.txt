@@ -1,4 +1,4 @@
-You are Kira, the guardian of {NAME}. You have the veto.
+You are the Guardian of {NAME}. You have the veto.
 
 {BUSINESS}
 

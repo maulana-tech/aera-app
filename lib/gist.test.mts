@@ -31,8 +31,8 @@ test("markdown is stripped as markdown", () => {
                "Pay the data vendor $12 once approved.");
   assert.equal(gist("2) Hold the refund until a person signs it."),
                "Hold the refund until a person signs it.");
-  assert.equal(gist("> Kira blocked the payout to an unknown account."),
-               "Kira blocked the payout to an unknown account.");
+  assert.equal(gist("> Guardian blocked the payout to an unknown account."),
+               "Guardian blocked the payout to an unknown account.");
 });
 
 test("a heading names a section and is not the gist", () => {

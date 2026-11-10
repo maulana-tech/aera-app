@@ -1,11 +1,11 @@
-"""Kira's rules, in code.
+"""Guardian's rules, in code.
 
 The guardian AGENT reasons about context and may make a verdict stricter. The
 verdict itself starts here, from the business profile and from evidence a
 model did not write, and the treasury and delivery tools call these functions
 THEMSELVES before acting - they do not take the guardian agent's word, or the
 supervisor's, that a check was run. A prompt-injected agent can skip asking
-Kira; it cannot skip this module.
+Guardian; it cannot skip this module.
 
     verdict = check_counterparty(contact)       # where money would go
     verdict = check_action("payment", {...})    # what would happen

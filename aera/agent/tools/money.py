@@ -1,6 +1,6 @@
 """Capabilities `guardian`, `treasury` and `supervisor`, each locked to one core role.
 
-The treasury tools run the guardian's checks THEMSELVES. Asking Kira is good
+The treasury tools run the guardian's checks THEMSELVES. Asking Guardian is good
 practice for the supervisor; it is not what keeps money safe. What keeps it
 safe is that pay_vendor reads the payout account from the contact record, has
 core/guardian.py rule on it and on the payment, and only then raises the

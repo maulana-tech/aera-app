@@ -185,6 +185,12 @@ def ensure_team(by: str = "system") -> List[Dict[str, Any]]:
     """A team on record, composing one from the current profile if there is none."""
     from core import store
     agents = store.list_agents(include_inactive=True)
+    # Agents used to carry personal names; they are named by role now. A team
+    # recorded under the old names is recomposed once (a person's edits kept).
+    legacy = {"Arya", "Kira", "Tara", "Nova", "Wira", "Lina", "Sena", "Dewi", "Maya", "Odi", "Prita", "Desi", "Quin"}
+    if any(a["nickname"] in legacy for a in agents):
+        apply(compose(), by=by)
+        agents = store.list_agents(include_inactive=True)
     if not any(a["code"] == "supervisor" for a in agents):
         apply(compose(), by=by)
         agents = store.list_agents(include_inactive=True)

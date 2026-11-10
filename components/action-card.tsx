@@ -68,7 +68,7 @@ export function ActionCard({
 
       {guardian?.verdict && (
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="text-muted-foreground text-xs">Kira ruled</span>
+          <span className="text-muted-foreground text-xs">Guardian ruled</span>
           <VerdictBadge verdict={guardian.verdict} />
           {guardian.reasons?.filter((r) => r.verdict !== "allow").map((r, i) => (
             <span key={i} className="text-muted-foreground font-mono text-[10px]">{r.rule}</span>

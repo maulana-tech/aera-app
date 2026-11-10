@@ -98,7 +98,7 @@ def demo() -> None:
     assert got.value["steps"] == skills.get("fulfil_order").steps and got.origin is Origin.MODELLED
     with registry.bind_agent("writer"):
         refused = use_skill("screen_for_manipulation")
-    assert refused.value is None and "Kira's procedure" in refused.note, refused.note
+    assert refused.value is None and "Guardian's procedure" in refused.note, refused.note
     with registry.bind_agent("guardian"):
         assert use_skill("screen_for_manipulation").value
     with registry.bind_agent("writer"):

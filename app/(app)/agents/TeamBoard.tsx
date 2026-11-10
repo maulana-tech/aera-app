@@ -196,7 +196,7 @@ function NewRole({ caps }: { caps: Capability[] }) {
           );
         })}
       </div>
-      <p className="text-muted-foreground text-[11px]">Money, veto and delegation stay locked to Tara, Kira and Arya.</p>
+      <p className="text-muted-foreground text-[11px]">Money, veto and delegation stay locked to Treasurer, Guardian and Supervisor.</p>
       {error && <p className="text-sm text-rose-700 dark:text-rose-400">{error}</p>}
       <Button type="submit" size="sm" disabled={busy || !title.trim()}>{busy ? <Loader2 className="animate-spin" /> : <Plus />}Add role</Button>
     </form>

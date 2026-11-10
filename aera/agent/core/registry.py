@@ -212,7 +212,7 @@ def remote_tools(refresh: bool = False) -> Dict[str, Dict[str, Any]]:
                 # Already ours under that name. An agent is not given two
                 # routes to the same answer, one of them through somebody
                 # else's uptime - and a remote `check_local_constraints` can
-                # never stand in for Kira's.
+                # never stand in for Guardian's.
                 continue
             schema = t.get("schema")
             if not isinstance(schema, dict) or schema.get("type") != "object":

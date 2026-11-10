@@ -24,7 +24,7 @@ export default async function Onboarding() {
     <main className="w-full max-w-5xl px-4 py-4 md:px-6 md:py-8">
       <PageHeader
         title={existing ? `Re-describe ${biz.data.profile.name}` : "Describe your business"}
-        lead="Write what the business sells, the limits it works within and what it must never do. AERA forms a team of agents for it: Arya plans, Kira can veto anything, Tara is the only one who touches money, and specialists do the work."
+        lead="Write what the business sells, the limits it works within and what it must never do. AERA forms a team of agents for it: Supervisor plans, Guardian can veto anything, Treasurer is the only one who touches money, and specialists do the work."
       />
       <Wizard
         initial={completeProfile(existing ? biz.data.profile : null)}

@@ -74,7 +74,7 @@ export default async function WorkRun({ params, searchParams }: {
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0">
-          <Section title="Outcome" className="mt-0" note={d.agents_called?.length ? `Written by Arya after asking ${d.agents_called.map((c) => names[c] ?? c).join(", ")}.` : undefined}>
+          <Section title="Outcome" className="mt-0" note={d.agents_called?.length ? `Written by the Supervisor after asking ${d.agents_called.map((c) => names[c] ?? c).join(", ")}.` : undefined}>
             {outcome ? (
               <div className="rounded-lg border p-4"><Markdown>{outcome}</Markdown></div>
             ) : (
@@ -101,7 +101,7 @@ export default async function WorkRun({ params, searchParams }: {
             )}
           </Section>
 
-          <Section title="Guardian rulings" note="Kira's checks on every outward action and counterparty, rule by rule.">
+          <Section title="Guardian rulings" note="Guardian's checks on every outward action and counterparty, rule by rule.">
             <GuardianRulings checks={r.guardian} />
           </Section>
         </div>

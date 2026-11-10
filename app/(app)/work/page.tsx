@@ -28,7 +28,7 @@ export default async function WorkPage({ searchParams }: { searchParams: Promise
     <main className="w-full px-4 py-4 md:px-6 md:py-8">
       <PageHeader
         title="Work"
-        lead="Everything the team has been given: paid orders, requests, standing goals and bills. Each one is a run: Arya plans it, specialists do it, Kira rules on anything that leaves, Tara handles the money."
+        lead="Everything the team has been given: paid orders, requests, standing goals and bills. Each one is a run: Supervisor plans it, specialists do it, Guardian rules on anything that leaves, Treasurer handles the money."
         aside={<><AutoRefresh active={running} /><NewWork disabled={stopped} /></>}
       />
 

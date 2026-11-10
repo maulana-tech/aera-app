@@ -144,7 +144,7 @@ function CallRow({
         <span suppressHydrationWarning className="text-muted-foreground font-mono text-[11px] tabular-nums">{time(c.at)}</span>
         <span className={cn("flex min-w-0 items-center gap-2 text-xs", nested && "pl-4")}>
           <span className="shrink-0 font-medium">
-            {c.kind === "delegate" ? `${by?.label ?? "Arya"} → ${who?.label ?? c.agent}` : who?.label ?? c.agent}
+            {c.kind === "delegate" ? `${by?.label ?? "Supervisor"} → ${who?.label ?? c.agent}` : who?.label ?? c.agent}
           </span>
           <span className="text-muted-foreground shrink-0 font-mono text-[10px]">{KIND_LABEL[c.kind] ?? c.kind}</span>
           <span className={cn("truncate", c.kind === "tool" && "font-mono text-[11px]", failed && "text-rose-600 dark:text-rose-400")}>

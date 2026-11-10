@@ -35,7 +35,7 @@ function Reason({ r }: { r: GuardianReason }) {
   );
 }
 
-/** Kira's rulings: every check she made, its verdict, and each rule behind it.
+/** Guardian's rulings: every check it made, its verdict, and each rule behind it.
  *  A block is final; a warn always goes to a person. */
 export function GuardianRulings({ checks, empty }: { checks: GuardianCheck[]; empty?: string }) {
   if (!checks.length) {

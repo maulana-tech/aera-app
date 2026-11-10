@@ -438,7 +438,7 @@ function Steps({ steps, byId, runId }: { steps: TraceCall[]; byId: Record<string
               <span className="min-w-0">
                 <span className="flex items-center gap-1.5 text-xs">
                   <span className="shrink-0 font-medium">
-                    {c.kind === "delegate" ? `${name(c.by) || "Arya"} → ${name(c.agent)}` : name(c.agent)}
+                    {c.kind === "delegate" ? `${name(c.by) || "Supervisor"} → ${name(c.agent)}` : name(c.agent)}
                   </span>
                   <span className="text-muted-foreground shrink-0 font-mono text-[10px]">{KIND_LABEL[c.kind] ?? c.kind}</span>
                   <span className="text-muted-foreground ml-auto shrink-0 font-mono text-[10px] tabular-nums">{time(c.at)}</span>

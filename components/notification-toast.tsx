@@ -129,7 +129,7 @@ export function NotificationToast() {
 
       setNotification({
         id: `${detail.conversationId}-${Date.now()}`,
-        agentName: detail.agentName || "Arya",
+        agentName: detail.agentName || "Supervisor",
         conversationId: detail.conversationId,
         preview: detail.preview,
         timestamp: Date.now(),

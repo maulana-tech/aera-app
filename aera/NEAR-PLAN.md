@@ -57,9 +57,9 @@ AI, lalu dikoreksi user). Disimpan di tabel `business` + diekspor sebagai
 **Inti tetap (selalu ada, tidak bisa dihapus user):**
 | Agen | Peran | Kenapa tetap |
 |---|---|---|
-| **Arya** 👑 Supervisor | Menerima work item, merencanakan, mendelegasikan ke specialist, menulis hasil | Satu jalur delegasi = satu jejak audit |
-| **Kira** ⚖️ Guardian | **Veto**: cek setiap aksi keluar & uang terhadap `constraints`, `forbidden`, counterparty, privasi | Rem harus kode + agen yang tidak bisa dimatikan prompt |
-| **Tara** 💰 Treasurer | Quote, minta pembayaran ke vault, rekonsiliasi revenue, ledger | Satu-satunya yang menyentuh vault |
+| **Supervisor** 👑 Supervisor | Menerima work item, merencanakan, mendelegasikan ke specialist, menulis hasil | Satu jalur delegasi = satu jejak audit |
+| **Guardian** ⚖️ Guardian | **Veto**: cek setiap aksi keluar & uang terhadap `constraints`, `forbidden`, counterparty, privasi | Rem harus kode + agen yang tidak bisa dimatikan prompt |
+| **Treasurer** 💰 Treasurer | Quote, minta pembayaran ke vault, rekonsiliasi revenue, ledger | Satu-satunya yang menyentuh vault |
 
 **Specialist dinamis (dibentuk dari profil):**
 - **Role library** (template bawaan): Sales, Researcher, Writer, Analyst, Support, Marketing,
@@ -72,7 +72,7 @@ AI, lalu dikoreksi user). Disimpan di tabel `business` + diekspor sebagai
 - Disimpan di tabel `agents` (code, name, role, prompt, tools[], model, enabled, version).
   Bisa diedit, dimatikan, ditambah di web. Perubahan profil → Composer mengusulkan diff tim
   (bukan menimpa diam-diam).
-- Aturan lama tetap: **specialist tidak saling memanggil**; Arya mendapat satu tool
+- Aturan lama tetap: **specialist tidak saling memanggil**; Supervisor mendapat satu tool
   `ask_<code>` per specialist aktif, dibangun ulang saat tim berubah.
 
 ### 1.3 Work items — pemicu kerja yang generik
@@ -84,7 +84,7 @@ Menggantikan "disruption event". Satu tabel `work_items(kind, source, payload, s
 | `goal` | Target berulang dari profil/schedule ("publish 1 brief gratis per minggu") |
 | `payable` | Tagihan vendor / biaya yang harus dibayar |
 
-Loop: work item → Arya → specialists → **Kira** (setiap aksi keluar/uang) → **Tara**
+Loop: work item → Supervisor → specialists → **Guardian** (setiap aksi keluar/uang) → **Treasurer**
 (uang) → hasil dikirim / aksi menunggu manusia → outcome tercatat.
 
 ### 1.4 Katalog kapabilitas (tools generik)
@@ -97,8 +97,8 @@ Loop: work item → Arya → specialists → **Kira** (setiap aksi keluar/uang) 
 | Pengetahuan bisnis | `read_business_file`, `search_business_files` | upload file generik (baru, sederhana) |
 | Prosedur | `use_skill` | `core/skills.py` (ada, isi skill diganti) |
 | Order | `list_orders`, `deliver_order` | baru |
-| Uang (Tara) | `quote_payment`, `request_payment`, `record_revenue`, `ledger` | baru |
-| Guardian (Kira) | `check_action`, `check_counterparty` | baru |
+| Uang (Treasurer) | `quote_payment`, `request_payment`, `record_revenue`, `ledger` | baru |
+| Guardian | `check_action`, `check_counterparty` | baru |
 | Eksternal | tool apa pun dari server MCP yang ditambahkan user | `clients/mcp_client.py` (ada) |
 
 ---
@@ -114,7 +114,7 @@ Loop: work item → Arya → specialists → **Kira** (setiap aksi keluar/uang) 
  ┌───────────────────────────▼──────────────────────────────────────────┐
  │ agent service (Python stdlib, 1 proses)                              │
  │  business profile ─▶ Composer ─▶ agents table                        │
- │  work_items ─▶ Arya ─▶ specialists ─▶ Kira (veto) ─▶ Tara (uang)     │
+ │  work_items ─▶ Supervisor ─▶ specialists ─▶ Guardian (veto) ─▶ Treasurer (uang)     │
  │  core/llm.py ──── provider nearai ──▶ NEAR AI Cloud (TEE) ─┐         │
  │  core/attest.py ◀── attestation + signature ───────────────┘         │
  │  settle.py ─▶ clients/near.py ─▶ vault (FC key)                      │
@@ -178,11 +178,11 @@ Self-check tiap modul tetap (`python3 x.py --check`) — sesuai gaya repo.
    - deterministik dulu: aturan pemetaan offering/channel → role library;
    - AI hanya untuk `extra_roles` & penyesuaian prompt, hasilnya **draft** yang harus
      disetujui; tool di luar katalog tidak bisa diberikan;
-   - Kira & Tara selalu disisipkan; tool uang **hanya** milik Tara; tool veto **hanya**
-     milik Kira (dikunci di kode, bukan di prompt).
+   - Guardian & Treasurer selalu disisipkan; tool uang **hanya** milik Treasurer; tool veto **hanya**
+     milik Guardian (dikunci di kode, bukan di prompt).
 3. **Halaman Team**: kartu tiap agen (peran, model, tool, prompt), toggle aktif, versi.
 4. **Perubahan profil** → Composer menampilkan diff tim → user setujui → `agents.version++`.
-5. **Batas dari profil** → `constraints` dipakai Kira (Python) **dan** ditulis ke vault
+5. **Batas dari profil** → `constraints` dipakai Guardian (Python) **dan** ditulis ke vault
    (`set_policy`) lewat tanda tangan owner di wallet. `manage.py ready` memeringatkan jika
    keduanya berbeda.
 
@@ -213,7 +213,7 @@ Diverifikasi di worker `attest` segera setelah langkah selesai (record kedaluwar
 ### 6.3 Data pelanggan
 - Hanya `/chat/completions` stateless; tidak memakai `/v1/files`, `/conversations`.
 - `POST /v1/privacy/redact` sebelum apa pun keluar ke saluran non-TEE (email/Telegram).
-- Field `privacy.sensitive` di profil → Kira menolak aksi yang mengirim kelas data itu ke
+- Field `privacy.sensitive` di profil → Guardian menolak aksi yang mengirim kelas data itu ke
   penerima di luar allowlist.
 - README: tabel "apa disimpan di mana" (SQLite lokal vs tidak ada di penyedia model).
 
@@ -256,7 +256,7 @@ Event NEP-297 untuk setiap perubahan. Test: unit + `near-sandbox` untuk setiap a
 
 ### 7.3 Uang keluar (biaya)
 - Specialist yang butuh membeli (API, jasa vendor, agen lain di market.near.ai) membuat
-  `payable` → Arya → **Kira** `check_action` + `check_counterparty` → **Tara**
+  `payable` → Supervisor → **Guardian** `check_action` + `check_counterparty` → **Treasurer**
   `quote_payment` → `request_payment` → `settle.py` → vault.
 - Biaya inferensi NEAR AI dicatat per langkah (mesin biaya yang sudah ada) dan dibatasi
   `inference_max_usd_per_day`; terlampaui → agen berhenti dengan `_salvage`.
@@ -264,7 +264,7 @@ Event NEP-297 untuk setiap perubahan. Test: unit + `near-sandbox` untuk setiap a
 
 ### 7.4 Ledger publik
 `GET /ledger` + halaman `/ledger`: revenue, split, biaya (inferensi, vendor), keputusan
-otonom vs manusia, jumlah yang diblokir Kira — tiap baris dengan link NearBlocks.
+otonom vs manusia, jumlah yang diblokir Guardian — tiap baris dengan link NearBlocks.
 
 ---
 
@@ -275,11 +275,11 @@ otonom vs manusia, jumlah yang diblokir Kira — tiap baris dengan link NearBloc
 agen (bisa dibajak prompt injection)
   │  request_payment(payable_id)           ← model hanya menyebut ID, bukan alamat/nominal
 Lapis 1  Python — alamat & nominal dibaca dari record (kontak / payable yang disetujui)
-Lapis 2  Kira   — check_action (constraints, forbidden, privacy) + check_counterparty
+Lapis 2  Guardian   — check_action (constraints, forbidden, privacy) + check_counterparty
 Lapis 3  Vault  — allowlist, cap per tx & harian, role limit, freeze
 ```
 
-### 8.2 `check_counterparty` (Kira, `tools/guardian.py`)
+### 8.2 `check_counterparty` (Guardian, `tools/guardian.py`)
 | Sinyal | Sumber | Aturan contoh |
 |---|---|---|
 | Alamat di record | `contacts.near_account` | tidak ada → block |
@@ -291,7 +291,7 @@ Lapis 3  Vault  — allowlist, cap per tx & harian, role limit, freeze
 | Alamat baru diganti | riwayat `contacts` | < 14 hari → warn |
 `block` final (seperti veto lama); `warn` → selalu menunggu manusia.
 
-### 8.3 `check_action` (Kira)
+### 8.3 `check_action` (Guardian)
 Setiap aksi keluar (pesan, dokumen, pembayaran, refund) dicek terhadap profil:
 `forbidden`, `approval_required`, `min_price_usd`, `privacy.sensitive`, batas belanja.
 Penolakan disimpan di `guardian_checks` dengan aturan & angka yang dipakai.
@@ -374,7 +374,7 @@ ONECLICK_JWT=              AERA_INTENTS_ACCOUNT=  AERA_INTENTS_KEY=   # mainnet,
 | 5 | `core/attest.py` + Verified panel | Privacy | Wajib |
 | 6 | Vault + test sandbox + deploy testnet + `near-setup` | Business, Security | Wajib |
 | 7 | Order masuk (testnet USDC) → kerja → kirim → split | Business | Wajib |
-| 8 | Kira: `check_action` + `check_counterparty`; Tara: `request_payment` | Security, Business | Wajib |
+| 8 | Guardian: `check_action` + `check_counterparty`; Treasurer: `request_payment` | Security, Business | Wajib |
 | 9 | `attack-demo` + log | Security | Wajib |
 | 10 | Treasury page + approve/freeze via wallet, Ledger | Business, Security | Sebaiknya |
 | 11 | Onboarding wizard lengkap + edit tim di UI | Business | Sebaiknya |
@@ -405,7 +405,7 @@ Nomor 1–9 sudah membentuk satu cerita utuh untuk ketiga track.
 | Risiko | Mitigasi |
 |---|---|
 | Model TEE lemah di tool calling | Spike dulu; pilih model terbaik per peran; jika deciders harus di luar TEE, tulis terbuka dan specialists yang memegang data pelanggan tetap TEE |
-| Tim dinamis menghasilkan agen berbahaya | Tool hanya dari katalog; uang hanya Tara, veto hanya Kira (dikunci di kode); role AI-generated harus disetujui |
+| Tim dinamis menghasilkan agen berbahaya | Tool hanya dari katalog; uang hanya Treasurer, veto hanya Guardian (dikunci di kode); role AI-generated harus disetujui |
 | Rate limit attestation | Cache per signing address; pakai API key |
 | Intents tanpa testnet | Alur utama testnet USDC native; 1Click mainnet cap $5 |
 | Code window | Tag `pre-hackathon`, diff di README, kode baru di branch |

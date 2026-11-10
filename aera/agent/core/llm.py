@@ -29,7 +29,7 @@ specific level wins over a broader one:
 
   AERA_MODEL_<CODE>        that one agent, e.g. AERA_MODEL_COMPLIANCE
   AERA_MODEL_SPECIALISTS   the ten specialists that neither lead nor hold the veto
-  AERA_MODEL               the deciders (Arya, Kira), and everyone else not set above
+  AERA_MODEL               the deciders (Supervisor, Guardian), and everyone else not set above
   AERA_MODEL_FALLBACK      tried once when an agent's own model fails, then kept
                             for the rest of that handling
 
@@ -38,7 +38,7 @@ The translation is the whole of the difference, and it is deliberately dull:
 role `tool` message, the usage counts. What a model cannot take is dropped
 here, per model, rather than tested for at the call site: adaptive thinking and
 effort go only to the Claude models that accept them. Nothing about the
-guarantees moves with the model. Kira's veto, Tara's figures and every origin
+guarantees moves with the model. Guardian's veto, Treasurer's figures and every origin
 label are Python, so a cheaper specialist cannot weaken them.
 """
 from __future__ import annotations
@@ -209,7 +209,7 @@ def parse(raw: str) -> Spec:
 
 
 def _deciding(code: str, veto: bool) -> bool:
-    """Arya decides what to do, Kira decides what may be done. They get the
+    """Supervisor decides what to do, Guardian decides what may be done. They get the
     strong model. The other ten gather and compute."""
     return code == "supervisor" or veto
 
@@ -1151,7 +1151,7 @@ def demo() -> None:
             if v is not None:
                 os.environ[k] = v
     print("  resolution: one AERA_MODEL runs everyone ✓ · specialists split off ✓ "
-          "· Kira stays with the deciders ✓ · per-agent override ✓ · page choice layered ✓")
+          "· Guardian stays with the deciders ✓ · per-agent override ✓ · page choice layered ✓")
 
     # Capabilities, which replace the old `"haiku" not in model` test.
     assert caps(Spec("bedrock", "anthropic.claude-opus-5")).thinking

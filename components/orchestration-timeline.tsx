@@ -138,7 +138,7 @@ export function OrchestrationTimeline({
   const squadOverview = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const s of steps) {
-      const name = s.agent_name || (s.agent === "supervisor" ? "Arya" : s.agent);
+      const name = s.agent_name || (s.agent === "supervisor" ? "Supervisor" : s.agent);
       if (name) counts[name] = (counts[name] ?? 0) + 1;
       if (s.target_name && s.target_name !== name) {
         counts[s.target_name] = (counts[s.target_name] ?? 0) + 1;
@@ -259,7 +259,7 @@ export function OrchestrationTimeline({
           {isRunning && latestStep && (
             <div className="text-muted-foreground flex items-center gap-1.5 pl-5.5 text-[11px]">
               <AgentBadge
-                nickname={latestStep.agent_name || "Arya"}
+                nickname={latestStep.agent_name || "Supervisor"}
                 size="xs"
                 showTooltip={false}
               />
@@ -339,7 +339,7 @@ export function OrchestrationTimeline({
                 const currentActor =
                   step.kind === "specialist_start" && step.target_name
                     ? step.target_name
-                    : step.agent_name || "Arya";
+                    : step.agent_name || "Supervisor";
 
                 return (
                   <li key={`${step.seq}-${idx}`} className="group relative">
@@ -364,7 +364,7 @@ export function OrchestrationTimeline({
                           {step.kind === "specialist_start" && step.target_name ? (
                             <span className="text-muted-foreground inline-flex shrink-0 items-center gap-1 text-[11px] font-medium">
                               <span className="text-foreground font-semibold">
-                                {step.agent_name || "Arya"}
+                                {step.agent_name || "Supervisor"}
                               </span>
                               <ArrowRight className="size-2.5" />
                               <span className="text-primary font-semibold">
