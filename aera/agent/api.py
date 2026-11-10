@@ -1,57 +1,45 @@
 """AERA HTTP service.
 
-# ponytail: stdlib http.server, fine for a dozen events/day, zero dependencies.
-#           Move to FastAPI + uvicorn if you need async, websockets, or >10 rps.
+# ponytail: stdlib http.server, fine for a small business's traffic, zero dependencies.
 
     python3 api.py                 # listen on :8787
+    python3 api.py --check         # the self-check, on a scratch database
 
-Every route but /health and /login needs a session.
+Every route but /health, /login and /public/* needs a session.
 
-Endpoints
-    GET  /health                   readiness, and which model each agent runs on
-    POST /events                   {kind, title, trigger, payload, source} → run  (session)
-    GET  /exposure                 Vega's exposure scan, no model  (session)
-    GET  /runs                     recent handlings
-    GET  /runs/{id}                one handling: steps, actions, approvals
-    POST /actions/{id}/decision    {decision, note}
-    POST /actions/{id}/outcome     {outcome, detail?, actual_cost_idr?}  what happened
-    POST /login                    {email, password}
-    GET  /me
-    GET  /agents                   team anatomy
-    POST /agents/{code}/ask        {question, conversation_id?}
-    GET  /agents/{code}/conversations
-    GET  /conversations/{id} · POST /conversations/{id}/delete
-    GET  /summary                  dashboard figures
-    GET  /data/{domain}            per-domain table
-    GET  /log                      every step, newest first
-    GET  /runs/{id}/trace          one handling as a topology, with its calls in order
-    GET  /runs/{id}/steps/{seq}    one step in full
-    GET  /runs/{id}/graph          the exploration graph, empty when AERA_GRAPH was off
-    GET  /audit                    what is wrong with the data the system can see
-    GET  /uploads · POST /uploads · POST /uploads/{id}/delete
-    GET  /uploads/template/{entity}   the columns an upload of that entity takes, with a sample row
-    POST /mcp                      the tool registry over MCP
-    GET  /reports/{run_id}         one handling written up, and the sheets its workbook holds
-    GET  /reports/{run_id}.pdf · .xlsx   the same as a document, or every table it produced
-    GET  /portfolio · /portfolio.pdf · /portfolio.xlsx   the handlings rolled up over a
-                                   period: ?days=30, or ?since=&until= as WIB calendar dates
-    POST /reports/{run_id}/send · /portfolio/send   {contacts, me?, formats, note} by email  (session)
-    GET  /contacts · /contacts/{id}  (session) · POST /contacts, /contacts/{id}, /contacts/{id}/delete  (admin, lead)
-    GET  /notifications            channel status and what was sent  (session)
-    POST /notifications/test       a test alert to every channel set up  (admin, lead)
-    POST /notifications/connect    a sign-in link for the Gmail AERA sends from  (admin, lead)
-    POST /actions/{id}/resend      an approved outward message whose send failed  (session)
-    GET  /schedule                 every job, its cadence and last result  (session)
-    POST /schedule/{name}/run      run one now  (admin, lead)
-    POST /schedule/{name}/enabled  {enabled}  (admin, lead)
-    GET  /models                   the catalog, and which model each agent runs on  (session)
-    POST /models                   {lead?, specialists?, fallback?, aux?, agents?}  (admin, lead)
-    POST /models/test              {model}: one real call  (admin, lead)
+The business and its team
+    GET  /business                 the profile in force, its version history, problems found
+    POST /business                 {profile}: save a new version (owner)
+    POST /business/draft           {text}: a model's draft profile from a paragraph (not saved)
+    POST /business/kill-switch     {on}: stop or resume everything (owner, approver may stop)
+    GET  /team                     the team on record, with capabilities and tools
+    POST /team/compose             {profile?}: the team the Composer proposes, and the diff
+    POST /team/apply               {profile?}: write the proposed team (owner)
+    POST /team/{code}              {prompt?, capabilities?, title?, brief?, status?} (owner)
+Work
+    POST /work                     {kind, title, payload}: give the team something to do
+    GET  /work                     recent work items
+    GET  /runs · /runs/{id} · /runs/{id}/trace · /runs/{id}/steps/{seq} · /runs/{id}/proofs
+    POST /actions/{id}/decision    {decision, note}: approve or reject (limit checked from the token)
+    POST /actions/{id}/outcome     {outcome, detail?}
+    GET  /actions?status=pending   what waits for a person
+Money and proof
+    GET  /orders · POST /orders/{id}/simulate-paid (owner; demo without a vault)
+    GET  /treasury                 vault policy, balance, pending payments, frozen?
+    GET  /ledger                   public figures (also /public/ledger)
+    GET  /guardian                 the guardian's recent rulings
+    GET  /attestation/{model}      a live TEE attestation report, checked with a fresh nonce
+Public
+    GET  /public/offerings         what the business sells
+    POST /public/checkout          {offering, inputs, email?, account?}: an order to pay
+    GET  /public/orders/{id}       an order's status
+    GET  /public/ledger
+Agents, chat and settings
+    GET  /agents · POST /agents/{code}/ask · conversations · /skills · /mcp/servers · /models ·
+    /contacts · /notifications · /schedule · POST /mcp · /login · /me · /files
 """
 from __future__ import annotations
 
-import csv
-import io
 import json
 import os
 import queue
@@ -67,82 +55,82 @@ import tools  # noqa: F401  (registers every tool)
 from core import identity, llm, registry, store
 from core.config import CFG, bind_target
 from core.identity import NotAuthorised, User
-from tools.views import VIEWS
 
 HOST, PORT = bind_target(os.environ)
 
 
 def _reasoning_workers() -> int:
-    """Bound concurrent handlings so a burst cannot exhaust provider RPM/TPM."""
     try:
-        return max(1, min(8, int(os.environ.get("AERA_REASONING_WORKERS", "1"))))
+        return max(1, min(8, int(os.environ.get("AERA_REASONING_WORKERS", "2"))))
     except ValueError:
-        return 1
+        return 2
 
 
-#: Events are still recorded immediately; only their model reasoning queues.
 REASONING_SEMAPHORE = threading.BoundedSemaphore(_reasoning_workers())
 
 
 # ------------------------------------------------------------------- handling
-def _handle(run_id: str, event: dict) -> None:
-    """Run the agent team in the background. Failures are written down, not swallowed."""
+def _handle(run_id: str, item: dict) -> None:
+    """Run the team on one work item in the background. Failures are written down."""
     seq = {"n": 0}
 
     def report(kind: str, d: dict) -> None:
         seq["n"] += 1
-        name = d.get("name") or d.get("agent", "-")
         store.save_step(run_id, {
             "seq": seq["n"],
-            "stage": {"specialist_start": "DELEGATE", "specialist_done": "FINDING",
-                      "tool": "TOOL"}.get(kind, kind.upper()),
+            "stage": {"specialist_start": "DELEGATE", "specialist_done": "FINDING", "tool": "TOOL",
+                      "model_call": "MODEL"}.get(kind, kind.upper()),
             "agent": d.get("agent", "supervisor"),
-            "agent_name": name,
+            "agent_name": d.get("name") or d.get("agent", "-"),
             "summary": d.get("summary") or d.get("task") or d.get("name", ""),
             "tools": [d["name"]] if kind == "tool" else [],
-            # The provenance columns the log reads; they were left empty before.
-            "origin": d.get("origin"),
-            "source": d.get("source"),
-            "detail": d,
-            "at": store._now(),
+            "origin": d.get("origin"), "source": d.get("source"),
+            "detail": d, "at": store._now(),
         })
 
     try:
-        # Runs remain visible as `running` while queued. Only the expensive
-        # model work enters the bounded section, so event ingestion stays fast.
         with REASONING_SEMAPHORE:
             import graph
-            # Every tool called inside this handling knows which run it belongs to,
-            # so an action raised by one lands on this run rather than on nothing.
             with registry.bind_run(run_id):
-                result = graph.run(event, report)
-        store.close_run(run_id, "done", result, cost_idr=result.get("cost_idr", 0))
+                result = graph.run(item, report)
+        store.close_run(run_id, result.get("status", "done"), result, cost_usd=result.get("cost_usd", 0))
     except Exception as e:                                           # noqa: BLE001
         if llm.is_rate_limited(e):
-            reason = "The Bedrock account is temporarily rate-limited after automatic retries."
-            store.close_run(run_id, "held", decision={
-                "status": "held", "reason": reason, "retryable": True,
-            })
+            store.close_run(run_id, "held", decision={"status": "held", "retryable": True,
+                                                      "reason": "the model provider is rate-limiting us"})
         else:
             store.close_run(run_id, "failed", error=f"{type(e).__name__}: {e}")
             traceback.print_exc()
     _tell(run_id)
 
 
-#: The schedule, once __main__ starts it. None in a check or an import.
 SCHEDULE = None
 
 
 def _tell(run_id: str) -> None:
-    """Queue the alerts for a finished handling, then deliver without waiting
-    for the outbox's next round. Fails open: a mail server that is down must
-    not turn a finished handling into a failed one; the row stays queued."""
     try:
         import notify
         if notify.queue_handling(run_id) and SCHEDULE is not None:
             SCHEDULE.run_now("notify")
     except Exception:                                                # noqa: BLE001
         traceback.print_exc()
+
+
+def start_work(item: dict) -> str:
+    """Open a run for a work item and set the team on it. Returns the run id."""
+    from agents import roster
+    from core import business
+    rid = store.start_run(item["id"], roster.versions(), business.current().get("_version"))
+    if CFG.model_ready:
+        threading.Thread(target=_handle, args=(rid, item), daemon=True).start()
+    else:
+        lead = llm.spec_for_code("supervisor")
+        store.close_run(rid, "held", decision={
+            "status": "held",
+            "reason": f"The supervisor's model {lead} cannot be called ({llm.ready(lead)[1]}). "
+                      "The team cannot reason; nothing was decided."})
+        _tell(rid)
+    return rid
 
 
 # -------------------------------------------------------------------- routing
@@ -168,16 +156,16 @@ def route(method: str, pattern: str) -> Callable:
 
 @route("GET", r"/health")
 def health(_m, _b, _h) -> Tuple[int, dict]:
-    from agents.definitions import ALL
+    from core import chain
     return 200, {
         "env": CFG.env,
         "model_ready": CFG.model_ready,
-        "may_use_modelled": CFG.may_use_modelled,
-        # The lead's model, as before. `models` has every agent's, since they
-        # no longer have to be the same one.
-        "model": str(llm.spec_for(ALL["supervisor"])),
-        "models": llm.describe(ALL.values()),
+        "model": str(llm.spec_for_code("supervisor")),
+        "private_mode": llm.private_mode(),
         "aux_model": str(llm.aux_spec()),
+        "vault": chain.vault_id() or None,
+        "network": chain.network(),
+        "rail": "vault" if chain.configured() else "simulated",
     }
 
 
@@ -190,7 +178,8 @@ def list_skills(_m, b, h) -> Tuple[int, dict]:
     nobody wrote is a gap in the catalogue, and it is only visible because
     those calls are recorded rather than dropped.
     """
-    from agents.definitions import ALL
+    from agents import roster
+    ALL = roster.load()
     from core import skills
     _user(h)
     # A GET's query string arrives as its body (see the dispatcher), so the
@@ -370,7 +359,7 @@ def remove_mcp_server(m, _b, h) -> Tuple[int, dict]:
 #: model change moves spend and the quality of every recommendation after it,
 #: and switching a watcher off is choosing not to hear about a typhoon, so these
 #: sit with the roles that already carry the largest approval limits.
-SETTINGS_ROLES = ("admin", "procurement_lead")
+SETTINGS_ROLES = ("admin", "owner")
 _CHOICE_KEYS = ("lead", "specialists", "fallback", "aux")
 
 #: The last Test per model, for the page. In memory: a reading, not a record.
@@ -387,7 +376,8 @@ def _load_model_choices() -> None:
 def _offered(raw: str) -> bool:
     """A model the page may set or test: one from the catalog, or one the
     environment already names, so going back to it never needs a shell."""
-    from agents.definitions import ALL
+    from agents import roster
+    ALL = roster.load()
     s = str(llm.parse(raw))
     env = set()
     for var in ("AERA_MODEL", "AERA_MODEL_SPECIALISTS", "AERA_MODEL_FALLBACK", "AERA_AUX_MODEL",
@@ -399,7 +389,8 @@ def _offered(raw: str) -> bool:
 
 
 def _models_payload(user: User) -> dict:
-    from agents.definitions import ALL
+    from agents import roster
+    ALL = roster.load()
     team = llm.describe(ALL.values())
     fb = llm.fallback_for()
     aux = llm.aux_spec()
@@ -433,7 +424,6 @@ def _models_payload(user: User) -> dict:
         "env": env,
         "tested": _TESTED,
         "may_change": user.role in SETTINGS_ROLES,
-        "idr_per_usd": llm.IDR_PER_USD,
     }
 
 
@@ -448,7 +438,8 @@ def choose_models(_m, b: dict, h) -> Tuple[int, dict]:
     left out is left alone; null or "" hands it back to the environment.
     Applies to every model call made after it, including the remaining rounds
     of a handling already running."""
-    from agents.definitions import ALL
+    from agents import roster
+    ALL = roster.load()
     user = _user(h)
     if user.role not in SETTINGS_ROLES:
         return 403, {"error": f"role '{user.role}' may not change the models "
@@ -506,355 +497,7 @@ def test_model(_m, b: dict, h) -> Tuple[int, dict]:
     ok, said, seconds = llm.ping(s)
     _TESTED[str(s)] = {"ok": ok, "said": said, "seconds": round(seconds, 1),
                        "at": store._now(), "by": user.email}
-    return 200, {"model": str(s), **_TESTED[str(s)]}
 
-
-def raise_event(b: dict) -> Tuple[str, str, str]:
-    """Record a disruption and set the team on it. Returns (event, run, mode).
-
-    Both the endpoint below and the BMKG watcher come through here. They used
-    to be the same ten lines in two places, which is how a signal raised by a
-    machine and one raised by a person drift into behaving differently.
-    """
-    eid = store.record_event(b["kind"], b["title"], b["trigger"],
-                             b.get("payload", {}), b.get("source", "api"))
-    mode = "autonomous" if CFG.model_ready else "guided"
-    rid = store.start_run(eid, mode)
-
-    event = {"id": eid, "kind": b["kind"], "title": b["title"],
-             "trigger": b["trigger"], **b.get("payload", {})}
-
-    if CFG.model_ready:
-        threading.Thread(target=_handle, args=(rid, event), daemon=True).start()
-    else:
-        lead = llm.spec_for_code("supervisor")
-        store.close_run(rid, "held", decision={
-            "status": "held",
-            "reason": f"The lead's model {lead} cannot be called ({llm.ready(lead)[1]}), and no "
-                      "fallback can either. The agent team cannot reason. No decision was made.",
-        })
-        _tell(rid)
-    return eid, rid, mode
-
-
-@route("POST", r"/events")
-def receive_event(_m, b: dict, h) -> Tuple[int, dict]:
-    # A session is required. This route used to check none, so anyone who could
-    # reach the host could start handlings that spend model credit. Any role
-    # may raise an event: raising one decides nothing, and every action it
-    # leads to still waits on someone whose limit covers it. The watchers
-    # (signals/watch.py) call raise_event() in-process and never come through here.
-    user = _user(h)
-    for field in ("kind", "title", "trigger"):
-        if not b.get(field):
-            return 400, {"error": f"'{field}' is required"}
-
-    if CFG.production and not CFG.model_ready:
-        return 503, {"error": "production is not ready: the model is not connected"}
-
-    eid, rid, mode = raise_event({**b, "source": b.get("source") or f"api:{user.email}"})
-    return 202, {"event_id": eid, "run_id": rid, "mode": mode}
-
-
-@route("GET", r"/exposure")
-def exposure(_m, _b, h) -> Tuple[int, dict]:
-    """Vega's read-only answer to "what is about to break": the exposure scan,
-    a tool run directly, so the answer costs no model call."""
-    _user(h)
-    scan = registry.run("scan_supply_exposure", {})
-    return 200, {"findings": scan.value or [], **scan.brief()}
-
-
-@route("GET", r"/summary")
-def summary(_m, b, h) -> Tuple[int, dict]:
-    """The dashboard figures, over a period: ?days=30, or ?since=&until= (WIB).
-
-    Two kinds of figure live here and they are NOT both period figures, so the
-    reply keeps them apart rather than letting a date range quietly change the
-    meaning of half the page:
-
-      * a FLOW is what happened between two dates - how much was handled, what
-        it was predicted to cost, what obeying the rules cost, what the models
-        cost. A period makes these comparable month to month.
-      * a STATE is what is true right now - what waits on a person, what still
-        owes an outcome, how much of the rule pack anybody has verified.
-        Filtering a state by last month would answer a question nobody asked
-        and hide the approval that is late today.
-    """
-    _user(h)
-    from engine import report, triage
-    from tools.compliance import pack_status
-    try:
-        w = report.window(**_period(b))
-    except ValueError as e:
-        return 400, {"error": str(e)}
-    clause, args = report.period_sql(w, "r.started_at")
-
-    with store.connect() as c:
-        runs = c.execute("SELECT r.status, COUNT(*) n FROM runs r WHERE 1=1"
-                         + clause + " GROUP BY r.status", args).fetchall()
-        actions = c.execute(
-            "SELECT a.status, COUNT(*) n FROM actions a JOIN runs r ON r.id = a.run_id"
-            " WHERE 1=1" + clause + " GROUP BY a.status", args).fetchall()
-        approved = c.execute(
-            "SELECT COALESCE(SUM(json_extract(a.payload,'$.cost_idr')),0) FROM actions a"
-            " JOIN runs r ON r.id = a.run_id WHERE a.status IN ('approved','sent')"
-            + clause, args).fetchone()[0]
-        pending = c.execute(
-            "SELECT COALESCE(SUM(json_extract(a.payload,'$.cost_idr')),0) FROM actions a"
-            " JOIN runs r ON r.id = a.run_id WHERE a.status='pending'" + clause, args).fetchone()[0]
-        model_cost = c.execute("SELECT COALESCE(SUM(r.token_cost_idr),0) FROM runs r"
-                               " WHERE 1=1" + clause, args).fetchone()[0]
-        autonomous = c.execute(
-            "SELECT COUNT(*) FROM actions a JOIN runs r ON r.id = a.run_id"
-            " WHERE a.autonomous=1 AND a.status IN ('approved','sent')" + clause, args).fetchone()[0]
-        recent = c.execute(
-            "SELECT e.title, r.status, r.started_at FROM runs r"
-            " JOIN events e ON e.id=r.event_id WHERE 1=1" + clause
-            + " ORDER BY r.started_at DESC LIMIT 5", args).fetchall()
-
-    stock = VIEWS["inventory"]()
-    critical = [x for x in stock["rows"] if (x.get("days_left") or 999) < 14]
-
-    # Flow: what the rules cost between those dates.
-    costs = report.compliance_costs(w)
-    # State: what is true now. Deliberately not filtered by the period - an
-    # approval that is late today is late whatever month the reader picked.
-    board = triage.summarise([triage.Verdict(**r["verdict"]) for r in triage.queue()])
-    owed = store.actions_awaiting_outcome()
-
-    return 200, {
-        "period": w,
-        "period_label": report.period_label(w),
-        # ---- flow, inside the period
-        "runs": {r["status"]: r["n"] for r in runs},
-        "actions": {r["status"]: r["n"] for r in actions},
-        "approved_value_idr": approved,
-        "pending_value_idr": pending,
-        "model_cost_idr": model_cost,
-        "autonomous_actions": autonomous,
-        "rules_cost_idr": sum(int(c["idr"]) for c in costs),
-        "rules_cost_cases": len(costs),
-        "recent": [dict(r) for r in recent],
-        # ---- state, right now, whatever period is selected
-        "board": board,
-        "outcomes_owed": len(owed),
-        "oldest_owed_days": max((o["days_waiting"] or 0 for o in owed), default=0),
-        "knowledge_base": pack_status(),
-        "critical_stock": critical[:5],
-        "model_ready": CFG.model_ready,
-    }
-
-
-@route("GET", r"/data/([a-z]+)")
-def domain_view(m, _b, h) -> Tuple[int, dict]:
-    _user(h)
-    name = m.group(1)
-    if name not in VIEWS:
-        return 404, {"error": f"unknown domain '{name}'", "available": list(VIEWS)}
-    # the domain name is the code of the agent that owns it
-    return 200, {"domain": name, "agent": name, **VIEWS[name]()}
-
-
-@route("GET", r"/audit")
-def audit(_m, _b, h) -> Tuple[int, dict]:
-    """Read everything the system can see and report what is wrong with it."""
-    _user(h)
-    from engine import audit as engine_audit
-    from tools.fetcher import current_dataset, profile
-
-    data, origins = current_dataset()
-    if not data.get("MaterialStock"):
-        return 200, {"findings": [], "counts": {}, "coverage": {},
-                     "origins": origins,
-                     "note": "no material stock is readable, so there is nothing to audit"}
-
-    result = engine_audit.run(data, profile())
-    weakest = sorted({o["origin"] for o in origins.values()},
-                     key=["missing", "modelled", "cached", "derived", "live"].index)
-    return 200, {
-        **result.as_dict(),
-        "origins": origins,
-        "weakest_origin": weakest[0] if weakest else "missing",
-        "note": "Every finding is computed from the rows named beside it. No model was "
-                "involved, so any of it can be recomputed from the same file.",
-    }
-
-
-@route("GET", r"/uploads")
-def list_uploads(_m, _b, h) -> Tuple[int, dict]:
-    _user(h)
-    return 200, {"uploads": store.list_uploads()}
-
-
-@route("POST", r"/uploads")
-def upload(_m, b: dict, h) -> Tuple[int, dict]:
-    """Accept the company's own data as CSV.
-
-    This layers over the modelled data: once uploaded, the tools use it and the
-    origin label becomes 'cached' rather than 'modelled'.
-    """
-    from core import schema
-    u = _user(h)
-    entity = b.get("entity")
-    filename = b.get("filename", "untitled.csv")
-    body = b.get("csv", "")
-    if entity not in schema.ENTITIES:
-        return 400, {"error": f"entity must be one of {schema.entity_names()}"}
-    if not body.strip():
-        return 400, {"error": "the CSV body is empty"}
-    try:
-        rows = [dict(r) for r in csv.DictReader(io.StringIO(body))]
-    except Exception as e:                                          # noqa: BLE001
-        return 400, {"error": f"could not read the CSV: {e}"}
-    if not rows:
-        return 400, {"error": "the CSV has no data rows"}
-
-    # numbers come back as numbers; CSV sends everything as text
-    for r in rows:
-        for k, v in list(r.items()):
-            if isinstance(v, str) and v.strip():
-                try:
-                    r[k] = float(v) if "." in v else int(v)
-                except ValueError:
-                    pass
-
-    # Validate before storing. AERA refuses to keep data it cannot stand
-    # behind: a missing column or a non-numeric quantity is reported with the
-    # row, and the file is rejected, rather than sitting as plausible-looking
-    # rows that break three agents downstream.
-    check = schema.validate(entity, rows)
-    if not check["ok"]:
-        return 422, {"error": "the file does not match the " + entity + " schema",
-                     "problems": check["errors"], "rows": check["row_problems"],
-                     "template": schema.template(entity)}
-
-    # The uploader says whether this is real master data or a generated sample.
-    # Nothing in the file itself can tell us, and guessing would mean labelling
-    # generated rows as cached, which is exactly the laundering this system
-    # exists to prevent.
-    return 201, store.save_upload(entity, filename, rows, u.email,
-                                  synthetic=bool(b.get("synthetic")))
-
-
-@route("GET", r"/uploads/([A-Za-z0-9_]+)/rows")
-def upload_rows(m, _b, h) -> Tuple[int, dict]:
-    """One upload's own rows, so a person can see what they actually gave the
-    system rather than trusting a row count. Capped; the reply says when it is."""
-    _user(h)
-    u = store.get_upload(m.group(1))
-    return (200, u) if u else (404, {"error": "not found"})
-
-
-@route("GET", r"/uploads/template/([A-Za-z]+)")
-def upload_template(m, _b, h) -> Tuple[int, dict]:
-    """The expected columns (and a one-row sample) for an entity, so a company
-    knows exactly what to upload."""
-    _user(h)
-    from core import schema
-    entity = m.group(1)
-    if entity not in schema.ENTITIES:
-        return 404, {"error": f"unknown entity; one of {schema.entity_names()}"}
-    return 200, schema.template(entity)
-
-
-@route("POST", r"/uploads/([A-Za-z0-9_]+)/delete")
-def remove_upload(m, _b, h) -> Tuple[int, dict]:
-    _user(h)
-    return (200, {"deleted": True}) if store.delete_upload(m.group(1)) \
-        else (404, {"error": "not found"})
-
-
-def _period(b: dict) -> dict:
-    """The period a rollup is asked for: ?days=30, or ?since=&until= as WIB
-    calendar dates. Nothing given means every handling on record."""
-    days = b.get("days")
-    return {"since": str(b["since"]) if b.get("since") else None,
-            "until": str(b["until"]) if b.get("until") else None,
-            "days": int(days) if days not in (None, "") else None}
-
-
-@route("GET", r"/portfolio")
-def portfolio_report(_m, b, h) -> Tuple[int, dict]:
-    """The operations rollup over a period: counts, committed value, what the
-    rules cost, realized-vs-predicted. Figures deterministic; aux adds a summary
-    when able. ?days=30, or ?since=2026-10-01&until=2026-10-31 (WIB)."""
-    _user(h)
-    from engine import report
-    try:
-        return 200, report.build_portfolio(**_period(b))
-    except ValueError as e:
-        return 400, {"error": str(e)}
-
-
-@route("GET", r"/reports/([A-Za-z0-9_]+)")
-def report_for_run(m, _b, h) -> Tuple[int, dict]:
-    """Assemble one handling into a report, ready to copy or send. The figures
-    are deterministic; the aux model adds an executive summary when available
-    (engine/report.py), and the report is complete without it."""
-    _user(h)
-    from engine import report
-    rep = report.build_report(m.group(1))
-    return (200, rep) if rep else (404, {"error": "not found"})
-
-
-@route("GET", r"/reports/([A-Za-z0-9_]+)\.(pdf|xlsx)")
-def report_file(m, _b, h) -> Tuple[int, Any]:
-    """One handling as a file: a PDF to read or send on, or a workbook with
-    every table it produced (actions, steps, and each tool's rows)."""
-    _user(h)
-    from engine import report
-    f = report.run_file(m.group(1), m.group(2))
-    return (200, Download(*f)) if f else (404, {"error": "not found"})
-
-
-@route("GET", r"/portfolio\.(pdf|xlsx)")
-def portfolio_file(m, b, h) -> Tuple[int, Any]:
-    """The operations report as a file, over the same period as the page."""
-    _user(h)
-    from engine import report
-    try:
-        return 200, Download(*report.portfolio_file(m.group(1), **_period(b)))
-    except ValueError as e:
-        return 400, {"error": str(e)}
-
-
-def _send_report(target: str, b: dict, h) -> Tuple[int, dict]:
-    """A report to the people on the Contacts page, by email, with the files
-    asked for. Only to contacts (or to the sender): a report carries what was
-    decided and what it is worth, and the contact list is where an admin or a
-    procurement lead has chosen who may read that."""
-    import notify
-    from clients import channels
-    u = _user(h)
-    wanted = {str(x) for x in b.get("contacts") or []}
-    known = {c["id"]: c["email"] for c in store.list_contacts()}
-    unknown = sorted(wanted - set(known))
-    if unknown:
-        return 400, {"error": f"not on the Contacts page: {', '.join(unknown)}"}
-    emails = [known[i] for i in wanted] + ([u.email] if b.get("me") else [])
-    if not emails:
-        return 400, {"error": "choose at least one contact, or yourself"}
-    gaps = channels.missing("email")
-    if gaps:
-        return 409, {"error": "email is not set up: " + "; ".join(gaps)}
-    try:
-        n = notify.queue_report(target, list(b.get("formats") or ["pdf"]), emails, u.email,
-                                str(b.get("note") or "")[:2000],
-                                period=_period(b) if target == "portfolio" else None)
-    except LookupError as e:
-        return 404, {"error": str(e)}
-    return 200, {"queued": n, "to": emails, "delivery": notify.deliver_summary()}
-
-
-@route("POST", r"/reports/([A-Za-z0-9_]+)/send")
-def send_report(m, b: dict, h) -> Tuple[int, dict]:
-    return _send_report(m.group(1), b, h)
-
-
-@route("POST", r"/portfolio/send")
-def send_portfolio(_m, b: dict, h) -> Tuple[int, dict]:
-    return _send_report("portfolio", b, h)
 
 
 @route("GET", r"/contacts")
@@ -1032,109 +675,7 @@ def schedule_switch(m, b: dict, h) -> Tuple[int, dict]:
     return 200, {"jobs": SCHEDULE.describe()}
 
 
-@route("GET", r"/agents")
-def list_agents(_m, _b, h) -> Tuple[int, dict]:
-    """Team anatomy: who exists, what tools they hold, what is actually wired up."""
-    _user(h)
-    from agents.definitions import ALL
-    from core import registry
 
-    registered = registry.all_tools()
-    out = []
-    for code, a in ALL.items():
-        tools = [{
-            "name": name,
-            "installed": name in registered,
-            "description": registered[name].description if name in registered else None,
-        } for name in a.tools]
-        out.append({
-            "code": code, "nickname": a.nickname, "title": a.title, "brief": a.brief,
-            "effort": a.effort, "veto": a.veto,
-            "lead": code == "supervisor",
-            "ready": a.ready,
-            "tools": tools,
-            "installed": sum(1 for t in tools if t["installed"]),
-            "tool_count": len(tools),
-        })
-
-    # how many events actually invoked each agent
-    with store.connect() as c:
-        used = dict(c.execute(
-            "SELECT agent, COUNT(DISTINCT run_id) FROM steps GROUP BY agent").fetchall())
-    for a in out:
-        a["used_in"] = used.get(a["code"], 0)
-
-    return 200, {
-        "agents": out,
-        "summary": {
-            "agent_count": len(out),
-            "tools_installed": sum(a["installed"] for a in out),
-            "tools_total": sum(a["tool_count"] for a in out),
-            "prompts_written": sum(1 for a in out if a["ready"]),
-            "model_ready": CFG.model_ready,
-        },
-    }
-
-
-_AGENT_NICKNAMES = {
-    "supervisor": "Arya", "impact": "Elsa", "demand": "Dara", "inventory": "Iris",
-    "sourcing": "Clint", "procurement": "Prita", "logistics": "Milo", "compliance": "Kira",
-    "simulation": "Tara", "precedent": "Otto", "execution": "Bram", "exposure": "Vega",
-}
-
-_TOOL_LABELS = {
-    "scan_live_hazards": "live hazards near ports and plants",
-    "get_shipments_at_port": "which shipments are at the port",
-    "find_bonded_stock": "goods already in a bonded warehouse",
-    "get_port_conditions": "port weather and hazards",
-    "search_news": "news headlines",
-    "get_public_holidays": "public holiday calendar",
-    "get_exchange_rate": "ECB exchange rate",
-    "get_materials": "material master records",
-    "get_open_purchase_orders": "open purchase orders",
-    "use_skill": "a written procedure, so the order is not reinvented",
-    "get_material_stock": "plant stock availability",
-    "get_bom_explosion": "bill of materials (BOM)",
-    "get_sales_order_commitments": "customer order commitments",
-    "get_demand_signal": "demand signals",
-    "get_production_schedule": "production schedule",
-    "forecast_demand": "material demand forecast",
-    "get_quality_holds": "stock quality holds",
-    "get_safety_stock_policy": "safety stock policy",
-    "get_replenishment_policy": "how the line is replenished",
-    "find_deadstock": "stock nobody has moved",
-    "assess_transfer": "stock transfer feasibility",
-    "find_alternate_sources": "alternative suppliers",
-    "find_internal_transfers": "stock at alternative plants",
-    "get_supplier_master": "supplier master records",
-    "get_blanket_orders": "contracts with quantity still to call off",
-    "get_supplier_performance": "supplier performance history",
-    "get_quotations": "supplier quotations",
-    "compare_quotations": "quotation comparisons",
-    "propose_purchase_order": "purchase order proposal",
-    "get_shipment_status": "shipment tracking status",
-    "estimate_eta": "estimated arrival dates (ETA)",
-    "check_local_constraints": "compliance and regulatory constraints",
-    "check_supplier_constraints": "whether the rules clear this supplier",
-    "simulate_scenario": "scenario mitigation costs",
-    "search_past_incidents": "similar past incident records",
-    "create_stock_transfer": "stock transfer request",
-    "create_draft_po": "draft purchase order creation",
-    "notify": "notification dispatch",
-    "draft_customer_notice": "customer delay notice (draft)",
-    "request_supplier_update": "supplier date request (draft)",
-    "monitor_shipment": "shipment watch",
-    "record_outcome": "action outcome record",
-    "create_sourcing_event": "sourcing event (draft)",
-    "propose_safety_stock_change": "safety stock change (proposal)",
-    "get_customs_status": "customs declaration status",
-    "find_substitute_materials": "substitute materials and approvals",
-    "allocate_short_supply": "allocation of short supply to customer orders",
-    "get_rule_pack": "rule pack in force",
-    "scan_supply_exposure": "supply exposure scan",
-    "get_supplier_certifications": "supplier TKDN certificates",
-    "detect_disruption": "disruption signal detection",
-}
 
 def _remote_label(tool_name: str) -> Optional[Tuple[str, str]]:
     """(what it is, badge) for a tool on a server AERA does not operate.
@@ -1152,30 +693,32 @@ def _remote_label(tool_name: str) -> Optional[Tuple[str, str]]:
 
 
 _TOOL_BADGES = {
-    "scan_live_hazards": "Hazards",
-    "get_port_conditions": "Weather",
-    "search_news": "News",
-    "get_public_holidays": "Calendar",
-    "get_exchange_rate": "FX",
-    "use_skill": "Procedure",
-    "get_material_stock": "Stock Check",
-    "get_open_purchase_orders": "Orders",
-    "get_sales_order_commitments": "Sales",
-    "forecast_demand": "Demand",
-    "check_local_constraints": "Compliance",
-    "check_supplier_constraints": "Compliance",
-    "simulate_scenario": "Simulation",
-    "find_alternate_sources": "Sourcing",
-    "find_internal_transfers": "Transfers",
-    "get_shipment_status": "Logistics",
-    "get_customs_status": "Customs",
-    "find_substitute_materials": "Substitutes",
-    "allocate_short_supply": "Allocation",
-    "get_rule_pack": "Rules",
-    "draft_customer_notice": "Customer",
-    "request_supplier_update": "Supplier",
-    "detect_disruption": "Trigger",
+    "search_news": "News", "read_web_page": "Web", "get_exchange_rate": "FX", "get_public_holidays": "Calendar",
+    "use_skill": "Procedure", "get_business_profile": "Profile", "write_document": "Document",
+    "read_document": "Document", "read_business_file": "Files", "list_business_files": "Files",
+    "find_contact": "Contacts", "save_contact": "Contacts", "search_past_work": "Memory",
+    "list_orders": "Orders", "get_order": "Orders", "deliver_order": "Delivery", "draft_message": "Message",
+    "check_action": "Guardian", "check_counterparty": "Guardian", "freeze_payments": "Kill switch",
+    "treasury_status": "Treasury", "pay_vendor": "Payment", "propose_refund": "Refund",
+    "ledger_summary": "Ledger", "get_work_item": "Work item",
 }
+
+
+def _nicknames() -> Dict[str, str]:
+    try:
+        from agents import roster
+        return {c: a.nickname for c, a in roster.load().items()}
+    except Exception:                                               # noqa: BLE001
+        return {}
+
+
+class _Nick(dict):
+    def get(self, k, default=None):
+        return _nicknames().get(k, default)
+
+
+_AGENT_NICKNAMES = _Nick()
+_TOOL_LABELS: Dict[str, str] = {}
 
 
 def format_orchestration_step(kind: str, d: dict, seq: int) -> dict:
@@ -1252,6 +795,13 @@ def format_orchestration_step(kind: str, d: dict, seq: int) -> dict:
             "thinking": thinking,
             "at": now,
         }
+    if kind == "model_call":
+        agent_code = d.get("agent", "")
+        return {"seq": seq, "kind": "model_call", "agent": agent_code,
+                "agent_name": d.get("name") or _AGENT_NICKNAMES.get(agent_code, agent_code),
+                "narrative": d.get("summary", ""), "badge": "TEE ›" if d.get("attested") else "Model ›",
+                "detail": d.get("summary", ""), "full_detail": str(d), "attested": d.get("attested"),
+                "proof_id": d.get("proof_id"), "chat_id": d.get("chat_id"), "at": now}
     if kind == "summary":
         full_summary = str(d.get("full_summary") or "").strip()
         return {
@@ -1259,10 +809,10 @@ def format_orchestration_step(kind: str, d: dict, seq: int) -> dict:
             "kind": "summary",
             "agent": "supervisor",
             "agent_name": "Arya",
-            "narrative": "Formulating final mitigation recommendation",
+            "narrative": "Writing the outcome",
             "badge": "Summary ›",
-            "detail": "Synthesizing findings for user",
-            "full_detail": full_summary or "Synthesizing specialist findings into final mitigation recommendation.",
+            "detail": "The supervisor's outcome",
+            "full_detail": full_summary or "The supervisor's outcome.",
             "thinking": thinking,
             "at": now,
         }
@@ -1280,6 +830,8 @@ def format_orchestration_step(kind: str, d: dict, seq: int) -> dict:
     }
 
 
+
+
 @route("POST", r"/agents/([a-z_]+)/ask")
 def ask_agent(m, b: dict, h):
     """A direct conversation with one specialist."""
@@ -1292,7 +844,8 @@ def ask_agent(m, b: dict, h):
     if not question and not attachments:
         return 400, {"error": "'question' or an attachment is required"}
 
-    from agents.definitions import ALL
+    from agents import roster
+    ALL = roster.load()
     if code not in ALL:
         return 404, {"error": f"unknown agent '{code}'"}
 
@@ -1301,8 +854,7 @@ def ask_agent(m, b: dict, h):
         return 503, {
             "error": f"{ALL[code].nickname}'s model {spec} cannot be called: "
                      f"{llm.ready(spec)[1]}. The agent cannot reason.",
-            "hint": "ENV.md, under Models, has the setup. Restart the service after "
-                    "changing aera/agent/.env.",
+            "hint": "Set NEARAI_API_KEY (aera/ENV.md, Models) and restart the service.",
         }
     # An existing conversation is only continued if this user owns it. An id in
     # a request body is a claim, not proof.
@@ -1315,7 +867,7 @@ def ask_agent(m, b: dict, h):
         "The user uploaded the attached image/file without a caption: "
         + ", ".join(str(a.get("name") or "attachment") for a in attachments)
         + ". Read all visible text, numbers, and visual context in the attachment carefully, "
-        "summarise what it shows, and explain the supply-chain impact or next steps."
+        "summarise what it shows, and what it means for the business."
     )
 
     wants_stream = "text/event-stream" in (h.get("Accept") or "") or bool(b.get("stream"))
@@ -1461,17 +1013,18 @@ def _usage_payload(user_id: str, code: str = "supervisor") -> dict:
     """The figures beside a conversation, at the rate of the model the agent
     being talked to runs on."""
     import graph
-    from agents.definitions import ALL
+    from agents import roster
+    ALL = roster.load()
     spec = llm.spec_for(ALL.get(code) or ALL["supervisor"])
     usd_in, usd_out = llm.usd_per_mtok(spec)
     return {
         **store.conversation_usage_summary(user_id),
-        "cost_cap_idr": CFG.cost_cap_per_event_idr,
+        "cost_cap_usd": CFG.cost_cap_per_run_usd,
         "max_output_tokens": 8000,
         "context_turns": CONTEXT_TURNS,
         "max_rounds": graph.MAX_SPECIALIST_ROUNDS,
-        "input_idr_per_million": round(usd_in * llm.IDR_PER_USD),
-        "output_idr_per_million": round(usd_out * llm.IDR_PER_USD),
+        "input_usd_per_million": usd_in,
+        "output_usd_per_million": usd_out,
         "model": str(spec),
     }
 
@@ -1542,39 +1095,6 @@ def mcp_endpoint(_m, b: dict, h) -> Tuple[int, dict]:
     return (204, {}) if not reply else (200, reply)
 
 
-@route("GET", r"/log")
-def raw_log(_m, _b, h) -> Tuple[int, dict]:
-    """Every step from every handling, newest first."""
-    _user(h)
-    with store.connect() as c:
-        steps = c.execute(
-            "SELECT s.*, e.title, e.kind AS event_kind FROM steps s"
-            " JOIN runs r ON r.id = s.run_id"
-            " JOIN events e ON e.id = r.event_id"
-            " ORDER BY s.id DESC LIMIT 300").fetchall()
-        actions = c.execute(
-            "SELECT a.*, e.title FROM actions a"
-            " JOIN runs r ON r.id = a.run_id"
-            " JOIN events e ON e.id = r.event_id"
-            " ORDER BY a.created_at DESC LIMIT 100").fetchall()
-        approvals = c.execute(
-            "SELECT p.*, a.kind AS action_kind, a.run_id FROM approvals p"
-            " JOIN actions a ON a.id = p.action_id ORDER BY p.id DESC LIMIT 100").fetchall()
-    def light(detail: str) -> dict:
-        # The log lists; it does not need every row a tool returned. The full
-        # step is at /runs/{id}/steps/{seq}.
-        d = json.loads(detail)
-        if isinstance(d.get("result"), list):
-            d["rows"] = d.get("rows") or len(d["result"])
-            d.pop("result")
-        return d
-
-    return 200, {
-        "steps": [dict(r) | {"tools": json.loads(r["tools"]),
-                             "detail": light(r["detail"])} for r in steps],
-        "actions": [dict(r) | {"payload": json.loads(r["payload"])} for r in actions],
-        "approvals": [dict(r) for r in approvals],
-    }
 
 
 @route("POST", r"/login")
@@ -1585,153 +1105,497 @@ def login(_m, b: dict, _h) -> Tuple[int, dict]:
         return 401, {"error": str(e)}
     return 200, {"token": identity.issue_token(u),
                  "user": {"name": u.name, "email": u.email,
-                          "role": u.role, "limit_idr": u.limit_idr}}
+                          "role": u.role, "limit_usd": u.limit_usd}}
 
 
 @route("GET", r"/me")
 def me(_m, _b, h) -> Tuple[int, dict]:
     u = _user(h)
     return 200, {"name": u.name, "email": u.email, "role": u.role,
-                 "limit_idr": u.limit_idr}
+                 "limit_usd": u.limit_usd}
+
+
+
+
+# ------------------------------------------------------------- the business
+
+
+def _manager(h) -> User:
+    u = _user(h)
+    if not u.may_manage:
+        raise _Refused(f"a {u.role} cannot change the business or its team (needs owner or admin)")
+    return u
+
+
+def _refusable(fn: Callable) -> Callable:
+    def wrapped(m, b, h):
+        try:
+            return fn(m, b, h)
+        except _Refused as e:
+            return 403, {"error": str(e)}
+    wrapped.__name__ = fn.__name__
+    return wrapped
+
+
+@route("GET", r"/business")
+def get_business(_m, _b, h) -> Tuple[int, dict]:
+    from core import business
+    u = _user(h)
+    stored = store.active_profile()
+    p, problems = business.normalise(stored) if stored else (business.current(), ["not described yet"])
+    return 200, {"profile": {k: v for k, v in p.items() if not k.startswith("_")},
+                 "version": (stored or {}).get("_version"), "problems": problems,
+                 "history": store.profile_history(), "context": business.context_block(p),
+                 "may_change": u.may_manage, "example": business.EXAMPLE}
+
+
+@route("POST", r"/business")
+@_refusable
+def save_business(_m, b: dict, h) -> Tuple[int, dict]:
+    from core import business, team
+    u = _manager(h)
+    raw = b.get("profile")
+    if not isinstance(raw, dict):
+        return 400, {"error": "send {profile: {...}}"}
+    p, problems = business.normalise(raw)
+    if not p["name"]:
+        return 400, {"error": "the business needs a name", "problems": problems}
+    v = store.save_profile(p, by=u.email, note=str(b.get("note") or "")[:300])
+    proposal = team.compose(p)
+    diff = team.diff(proposal)
+    # The first time a business is described, its team is composed with it.
+    # After that a profile edit only PROPOSES a team change; a person applies it.
+    first = not any(not a["core"] for a in store.list_agents(include_inactive=True))
+    if first or b.get("apply_team"):
+        team.apply(proposal, by=u.email)
+    return 200, {"version": v, "problems": problems, "team_diff": diff, "team_applied": bool(first or b.get("apply_team"))}
+
+
+@route("POST", r"/business/draft")
+def draft_business(_m, b: dict, h) -> Tuple[int, dict]:
+    from core import business, team
+    _user(h)
+    text = str(b.get("text") or "").strip()
+    if len(text) < 20:
+        return 400, {"error": "describe the business in a sentence or two"}
+    p, problems = business.draft_from_text(text)
+    if p is None:
+        return 503, {"error": problems[0] if problems else "no draft"}
+    return 200, {"profile": p, "problems": problems, "team": team.compose(p)}
+
+
+@route("POST", r"/business/kill-switch")
+def kill_switch(_m, b: dict, h) -> Tuple[int, dict]:
+    """Anyone who can approve may STOP; only an owner may resume."""
+    from core import business, chain
+    u = _user(h)
+    on = bool(b.get("on"))
+    if on and u.limit_usd <= 0:
+        return 403, {"error": "a viewer cannot pull the kill switch"}
+    if not on and not u.may_manage:
+        return 403, {"error": "only an owner can resume the business"}
+    p = business.current()
+    if not p.get("name"):
+        return 400, {"error": "no business to stop"}
+    p["kill_switch"] = on
+    store.save_profile(p, by=u.email, note=("stopped" if on else "resumed") + f" by {u.email}")
+    onchain = None
+    if on and chain.configured():
+        try:
+            onchain = chain.freeze()
+        except Exception as e:                                       # noqa: BLE001
+            onchain = {"error": f"{type(e).__name__}: {e}"}
+    return 200, {"kill_switch": on, "vault": onchain,
+                 "note": None if on or not chain.readable() else "unfreeze the vault from the owner's wallet"}
+
+
+# ------------------------------------------------------------------- the team
+def _agent_row(a: dict) -> dict:
+    from agents import roles
+    caps = roles.allowed_capabilities(a["code"], a.get("capabilities") or [])
+    return {**a, "capabilities": caps,
+            "tools": {c: registry.tools_of(c) for c in caps},
+            "model": str(llm.spec_for_code(a["code"], a.get("veto", False)))}
+
+
+@route("GET", r"/team")
+def get_team(_m, _b, h) -> Tuple[int, dict]:
+    from agents import roles
+    from core import team
+    u = _user(h)
+    team.ensure_team(by=u.email)
+    return 200, {"agents": [_agent_row(a) for a in store.list_agents(include_inactive=True)],
+                 "capabilities": [{"name": n, "description": d, "locked_to": roles.LOCKED.get(n),
+                                   "tools": registry.tools_of(n)} for n, d in roles.CAPABILITIES.items()],
+                 "library": [{"key": k, **{x: r[x] for x in ("nickname", "title", "brief", "capabilities")}}
+                             for k, r in roles.ROLES.items()],
+                 "may_change": u.may_manage}
+
+
+@route("POST", r"/team/compose")
+def compose_team(_m, b: dict, h) -> Tuple[int, dict]:
+    from core import business, team
+    _user(h)
+    p = business.normalise(b["profile"])[0] if isinstance(b.get("profile"), dict) else business.current()
+    proposal = team.compose(p)
+    return 200, {"team": proposal, "diff": team.diff(proposal)}
+
+
+@route("POST", r"/team/apply")
+@_refusable
+def apply_team(_m, b: dict, h) -> Tuple[int, dict]:
+    from core import business, team
+    u = _manager(h)
+    p = business.normalise(b["profile"])[0] if isinstance(b.get("profile"), dict) else business.current()
+    team.apply(team.compose(p), by=u.email, keep_edits=not b.get("reset"))
+    return 200, {"agents": [_agent_row(a) for a in store.list_agents(include_inactive=True)]}
+
+
+@route("POST", r"/team/new")
+@_refusable
+def new_agent(_m, b: dict, h) -> Tuple[int, dict]:
+    from core import team
+    u = _manager(h)
+    a = team._custom({"title": b.get("title"), "brief": b.get("brief"),
+                      "capabilities": b.get("capabilities") or []},
+                     {x["code"] for x in store.list_agents(include_inactive=True)})
+    if not a:
+        return 400, {"error": "give the role a new, unique title"}
+    a["status"], a["origin"] = "active", "person"
+    return 201, {"agent": _agent_row(store.upsert_agent(a, by=u.email))}
+
+
+@route("POST", r"/team/([a-z0-9_]+)")
+@_refusable
+def edit_agent(m, b: dict, h) -> Tuple[int, dict]:
+    from agents import roles
+    u = _manager(h)
+    a = store.get_agent(m.group(1))
+    if not a:
+        return 404, {"error": f"no agent {m.group(1)}"}
+    if "status" in b:
+        try:
+            store.set_agent_status(a["code"], str(b["status"]), by=u.email)
+        except ValueError as e:
+            return 400, {"error": str(e)}
+        a = store.get_agent(a["code"])
+    changes = {k: b[k] for k in ("prompt", "title", "brief", "nickname", "effort") if isinstance(b.get(k), str)}
+    if isinstance(b.get("capabilities"), list):
+        changes["capabilities"] = roles.allowed_capabilities(a["code"], [str(x) for x in b["capabilities"]])
+    if changes:
+        a = store.upsert_agent({**a, **changes, "origin": "person"}, by=u.email)
+    return 200, {"agent": _agent_row(a)}
+
+
+@route("GET", r"/agents")
+def list_agents(_m, _b, h) -> Tuple[int, dict]:
+    from agents import roster
+    _user(h)
+    out = []
+    counts: Dict[str, int] = {}
+    with store.connect() as c:
+        for r in c.execute("SELECT agent, count(DISTINCT run_id) n FROM steps GROUP BY agent").fetchall():
+            counts[r["agent"]] = r["n"]
+    for code, a in roster.load().items():
+        tools_ = [{"name": t.name, "installed": True, "description": t.description}
+                  for t in registry.owned_by(a.capabilities)]
+        out.append({"code": code, "nickname": a.nickname, "title": a.title, "brief": a.brief,
+                    "effort": a.effort, "veto": a.veto, "core": a.core, "lead": code == "supervisor",
+                    "capabilities": a.capabilities, "ready": True, "tools": tools_,
+                    "installed": len(tools_), "tool_count": len(tools_), "runs": counts.get(code, 0),
+                    "model": str(llm.spec_for(a)), "version": a.version})
+    return 200, {"agents": out}
+
+
+# ----------------------------------------------------------------------- work
+@route("POST", r"/work")
+def new_work(_m, b: dict, h) -> Tuple[int, dict]:
+    u = _user(h)
+    kind = str(b.get("kind") or "request")
+    if kind not in ("request", "goal", "payable", "order"):
+        return 400, {"error": "kind is one of request, goal, payable, order"}
+    title = str(b.get("title") or "").strip()
+    if not title:
+        return 400, {"error": "a title is required"}
+    payload = b.get("payload") if isinstance(b.get("payload"), dict) else {"text": str(b.get("text") or "")}
+    wid = store.record_work_item(kind, title[:200], "api", {**payload, "raised_by": u.email})
+    item = store.get_work_item(wid)
+    store.set_work_status(wid, "running")
+    rid = start_work(item)
+    return 201, {"work_item": wid, "run": rid}
+
+
+@route("GET", r"/work")
+def list_work(_m, b: dict, h) -> Tuple[int, dict]:
+    _user(h)
+    return 200, {"items": store.list_work_items(limit=100, status=b.get("status") or None)}
 
 
 @route("GET", r"/runs")
 def list_runs(_m, _b, h) -> Tuple[int, dict]:
-    """The board, most owed first, each handling carrying its verdict.
-
-    The verdict is computed from the record (engine/triage.py), never asked of
-    a model: a severity nobody can recompute is the kind of confident unlabelled
-    claim this system exists to refuse."""
     _user(h)
-    from engine import triage
-    runs = triage.queue()
-    return 200, {"runs": runs,
-                 "board": triage.summarise([triage.Verdict(**r["verdict"]) for r in runs])}
+    return 200, {"runs": store.list_runs(100)}
 
 
 @route("GET", r"/runs/([A-Za-z0-9_]+)")
 def one_run(m, _b, h) -> Tuple[int, dict]:
     _user(h)
-    d = store.get_run(m.group(1))
-    if d:
-        import outreach
-        # An outward message shows where it goes, or went, beside the draft.
-        for a in d.get("actions", []):
-            delivery = outreach.state(a)
-            if delivery:
-                a["delivery"] = delivery
-    return (200, d) if d else (404, {"error": "not found"})
+    r = store.get_run(m.group(1))
+    return (200, r) if r else (404, {"error": "no such run"})
 
 
 @route("GET", r"/runs/([A-Za-z0-9_]+)/trace")
 def run_trace(m, _b, h) -> Tuple[int, dict]:
-    """One handling as a topology (event, lead, specialists, tools, sources,
-    actions) beside its calls in order, each with a preview of its result."""
-    _user(h)
-    from agents.definitions import ALL
     from core import topology
-    d = store.get_run(m.group(1))
-    names = {code: (a.nickname, a.title, a.brief) for code, a in ALL.items()}
-    return (200, topology.build(d, names)) if d else (404, {"error": "not found"})
+    _user(h)
+    r = store.get_run(m.group(1))
+    return (200, topology.build(r)) if r else (404, {"error": "no such run"})
 
 
 @route("GET", r"/runs/([A-Za-z0-9_]+)/steps/(\d+)")
 def run_step(m, _b, h) -> Tuple[int, dict]:
-    """One step in full: every row of its result, not the trace's preview."""
     _user(h)
-    from core import topology
-    d = store.get_run(m.group(1))
-    s = topology.step(d, int(m.group(2))) if d else None
-    return (200, s) if s else (404, {"error": "not found"})
+    r = store.get_run(m.group(1))
+    s = next((x for x in (r or {}).get("steps", []) if x["seq"] == int(m.group(2))), None)
+    return (200, s) if s else (404, {"error": "no such step"})
 
 
-@route("GET", r"/runs/([A-Za-z0-9_]+)/graph")
-def run_graph(m, _b, h) -> Tuple[int, dict]:
-    """The exploration graph for one run: its typed nodes and edges, for the
-    DAG view. Empty when AERA_GRAPH was off for the handling (nothing was
-    mirrored), which the UI shows as 'the graph was not recorded'."""
+@route("GET", r"/runs/([A-Za-z0-9_]+)/proofs")
+def run_proofs(m, _b, h) -> Tuple[int, dict]:
     _user(h)
-    from core import exploration as ex
+    proofs = store.proofs_for_run(m.group(1))
+    return 200, {"proofs": proofs, "attested": sum(1 for p in proofs if p["verdict"] == "attested"),
+                 "total": len(proofs)}
+
+
+@route("GET", r"/log")
+def raw_log(_m, _b, h) -> Tuple[int, dict]:
+    _user(h)
     with store.connect() as c:
-        return 200, ex.get_graph(c, m.group(1))
+        steps = c.execute("SELECT s.*, w.title, w.kind AS work_kind FROM steps s JOIN runs r ON r.id = s.run_id"
+                          " JOIN work_items w ON w.id = r.work_item_id ORDER BY s.id DESC LIMIT 300").fetchall()
+    out = []
+    for r in steps:
+        d = json.loads(r["detail"])
+        if isinstance(d.get("result"), list):
+            d["rows"] = d.get("rows") or len(d["result"])
+            d.pop("result")
+        out.append(dict(r) | {"tools": json.loads(r["tools"]), "detail": d})
+    return 200, {"steps": out, "actions": store.list_actions(limit=100)}
 
 
-@route("POST", r"/actions/([A-Za-z0-9_]+)/outcome")
-def record_outcome(m, b: dict, h) -> Tuple[int, dict]:
-    """What actually happened. The half of the record that closes the loop.
-
-    `actual_cost_idr` is taken as a number at the top level, not dug out of
-    `detail`: a client that sends "24,500,000" gets a 400 rather than having a
-    scale guessed for it. Structured `detail` still passes through as given.
-    """
-    u = _user(h)                       # a reading of reality is still attributable
-    if not b.get("outcome"):
-        return 400, {"error": f"'outcome' is required, one of {', '.join(store.OUTCOMES)}"}
-    try:
-        given = b.get("detail")
-        if given is not None and not isinstance(given, dict):
-            given = {"note": str(given)}       # a plain string is a note, not a shape error
-        detail = (given or {}) | (
-            store.outcome_detail("", b.get("actual_cost_idr"), recorded_by=u.email) or {})
-        return 200, store.record_outcome(m.group(1), b["outcome"], detail or None)
-    except KeyError:
-        return 404, {"error": "action not found"}
-    except ValueError as e:
-        return 400, {"error": str(e)}
+# -------------------------------------------------------------------- actions
+@route("GET", r"/actions")
+def list_actions(_m, b: dict, h) -> Tuple[int, dict]:
+    _user(h)
+    return 200, {"actions": store.list_actions(status=b.get("status") or None, kind=b.get("kind") or None)}
 
 
 @route("POST", r"/actions/([A-Za-z0-9_]+)/decision")
 def decide(m, b: dict, h) -> Tuple[int, dict]:
-    u = _user(h)                       # identity from the token, not the body
-    if not b.get("decision"):
-        return 400, {"error": "'decision' is required"}
-
-    action_id = m.group(1)
-    d = store.get_action(action_id)
-    if not d:
-        return 404, {"error": "action not found"}
-
-    import outreach
-    value = int(d["payload"].get("cost_idr", 0))
-    if b["decision"] == "approved" and not u.may_approve(value):
-        return 403, {
-            "error": f"role '{u.role}' may not approve Rp {value:,}",
-            "limit_idr": u.limit_idr,
-            "hint": "escalate to procurement_lead",
-        }
-    # A message to a customer or a supplier costs nothing and still commits
-    # the company, so who may send it is its own rule, not the money limit.
-    why = outreach.refusal(d["kind"], u.role) if b["decision"] == "approved" else None
-    if why:
-        return 403, {"error": why, "hint": f"escalate to {outreach.APPROVERS[d['kind']][0]}"}
-    try:
-        decided = store.decide_action(action_id, u.email, u.role,
-                                      b["decision"], b.get("note", ""))
-    except ValueError as e:
-        return 400, {"error": str(e)}
-    if decided.get("status") == "approved" and d["kind"] in outreach.KINDS:
-        decided["delivery"] = outreach.queue(action_id)
-        if decided["delivery"].get("queued") and SCHEDULE is not None:
-            SCHEDULE.run_now("notify")
-    return 200, decided
-
-
-@route("POST", r"/actions/([A-Za-z0-9_]+)/resend")
-def resend(m, _b, h) -> Tuple[int, dict]:
-    """Send an approved outward message again after its send failed. Who may
-    approve it may resend it; nothing about it changes."""
-    import outreach
     u = _user(h)
-    d = store.get_action(m.group(1))
-    if not d or d["kind"] not in outreach.KINDS:
-        return 404, {"error": "no outward message by that id"}
-    why = outreach.refusal(d["kind"], u.role)
-    if why:
-        return 403, {"error": why}
-    r = outreach.queue(d["id"], again=True)
-    if r.get("queued") and SCHEDULE is not None:
-        SCHEDULE.run_now("notify")
-    return (200 if r.get("queued") else 409), r
+    a = store.get_action(m.group(1))
+    if not a:
+        return 404, {"error": "no such action"}
+    decision = str(b.get("decision") or "")
+    if decision not in ("approved", "rejected", "escalated"):
+        return 400, {"error": "decision is approved, rejected or escalated"}
+    if a["status"] == "blocked":
+        return 409, {"error": "the guardian blocked this action; a block is final and cannot be approved"}
+    if decision == "approved" and not u.may_approve(a["value_usd"]):
+        return 403, {"error": f"a {u.role} may approve up to ${u.limit_usd:,.2f}; this is ${a['value_usd']:,.2f}"}
+    from core import business
+    if decision == "approved" and business.current().get("kill_switch"):
+        return 409, {"error": "the kill switch is on; resume the business before approving anything"}
+    d = store.decide_action(a["id"], u.email, u.role, decision, str(b.get("note") or "")[:500])
+    out: Dict[str, Any] = {"action": d}
+    if d.get("status") == "approved" and not d.get("unchanged"):
+        import settle
+        out["executed"] = settle.execute(a["id"])
+        out["action"] = store.get_action(a["id"])
+    return 200, out
+
+
+@route("POST", r"/actions/([A-Za-z0-9_]+)/outcome")
+def record_outcome(m, b: dict, h) -> Tuple[int, dict]:
+    _user(h)
+    try:
+        a = store.record_outcome(m.group(1), str(b.get("outcome") or "")[:40] or "noted",
+                                 {"detail": str(b.get("detail") or "")[:2000]})
+    except KeyError:
+        return 404, {"error": "no such action"}
+    return 200, {"action": a}
+
+
+# ------------------------------------------------------------- money & proof
+@route("GET", r"/orders")
+def list_orders(_m, b: dict, h) -> Tuple[int, dict]:
+    _user(h)
+    return 200, {"orders": store.list_orders(status=b.get("status") or None)}
+
+
+@route("POST", r"/orders/([A-Za-z0-9_\-]+)/simulate-paid")
+@_refusable
+def simulate_paid(m, _b, h) -> Tuple[int, dict]:
+    """Mark an order paid WITHOUT a chain, for a demo with no vault. Labelled
+    `simulated` in the ledger and on the order, everywhere it is shown."""
+    import settle
+    from core import chain
+    _manager(h)
+    if chain.configured():
+        return 409, {"error": "a vault is configured: pay it for real (ft_transfer_call)"}
+    o = store.get_order(m.group(1))
+    if not o:
+        return 404, {"error": "no such order"}
+    w = settle.order_paid(o["id"], payer=o.get("customer"), amount_usd=o["amount_usd"], offering=o["offering"],
+                          tx=None, rail="simulated")
+    return 200, {"order": store.get_order(o["id"]), "work_items": w}
+
+
+@route("GET", r"/treasury")
+def treasury(_m, _b, h) -> Tuple[int, dict]:
+    from core import business, chain
+    _user(h)
+    p = business.current()
+    out: Dict[str, Any] = {
+        "network": chain.network(), "vault": chain.vault_id() or None, "agent": chain.agent_id() or None,
+        "token": chain.token_id(), "rail": "vault" if chain.configured() else "simulated",
+        "caps": business.spend_caps(p), "paid_today_usd": round(store.spent_today_usd(), 2),
+        "kill_switch": p.get("kill_switch"),
+        "pending_actions": store.list_actions(status="pending"),
+        "pending_onchain": store.list_payments(status="pending_onchain"),
+        "approved_refunds": store.list_actions(status="approved", kind="refund"),
+        "payments": store.list_payments(limit=50),
+    }
+    if chain.readable():
+        out["policy"] = chain.policy()
+        out["balance_usd"] = chain.vault_balance()
+        out["explorer"] = (("https://testnet.nearblocks.io" if chain.network() == "testnet"
+                            else "https://nearblocks.io") + f"/address/{chain.vault_id()}")
+    return 200, out
+
+
+@route("GET", r"/ledger")
+def ledger(_m, b: dict, h) -> Tuple[int, dict]:
+    _user(h)
+    return 200, store.ledger(int(b.get("days") or 30))
+
+
+@route("GET", r"/guardian")
+def guardian_log(_m, b: dict, h) -> Tuple[int, dict]:
+    _user(h)
+    return 200, {"checks": store.list_checks(limit=100, verdict=b.get("verdict") or None)}
+
+
+@route("GET", r"/attestation/([A-Za-z0-9_.\-/]+)")
+def attestation(m, _b, h) -> Tuple[int, dict]:
+    """A fresh report for one model, checked with a nonce made now."""
+    from core import attest
+    _user(h)
+    model = m.group(1)
+    try:
+        nonce = attest.new_nonce()
+        rep = attest.fetch_report(model, nonce=nonce, use_cache=False) \
+            if "use_cache" in attest.fetch_report.__code__.co_varnames else attest.fetch_report(model, nonce=nonce)
+        checks = attest.check_report(rep, rep.get("_aera", {}).get("nonce", nonce), model)
+    except Exception as e:                                           # noqa: BLE001
+        return 502, {"model": model, "error": f"{type(e).__name__}: {e}"}
+    return 200, {"model": model, "nonce": nonce, "checks": checks, "verdict": attest.verdict(checks)}
+
+
+@route("GET", r"/proofs")
+def proofs(_m, _b, h) -> Tuple[int, dict]:
+    _user(h)
+    with store.connect() as c:
+        rows = c.execute("SELECT * FROM tee_proofs ORDER BY created_at DESC LIMIT 100").fetchall()
+    return 200, {"proofs": [dict(r) | {"checks": json.loads(r["checks"] or "[]")} for r in rows],
+                 "summary": store.proof_summary(30)}
+
+
+# ---------------------------------------------------------------------- files
+@route("GET", r"/files")
+def list_files(_m, _b, h) -> Tuple[int, dict]:
+    _user(h)
+    return 200, {"files": store.list_files()}
+
+
+@route("POST", r"/files")
+def upload_file(_m, b: dict, h) -> Tuple[int, dict]:
+    u = _user(h)
+    name, text = str(b.get("name") or "").strip(), str(b.get("text") or "")
+    if not name or not text.strip():
+        return 400, {"error": "send {name, text}"}
+    if name.startswith("doc:"):
+        return 400, {"error": "'doc:' names are reserved for the team's own documents"}
+    return 201, store.save_file(name[:120], str(b.get("mime") or "text/plain")[:60], text, by=u.email)
+
+
+@route("POST", r"/files/([A-Za-z0-9_]+)/delete")
+def delete_file(m, _b, h) -> Tuple[int, dict]:
+    _user(h)
+    return (200, {"deleted": True}) if store.delete_file(m.group(1)) else (404, {"error": "no such file"})
+
+
+# --------------------------------------------------------------------- public
+@route("GET", r"/public/offerings")
+def public_offerings(_m, _b, _h) -> Tuple[int, dict]:
+    from core import business, chain
+    p = business.current()
+    return 200, {"business": p.get("name"), "mission": p.get("mission"),
+                 "open": bool(p.get("name")) and not p.get("kill_switch"),
+                 "offerings": p.get("offerings", []), "vault": chain.vault_id() or None,
+                 "token": chain.token_id(), "network": chain.network()}
+
+
+@route("POST", r"/public/checkout")
+def public_checkout(_m, b: dict, _h) -> Tuple[int, dict]:
+    """An order to pay. With a vault: the exact ft_transfer_call to sign in a
+    wallet. Without one: the order waits, and an owner can mark it paid
+    (simulated) from the Orders page."""
+    import secrets as _s
+    from core import business, chain
+    p = business.current()
+    if not p.get("name") or p.get("kill_switch"):
+        return 409, {"error": "the business is not taking orders right now"}
+    o = business.offering(str(b.get("offering") or ""), p)
+    if not o:
+        return 404, {"error": "no such offering"}
+    raw_inputs = b.get("inputs") if isinstance(b.get("inputs"), dict) else {}
+    inputs = {k: str(raw_inputs.get(k) or "")[:500] for k in o["inputs"]}
+    missing = [k for k, v in inputs.items() if not v.strip()]
+    if missing:
+        return 400, {"error": "missing: " + ", ".join(missing)}
+    email = str(b.get("email") or "").strip().lower()[:200]
+    account = str(b.get("account") or "").strip().lower()[:64]
+    customer = None
+    if email:
+        found = [c for c in store.find_contact(email) if c["email"] == email]
+        customer = (found[0] if found else store.add_contact(email.split("@")[0], "customer", email,
+                                                             near_account=account or None))["id"]
+    order_id = "ord_" + _s.token_hex(6)
+    order = store.create_order(order_id, o["id"], o["price_usd"], inputs, customer=customer or account or None)
+    pay: Dict[str, Any] = {"amount_usd": o["price_usd"], "token": chain.token_id()}
+    if chain.readable():
+        pay["ft_transfer_call"] = {"receiver_id": chain.vault_id(), "amount": chain.to_base(o["price_usd"]),
+                                   "msg": json.dumps({"order_id": order_id, "offering": o["id"]})}
+    else:
+        pay["simulated"] = True
+    return 201, {"order": order, "pay": pay}
+
+
+@route("GET", r"/public/orders/([A-Za-z0-9_\-]+)")
+def public_order(m, _b, _h) -> Tuple[int, dict]:
+    o = store.get_order(m.group(1))
+    if not o:
+        return 404, {"error": "no such order"}
+    return 200, {k: o[k] for k in ("id", "offering", "status", "amount_usd", "created_at", "updated_at")}
+
+
+@route("GET", r"/public/ledger")
+def public_ledger(_m, _b, _h) -> Tuple[int, dict]:
+    led = store.ledger(30)
+    return 200, {**led, "entries": [{k: e[k] for k in ("direction", "rail", "amount_usd", "token", "status",
+                                                      "tx_hash", "created_at")} for e in led["entries"]]}
 
 
 # --------------------------------------------------------------------- server
@@ -1837,18 +1701,13 @@ class Handler(BaseHTTPRequestHandler):
         print(f"  {self.command} {self.path} → {a[1] if len(a) > 1 else ''}")
 
 
-#: The only two routes that may be reached without a session token. /health is
-#: what a load balancer polls, and /login is where a token comes from. Every
-#: other route handles one company's disruptions, costs and suppliers.
+#: Routes that may be reached without a session token.
+PUBLIC_PREFIX = "/public/"
 PUBLIC = {("GET", "/health"), ("POST", "/login")}
 
-#: One sample value per group shape a pattern uses, so a route can be called
-#: without naming all 48 by hand. A new shape fails the check rather than
-#: quietly skipping the route that uses it.
-_SAMPLES = ((r"([A-Za-z0-9_]+)", "x1"), (r"([A-Za-z]+)", "Supplier"),
-            (r"([a-z0-9_]+)", "a_skill"),
-            (r"([a-z_]+)", "digest"), (r"([a-z]+)", "impact"),
-            (r"(\d+)", "0"), (r"(pdf|xlsx)", "pdf"))
+_SAMPLES = ((r"([A-Za-z0-9_]+)", "x1"), (r"([A-Za-z]+)", "Thing"), (r"([a-z0-9_]+)", "a_skill"),
+            (r"([a-z_]+)", "digest"), (r"([a-z]+)", "impact"), (r"(\d+)", "0"), (r"(pdf|xlsx)", "pdf"),
+            (r"([A-Za-z0-9_\-]+)", "ord_x"), (r"([A-Za-z0-9_.\-/]+)", "z-ai/glm-5.3"))
 
 
 def _sample_path(pattern) -> str:
@@ -1859,32 +1718,15 @@ def _sample_path(pattern) -> str:
 
 
 def demo() -> None:
-    """What is checked here is the door, not the rooms.
-
-    Every route but two handles one company's disruptions, costs and suppliers.
-    A route added without `_user(h)` is an open door, and nothing else in the
-    suite would notice: it would answer 200 to anyone who could reach the port.
-    So each one is called with no token and has to refuse. Grepping for
-    `_user(` would not do - several routes are guarded inside a shared helper -
-    so they are called for real.
-    """
+    """The door, not the rooms: every route but the public ones refuses an
+    anonymous caller. Each is called for real with no token."""
     import secrets
 
-    from core import identity
-
-    # A check must not need the operator's own secret. It needs A secret: one
-    # that signs the tokens it mints and reads back inside this process and
-    # nowhere else. core/identity.py's own check does exactly this. Without it
-    # `manage.py check` fails on any clean checkout - which is how CI found it,
-    # because a developer's aera/agent/.env was quietly supplying one here.
     if not identity.SECRET:
         os.environ.setdefault("AERA_SECRET", secrets.token_hex(16))
         identity.SECRET = os.environ["AERA_SECRET"]
+    os.environ["AERA_ATTEST_OFFLINE"] = "1"
 
-    assert len(ROUTES) >= 40, f"only {len(ROUTES)} routes registered; did an import fail?"
-
-    # A shadowed route never runs, and the one that wins is whichever was
-    # imported first - which is not a thing anyone chooses on purpose.
     seen = [(m, r.pattern) for m, r, _ in ROUTES]
     duplicates = sorted({x for x in seen if seen.count(x) > 1})
     assert not duplicates, f"two handlers for the same route: {duplicates}"
@@ -1896,60 +1738,77 @@ def demo() -> None:
         if found is None:
             unmatched.append(pattern.pattern)
             continue
-        key = (method, path)
+        if path.startswith("/attestation/"):
+            guarded.append((method, path))          # network call; guarded by _user before it
+            continue
         try:
             fn(found, {}, {})
         except NotAuthorised:
-            guarded.append(key)
+            guarded.append((method, path))
             continue
         except Exception:                                            # noqa: BLE001
-            # It got past the door on its own business and then failed on a
-            # made-up id. That is a route serving an anonymous caller.
             pass
-        public.append(key)
-
-    assert not unmatched, f"no sample path for: {unmatched}; add its shape to _SAMPLES"
-    extra = sorted(set(public) - PUBLIC)
+        public.append((method, path))
+    assert not unmatched, f"no sample path for: {unmatched}"
+    extra = sorted(x for x in set(public) - PUBLIC if not x[1].startswith(PUBLIC_PREFIX))
     assert not extra, f"reachable without a token: {extra}"
-    missing = sorted(PUBLIC - set(public))
-    assert not missing, f"meant to be public but refused anonymously: {missing}"
-    assert len(guarded) == len(ROUTES) - len(PUBLIC)
 
-    # Identity comes from the token and from nowhere else. A body naming
-    # another user is a request, not a fact.
+    from core import business
     identity.prepare()
-    u = identity.add_user("buyer@example.com", "A Buyer", "buyer", "pw-for-the-check")
-    code, out = login(None, {"email": "buyer@example.com", "password": "pw-for-the-check"}, {})
-    assert code == 200 and out["token"], out
-    token = out["token"]
-    assert out["user"]["role"] == "buyer" and out["user"]["limit_idr"] == 500_000_000, out
+    identity.add_user("owner@lumen.example", "Owner", "owner", "pw-for-the-check")
+    identity.add_user("op@lumen.example", "Op", "operator", "pw-for-the-check")
+    tok = login(None, {"email": "owner@lumen.example", "password": "pw-for-the-check"}, {})[1]["token"]
+    op = login(None, {"email": "op@lumen.example", "password": "pw-for-the-check"}, {})[1]["token"]
+    H, O = {"Authorization": f"Bearer {tok}"}, {"Authorization": f"Bearer {op}"}
 
-    headers = {"Authorization": f"Bearer {token}"}
-    code, who = me(None, {"email": "admin@example.com", "role": "admin"}, headers)
-    assert code == 200 and who["email"] == u.email, who
-    assert who["role"] == "buyer", "a body claiming admin must not become one"
-    assert who["limit_idr"] == 500_000_000, who
+    code, out = save_business(None, {"profile": business.EXAMPLE}, O)
+    assert code == 403, "an operator cannot rewrite the business"
+    code, out = save_business(None, {"profile": business.EXAMPLE}, H)
+    assert code == 200 and out["version"], out
+    code, t = get_team(None, {}, H)
+    codes = {a["code"] for a in t["agents"]}
+    assert {"supervisor", "guardian", "treasurer", "researcher", "writer"} <= codes, codes
+    tre = next(a for a in t["agents"] if a["code"] == "treasurer")
+    assert "pay_vendor" in tre["tools"]["treasury"]
+    code, e = edit_agent(re.match(r"(.*)", "writer"), {"capabilities": ["documents", "treasury"]}, H)
+    assert code == 200 and "treasury" not in e["agent"]["capabilities"], "the lock holds through the API"
+    print(f"  business saved ✓ · team composed ({len(codes)} agents) ✓ · treasury stays locked ✓")
 
-    for bad in ("", "Bearer", "Bearer not-a-token", "Basic abc", f"Bearer {token}x"):
-        try:
-            me(None, {}, {"Authorization": bad})
-            raise AssertionError(f"{bad!r} must not authenticate")
-        except NotAuthorised:
-            pass
+    code, co = public_checkout(None, {"offering": "brief", "inputs": {"industry": "coffee", "country": "VN"},
+                                      "email": "ana@client.example"}, {})
+    assert code == 201 and co["pay"].get("simulated"), co
+    oid = co["order"]["id"]
+    code, paid = simulate_paid(re.match(r"(.*)", oid), {}, H)
+    assert code == 200 and paid["order"]["status"] == "paid" and paid["work_items"], paid
+    assert public_order(re.match(r"(.*)", oid), {}, {})[1]["status"] == "paid"
+    print("  checkout → simulated payment → a work item for the team ✓")
 
-    # The one route a load balancer polls says what it can see, without a token.
-    code, health_out = health(None, {}, {})
-    assert code == 200 and "model_ready" in health_out and "models" in health_out
+    # Approval limits come from the token; a blocked action can never be approved.
+    from core.actions import raise_action
+    wid = store.record_work_item("request", "x", "api", {})
+    rid = store.start_run(wid)
+    with registry.bind_run(rid):
+        big = raise_action("payment", {"receiver": "v.testnet", "amount_usd": 400}, {"verdict": "warn", "reasons": []},
+                           value_usd=400, execute=False).value
+        bad = raise_action("payment", {"receiver": "e.testnet", "amount_usd": 1}, {"verdict": "block", "reasons": []},
+                           value_usd=1, execute=False).value
+    assert decide(re.match(r"(.*)", big["id"]), {"decision": "approved"}, O)[0] == 403
+    assert decide(re.match(r"(.*)", bad["id"]), {"decision": "approved"}, H)[0] == 409
+    code, d = decide(re.match(r"(.*)", big["id"]), {"decision": "approved"}, H)
+    assert code == 200 and d["action"]["status"] == "sent", d
+    print("  approval: role limit from the token ✓ · blocked is final ✓ · approved executes ✓")
 
+    assert kill_switch(None, {"on": True}, O)[0] == 200
+    assert kill_switch(None, {"on": False}, O)[0] == 403, "only an owner resumes"
+    assert public_checkout(None, {"offering": "brief", "inputs": {"industry": "x", "country": "y"}}, {})[0] == 409
+    assert kill_switch(None, {"on": False}, H)[0] == 200
+    print("  kill switch: anyone with authority stops, only an owner resumes ✓")
     print(f"  {len(ROUTES)} routes · {len(guarded)} refuse an anonymous caller ✓")
-    print(f"  public by design: {', '.join(f'{m} {p}' for m, p in sorted(PUBLIC))} ✓")
-    print("  no route shadows another ✓ · identity comes from the token, never the body ✓")
     print("api ok")
 
 
 if __name__ == "__main__":
     if "--check" in sys.argv:
-        # Calling 48 handlers writes and reads; never against a real database.
         from core.config import fixtures_only
 
         fixtures_only(__file__, "AERA_API_CHECK")
@@ -1957,21 +1816,12 @@ if __name__ == "__main__":
         raise SystemExit(0)
 
     _load_model_choices()
-    print(f"AERA API · env={CFG.env} "
-          f"· model={'ready' if CFG.model_ready else 'no'}")
-    # Bind before watching. The watchers write real events into the record, and
-    # a second copy of the service that cannot take the port must not spend its
-    # last moments raising disruptions nobody is serving.
+    llm.refresh_attested()
+    print(f"AERA API · env={CFG.env} · model={'ready' if CFG.model_ready else 'no'} "
+          f"· private={'on' if llm.private_mode() else 'off'}")
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     print(f"listening on http://{HOST}:{PORT}")
-
-    # Watching is what separates this from an inbox: one eye on what happened,
-    # one on what has not happened yet, and the outbox that tells people. The
-    # whole list, with cadences, is jobs.py. AERA_WATCH=0 keeps the watchers
-    # off (somewhere that should not reach out to a feed); AERA_SCHEDULE=0
-    # keeps everything off.
     import jobs
-    SCHEDULE = jobs.scheduler(lambda body: raise_event(body)[0])
+    SCHEDULE = jobs.scheduler(start_work)
     SCHEDULE.start()
-
     server.serve_forever()

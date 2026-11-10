@@ -1,11 +1,15 @@
-"""Persistence. SQLite, plenty for a dozen events a day, zero dependencies.
+"""Persistence. SQLite, one file, zero dependencies.
 
 # ponytail: SQLite; move to Postgres once this is multi-tenant or needs concurrent writes
 
-What lands here is the official record: what the agents decided, on what
-evidence, who approved it, and what was actually issued. Rows in the
-actions and approvals tables are NEVER updated in place, a correction is
-written as a new row.
+What lands here is the official record of the business AERA runs: the profile
+a person wrote, the team composed from it, every piece of work and how it was
+handled, what the agents decided and on what evidence, who approved it, what
+money moved and the proof that a model ran where it said it ran.
+
+Rows in `actions`, `approvals`, `payments` and `guardian_checks` are never
+rewritten to say something else; a correction is a new row (status columns
+move forward only).
 """
 from __future__ import annotations
 
@@ -20,24 +24,59 @@ from typing import Any, Dict, Iterator, List, Optional
 from core.config import CFG
 
 SCHEMA = """
-CREATE TABLE IF NOT EXISTS events (
-  id            TEXT PRIMARY KEY,
-  kind          TEXT NOT NULL,           -- port_closure | supplier_failure | demand_spike | ...
-  title         TEXT NOT NULL,
-  trigger       TEXT NOT NULL,
-  payload       TEXT NOT NULL,           -- raw JSON from the signal source
-  received_at   TEXT NOT NULL,
-  source        TEXT NOT NULL
+-- The business a person defined. One active row; every edit is a new version,
+-- so "what were the rules when the agent did that" always has an answer.
+CREATE TABLE IF NOT EXISTS business (
+  version     INTEGER PRIMARY KEY AUTOINCREMENT,
+  profile     TEXT NOT NULL,             -- JSON, see core/business.py
+  active      INTEGER NOT NULL DEFAULT 1,
+  changed_by  TEXT NOT NULL,
+  note        TEXT,
+  at          TEXT NOT NULL
+);
+
+-- The team. Composed from the profile (core/team.py); three core roles are
+-- always present and cannot be disabled. A specialist proposed by a model is
+-- `draft` until a person approves it.
+CREATE TABLE IF NOT EXISTS agents (
+  code        TEXT PRIMARY KEY,          -- supervisor | guardian | treasurer | <slug>
+  nickname    TEXT NOT NULL,
+  title       TEXT NOT NULL,
+  brief       TEXT NOT NULL,
+  role        TEXT NOT NULL,             -- a key in agents/roles.py, or 'custom'
+  core        INTEGER NOT NULL DEFAULT 0,
+  veto        INTEGER NOT NULL DEFAULT 0,
+  prompt      TEXT NOT NULL,
+  capabilities TEXT NOT NULL DEFAULT '[]',  -- JSON list of capability names
+  effort      TEXT NOT NULL DEFAULT 'medium',
+  status      TEXT NOT NULL DEFAULT 'active',  -- active | draft | disabled
+  version     INTEGER NOT NULL DEFAULT 1,
+  origin      TEXT NOT NULL DEFAULT 'composer', -- composer | person | model
+  updated_by  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+
+-- Everything the team is asked to do. Replaces the old disruption events.
+CREATE TABLE IF NOT EXISTS work_items (
+  id          TEXT PRIMARY KEY,
+  kind        TEXT NOT NULL,             -- order | request | goal | payable
+  title       TEXT NOT NULL,
+  source      TEXT NOT NULL,             -- vault | intents | chat | email | schedule | api
+  payload     TEXT NOT NULL,             -- JSON
+  dedup_key   TEXT UNIQUE,
+  status      TEXT NOT NULL DEFAULT 'new', -- new | running | done | held | failed
+  received_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS runs (
   id            TEXT PRIMARY KEY,
-  event_id      TEXT NOT NULL REFERENCES events(id),
-  mode          TEXT NOT NULL,           -- autonomous | guided
-  status        TEXT NOT NULL,           -- running | done | held | failed
+  work_item_id  TEXT NOT NULL REFERENCES work_items(id),
+  status        TEXT NOT NULL,           -- running | done | partial | held | failed
   started_at    TEXT NOT NULL,
   finished_at   TEXT,
-  token_cost_idr INTEGER DEFAULT 0,
+  cost_usd      REAL DEFAULT 0,
+  team_version  TEXT,                    -- JSON {code: version} the run used
+  profile_version INTEGER,
   decision      TEXT,                    -- JSON
   error         TEXT
 );
@@ -57,21 +96,23 @@ CREATE TABLE IF NOT EXISTS steps (
   at            TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_steps_run ON steps(run_id, seq);
--- The operations report reads what the rules cost out of every costing step
--- across many runs (engine/report.py compliance_costs), which is a scan by
--- stage rather than by run.
-CREATE INDEX IF NOT EXISTS idx_steps_stage ON steps(stage, run_id, seq);
 
--- The official record. Never UPDATEd except to stamp the document reference.
+-- Anything that leaves the building or moves money. Never UPDATEd except to
+-- move its status forward and stamp what it became.
 CREATE TABLE IF NOT EXISTS actions (
   id              TEXT PRIMARY KEY,
   run_id          TEXT NOT NULL REFERENCES runs(id),
-  idempotency_key TEXT NOT NULL UNIQUE,  -- stops a retry becoming a duplicate PO
-  kind            TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL UNIQUE,  -- a retry never becomes a second payment
+  kind            TEXT NOT NULL,         -- payment | refund | message | deliver_order
   autonomous      INTEGER NOT NULL,
+  value_usd       REAL NOT NULL DEFAULT 0,
   payload         TEXT NOT NULL,
-  status          TEXT NOT NULL,         -- pending | approved | rejected | sent | failed
-  reference       TEXT,
+  status          TEXT NOT NULL,         -- pending | approved | rejected | sent | failed | blocked
+  reason          TEXT,                  -- why it waits, or why it was blocked
+  reference       TEXT,                  -- tx hash, message id, document hash
+  outcome         TEXT,
+  outcome_detail  TEXT,
+  outcome_at      TEXT,
   created_at      TEXT NOT NULL
 );
 
@@ -85,27 +126,112 @@ CREATE TABLE IF NOT EXISTS approvals (
   at            TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS uploads (
+-- Kira's rulings. One row per check, whatever the verdict, so "what did the
+-- guardian refuse this week" is a query and not a search through prose.
+CREATE TABLE IF NOT EXISTS guardian_checks (
   id          TEXT PRIMARY KEY,
-  entity      TEXT NOT NULL,             -- MaterialStock | PurchaseOrder | SalesOrder | ...
-  filename    TEXT NOT NULL,
-  rows        INTEGER NOT NULL,
-  payload     TEXT NOT NULL,             -- JSON array
-  uploaded_by TEXT NOT NULL,
-  uploaded_at TEXT NOT NULL,
-  -- Declared by whoever uploaded it. The system cannot tell real master data
-  -- from a generated sample by looking at it, and labelling a generated file
-  -- as cached would launder it into looking more trustworthy than it is.
-  synthetic   INTEGER NOT NULL DEFAULT 0
+  run_id      TEXT,
+  action_id   TEXT,
+  kind        TEXT NOT NULL,             -- action | counterparty
+  subject     TEXT NOT NULL,
+  verdict     TEXT NOT NULL,             -- allow | warn | block
+  reasons     TEXT NOT NULL,             -- JSON list of {rule, verdict, detail, origin}
+  at          TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_guardian_at ON guardian_checks(at);
+
+-- Money out (through the vault) and money in (orders paid to it), as the chain
+-- reported it. `request_id` is the action's idempotency key: idempotent here
+-- and on chain.
+CREATE TABLE IF NOT EXISTS payments (
+  id           TEXT PRIMARY KEY,
+  action_id    TEXT REFERENCES actions(id),
+  direction    TEXT NOT NULL,            -- out | in | split | refund
+  rail         TEXT NOT NULL,            -- vault | intents | simulated
+  request_id   TEXT,
+  counterparty TEXT NOT NULL,            -- NEAR account or foreign address
+  amount_usd   REAL NOT NULL,
+  token        TEXT NOT NULL,
+  status       TEXT NOT NULL,            -- submitted | sent | pending_onchain | approved | rejected | failed
+  tx_hash      TEXT,
+  detail       TEXT,                     -- JSON: quote, events, error
+  created_at   TEXT NOT NULL,
+  settled_at   TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status, created_at);
+
+CREATE TABLE IF NOT EXISTS orders (
+  id            TEXT PRIMARY KEY,        -- the order_id the customer paid against
+  offering      TEXT NOT NULL,
+  customer      TEXT,                    -- NEAR account or contact id
+  inputs        TEXT NOT NULL DEFAULT '{}',
+  amount_usd    REAL NOT NULL DEFAULT 0,
+  status        TEXT NOT NULL,           -- awaiting_payment | paid | working | delivered | refunded | failed
+  work_item_id  TEXT,
+  paid_tx       TEXT,
+  delivery      TEXT,                    -- JSON {hash, file, sent_to}
+  created_at    TEXT NOT NULL,
+  updated_at    TEXT NOT NULL
 );
 
--- A conversation with one agent. Unlike runs, this is a person talking, so it
--- belongs to whoever asked and is never shown to anyone else.
+-- Proof that a model call ran inside an attested TEE (core/attest.py).
+CREATE TABLE IF NOT EXISTS tee_proofs (
+  id              TEXT PRIMARY KEY,
+  run_id          TEXT,
+  step_seq        INTEGER,
+  agent           TEXT NOT NULL,
+  model           TEXT NOT NULL,
+  chat_id         TEXT NOT NULL,
+  signing_address TEXT,
+  req_sha256      TEXT,
+  resp_sha256     TEXT,
+  checks          TEXT NOT NULL DEFAULT '[]',
+  verdict         TEXT NOT NULL,         -- pending | attested | partial | failed
+  created_at      TEXT NOT NULL,
+  verified_at     TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_tee_run ON tee_proofs(run_id);
+CREATE INDEX IF NOT EXISTS idx_tee_verdict ON tee_proofs(verdict, created_at);
+
+-- What the business knows that no API does: price lists, briefs, style
+-- guides. Text only; read by the agents through read_business_file.
+CREATE TABLE IF NOT EXISTS files (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  mime        TEXT NOT NULL,
+  text        TEXT NOT NULL,
+  size        INTEGER NOT NULL,
+  uploaded_by TEXT NOT NULL,
+  uploaded_at TEXT NOT NULL
+);
+
+-- People and accounts the business deals with. The payout address of a
+-- counterparty lives here and ONLY here: a payment tool reads it from this
+-- row, never from a model or a message.
+CREATE TABLE IF NOT EXISTS contacts (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  role        TEXT NOT NULL,             -- customer | vendor | contributor | team | approver
+  email       TEXT NOT NULL DEFAULT '',
+  notify_for  TEXT NOT NULL DEFAULT '',  -- work kinds, comma separated; * = all
+  near_account TEXT,
+  payout_chain TEXT,                     -- near | base | eth | sol | ...
+  payout_address TEXT,
+  address_changed_at TEXT,
+  phone       TEXT,
+  title       TEXT,
+  department  TEXT,
+  notes       TEXT,
+  active      INTEGER NOT NULL DEFAULT 1,
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT
+);
+
 CREATE TABLE IF NOT EXISTS conversations (
   id         TEXT PRIMARY KEY,
   agent      TEXT NOT NULL,
   user_id    TEXT NOT NULL,
-  title      TEXT NOT NULL,             -- the first question, trimmed
+  title      TEXT NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -117,79 +243,36 @@ CREATE TABLE IF NOT EXISTS messages (
   conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
   seq     INTEGER NOT NULL,
   role    TEXT NOT NULL,                -- person | agent | error
-  body    TEXT NOT NULL,                -- JSON: the whole reply, or {"text": ...}
+  body    TEXT NOT NULL,
   at      TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, seq);
 
-CREATE TABLE IF NOT EXISTS reservations (
-  id            TEXT PRIMARY KEY,
-  run_id        TEXT NOT NULL REFERENCES runs(id),
-  action_id     TEXT,                    -- set once the action exists
-  material      TEXT NOT NULL,
-  plant         TEXT NOT NULL,           -- the donor, the plant losing the stock
-  qty           REAL NOT NULL,
-  created_at    TEXT NOT NULL,
-  released_at   TEXT,                    -- NULL means still held
-  released_why  TEXT
-);
-
-CREATE INDEX IF NOT EXISTS reservations_open
-  ON reservations (material, plant) WHERE released_at IS NULL;
-
-CREATE TABLE IF NOT EXISTS contacts (
-  id         TEXT PRIMARY KEY,
-  name       TEXT NOT NULL,
-  role       TEXT NOT NULL,              -- planner | buyer | procurement_lead | qa | oem
-  email      TEXT NOT NULL,
-  notify_for TEXT NOT NULL,              -- event kinds, comma separated; * = all
-  active     INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL
-);
-
--- Which model each role runs on, as picked on the Models page (core/llm.py,
--- choose()). Key is model.<lead|specialists|fallback|aux|agent code>. A key
--- that is absent hands that choice back to the environment.
--- MCP servers this deployment may call out to. AERA is already an MCP
--- SERVER - AgentCore Gateway and other clients call in - and this is the other
--- direction: tools somebody else operates, offered to our agents.
---
--- The token is stored here rather than in .env because these are added at
--- runtime by an admin, and a deployment that needs a redeploy to add a tool
--- is a deployment nobody adds tools to. It is never returned by any read.
 CREATE TABLE IF NOT EXISTS mcp_servers (
   id          TEXT PRIMARY KEY,
   name        TEXT NOT NULL UNIQUE,
   url         TEXT NOT NULL,
-  token       TEXT,                  -- bearer, write-only
+  token       TEXT,
   enabled     INTEGER NOT NULL DEFAULT 1,
-  agents      TEXT NOT NULL DEFAULT '[]',   -- agent codes allowed to use it; [] = all
-  tools       TEXT NOT NULL DEFAULT '[]',   -- last tools/list, cached for the page
+  agents      TEXT NOT NULL DEFAULT '[]',
+  tools       TEXT NOT NULL DEFAULT '[]',
   last_ok     TEXT,
   last_error  TEXT,
   added_by    TEXT NOT NULL,
   added_at    TEXT NOT NULL
 );
 
--- Procedures written by an operator rather than by us. They live beside
--- core/skills.py's catalogue and never replace it: a stored skill may not
--- take a built-in's name, and it is never `external`, because what MCP and
--- the A2A card offer is a fixed contract other systems were built against.
 CREATE TABLE IF NOT EXISTS skills (
   name        TEXT PRIMARY KEY,
   title       TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
-  agents      TEXT NOT NULL DEFAULT '[]',   -- agent codes; [] = any of them
-  tools       TEXT NOT NULL DEFAULT '[]',   -- registry tool names it composes
+  agents      TEXT NOT NULL DEFAULT '[]',
+  tools       TEXT NOT NULL DEFAULT '[]',
   steps       TEXT NOT NULL DEFAULT '[]',
   added_by    TEXT NOT NULL,
   added_at    TEXT NOT NULL
 );
 
--- One row per skill invocation. Dimensions only, never the caller's text:
--- which skill, which agent, whether it existed. A model naming a skill that
--- does not exist is the single most useful row here, so `found` is recorded
--- rather than the call being dropped.
 CREATE TABLE IF NOT EXISTS skill_usage (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   skill      TEXT NOT NULL,
@@ -207,90 +290,36 @@ CREATE TABLE IF NOT EXISTS settings (
   updated_at TEXT NOT NULL
 );
 
--- Who was told what, over which channel, and whether it arrived. Written
--- before anything is sent (an outbox), so a crash between deciding to tell
--- someone and telling them leaves a row to retry, and dedup_key stops a
--- retry, or a second handling of the same run, telling them twice.
 CREATE TABLE IF NOT EXISTS notifications (
   id         TEXT PRIMARY KEY,
   dedup_key  TEXT NOT NULL UNIQUE,
   run_id     TEXT,
-  kind       TEXT NOT NULL,              -- handling | digest | test | report | outreach
+  kind       TEXT NOT NULL,              -- handling | digest | test | outreach | delivery
   channel    TEXT NOT NULL,              -- email | slack | telegram | webhook
-  address    TEXT NOT NULL,              -- an email, or the channel's name
+  address    TEXT NOT NULL,
   subject    TEXT NOT NULL,
   body       TEXT NOT NULL,
   status     TEXT NOT NULL,              -- pending | sent | failed | skipped
   attempts   INTEGER NOT NULL DEFAULT 0,
   error      TEXT,
+  attachments TEXT,
+  action_id  TEXT,
+  reference  TEXT,
   created_at TEXT NOT NULL,
   sent_at    TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_notifications_status ON notifications(status, created_at);
 
--- The schedule's memory. A job's next run is worked out from when it last
--- started, so a restart does not re-run a weekly scan that ran yesterday.
 CREATE TABLE IF NOT EXISTS jobs (
   name         TEXT PRIMARY KEY,
   enabled      INTEGER NOT NULL DEFAULT 1,
   last_started TEXT,
   last_finished TEXT,
-  last_status  TEXT,                     -- ok | failed
+  last_status  TEXT,
   last_detail  TEXT,
   runs         INTEGER NOT NULL DEFAULT 0,
   failures     INTEGER NOT NULL DEFAULT 0
 );
-
--- The exploration graph. A persisted, typed DAG of one event's handling: the
--- disruption, the lines of investigation it opened, the facts each one
--- surfaced (every fact keeps its origin, AERA's house rule), the candidate
--- options, and Kira's rulings on them. The supervisor and the specialists read
--- and write this ONE graph together, so it is the shared record of how a
--- decision was reached, not three parallel dicts that can drift.
---
--- A node's identity is (run_id, dedup_key): two specialists that surface the
--- same fact collapse to ONE node, which is what makes the multi-parent DAG hold
--- (a priced option that two leads both point at is one option, not two). The
--- whole feature is flag-gated (AERA_GRAPH) and written through fail-open, so a
--- graph error can never break a handling that already works without it.
-CREATE TABLE IF NOT EXISTS graph_nodes (
-  node_id    TEXT PRIMARY KEY,
-  run_id     TEXT NOT NULL REFERENCES runs(id),
-  kind       TEXT NOT NULL,            -- event | lead | fact | option | ruling
-  state      TEXT,                     -- lead: open|claimed|worked|capped|blocked|stopped
-  label      TEXT,
-  subject    TEXT,                     -- the material / option id / supplier a node is about
-  lead_key   TEXT,                     -- kind='lead' mirrors the claimable frontier key
-  origin     TEXT,                     -- kind='fact' carries provenance: live|cached|derived|modelled|missing
-  source     TEXT,                     -- where the fact came from ("API_MATERIAL_STOCK_SRV", "references/")
-  dedup_key  TEXT NOT NULL,            -- canonical identity for multi-parent DAG dedup
-  payload    TEXT,                     -- JSON: the node's value / detail
-  priority   INTEGER,
-  -- Claim bookkeeping so a 'lead' node can BE the atomic claimable frontier.
-  -- owner = the specialist that CAS-claimed it; the counters bound the chain so
-  -- a recursive spawn can never loop forever.
-  owner        TEXT,
-  attempts     INTEGER NOT NULL DEFAULT 0,
-  dispatches   INTEGER NOT NULL DEFAULT 0,
-  revived_once INTEGER NOT NULL DEFAULT 0,
-  claimed_at   TEXT,
-  created_at   TEXT NOT NULL,
-  updated_at   TEXT NOT NULL,
-  UNIQUE(run_id, dedup_key)
-);
-CREATE INDEX IF NOT EXISTS idx_graph_nodes_run ON graph_nodes(run_id, kind);
--- the atomic claim + frontier-depth queries filter by (run_id, kind, state).
-CREATE INDEX IF NOT EXISTS idx_graph_nodes_claim ON graph_nodes(run_id, kind, state);
-
-CREATE TABLE IF NOT EXISTS graph_edges (
-  run_id     TEXT NOT NULL REFERENCES runs(id),
-  src        TEXT NOT NULL,            -- ancestor node_id
-  rel        TEXT NOT NULL,            -- spawns | derived_from | yields | rules_on | covers
-  dst        TEXT NOT NULL,            -- descendant node_id
-  created_at TEXT NOT NULL,
-  PRIMARY KEY (run_id, src, rel, dst)
-);
-CREATE INDEX IF NOT EXISTS idx_graph_edges_run ON graph_edges(run_id);
 """
 
 
@@ -302,33 +331,17 @@ def new_id(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex[:12]}"
 
 
-# Columns that arrived after a database already existed. CREATE TABLE IF NOT
-# EXISTS will not add a column to a table that is already there, so each one is
-# applied on connect and the duplicate error is the normal outcome.
-ADDED_LATER = [
-    ("uploads", "synthetic", "INTEGER NOT NULL DEFAULT 0"),
-    # What actually happened after the action was sent. Without these the
-    # record says what was decided and never what it cost in the end, so the
-    # memory Otto reads is a memory of intentions.
-    ("actions", "outcome", "TEXT"),
-    ("actions", "outcome_at", "TEXT"),
-    ("actions", "outcome_detail", "TEXT"),
-    # What a message carries and what it answers to. Attachments are named, as
-    # JSON ({"report": run_id | "portfolio", "format": "pdf"}), and rendered
-    # when sent, so the outbox holds no copies of reports. action_id ties an
-    # outreach message to the approved action it delivers; reference is the
-    # id the mail server gave it, the proof it went.
-    ("notifications", "attachments", "TEXT"),
-    ("notifications", "action_id", "TEXT"),
-    ("notifications", "reference", "TEXT"),
-    # Who a contact is beyond an inbox: how to reach them when an alert needs
-    # an answer now, and what they do. None of it is sent anywhere by AERA.
-    ("contacts", "phone", "TEXT"),
-    ("contacts", "title", "TEXT"),
-    ("contacts", "department", "TEXT"),
-    ("contacts", "notes", "TEXT"),
-    ("contacts", "updated_at", "TEXT"),
-]
+def _j(v: Any) -> str:
+    return json.dumps(v, ensure_ascii=False, default=str)
+
+
+def _load(v: Optional[str], default: Any = None) -> Any:
+    if v is None or v == "":
+        return default
+    try:
+        return json.loads(v)
+    except (TypeError, ValueError):
+        return default
 
 
 @contextmanager
@@ -341,82 +354,181 @@ def connect() -> Iterator[sqlite3.Connection]:
     c.execute("PRAGMA journal_mode = WAL")
     try:
         c.executescript(SCHEMA)
-        # An older database still names the document column after the ERP it
-        # was once posted to.
-        try:
-            c.execute("ALTER TABLE actions RENAME COLUMN sap_reference TO reference")
-        except sqlite3.OperationalError:
-            pass                          # already renamed, or a fresh database
-        for table, column, decl in ADDED_LATER:
-            try:
-                c.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
-            except sqlite3.OperationalError:
-                pass                      # already there, which is the usual case
         yield c
         c.commit()
     finally:
         c.close()
 
 
-# --------------------------------------------------------------------- events
-def record_event(kind: str, title: str, trigger: str, payload: dict, source: str) -> str:
-    eid = new_id("evt")
+# ------------------------------------------------------------------- business
+def active_profile() -> Optional[Dict[str, Any]]:
+    """The business profile in force, with its version, or None before onboarding."""
     with connect() as c:
-        c.execute(
-            "INSERT INTO events (id, kind, title, trigger, payload, received_at, source)"
-            " VALUES (?,?,?,?,?,?,?)",
-            (eid, kind, title, trigger, json.dumps(payload, ensure_ascii=False), _now(), source),
-        )
-    return eid
+        r = c.execute("SELECT * FROM business WHERE active=1 ORDER BY version DESC LIMIT 1").fetchone()
+    if not r:
+        return None
+    return {**_load(r["profile"], {}), "_version": r["version"], "_changed_by": r["changed_by"],
+            "_at": r["at"]}
 
 
-def event_exists(title: str, trigger: str, within_days: Optional[int] = None) -> bool:
-    """Has this exact signal already been recorded?
-
-    A feed reports the same quake for hours, so a watcher that polls every few
-    minutes would raise it again on every pass. Title and trigger together are
-    the signal's natural identity: the trigger carries the source's own
-    timestamp, so a genuinely new event never collides with an old one.
-    """
-    sql = "SELECT 1 FROM events WHERE title=? AND trigger=? "
-    args: List[Any] = [title, trigger]
-    if within_days is not None:
-        # A standing risk is not news every week, but it is news again if it is
-        # still there months later. Without a window a one-off suppression
-        # becomes permanent silence about a problem nobody fixed.
-        sql += "AND received_at >= ? "
-        args.append((datetime.now(timezone.utc) - timedelta(days=within_days)).isoformat())
+def save_profile(profile: Dict[str, Any], by: str, note: str = "") -> int:
+    """Write a new version and make it the only active one. Returns the version."""
+    clean = {k: v for k, v in profile.items() if not k.startswith("_")}
     with connect() as c:
-        row = c.execute(sql + "LIMIT 1", args).fetchone()
-    return row is not None
+        c.execute("UPDATE business SET active=0 WHERE active=1")
+        cur = c.execute("INSERT INTO business (profile, active, changed_by, note, at) VALUES (?,?,?,?,?)",
+                        (_j(clean), 1, by, note or None, _now()))
+        return int(cur.lastrowid)
+
+
+def profile_history(limit: int = 20) -> List[Dict[str, Any]]:
+    with connect() as c:
+        rows = c.execute("SELECT version, active, changed_by, note, at FROM business"
+                         " ORDER BY version DESC LIMIT ?", (limit,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+# --------------------------------------------------------------------- agents
+_AGENT_JSON = ("capabilities",)
+
+
+def _agent(r: sqlite3.Row) -> Dict[str, Any]:
+    d = dict(r)
+    d["capabilities"] = _load(d.get("capabilities"), [])
+    d["core"], d["veto"] = bool(d["core"]), bool(d["veto"])
+    return d
+
+
+def list_agents(include_inactive: bool = False) -> List[Dict[str, Any]]:
+    sql = "SELECT * FROM agents" + ("" if include_inactive else " WHERE status='active'")
+    with connect() as c:
+        rows = c.execute(sql + " ORDER BY core DESC, code").fetchall()
+    return [_agent(r) for r in rows]
+
+
+def get_agent(code: str) -> Optional[Dict[str, Any]]:
+    with connect() as c:
+        r = c.execute("SELECT * FROM agents WHERE code=?", (code,)).fetchone()
+    return _agent(r) if r else None
+
+
+def upsert_agent(a: Dict[str, Any], by: str) -> Dict[str, Any]:
+    """Insert, or update and bump the version when anything that matters changed."""
+    fields = ("nickname", "title", "brief", "role", "core", "veto", "prompt", "capabilities",
+              "effort", "status", "origin")
+    vals = {k: a.get(k) for k in fields}
+    vals["capabilities"] = _j(list(a.get("capabilities") or []))
+    vals["core"], vals["veto"] = int(bool(a.get("core"))), int(bool(a.get("veto")))
+    vals["effort"] = vals["effort"] or "medium"
+    vals["status"] = vals["status"] or "active"
+    vals["origin"] = vals["origin"] or "composer"
+    with connect() as c:
+        old = c.execute("SELECT * FROM agents WHERE code=?", (a["code"],)).fetchone()
+        if old is None:
+            c.execute("INSERT INTO agents (code," + ",".join(fields) + ", version, updated_by, updated_at)"
+                      " VALUES (?," + ",".join("?" * len(fields)) + ",1,?,?)",
+                      (a["code"], *[vals[k] for k in fields], by, _now()))
+        else:
+            changed = any(str(old[k]) != str(vals[k]) for k in fields)
+            if changed:
+                c.execute("UPDATE agents SET " + ", ".join(f"{k}=?" for k in fields)
+                          + ", version=version+1, updated_by=?, updated_at=? WHERE code=?",
+                          (*[vals[k] for k in fields], by, _now(), a["code"]))
+        return _agent(c.execute("SELECT * FROM agents WHERE code=?", (a["code"],)).fetchone())
+
+
+def set_agent_status(code: str, status: str, by: str) -> Optional[Dict[str, Any]]:
+    if status not in ("active", "draft", "disabled"):
+        raise ValueError(f"unknown status {status!r}")
+    with connect() as c:
+        r = c.execute("SELECT core FROM agents WHERE code=?", (code,)).fetchone()
+        if r is None:
+            return None
+        if r["core"] and status != "active":
+            raise ValueError(f"'{code}' is a core role and cannot be {status}")
+        c.execute("UPDATE agents SET status=?, version=version+1, updated_by=?, updated_at=?"
+                  " WHERE code=?", (status, by, _now(), code))
+    return get_agent(code)
+
+
+def delete_agent(code: str) -> bool:
+    with connect() as c:
+        r = c.execute("SELECT core FROM agents WHERE code=?", (code,)).fetchone()
+        if r is None or r["core"]:
+            return False
+        c.execute("DELETE FROM agents WHERE code=?", (code,))
+    return True
+
+
+# ----------------------------------------------------------------- work items
+def record_work_item(kind: str, title: str, source: str, payload: dict,
+                     dedup_key: Optional[str] = None) -> Optional[str]:
+    """Write a work item. A dedup_key already on record returns None: the same
+    paid order or the same inbound message is never worked twice."""
+    wid = new_id("wrk")
+    with connect() as c:
+        try:
+            c.execute("INSERT INTO work_items (id, kind, title, source, payload, dedup_key, status,"
+                      " received_at) VALUES (?,?,?,?,?,?,?,?)",
+                      (wid, kind, title, source, _j(payload), dedup_key, "new", _now()))
+        except sqlite3.IntegrityError:
+            return None
+    return wid
+
+
+def get_work_item(wid: str) -> Optional[Dict[str, Any]]:
+    with connect() as c:
+        r = c.execute("SELECT * FROM work_items WHERE id=?", (wid,)).fetchone()
+    return dict(r) | {"payload": _load(r["payload"], {})} if r else None
+
+
+def set_work_status(wid: str, status: str) -> None:
+    with connect() as c:
+        c.execute("UPDATE work_items SET status=? WHERE id=?", (status, wid))
+
+
+def list_work_items(limit: int = 100, status: Optional[str] = None) -> List[Dict[str, Any]]:
+    sql, args = "SELECT w.*, (SELECT r.id FROM runs r WHERE r.work_item_id=w.id ORDER BY r.started_at DESC LIMIT 1) AS run_id FROM work_items w", []
+    if status:
+        sql += " WHERE w.status=?"
+        args.append(status)
+    with connect() as c:
+        rows = c.execute(sql + " ORDER BY w.received_at DESC LIMIT ?", (*args, limit)).fetchall()
+    return [dict(r) | {"payload": _load(r["payload"], {})} for r in rows]
+
+
+def next_new_work_item() -> Optional[Dict[str, Any]]:
+    """Claim the oldest new item (atomic: the UPDATE only wins once)."""
+    with connect() as c:
+        r = c.execute("SELECT id FROM work_items WHERE status='new' ORDER BY received_at LIMIT 1").fetchone()
+        if not r:
+            return None
+        won = c.execute("UPDATE work_items SET status='running' WHERE id=? AND status='new'",
+                        (r["id"],)).rowcount
+    return get_work_item(r["id"]) if won else None
 
 
 # ----------------------------------------------------------------------- runs
-def start_run(event_id: str, mode: str) -> str:
+def start_run(work_item_id: str, team_version: Optional[dict] = None,
+              profile_version: Optional[int] = None) -> str:
     rid = new_id("run")
     with connect() as c:
-        c.execute("INSERT INTO runs (id, event_id, mode, status, started_at) VALUES (?,?,?,?,?)",
-                  (rid, event_id, mode, "running", _now()))
+        c.execute("INSERT INTO runs (id, work_item_id, status, started_at, team_version, profile_version)"
+                  " VALUES (?,?,?,?,?,?)",
+                  (rid, work_item_id, "running", _now(), _j(team_version or {}), profile_version))
+        c.execute("UPDATE work_items SET status='running' WHERE id=?", (work_item_id,))
     return rid
 
 
 def close_run(run_id: str, status: str, decision: Optional[dict] = None,
-              error: Optional[str] = None, cost_idr: int = 0) -> None:
+              error: Optional[str] = None, cost_usd: float = 0.0) -> None:
     with connect() as c:
-        c.execute(
-            "UPDATE runs SET status=?, finished_at=?, decision=?, error=?, token_cost_idr=?"
-            " WHERE id=?",
-            (status, _now(),
-             json.dumps(decision, ensure_ascii=False) if decision else None,
-             error, cost_idr, run_id),
-        )
-        if status in ("failed", "held"):
-            # Nothing was carried out, so nothing should stay reserved. A run
-            # that ends 'done' keeps its holds: the stock really is spoken for
-            # until the move is confirmed, and record_outcome lets it go.
-            c.execute("UPDATE reservations SET released_at=?, released_why=?"
-                      " WHERE run_id=? AND released_at IS NULL",
-                      (_now(), f"run {status}", run_id))
+        c.execute("UPDATE runs SET status=?, finished_at=?, decision=?, error=?, cost_usd=? WHERE id=?",
+                  (status, _now(), _j(decision) if decision else None, error, float(cost_usd or 0), run_id))
+        r = c.execute("SELECT work_item_id FROM runs WHERE id=?", (run_id,)).fetchone()
+        if r:
+            ws = {"done": "done", "partial": "done", "held": "held"}.get(status, "failed")
+            c.execute("UPDATE work_items SET status=? WHERE id=?", (ws, r["work_item_id"]))
 
 
 def save_step(run_id: str, s: dict) -> None:
@@ -425,219 +537,122 @@ def save_step(run_id: str, s: dict) -> None:
             "INSERT INTO steps (run_id, seq, stage, agent, agent_name, summary,"
             " tools, origin, source, detail, at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             (run_id, s["seq"], s["stage"], s["agent"], s["agent_name"], s["summary"],
-             json.dumps(s["tools"], ensure_ascii=False), s.get("origin"), s.get("source"),
-             json.dumps(s.get("detail", {}), ensure_ascii=False), s["at"]),
+             _j(s["tools"]), s.get("origin"), s.get("source"), _j(s.get("detail", {})), s["at"]),
         )
+
+
+def list_runs(limit: int = 50) -> List[dict]:
+    with connect() as c:
+        rows = c.execute(
+            "SELECT r.*, w.title, w.kind, w.source AS work_source,"
+            " (SELECT count(*) FROM steps s WHERE s.run_id = r.id) AS step_count,"
+            " (SELECT count(*) FROM steps s WHERE s.run_id = r.id AND s.stage = 'TOOL') AS tool_count,"
+            " (SELECT count(*) FROM actions a WHERE a.run_id = r.id) AS action_count,"
+            " (SELECT count(*) FROM tee_proofs t WHERE t.run_id = r.id AND t.verdict='attested') AS attested,"
+            " (SELECT count(*) FROM tee_proofs t WHERE t.run_id = r.id) AS proofs"
+            " FROM runs r JOIN work_items w ON w.id = r.work_item_id"
+            " ORDER BY r.started_at DESC LIMIT ?", (limit,)).fetchall()
+    return [dict(r) | {"decision": _load(r["decision"]), "team_version": _load(r["team_version"], {})}
+            for r in rows]
+
+
+def get_run(run_id: str) -> Optional[dict]:
+    with connect() as c:
+        r = c.execute(
+            "SELECT r.*, w.title, w.kind, w.source AS work_source, w.payload AS work_payload"
+            " FROM runs r JOIN work_items w ON w.id = r.work_item_id WHERE r.id=?",
+            (run_id,)).fetchone()
+        if not r:
+            return None
+        steps = c.execute("SELECT * FROM steps WHERE run_id=? ORDER BY seq", (run_id,)).fetchall()
+        actions = c.execute("SELECT * FROM actions WHERE run_id=? ORDER BY created_at", (run_id,)).fetchall()
+        approvals = c.execute(
+            "SELECT p.* FROM approvals p JOIN actions a ON a.id = p.action_id"
+            " WHERE a.run_id=? ORDER BY p.at", (run_id,)).fetchall()
+        checks = c.execute("SELECT * FROM guardian_checks WHERE run_id=? ORDER BY at", (run_id,)).fetchall()
+    return {
+        **dict(r),
+        "work_payload": _load(r["work_payload"], {}),
+        "decision": _load(r["decision"]),
+        "team_version": _load(r["team_version"], {}),
+        "steps": [dict(s) | {"tools": _load(s["tools"], []), "detail": _load(s["detail"], {})} for s in steps],
+        "actions": [_action(a) for a in actions],
+        "approvals": [dict(p) for p in approvals],
+        "guardian": [_check(x) for x in checks],
+        "proofs": proofs_for_run(run_id),
+    }
 
 
 # -------------------------------------------------------------------- actions
-def record_action(run_id: str, idempotency_key: str, kind: str,
-                  autonomous: bool, payload: dict,
-                  status: Optional[str] = None) -> Dict[str, Any]:
-    """Idempotent: the same key never produces a second action.
+def _action(r: sqlite3.Row) -> Dict[str, Any]:
+    return dict(r) | {"payload": _load(r["payload"], {}),
+                      "outcome_detail": _load(r["outcome_detail"]),
+                      "autonomous": bool(r["autonomous"])}
 
-    `status` is what it starts as. By default `pending`, waiting for a person,
-    or `sent` for an autonomous record that is done once written. An
-    autonomous action that still has to be issued starts `approved` instead
-    (tools/execution.raise_action), and only issuing it makes it `sent`.
-    """
+
+def record_action(run_id: str, idempotency_key: str, kind: str, autonomous: bool,
+                  payload: dict, value_usd: float = 0.0, status: Optional[str] = None,
+                  reason: Optional[str] = None) -> Dict[str, Any]:
+    """Idempotent: the same key never produces a second action."""
     with connect() as c:
-        existing = c.execute("SELECT * FROM actions WHERE idempotency_key=?",
-                             (idempotency_key,)).fetchone()
+        existing = c.execute("SELECT * FROM actions WHERE idempotency_key=?", (idempotency_key,)).fetchone()
         if existing:
-            return dict(existing) | {"repeated": True}
+            return _action(existing) | {"repeated": True}
         aid = new_id("act")
         c.execute(
-            "INSERT INTO actions (id, run_id, idempotency_key, kind, autonomous, payload,"
-            " status, created_at) VALUES (?,?,?,?,?,?,?,?)",
-            (aid, run_id, idempotency_key, kind, int(autonomous),
-             json.dumps(payload, ensure_ascii=False),
-             status or ("sent" if autonomous else "pending"), _now()),
-        )
-        row = c.execute("SELECT * FROM actions WHERE id=?", (aid,)).fetchone()
-        return dict(row) | {"repeated": False}
+            "INSERT INTO actions (id, run_id, idempotency_key, kind, autonomous, value_usd, payload,"
+            " status, reason, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (aid, run_id, idempotency_key, kind, int(autonomous), float(value_usd), _j(payload),
+             status or ("approved" if autonomous else "pending"), reason, _now()))
+        return _action(c.execute("SELECT * FROM actions WHERE id=?", (aid,)).fetchone()) | {"repeated": False}
 
 
-# ------------------------------------------------------------- reservations
-def reserve(run_id: str, material: str, plant: str, qty: float,
-            action_id: Optional[str] = None) -> str:
-    """Hold stock at the donor plant so a second handling cannot promise it too.
-
-    Two disruptions running at once both read the same on-hand figure and both
-    conclude SBY1 can spare 55 t. Each is right on its own and they are wrong
-    together. A hold is what makes the second one see the first.
-    """
-    rid = new_id("res")
+def get_action(action_id: str) -> Optional[dict]:
     with connect() as c:
-        c.execute("INSERT INTO reservations (id, run_id, action_id, material, plant,"
-                  " qty, created_at) VALUES (?,?,?,?,?,?,?)",
-                  (rid, run_id, action_id, material, plant, float(qty), _now()))
-    return rid
+        r = c.execute("SELECT * FROM actions WHERE id=?", (action_id,)).fetchone()
+    return _action(r) if r else None
 
 
-def reserved_qty(material: str, plant: str, excluding_run: Optional[str] = None) -> float:
-    """How much of this material at this plant is already spoken for.
-
-    `excluding_run` lets a handling see the world without its own holds, so
-    re-assessing its own transfer does not subtract the stock twice.
-    """
-    sql = ("SELECT COALESCE(SUM(qty), 0) t FROM reservations"
-           " WHERE material=? AND plant=? AND released_at IS NULL")
-    args: List[Any] = [material, plant]
-    if excluding_run:
-        sql += " AND run_id<>?"
-        args.append(excluding_run)
+def list_actions(status: Optional[str] = None, kind: Optional[str] = None,
+                 limit: int = 100) -> List[Dict[str, Any]]:
+    where, args = [], []
+    if status:
+        where.append("a.status=?")
+        args.append(status)
+    if kind:
+        where.append("a.kind=?")
+        args.append(kind)
+    sql = ("SELECT a.*, w.title AS work_title FROM actions a JOIN runs r ON r.id=a.run_id"
+           " JOIN work_items w ON w.id=r.work_item_id")
+    if where:
+        sql += " WHERE " + " AND ".join(where)
     with connect() as c:
-        return float(c.execute(sql, args).fetchone()["t"])
+        rows = c.execute(sql + " ORDER BY a.created_at DESC LIMIT ?", (*args, limit)).fetchall()
+    return [_action(r) | {"work_title": r["work_title"]} for r in rows]
 
 
-def release_reservations(why: str, run_id: Optional[str] = None,
-                         action_id: Optional[str] = None) -> int:
-    """Let held stock go. Returns how many holds were lifted."""
-    if not (run_id or action_id):
-        raise ValueError("release what? pass run_id or action_id")
-    sql = "UPDATE reservations SET released_at=?, released_why=? WHERE released_at IS NULL"
-    args: List[Any] = [_now(), why]
-    if action_id:
-        sql += " AND action_id=?"
-        args.append(action_id)
-    else:
-        sql += " AND run_id=?"
-        args.append(run_id)
+#: Status moves forward only. Anything else is a bug, not an update.
+_FORWARD = {
+    "pending": {"approved", "rejected", "blocked"},
+    "approved": {"sent", "failed", "blocked"},
+    "sent": set(),
+    "failed": {"approved"},          # a resend after a fix is a fresh approval
+    "rejected": set(),
+    "blocked": set(),
+}
+
+
+def move_action(action_id: str, status: str, reference: Optional[str] = None,
+                reason: Optional[str] = None) -> Optional[Dict[str, Any]]:
     with connect() as c:
-        return c.execute(sql, args).rowcount
-
-
-def open_reservations(material: Optional[str] = None) -> List[dict]:
-    sql = "SELECT * FROM reservations WHERE released_at IS NULL"
-    args: List[Any] = []
-    if material:
-        sql += " AND material=?"
-        args.append(material)
-    with connect() as c:
-        return [dict(r) for r in c.execute(sql + " ORDER BY created_at", args)]
-
-
-OUTCOMES = ("delivered", "late", "short", "failed", "cancelled")
-
-#: The one key engine/report.py reads as the realized cost. Declared here so the
-#: agent tool and the HTTP route cannot each invent their own spelling.
-REALIZED_COST_KEY = "actual_idr"
-
-#: Action kinds that have a real-world result worth asking about. `notify` is
-#: deliberately absent: an internal message has no realized cost, and chasing
-#: one would teach people to ignore the chase.
-AWAITS_OUTCOME = ("stock_transfer", "draft_po", "monitor",
-                  "customer_notice", "supplier_request")
-
-
-def outcome_detail(note: str = "", actual_cost_idr: Optional[float] = None,
-                   recorded_by: str = "") -> Optional[Dict[str, Any]]:
-    """Build the `detail` document for `record_outcome`. Deterministic.
-
-    The realized cost travels as a number or not at all. A string raises here
-    rather than being coerced, and `note` is never scanned for a figure: in
-    Indonesian "Rp 24,5 jt" and "24.500.000" put the same digits a thousand
-    apart, so any parser would have to guess a scale, and a guessed rupiah
-    figure that reaches a portfolio tile is indistinguishable from a read one.
-    That is the single thing this system refuses to do.
-
-    `recorded_by` says who read reality, which is what makes the figure
-    admissible as a reading rather than as somebody's arithmetic.
-    """
-    doc: Dict[str, Any] = {}
-    if note:
-        doc["note"] = note
-    if actual_cost_idr is not None:
-        # bool is an int in Python; True is not a cost.
-        if isinstance(actual_cost_idr, bool) or not isinstance(actual_cost_idr, (int, float)):
-            raise ValueError(
-                f"a realized cost must be a number, not {actual_cost_idr!r}. "
-                "Pass the figure itself, or leave it out and the report will say "
-                "the realized cost is not known.")
-        if actual_cost_idr < 0:
-            raise ValueError(f"a realized cost cannot be negative: {actual_cost_idr!r}")
-        doc[REALIZED_COST_KEY] = float(actual_cost_idr)
-    if recorded_by:
-        doc["recorded_by"] = recorded_by
-    return doc or None
-
-
-def record_outcome(action_id: str, outcome: str, detail: Optional[dict] = None) -> Dict[str, Any]:
-    """What actually happened after the action was sent.
-
-    This is the half of the record that was missing. Everything else here says
-    what was decided and on what evidence; without this nothing says whether
-    the decision worked, so the system could run for a year and learn nothing.
-
-    Written once, like an approval. A correction is a new reading of reality,
-    not an edit of the old one, so a second call is refused rather than
-    silently overwriting what the first one saw.
-    """
-    if outcome not in OUTCOMES:
-        raise ValueError(f"outcome must be one of {', '.join(OUTCOMES)}, not {outcome!r}")
-    with connect() as c:
-        row = c.execute("SELECT * FROM actions WHERE id=?", (action_id,)).fetchone()
-        if not row:
-            raise KeyError(action_id)
-        if row["outcome"]:
-            return dict(row) | {"repeated": True}
-        if row["status"] not in ("sent", "approved"):
-            raise ValueError(f"action {action_id} is {row['status']}: "
-                             "nothing was sent, so nothing can have happened to it")
-        c.execute("UPDATE actions SET outcome=?, outcome_at=?, outcome_detail=? WHERE id=?",
-                  (outcome, _now(), json.dumps(detail or {}, ensure_ascii=False), action_id))
-        # The move has now either happened or not. Either way the stock records
-        # are the truth from here, so the hold has nothing left to protect.
-        c.execute("UPDATE reservations SET released_at=?, released_why=?"
-                  " WHERE action_id=? AND released_at IS NULL",
-                  (_now(), f"outcome {outcome}", action_id))
-        return dict(c.execute("SELECT * FROM actions WHERE id=?",
-                              (action_id,)).fetchone()) | {"repeated": False}
-
-
-def actions_awaiting_outcome(older_than_days: int = 0) -> List[Dict[str, Any]]:
-    """Actions that went out and whose real result nobody has written down yet.
-
-    The loop that makes this system learn is closed by hand: nothing here polls
-    a carrier or a stock system to discover a receipt, and inventing one would be worse
-    than an empty column. So the open half of the record is made visible
-    instead, and the daily digest asks for it. Oldest first, because the one
-    sent three weeks ago is the one whose outcome is about to be forgotten.
-
-    The `status IN ('sent','approved') AND outcome IS NULL` test is a literal
-    mirror of the guard inside `record_outcome`. If the two drift, this offers
-    a thing the store would then refuse. The kind filter is narrower on purpose
-    (see AWAITS_OUTCOME), so the two rules sit next to each other here.
-    """
-    cutoff = ""
-    if older_than_days > 0:
-        cutoff = (datetime.now(timezone.utc)
-                  - timedelta(days=older_than_days)).isoformat(timespec="seconds")
-    marks = ",".join("?" * len(AWAITS_OUTCOME))
-    with connect() as c:
-        rows = c.execute(
-            "SELECT a.id, a.run_id, a.kind, a.payload, a.status, a.reference,"
-            "       a.created_at, e.title, e.kind AS event_kind"
-            " FROM actions a JOIN runs r ON r.id = a.run_id"
-            " JOIN events e ON e.id = r.event_id"
-            " WHERE a.status IN ('sent','approved') AND a.outcome IS NULL"
-            f" AND a.kind IN ({marks})"
-            + (" AND a.created_at <= ?" if cutoff else "")
-            + " ORDER BY a.created_at",
-            AWAITS_OUTCOME + ((cutoff,) if cutoff else ())).fetchall()
-
-    now = datetime.now(timezone.utc)
-    out = []
-    for r in rows:
-        waiting = None
-        try:
-            waiting = (now - datetime.fromisoformat(r["created_at"])).days
-        except (TypeError, ValueError):       # a stamp we cannot read is not a crash
-            pass
-        out.append(dict(r) | {"payload": json.loads(r["payload"]),
-                              "days_waiting": waiting})
-    return out
+        a = c.execute("SELECT status FROM actions WHERE id=?", (action_id,)).fetchone()
+        if a is None:
+            return None
+        if status != a["status"] and status not in _FORWARD.get(a["status"], set()):
+            raise ValueError(f"action {action_id} cannot go from {a['status']} to {status}")
+        c.execute("UPDATE actions SET status=?, reference=COALESCE(?, reference),"
+                  " reason=COALESCE(?, reason) WHERE id=?", (status, reference, reason, action_id))
+    return get_action(action_id)
 
 
 def decide_action(action_id: str, decided_by: str, role: str, decision: str,
@@ -650,231 +665,249 @@ def decide_action(action_id: str, decided_by: str, role: str, decision: str,
         if not a:
             raise KeyError(action_id)
         if a["status"] != "pending":
-            return dict(a) | {"unchanged": True}
+            return _action(a) | {"unchanged": True}
         c.execute("INSERT INTO approvals (action_id, decided_by, role, decision, note, at)"
                   " VALUES (?,?,?,?,?,?)", (action_id, decided_by, role, decision, note, _now()))
         c.execute("UPDATE actions SET status=? WHERE id=?", (nxt[decision], action_id))
-        if decision == "rejected":
-            # The move is not happening, so the donor's stock belongs to
-            # whoever needs it next. Held inside this transaction so a
-            # rejection never leaves tonnes locked by an action that died.
-            c.execute("UPDATE reservations SET released_at=?, released_why=?"
-                      " WHERE action_id=? AND released_at IS NULL",
-                      (_now(), "action rejected", action_id))
-        return dict(c.execute("SELECT * FROM actions WHERE id=?", (action_id,)).fetchone())
+        return _action(c.execute("SELECT * FROM actions WHERE id=?", (action_id,)).fetchone())
 
 
-# --------------------------------------------------------------------- reads
-def list_runs(limit: int = 50) -> List[dict]:
+def record_outcome(action_id: str, outcome: str, detail: Optional[dict] = None) -> Dict[str, Any]:
     with connect() as c:
-        rows = c.execute(
-            "SELECT r.*, e.title, e.kind, e.trigger,"
-            " (SELECT count(*) FROM steps s WHERE s.run_id = r.id) AS step_count,"
-            " (SELECT count(*) FROM steps s WHERE s.run_id = r.id AND s.stage = 'TOOL') AS tool_count,"
-            " (SELECT count(*) FROM actions a WHERE a.run_id = r.id) AS action_count"
-            " FROM runs r JOIN events e ON e.id = r.event_id"
-            " ORDER BY r.started_at DESC LIMIT ?", (limit,)).fetchall()
-    return [dict(r) | {"decision": json.loads(r["decision"]) if r["decision"] else None}
-            for r in rows]
+        if not c.execute("SELECT 1 FROM actions WHERE id=?", (action_id,)).fetchone():
+            raise KeyError(action_id)
+        c.execute("UPDATE actions SET outcome=?, outcome_detail=?, outcome_at=? WHERE id=?",
+                  (outcome, _j(detail or {}), _now(), action_id))
+    return get_action(action_id) or {}
 
 
-def past_incidents(terms: List[str], limit: int = 5) -> tuple[List[dict], int]:
-    """Handled disruptions, ranked by how many of `terms` they mention.
-
-    Returns the matches AND the number of finished runs on record, because
-    "we have never handled anything" and "we looked and nothing was
-    comparable" are different answers and only the first is a gap in the data.
-    The caller needs to tell them apart to label its result honestly.
-
-    What is searched includes how the handling ENDED, not only how it was
-    titled: the lead's recommendation and each action's outcome. An incident is
-    most worth finding for what came of it ("late", "short"), and that is
-    exactly the part a title never says.
-
-    # ponytail: ranks in Python over every finished run. Fine for a dozen
-    #           events a day; move to FTS5 when the table outgrows a scan.
-    """
+def spent_today_usd(kind: str = "payment") -> float:
+    """Autonomous money moved today (UTC), by this service, for the profile's daily cap."""
+    day = datetime.now(timezone.utc).date().isoformat()
     with connect() as c:
-        rows = c.execute(
-            "SELECT r.id AS run_id, r.status, r.mode, r.started_at, r.finished_at,"
-            "       r.token_cost_idr, r.decision, e.title, e.kind, e.trigger"
-            " FROM runs r JOIN events e ON e.id = r.event_id"
-            " WHERE r.finished_at IS NOT NULL"
-            " ORDER BY r.finished_at DESC").fetchall()
-        # One query for every action, grouped here: the haystack now needs the
-        # outcomes before anything is scored, and asking per run would be a
-        # query per finished run.
-        by_run: Dict[str, List[dict]] = {}
-        for a in c.execute(
-                "SELECT run_id, kind, payload, status, outcome, outcome_at, outcome_detail"
-                " FROM actions ORDER BY created_at").fetchall():
-            by_run.setdefault(a["run_id"], []).append({
-                "kind": a["kind"],
-                "payload": json.loads(a["payload"]),
-                "status": a["status"],
-                "outcome": a["outcome"],
-                "outcome_at": a["outcome_at"],
-                "outcome_detail": json.loads(a["outcome_detail"]) if a["outcome_detail"] else None,
-            })
-
-    total = len(rows)
-    scored = []
-    for r in rows:
-        # What was done, and what came of it. A precedent without its outcome
-        # only says what somebody decided, which is the part the system already
-        # knows it decided.
-        acts = by_run.get(r["run_id"], [])
-        decision = json.loads(r["decision"]) if r["decision"] else None
-        # Only the prose is searched, never the JSON around it: matching on the
-        # raw document would make every incident a hit for "recommendation".
-        said = " ".join(str(decision.get(k) or "") for k in ("recommendation", "reason")
-                        ) if isinstance(decision, dict) else ""
-        happened = " ".join(
-            f"{a['kind']} {a['outcome'] or ''} "
-            f"{(a['outcome_detail'] or {}).get('note') or ''}" for a in acts)
-        hay = f"{r['title']} {r['kind']} {r['trigger']} {said} {happened}".lower()
-        hits = sum(1 for t in terms if t in hay)
-        if not hits:
-            continue
-        scored.append((hits, dict(r) | {
-            "decision": decision,
-            "matched": hits,
-            "actions": acts,
-        }))
-
-    # Most terms matched first; the query already ordered by recency, and
-    # Python's sort is stable, so equal scores keep the newest incident on top.
-    scored.sort(key=lambda p: p[0], reverse=True)
-    return [row for _, row in scored[:limit]], total
+        r = c.execute("SELECT COALESCE(SUM(value_usd),0) FROM actions WHERE kind=? AND autonomous=1"
+                      " AND status IN ('approved','sent') AND substr(created_at,1,10)=?",
+                      (kind, day)).fetchone()
+    return float(r[0] or 0)
 
 
-def get_run(run_id: str) -> Optional[dict]:
+# ------------------------------------------------------------------- guardian
+def _check(r: sqlite3.Row) -> Dict[str, Any]:
+    return dict(r) | {"reasons": _load(r["reasons"], [])}
+
+
+def record_check(kind: str, subject: str, verdict: str, reasons: List[dict],
+                 run_id: Optional[str] = None, action_id: Optional[str] = None) -> Dict[str, Any]:
+    cid = new_id("chk")
     with connect() as c:
-        r = c.execute(
-            "SELECT r.*, e.title, e.kind, e.trigger, e.source AS signal_source"
-            " FROM runs r JOIN events e ON e.id = r.event_id WHERE r.id=?",
-            (run_id,)).fetchone()
-        if not r:
+        c.execute("INSERT INTO guardian_checks (id, run_id, action_id, kind, subject, verdict, reasons, at)"
+                  " VALUES (?,?,?,?,?,?,?,?)", (cid, run_id, action_id, kind, subject, verdict, _j(reasons), _now()))
+        return _check(c.execute("SELECT * FROM guardian_checks WHERE id=?", (cid,)).fetchone())
+
+
+def list_checks(limit: int = 100, verdict: Optional[str] = None) -> List[Dict[str, Any]]:
+    sql, args = "SELECT * FROM guardian_checks", []
+    if verdict:
+        sql += " WHERE verdict=?"
+        args.append(verdict)
+    with connect() as c:
+        rows = c.execute(sql + " ORDER BY at DESC LIMIT ?", (*args, limit)).fetchall()
+    return [_check(r) for r in rows]
+
+
+# ------------------------------------------------------------------- payments
+def _payment(r: sqlite3.Row) -> Dict[str, Any]:
+    return dict(r) | {"detail": _load(r["detail"], {})}
+
+
+def record_payment(direction: str, rail: str, counterparty: str, amount_usd: float, token: str,
+                   status: str, action_id: Optional[str] = None, request_id: Optional[str] = None,
+                   tx_hash: Optional[str] = None, detail: Optional[dict] = None) -> Dict[str, Any]:
+    pid = new_id("pay")
+    with connect() as c:
+        c.execute("INSERT INTO payments (id, action_id, direction, rail, request_id, counterparty, amount_usd,"
+                  " token, status, tx_hash, detail, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                  (pid, action_id, direction, rail, request_id, counterparty, float(amount_usd), token,
+                   status, tx_hash, _j(detail or {}), _now()))
+        return _payment(c.execute("SELECT * FROM payments WHERE id=?", (pid,)).fetchone())
+
+
+def update_payment(pid: str, status: str, tx_hash: Optional[str] = None,
+                   detail: Optional[dict] = None) -> Optional[Dict[str, Any]]:
+    settled = status in ("sent", "approved", "rejected", "failed")
+    with connect() as c:
+        old = c.execute("SELECT detail FROM payments WHERE id=?", (pid,)).fetchone()
+        if old is None:
             return None
-        steps = c.execute("SELECT * FROM steps WHERE run_id=? ORDER BY seq",
-                          (run_id,)).fetchall()
-        actions = c.execute("SELECT * FROM actions WHERE run_id=? ORDER BY created_at",
-                            (run_id,)).fetchall()
-        approvals = c.execute(
-            "SELECT p.* FROM approvals p JOIN actions a ON a.id = p.action_id"
-            " WHERE a.run_id=? ORDER BY p.at", (run_id,)).fetchall()
-    return {
-        **dict(r),
-        "decision": json.loads(r["decision"]) if r["decision"] else None,
-        "steps": [dict(s) | {"tools": json.loads(s["tools"]),
-                             "detail": json.loads(s["detail"])} for s in steps],
-        "actions": [dict(a) | {
-            "payload": json.loads(a["payload"]),
-            # Parsed here like `payload`, so a reader never has to know that one
-            # JSON column arrives decoded and the next one as a string.
-            "outcome_detail": json.loads(a["outcome_detail"]) if a["outcome_detail"] else None,
-        } for a in actions],
-        "approvals": [dict(p) for p in approvals],
-    }
+        merged = {**_load(old["detail"], {}), **(detail or {})}
+        c.execute("UPDATE payments SET status=?, tx_hash=COALESCE(?, tx_hash), detail=?,"
+                  " settled_at=CASE WHEN ? THEN ? ELSE settled_at END WHERE id=?",
+                  (status, tx_hash, _j(merged), int(settled), _now(), pid))
+        return _payment(c.execute("SELECT * FROM payments WHERE id=?", (pid,)).fetchone())
 
 
-def get_action(action_id: str) -> Optional[dict]:
+def payment_for_action(action_id: str) -> Optional[Dict[str, Any]]:
     with connect() as c:
-        r = c.execute("SELECT * FROM actions WHERE id=?", (action_id,)).fetchone()
-    return dict(r) | {"payload": json.loads(r["payload"])} if r else None
+        r = c.execute("SELECT * FROM payments WHERE action_id=? ORDER BY created_at DESC LIMIT 1",
+                      (action_id,)).fetchone()
+    return _payment(r) if r else None
 
 
-def mark_sent(action_id: str, reference: str) -> None:
-    """Called once an approved action has issued, with its document number."""
+def list_payments(limit: int = 200, status: Optional[str] = None) -> List[Dict[str, Any]]:
+    sql, args = "SELECT * FROM payments", []
+    if status:
+        sql += " WHERE status=?"
+        args.append(status)
     with connect() as c:
-        c.execute("UPDATE actions SET status='sent', reference=?"
-                  " WHERE id=? AND status='approved'",
-                  (reference, action_id))
+        rows = c.execute(sql + " ORDER BY created_at DESC LIMIT ?", (*args, limit)).fetchall()
+    return [_payment(r) for r in rows]
 
 
-# -------------------------------------------------------------------- uploads
-def save_upload(entity: str, filename: str, payload: list, uploaded_by: str,
-                synthetic: bool = False) -> dict:
-    uid = new_id("upl")
+# --------------------------------------------------------------------- orders
+def _order(r: sqlite3.Row) -> Dict[str, Any]:
+    return dict(r) | {"inputs": _load(r["inputs"], {}), "delivery": _load(r["delivery"])}
+
+
+def create_order(order_id: str, offering: str, amount_usd: float, inputs: dict,
+                 customer: Optional[str] = None, status: str = "awaiting_payment") -> Dict[str, Any]:
     with connect() as c:
-        c.execute("INSERT INTO uploads (id,entity,filename,rows,payload,uploaded_by,"
-                  "uploaded_at,synthetic) VALUES (?,?,?,?,?,?,?,?)",
-                  (uid, entity, filename, len(payload),
-                   json.dumps(payload, ensure_ascii=False), uploaded_by, _now(),
-                   int(synthetic)))
-    return {"id": uid, "entity": entity, "rows": len(payload), "synthetic": synthetic}
+        existing = c.execute("SELECT * FROM orders WHERE id=?", (order_id,)).fetchone()
+        if existing:
+            return _order(existing)
+        c.execute("INSERT INTO orders (id, offering, customer, inputs, amount_usd, status, created_at, updated_at)"
+                  " VALUES (?,?,?,?,?,?,?,?)",
+                  (order_id, offering, customer, _j(inputs), float(amount_usd), status, _now(), _now()))
+        return _order(c.execute("SELECT * FROM orders WHERE id=?", (order_id,)).fetchone())
 
 
-def latest_upload(entity: str) -> Optional[dict]:
-    """The most recent upload for one entity, if any."""
+def get_order(order_id: str) -> Optional[Dict[str, Any]]:
     with connect() as c:
-        r = c.execute("SELECT * FROM uploads WHERE entity=? ORDER BY uploaded_at DESC LIMIT 1",
-                      (entity,)).fetchone()
-    return dict(r) | {"payload": json.loads(r["payload"])} if r else None
+        r = c.execute("SELECT * FROM orders WHERE id=?", (order_id,)).fetchone()
+    return _order(r) if r else None
 
 
-#: How many rows of an upload a reader is handed at once. A file of 1,395
-#: quotations is normal, and sending all of it to a browser to fill a drawer
-#: nobody scrolls is a cost paid on every open.
-PREVIEW_ROWS = 200
+def update_order(order_id: str, **fields: Any) -> Optional[Dict[str, Any]]:
+    allowed = ("status", "customer", "work_item_id", "paid_tx", "delivery", "amount_usd")
+    sets = {k: (_j(v) if k == "delivery" else v) for k, v in fields.items() if k in allowed}
+    if sets:
+        with connect() as c:
+            c.execute("UPDATE orders SET " + ", ".join(f"{k}=?" for k in sets) + ", updated_at=? WHERE id=?",
+                      (*sets.values(), _now(), order_id))
+    return get_order(order_id)
 
 
-def get_upload(uid: str, limit: int = PREVIEW_ROWS) -> Optional[dict]:
-    """One upload with the first `limit` of its rows, for looking at.
-
-    The row count stays the file's own, not the number returned, so a reader
-    can tell a short file from a long one that was cut — a preview that quietly
-    renamed 1,395 rows to 200 would be the kind of small lie this system is
-    built to avoid.
-    """
+def list_orders(limit: int = 100, status: Optional[str] = None) -> List[Dict[str, Any]]:
+    sql, args = "SELECT * FROM orders", []
+    if status:
+        sql += " WHERE status=?"
+        args.append(status)
     with connect() as c:
-        r = c.execute("SELECT * FROM uploads WHERE id=?", (uid,)).fetchone()
-    if not r:
-        return None
-    rows = json.loads(r["payload"])
-    shown = rows[:limit] if limit else rows
-    return {k: r[k] for k in ("id", "entity", "filename", "rows", "uploaded_by",
-                              "uploaded_at", "synthetic")} | {
-        "columns": list(shown[0]) if shown else [],
-        "preview": shown,
-        "shown": len(shown),
-        "truncated": len(shown) < len(rows),
-    }
+        rows = c.execute(sql + " ORDER BY created_at DESC LIMIT ?", (*args, limit)).fetchall()
+    return [_order(r) for r in rows]
 
 
-def list_uploads() -> List[dict]:
+# ----------------------------------------------------------------- tee proofs
+def _proof(r: sqlite3.Row) -> Dict[str, Any]:
+    return dict(r) | {"checks": _load(r["checks"], [])}
+
+
+def record_proof(agent: str, model: str, chat_id: str, req_sha256: str, resp_sha256: str,
+                 run_id: Optional[str] = None, step_seq: Optional[int] = None) -> str:
+    pid = new_id("tee")
     with connect() as c:
-        rows = c.execute("SELECT id,entity,filename,rows,uploaded_by,uploaded_at,synthetic"
-                         " FROM uploads ORDER BY uploaded_at DESC LIMIT 50").fetchall()
+        c.execute("INSERT INTO tee_proofs (id, run_id, step_seq, agent, model, chat_id, req_sha256, resp_sha256,"
+                  " verdict, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                  (pid, run_id, step_seq, agent, model, chat_id, req_sha256, resp_sha256, "pending", _now()))
+    return pid
+
+
+def settle_proof(pid: str, verdict: str, checks: List[dict], signing_address: Optional[str]) -> None:
+    with connect() as c:
+        c.execute("UPDATE tee_proofs SET verdict=?, checks=?, signing_address=?, verified_at=? WHERE id=?",
+                  (verdict, _j(checks), signing_address, _now(), pid))
+
+
+def pending_proofs(limit: int = 20) -> List[Dict[str, Any]]:
+    with connect() as c:
+        rows = c.execute("SELECT * FROM tee_proofs WHERE verdict='pending' ORDER BY created_at LIMIT ?",
+                         (limit,)).fetchall()
+    return [_proof(r) for r in rows]
+
+
+def proofs_for_run(run_id: str) -> List[Dict[str, Any]]:
+    with connect() as c:
+        rows = c.execute("SELECT * FROM tee_proofs WHERE run_id=? ORDER BY created_at", (run_id,)).fetchall()
+    return [_proof(r) for r in rows]
+
+
+def proof_summary(days: int = 30) -> Dict[str, int]:
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    with connect() as c:
+        rows = c.execute("SELECT verdict, count(*) n FROM tee_proofs WHERE created_at >= ? GROUP BY verdict",
+                         (since,)).fetchall()
+    return {r["verdict"]: r["n"] for r in rows}
+
+
+# ---------------------------------------------------------------------- files
+FILE_MAX_CHARS = 200_000
+
+
+def save_file(name: str, mime: str, text: str, by: str) -> Dict[str, Any]:
+    fid = new_id("fil")
+    text = text[:FILE_MAX_CHARS]
+    with connect() as c:
+        c.execute("INSERT INTO files (id, name, mime, text, size, uploaded_by, uploaded_at) VALUES (?,?,?,?,?,?,?)",
+                  (fid, name, mime, text, len(text), by, _now()))
+    return {"id": fid, "name": name, "mime": mime, "size": len(text)}
+
+
+def list_files() -> List[Dict[str, Any]]:
+    with connect() as c:
+        rows = c.execute("SELECT id, name, mime, size, uploaded_by, uploaded_at FROM files"
+                         " ORDER BY uploaded_at DESC").fetchall()
     return [dict(r) for r in rows]
 
 
-def delete_upload(uid: str) -> bool:
+def get_file(fid_or_name: str) -> Optional[Dict[str, Any]]:
     with connect() as c:
-        n = c.execute("DELETE FROM uploads WHERE id=?", (uid,)).rowcount
-    return n > 0
+        r = c.execute("SELECT * FROM files WHERE id=? OR name=? ORDER BY uploaded_at DESC LIMIT 1",
+                      (fid_or_name, fid_or_name)).fetchone()
+    return dict(r) if r else None
+
+
+def delete_file(fid: str) -> bool:
+    with connect() as c:
+        return c.execute("DELETE FROM files WHERE id=?", (fid,)).rowcount > 0
 
 
 # ------------------------------------------------------------------- contacts
-def list_contacts() -> List[dict]:
+CONTACT_FIELDS = ("name", "role", "email", "notify_for", "near_account", "payout_chain",
+                  "payout_address", "phone", "title", "department", "notes")
+#: Changing one of these is changing where money goes. It is stamped, and the
+#: guardian treats a recent change as a reason to ask a person.
+PAYOUT_FIELDS = ("near_account", "payout_chain", "payout_address")
+
+
+def list_contacts(role: Optional[str] = None) -> List[dict]:
+    sql, args = "SELECT * FROM contacts WHERE active=1", []
+    if role:
+        sql += " AND role=?"
+        args.append(role)
     with connect() as c:
-        rows = c.execute("SELECT * FROM contacts WHERE active=1 ORDER BY role, name").fetchall()
+        rows = c.execute(sql + " ORDER BY role, name", args).fetchall()
     return [dict(r) for r in rows]
 
 
-#: What a contact carries besides name, role, email and the kinds they follow.
-CONTACT_DETAILS = ("phone", "title", "department", "notes")
-
-
-def add_contact(name: str, role: str, email: str, notify_for: str = "*",
+def add_contact(name: str, role: str, email: str = "", notify_for: str = "",
                 **details: Optional[str]) -> dict:
     cid = new_id("cnt")
-    extra = [details.get(k) or None for k in CONTACT_DETAILS]
+    vals = {"name": name, "role": role, "email": (email or "").lower(), "notify_for": notify_for or ""}
+    for k in CONTACT_FIELDS:
+        if k not in vals:
+            vals[k] = details.get(k) or None
     with connect() as c:
-        c.execute("INSERT INTO contacts (id,name,role,email,notify_for,created_at,"
-                  + ",".join(CONTACT_DETAILS) + ") VALUES (?,?,?,?,?,?,"
-                  + ",".join("?" * len(CONTACT_DETAILS)) + ")",
-                  (cid, name, role, email.lower(), notify_for, _now(), *extra))
+        c.execute("INSERT INTO contacts (id," + ",".join(CONTACT_FIELDS) + ", created_at) VALUES (?,"
+                  + ",".join("?" * len(CONTACT_FIELDS)) + ",?)", (cid, *[vals[k] for k in CONTACT_FIELDS], _now()))
         return dict(c.execute("SELECT * FROM contacts WHERE id=?", (cid,)).fetchone())
 
 
@@ -884,20 +917,33 @@ def get_contact(cid: str) -> Optional[dict]:
     return dict(r) if r else None
 
 
+def find_contact(term: str) -> List[dict]:
+    t = f"%{term.lower()}%"
+    with connect() as c:
+        rows = c.execute("SELECT * FROM contacts WHERE active=1 AND (lower(name) LIKE ? OR lower(email) LIKE ?"
+                         " OR lower(COALESCE(near_account,'')) LIKE ? OR id=?) ORDER BY name LIMIT 20",
+                         (t, t, t, term)).fetchall()
+    return [dict(r) for r in rows]
+
+
 def update_contact(cid: str, **fields: Optional[str]) -> Optional[dict]:
     """Change what is given; an empty string clears a detail."""
-    allowed = ("name", "role", "email", "notify_for") + CONTACT_DETAILS
     sets = {k: (v.lower() if k == "email" and v else (v or None))
-            for k, v in fields.items() if k in allowed and v is not None}
+            for k, v in fields.items() if k in CONTACT_FIELDS and v is not None}
     if sets:
         with connect() as c:
+            old = c.execute("SELECT * FROM contacts WHERE id=?", (cid,)).fetchone()
+            if old is None:
+                return None
+            payout_changed = any(k in PAYOUT_FIELDS and (old[k] or None) != sets[k] for k in sets)
             c.execute("UPDATE contacts SET " + ", ".join(f"{k}=?" for k in sets)
-                      + ", updated_at=? WHERE id=? AND active=1", (*sets.values(), _now(), cid))
+                      + ", updated_at=?" + (", address_changed_at=?" if payout_changed else "")
+                      + " WHERE id=? AND active=1",
+                      (*sets.values(), _now(), *([_now()] if payout_changed else []), cid))
     return get_contact(cid)
 
 
 def notifications_to(address: str, limit: int = 20) -> List[dict]:
-    """What was sent to one email address, newest first."""
     with connect() as c:
         rows = c.execute("SELECT id, run_id, kind, channel, address, subject, status, attempts,"
                          " error, created_at, sent_at, attachments, action_id, reference"
@@ -910,6 +956,33 @@ def delete_contact(cid: str) -> bool:
     with connect() as c:
         n = c.execute("UPDATE contacts SET active=0 WHERE id=?", (cid,)).rowcount
     return n > 0
+
+
+# ------------------------------------------------------------------- ledger
+def ledger(days: int = 30) -> Dict[str, Any]:
+    """The public figures: money in, money out, splits, model spend, and how
+    many decisions were the team's own versus a person's. No customer data."""
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    with connect() as c:
+        money = c.execute("SELECT direction, status, COALESCE(SUM(amount_usd),0) total, count(*) n"
+                          " FROM payments WHERE created_at >= ? GROUP BY direction, status", (since,)).fetchall()
+        model = c.execute("SELECT COALESCE(SUM(cost_usd),0) FROM runs WHERE started_at >= ?", (since,)).fetchone()[0]
+        auto = c.execute("SELECT autonomous, status, count(*) n FROM actions WHERE created_at >= ?"
+                         " GROUP BY autonomous, status", (since,)).fetchall()
+        blocked = c.execute("SELECT count(*) FROM guardian_checks WHERE verdict='block' AND at >= ?",
+                            (since,)).fetchone()[0]
+        rows = c.execute("SELECT id, direction, rail, counterparty, amount_usd, token, status, tx_hash, created_at"
+                         " FROM payments WHERE created_at >= ? ORDER BY created_at DESC LIMIT 200",
+                         (since,)).fetchall()
+    return {
+        "days": days,
+        "money": [dict(r) for r in money],
+        "model_spend_usd": round(float(model or 0), 4),
+        "decisions": [dict(r) for r in auto],
+        "blocked_by_guardian": int(blocked or 0),
+        "entries": [dict(r) for r in rows],
+        "proofs": proof_summary(days),
+    }
 
 
 # ------------------------------------------------------------------ settings
@@ -1190,8 +1263,8 @@ def list_conversations(user_id: str, agent: Optional[str] = None,
             " (SELECT COUNT(*) FROM messages m WHERE m.conversation_id=c.id) AS messages,"
             " (SELECT COALESCE(SUM(json_extract(m.body, '$.tokens.total')), 0)"
             "  FROM messages m WHERE m.conversation_id=c.id AND m.role='agent') AS total_tokens,"
-            " (SELECT COALESCE(SUM(json_extract(m.body, '$.cost_idr')), 0)"
-            "  FROM messages m WHERE m.conversation_id=c.id AND m.role='agent') AS cost_idr"
+            " (SELECT COALESCE(SUM(json_extract(m.body, '$.cost_usd')), 0)"
+            "  FROM messages m WHERE m.conversation_id=c.id AND m.role='agent') AS cost_usd"
             f" FROM conversations c {where}"
             " ORDER BY c.updated_at DESC LIMIT ?", args).fetchall()
     return [dict(r) for r in rows]
@@ -1205,7 +1278,7 @@ def conversation_usage_summary(user_id: str) -> Dict[str, Any]:
             " COALESCE(SUM(json_extract(m.body, '$.tokens.input')), 0) AS input_tokens,"
             " COALESCE(SUM(json_extract(m.body, '$.tokens.output')), 0) AS output_tokens,"
             " COALESCE(SUM(json_extract(m.body, '$.tokens.total')), 0) AS total_tokens,"
-            " COALESCE(SUM(json_extract(m.body, '$.cost_idr')), 0) AS cost_idr,"
+            " COALESCE(SUM(json_extract(m.body, '$.cost_usd')), 0) AS cost_usd,"
             " COUNT(m.id) AS replies"
             " FROM messages m"
             " JOIN conversations cv ON cv.id = m.conversation_id"
@@ -1213,15 +1286,15 @@ def conversation_usage_summary(user_id: str) -> Dict[str, Any]:
             (user_id,),
         ).fetchone()
         runs_cost = c.execute(
-            "SELECT COALESCE(SUM(token_cost_idr), 0) FROM runs"
+            "SELECT COALESCE(SUM(cost_usd), 0) FROM runs"
         ).fetchone()[0]
     return {
         "input_tokens": int(row["input_tokens"] or 0),
         "output_tokens": int(row["output_tokens"] or 0),
         "total_tokens": int(row["total_tokens"] or 0),
-        "cost_idr": int(row["cost_idr"] or 0),
+        "cost_usd": round(float(row["cost_usd"] or 0), 4),
         "replies": int(row["replies"] or 0),
-        "runs_cost_idr": int(runs_cost or 0),
+        "runs_cost_usd": round(float(runs_cost or 0), 4),
     }
 
 
@@ -1247,173 +1320,82 @@ def delete_conversation(conversation_id: str, user_id: str) -> bool:
     return n > 0
 
 
+
+
 def demo() -> None:
     """Runs against a throwaway database. The __main__ block guarantees one."""
-    cid = start_conversation("demand", "usr_1", "What is daily consumption of M-4471?")
-    add_message(cid, "person", {"text": "What is daily consumption of M-4471?"})
-    add_message(cid, "agent", {"answer": "10.33 TON a day", "tools_used": ["forecast_demand"]})
-    add_message(cid, "person", {"text": "and the other plant?"})
+    # A profile is versioned, and only one is in force.
+    v1 = save_profile({"name": "Lumen", "offerings": []}, by="check")
+    v2 = save_profile({"name": "Lumen Research", "offerings": [{"id": "brief"}]}, by="check", note="rename")
+    p = active_profile()
+    assert p and p["name"] == "Lumen Research" and p["_version"] == v2 > v1, p
+    assert [h["active"] for h in profile_history()] == [1, 0]
+    print("  business: versioned, one active ✓")
 
-    c = get_conversation(cid, "usr_1")
-    assert c and [m["seq"] for m in c["messages"]] == [1, 2, 3]
-
-    # An id is not authority. Someone else's conversation is not readable and
-    # not deletable, which is the whole reason these take a user_id at all.
-    assert get_conversation(cid, "usr_2") is None
-    assert delete_conversation(cid, "usr_2") is False
-
-    rows = list_conversations("usr_1", "demand")
-    assert len(rows) == 1 and rows[0]["messages"] == 3
-    assert list_conversations("usr_1", "inventory") == []
-
-    start_conversation("demand", "usr_1", "x" * 200)
-    assert all(len(r["title"]) <= TITLE_MAX for r in list_conversations("usr_1"))
-
-    assert delete_conversation(cid, "usr_1") is True
-    with connect() as c2:
-        left = c2.execute("SELECT COUNT(*) n FROM messages WHERE conversation_id=?",
-                          (cid,)).fetchone()["n"]
-    assert left == 0, "messages must go when the conversation goes"
-    print("  conversations: owner-scoped ✓ · cascade clean ✓ · titles trimmed ✓")
-    # ---------------------------------------------------------- reservations
-    # Two handlings read the same on-hand figure at the same moment. Each
-    # concludes SBY1 can spare 55 t. Each is right alone; together they promise
-    # 110 t that does not exist. The hold is what makes the second one see the
-    # first.
-    e1 = record_event("port_closure", "Ningbo closes", "test", {}, "check")
-    e2 = record_event("supplier_failure", "Supplier stops", "test", {}, "check")
-    r1, r2 = start_run(e1, "guided"), start_run(e2, "guided")
-
-    assert reserved_qty("M-4471", "SBY1") == 0
-    reserve(r1, "M-4471", "SBY1", 55)
-    assert reserved_qty("M-4471", "SBY1") == 55
-    # The run that placed the hold must not be charged for its own tonnes.
-    assert reserved_qty("M-4471", "SBY1", excluding_run=r1) == 0
-    assert reserved_qty("M-4471", "SBY1", excluding_run=r2) == 55
-    assert reserved_qty("M-4471", "KRW1") == 0, "a hold is per plant"
-
-    reserve(r2, "M-4471", "SBY1", 20)
-    assert reserved_qty("M-4471", "SBY1") == 75
-
-    freed = release_reservations("run failed", run_id=r1)
-    assert freed == 1 and reserved_qty("M-4471", "SBY1") == 20, reserved_qty("M-4471", "SBY1")
-
-    # A run that ends without carrying anything out must not keep the stock.
-    close_run(r2, "failed", error="boom")
-    assert reserved_qty("M-4471", "SBY1") == 0, "a failed run left stock held"
-    assert not open_reservations("M-4471")
-    print("  reservations: donor stock cannot be promised twice ✓ · freed on failure ✓")
-
-    # ---- the realized figure, and what is still owed one -------------------
-    # A cost is a number or it is nothing. These are the assertions that keep
-    # prose from ever becoming money.
-    assert outcome_detail() is None
-    assert outcome_detail("arrived late") == {"note": "arrived late"}, "prose only"
-    assert REALIZED_COST_KEY not in outcome_detail("it cost about Rp 24,5 jt")
-    assert outcome_detail("", 24_500_000, "rina@x") == {
-        REALIZED_COST_KEY: 24_500_000.0, "recorded_by": "rina@x"}
-    for bad in ("24,500,000", "24500000", True, -1):
-        try:
-            outcome_detail("", bad)
-        except ValueError:
-            pass
-        else:
-            raise AssertionError(f"a realized cost of {bad!r} was accepted")
-
-    r3 = start_run(e1, "guided")
-    moved = record_action(r3, "k-move", "stock_transfer", True,
-                          {"material": "M-4471", "cost_idr": 22_000_000})
-    told = record_action(r3, "k-told", "notify", True, {"role": "buyer"})
-    reserve(r3, "M-4471", "SBY1", 10, action_id=moved["id"])
-
-    owed = {a["id"]: a for a in actions_awaiting_outcome()}
-    assert moved["id"] in owed, "a sent transfer is owed an outcome"
-    assert told["id"] not in owed, "an internal message is not chased for an outcome"
-    assert owed[moved["id"]]["title"] == "Ningbo closes"
-    assert owed[moved["id"]]["days_waiting"] == 0
-
-    # An outcome recorded by hand releases the hold in the same transaction.
-    record_outcome(moved["id"], "late", outcome_detail("3 days late", 24_500_000, "rina@x"))
-    assert moved["id"] not in {a["id"] for a in actions_awaiting_outcome()}
-    assert reserved_qty("M-4471", "SBY1") == 0, "the outcome left stock held"
-    again = record_outcome(moved["id"], "delivered")
-    assert again["repeated"] and again["outcome"] == "late", "an outcome was overwritten"
-
-    # Nothing was sent, so nothing can have happened to it — and the store's
-    # refusal must agree with what actions_awaiting_outcome() offers.
-    waiting = record_action(r3, "k-po", "draft_po", False, {"cost_idr": 94_000_000})
-    assert waiting["id"] not in {a["id"] for a in actions_awaiting_outcome()}
+    # Agents: an edit bumps the version, a core role cannot be switched off.
+    a = upsert_agent({"code": "guardian", "nickname": "Kira", "title": "Guardian", "brief": "veto",
+                      "role": "guardian", "core": True, "veto": True, "prompt": "p",
+                      "capabilities": ["guardian"]}, by="check")
+    assert a["version"] == 1 and a["veto"] and a["capabilities"] == ["guardian"]
+    assert upsert_agent({**a, "prompt": "p"}, by="check")["version"] == 1, "no change, no bump"
+    assert upsert_agent({**a, "prompt": "p2"}, by="check")["version"] == 2
     try:
-        record_outcome(waiting["id"], "delivered")
+        set_agent_status("guardian", "disabled", by="check")
+        raise AssertionError("a core role must not be disabled")
     except ValueError:
         pass
-    else:
-        raise AssertionError("an outcome was recorded against a pending action")
-    print("  outcomes: a figure is a number or nothing, never read out of prose ✓ "
-          "· written once ✓ · the hold is released ✓ · what is still owed one ✓")
+    assert delete_agent("guardian") is False
+    print("  agents: versioned ✓ · core roles locked ✓")
 
-    save_model_choices({"lead": "bedrock-openai:openai.gpt-oss-120b", "specialists": "deepseek.v3.2"}, "a@x")
-    save_model_choices({"specialists": "zai.glm-5", "lead": None}, "b@x")
-    assert model_choices() == {"specialists": "zai.glm-5"}, model_choices()
-    assert model_choices(detail=True)["specialists"]["updated_by"] == "b@x"
-    print("  model choice: set, replaced, cleared back to the environment ✓")
+    # Work items deduplicate, and claiming is single-winner.
+    w = record_work_item("order", "Brief for ACME", "vault", {"order_id": "o1"}, dedup_key="order:o1")
+    assert w and record_work_item("order", "again", "vault", {}, dedup_key="order:o1") is None
+    claimed = next_new_work_item()
+    assert claimed and claimed["id"] == w and next_new_work_item() is None
+    print("  work items: a paid order is worked once ✓")
 
-    assert enqueue_notification("run:r1:done:a@x", "handling", "email", "a@x", "s", "b", "r1")
-    assert not enqueue_notification("run:r1:done:a@x", "handling", "email", "a@x", "s", "b", "r1"), \
-        "the same message is queued once, however many times it is asked for"
-    (n,) = pending_notifications()
-    mark_notification(n["id"], "sent")
-    assert not pending_notifications() and list_notifications()[0]["status"] == "sent"
-    print("  notifications: queued once ✓ · marked sent ✓")
+    # Actions: idempotent, forward-only.
+    rid = start_run(w, {"guardian": 2}, v2)
+    act = record_action(rid, "pay:abc", "payment", False, {"to": "x"}, value_usd=12.5)
+    assert act["status"] == "pending" and not act["repeated"]
+    assert record_action(rid, "pay:abc", "payment", False, {})["repeated"]
+    decide_action(act["id"], "u1", "admin", "approved")
+    move_action(act["id"], "sent", reference="tx1")
+    try:
+        move_action(act["id"], "pending")
+        raise AssertionError("status must only move forward")
+    except ValueError:
+        pass
+    close_run(rid, "done", {"status": "done"}, cost_usd=0.0123)
+    run = get_run(rid)
+    assert run["status"] == "done" and run["actions"][0]["reference"] == "tx1"
+    assert get_work_item(w)["status"] == "done"
+    print("  actions: idempotent ✓ · forward-only ✓")
 
-    k = add_contact("Rina", "buyer", "Rina@X", "*", phone="+62 812 0000 1111", title="Buyer, steel")
-    assert k["email"] == "rina@x" and k["phone"] == "+62 812 0000 1111" and k["notes"] is None
-    k = update_contact(k["id"], department="Procurement", phone="", notes="Mornings only")
-    assert k["department"] == "Procurement" and k["phone"] is None and k["notes"] == "Mornings only"
-    assert k["updated_at"] and update_contact(k["id"], role=None)["role"] == "buyer", "None keeps"
-    assert enqueue_notification("to:rina", "test", "email", "rina@x", "hello", "b")
-    assert [n["subject"] for n in notifications_to("Rina@x")] == ["hello"]
-    assert delete_contact(k["id"]) and get_contact(k["id"]) is None
-    print("  contacts: phone, title, department, notes kept and cleared ✓ · what was sent to them ✓")
+    # Money and checks reach the ledger, without customer data.
+    record_check("counterparty", "evil.testnet", "block", [{"rule": "allowlist", "verdict": "block"}], run_id=rid)
+    pay = record_payment("out", "vault", "vendor.testnet", 12.5, "usdc", "submitted", action_id=act["id"])
+    update_payment(pay["id"], "sent", tx_hash="tx1", detail={"events": ["payment_sent"]})
+    led = ledger()
+    assert led["blocked_by_guardian"] == 1 and led["entries"][0]["tx_hash"] == "tx1"
+    print("  ledger: payments, model spend, guardian blocks ✓")
 
-    job_started("probe")
-    job_finished("probe", False, "boom")
-    set_job_enabled("probe", False)
-    j = job_states()["probe"]
-    assert (j["runs"], j["failures"], j["last_status"], j["enabled"]) == (1, 1, "failed", 0)
-    print("  jobs: a run, a failure and a switch-off are remembered ✓")
+    # A payout change is stamped.
+    cn = add_contact("Vendor", "vendor", "v@example.com", near_account="vendor.testnet")
+    assert cn["address_changed_at"] is None
+    assert update_contact(cn["id"], notes="hi")["address_changed_at"] is None
+    assert update_contact(cn["id"], near_account="other.testnet")["address_changed_at"]
+    print("  contacts: a payout change is stamped ✓")
 
-    # An upload read back for looking at. The count a reader is shown must stay
-    # the file's own even when the rows handed over are cut, because a preview
-    # that renamed 7 rows to 3 would be a quiet lie about what was stored.
-    big = [{"Supplier": f"SUP-{i}", "TkdnCertifiedPct": float(i)} for i in range(7)]
-    up = save_upload("Supplier", "suppliers.csv", big, "rina@x")
-    whole = get_upload(up["id"])
-    assert whole and whole["rows"] == 7 and whole["shown"] == 7 and not whole["truncated"]
-    assert whole["columns"] == ["Supplier", "TkdnCertifiedPct"], whole["columns"]
-    cut = get_upload(up["id"], limit=3)
-    assert cut["shown"] == 3 and cut["truncated"] and cut["rows"] == 7, cut
-    assert cut["preview"][0]["Supplier"] == "SUP-0"
-    assert get_upload("upl_nope") is None, "an unknown id is not found, not an empty file"
-    assert delete_upload(up["id"]) and get_upload(up["id"]) is None
-    print("  uploads: read back whole, cut rows say so, the row count stays the file's ✓")
-
+    cid = start_conversation("guardian", "usr_1", "Why did you block that?")
+    add_message(cid, "person", {"text": "Why did you block that?"})
+    assert get_conversation(cid, "usr_1") and get_conversation(cid, "usr_2") is None
+    print("  conversations: owner-scoped ✓")
     print("store ok")
 
 
 if __name__ == "__main__":
-    # This check writes rows, so it must never meet the real database. CFG is
-    # frozen and read at import, so the only honest way to swap it is to start
-    # again with AERA_DB pointing somewhere disposable.
-    import os
-    import subprocess
-    import sys
-    import tempfile
+    from core.config import fixtures_only
 
-    if os.environ.get("AERA_STORE_CHECK") != "1":
-        db = pathlib.Path(tempfile.mkdtemp(prefix="aera-check-")) / "check.db"
-        sys.exit(subprocess.call(
-            [sys.executable, __file__],
-            env={**os.environ, "AERA_DB": str(db), "AERA_STORE_CHECK": "1",
-                 "PYTHONPATH": os.environ.get("PYTHONPATH", ".")}))
+    fixtures_only(__file__, "AERA_STORE_CHECK")
     demo()

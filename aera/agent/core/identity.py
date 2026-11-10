@@ -36,12 +36,14 @@ CREATE TABLE IF NOT EXISTS users (
 );
 """
 
-# How much action value each role may approve (rupiah).
+# How much action value each role may approve (USD). Anything above a role's
+# limit needs someone with a higher one; a viewer approves nothing.
 ROLE_LIMITS = {
-    "planner": 0,                    # read only
-    "buyer": 500_000_000,
-    "procurement_lead": 10_000_000_000,
-    "admin": 10_000_000_000,
+    "viewer": 0,
+    "operator": 100,
+    "approver": 1_000,
+    "owner": 100_000,
+    "admin": 100_000,
 }
 
 
@@ -57,11 +59,16 @@ class User:
     role: str
 
     @property
-    def limit_idr(self) -> int:
-        return ROLE_LIMITS.get(self.role, 0)
+    def limit_usd(self) -> float:
+        return float(ROLE_LIMITS.get(self.role, 0))
 
-    def may_approve(self, value_idr: int) -> bool:
-        return self.limit_idr > 0 and value_idr <= self.limit_idr
+    def may_approve(self, value_usd: float) -> bool:
+        return self.limit_usd > 0 and value_usd <= self.limit_usd
+
+    @property
+    def may_manage(self) -> bool:
+        """Edit the business, the team, contacts' payout details, the kill switch."""
+        return self.role in ("owner", "admin")
 
 
 # ------------------------------------------------------------------ passwords
@@ -159,7 +166,7 @@ def demo() -> None:
     global SECRET
     SECRET = os.environ["AERA_SECRET"]
 
-    u = User("usr_1", "budi@kpn.co.id", "Budi", "buyer")
+    u = User("usr_1", "ana@lumen.example", "Ana", "approver")
     t = issue_token(u)
     assert from_token(t).email == u.email
 
@@ -172,11 +179,12 @@ def demo() -> None:
         pass
     print("  token: valid ✓ · tampered → rejected ✓")
 
-    assert User("u", "e", "n", "planner").may_approve(1) is False
-    assert User("u", "e", "n", "buyer").may_approve(94_000_000) is True
-    assert User("u", "e", "n", "buyer").may_approve(900_000_000) is False
-    assert User("u", "e", "n", "procurement_lead").may_approve(900_000_000) is True
-    print("  authority: planner none · buyer to Rp 500m · lead above that ✓")
+    assert User("u", "e", "n", "viewer").may_approve(1) is False
+    assert User("u", "e", "n", "operator").may_approve(40) is True
+    assert User("u", "e", "n", "operator").may_approve(400) is False
+    assert User("u", "e", "n", "approver").may_approve(400) is True
+    assert User("u", "e", "n", "owner").may_manage and not User("u", "e", "n", "approver").may_manage
+    print("  authority: viewer none · operator to $100 · approver to $1,000 · owner manages ✓")
 
     h = _hash_password("secret123")
     assert _password_matches("secret123", h) and not _password_matches("wrong", h)

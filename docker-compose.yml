@@ -1,24 +1,5 @@
 services:
-  # 1. Database Service (PostgreSQL)
-  database:
-    image: postgres:16-alpine
-    container_name: aera-database
-    restart: always
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-sigap}
-      POSTGRES_USER: ${POSTGRES_USER:-sigap}
-      POSTGRES_HOST_AUTH_METHOD: trust
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - aera_network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sigap} -d ${POSTGRES_DB:-sigap}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  # 2. Agent Backend Service (Python API)
+  # Agent service (Python, standard library only). Its record is one SQLite file.
   agents:
     image: ${IMAGE_AGENTS:-aera-agents:local}
     build:
@@ -29,20 +10,17 @@ services:
     environment:
       - AERA_HOST=0.0.0.0
       - PORT=8787
-      - AERA_ENV=${AERA_ENV:-production}
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-sigap}@database:5432/${POSTGRES_DB:-sigap}
-      - AERA_DB=/app/data/sigap.db
+      - AERA_ENV=${AERA_ENV:-dev}
+      - AERA_DB=/app/data/aera.db
     env_file:
       - ./aera/agent/.env
     volumes:
       - agent_data:/app/data
+      - ./aera/agent/.secrets:/app/.secrets:ro
     networks:
       - aera_network
-    depends_on:
-      database:
-        condition: service_healthy
 
-  # 3. Web Frontend Service (Next.js Standalone)
+  # Web app (Next.js standalone).
   aera:
     image: ${IMAGE_WEB:-aera-web:local}
     build:
@@ -62,12 +40,9 @@ services:
       - agents
 
 volumes:
-  postgres_data:
-    driver: local
   agent_data:
     driver: local
 
 networks:
   aera_network:
     driver: bridge
-

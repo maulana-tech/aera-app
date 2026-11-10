@@ -1,0 +1,229 @@
+"""Carrying out approved actions, and reading money that arrived.
+
+    python3 settle.py            # one pass: execute approved, reconcile, ingest orders
+    python3 settle.py --check    # the self-check, on a scratch database
+
+What each kind of approved action becomes:
+
+  payment        vault.request_payment with the agent's function-call key. The
+                 vault applies its own allowlist and caps; a payment over its
+                 cap comes back `pending` and waits for an approver's wallet.
+                 With no vault configured it is recorded on the SIMULATED rail.
+  refund         cannot be sent from here: the vault only takes a refund signed
+                 by an approver's wallet. It waits as `approved` until the
+                 vault reports it (reconcile), or a person marks it done.
+  message        queued in the outbox (notify.py delivers it).
+  deliver_order  the document is rendered, sent to the customer, and its hash
+                 written to the vault (deliver_receipt) as proof of delivery.
+
+One executor at a time per action (a lock, and the status re-read inside it),
+so the job and a handling that reach the same row together cannot both send.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import sys
+import threading
+from typing import Any, Dict, List
+
+from core import chain, store
+
+_LOCK = threading.Lock()
+
+
+def execute(action_id: str) -> Dict[str, Any]:
+    """Carry out one approved action now. Returns {ok, summary, ...}."""
+    with _LOCK:
+        a = store.get_action(action_id)
+        if a is None:
+            return {"ok": False, "summary": f"no action {action_id}"}
+        if a["status"] != "approved":
+            return {"ok": a["status"] == "sent", "summary": f"the action is {a['status']}"}
+        fn = {"payment": _pay, "refund": _refund, "message": _message,
+              "deliver_order": _deliver}.get(a["kind"])
+        if fn is None:
+            return {"ok": False, "summary": f"nothing executes a '{a['kind']}'"}
+        try:
+            return fn(a)
+        except Exception as e:                                         # noqa: BLE001
+            store.move_action(a["id"], "failed", reason=f"{type(e).__name__}: {e}")
+            return {"ok": False, "summary": f"failed: {type(e).__name__}: {e}"}
+
+
+def _pay(a: Dict[str, Any]) -> Dict[str, Any]:
+    p = a["payload"]
+    receiver, amount = p["receiver"], float(p["amount_usd"])
+    existing = store.payment_for_action(a["id"])
+    if existing and existing["status"] in ("submitted", "sent", "pending_onchain"):
+        return {"ok": True, "summary": f"already {existing['status']}"}
+    if not chain.configured():
+        pay = store.record_payment("out", "simulated", receiver, amount, "usdc", "sent", action_id=a["id"],
+                                   request_id=chain.request_id(a["idempotency_key"]),
+                                   detail={"simulated": True, "why": "no vault configured"})
+        store.move_action(a["id"], "sent", reference=f"simulated:{pay['id']}")
+        return {"ok": True, "summary": f"SIMULATED payment of ${amount:.2f} to {receiver} (no vault configured)",
+                "payment": pay}
+    pay = store.record_payment("out", "vault", receiver, amount, "usdc", "submitted", action_id=a["id"],
+                               request_id=chain.request_id(a["idempotency_key"]))
+    out = chain.request_payment(a["idempotency_key"], receiver, amount, p.get("purpose", ""), a["id"])
+    status = str(out.get("result_json") or "").strip('"') or "sent"
+    detail = {"events": out.get("events"), "explorer": out.get("explorer")}
+    if status == "pending":
+        store.update_payment(pay["id"], "pending_onchain", tx_hash=out.get("tx_hash"), detail=detail)
+        return {"ok": True, "summary": f"the vault holds ${amount:.2f} for an approver's signature "
+                                       f"(over its own cap); tx {out.get('tx_hash')}", "explorer": out.get("explorer")}
+    store.update_payment(pay["id"], "sent", tx_hash=out.get("tx_hash"), detail=detail)
+    store.move_action(a["id"], "sent", reference=out.get("tx_hash"))
+    return {"ok": True, "summary": f"paid ${amount:.2f} to {receiver}; tx {out.get('tx_hash')}",
+            "explorer": out.get("explorer")}
+
+
+def _refund(a: Dict[str, Any]) -> Dict[str, Any]:
+    return {"ok": True, "summary": "approved; an approver signs vault.refund from their wallet (Treasury page)"}
+
+
+def _message(a: Dict[str, Any]) -> Dict[str, Any]:
+    p = a["payload"]
+    key = f"msg:{a['id']}"
+    ok = store.enqueue_notification(key, "outreach", "email", p["to"], p.get("subject") or "(no subject)",
+                                    p.get("body") or "", action_id=a["id"])
+    store.move_action(a["id"], "sent", reference=key)
+    return {"ok": True, "summary": f"queued to {p['to']}" + ("" if ok else " (already queued)")}
+
+
+def render_document(doc: Dict[str, Any]) -> bytes:
+    """A stored document as the bytes the customer receives (PDF)."""
+    from engine.export import Doc
+    meta = json.loads(doc.get("mime", "").split(";", 1)[1]) if ";" in doc.get("mime", "") else {}
+    d = Doc(meta.get("title") or doc["name"])
+    d.md(doc["text"])
+    return d.render()
+
+
+def _deliver(a: Dict[str, Any]) -> Dict[str, Any]:
+    p = a["payload"]
+    order = store.get_order(p["order_id"])
+    doc = store.get_file(p["document_id"])
+    if not order or not doc:
+        raise RuntimeError("the order or the document is gone")
+    body = render_document(doc)
+    digest = hashlib.sha256(body).hexdigest()
+    receipt: Dict[str, Any] = {"hash": digest, "document_id": doc["id"], "bytes": len(body)}
+    if p.get("to"):
+        store.enqueue_notification(f"deliver:{a['id']}", "delivery", "email", p["to"],
+                                   p.get("subject") or f"Your order {order['id']}", p.get("note") or "",
+                                   action_id=a["id"],
+                                   attachments=[{"document": doc["id"], "format": "pdf"}])
+        receipt["sent_to"] = p["to"]
+    if chain.configured():
+        out = chain.deliver_receipt(order["id"], digest)
+        receipt["tx_hash"], receipt["explorer"] = out.get("tx_hash"), out.get("explorer")
+    store.update_order(order["id"], status="delivered", delivery=receipt)
+    store.move_action(a["id"], "sent", reference=receipt.get("tx_hash") or f"sha256:{digest[:16]}")
+    return {"ok": True, "summary": f"delivered order {order['id']} (sha256 {digest[:12]}…)"
+                                   + (f", receipt on chain {receipt['tx_hash']}" if receipt.get("tx_hash") else "")}
+
+
+# ------------------------------------------------------------- reconcile
+def reconcile() -> int:
+    """Follow payments the vault is holding for an approver."""
+    if not chain.readable():
+        return 0
+    moved = 0
+    for pay in store.list_payments(status="pending_onchain"):
+        try:
+            req = chain.view("get_request", {"request_id": pay["request_id"]})
+        except Exception:                                              # noqa: BLE001
+            continue
+        st = (req or {}).get("status")
+        if st in ("approved", "sent"):
+            store.update_payment(pay["id"], "sent", detail={"vault": req})
+            if pay["action_id"]:
+                store.move_action(pay["action_id"], "sent", reference=pay.get("tx_hash"))
+            moved += 1
+        elif st in ("rejected", "failed"):
+            store.update_payment(pay["id"], st, detail={"vault": req})
+            if pay["action_id"]:
+                store.move_action(pay["action_id"], "failed", reason=f"vault: {st} {req.get('reason') or ''}")
+            moved += 1
+    return moved
+
+
+def ingest_orders() -> List[str]:
+    """Orders paid to the vault since the last pass become work items."""
+    if not chain.readable():
+        return []
+    start = int(store.get_setting("vault.orders_seen") or 0)
+    try:
+        rows = chain.view("list_orders", {"from_index": start, "limit": 50}) or []
+    except Exception:                                                  # noqa: BLE001
+        return []
+    raised = []
+    for o in rows:
+        raised += order_paid(o["order_id"], payer=o.get("payer"), amount_usd=chain.from_base(o.get("amount", 0)),
+                             offering=o.get("offering"), tx=None, rail="vault")
+    if rows:
+        store.set_setting("vault.orders_seen", str(start + len(rows)), by="settle")
+    return raised
+
+
+def order_paid(order_id: str, *, payer: Any, amount_usd: float, offering: Any, tx: Any, rail: str) -> List[str]:
+    """Mark an order paid and raise its work item (once)."""
+    order = store.get_order(order_id) or store.create_order(order_id, offering or "unknown", amount_usd, {},
+                                                            customer=payer, status="awaiting_payment")
+    if order["status"] != "awaiting_payment":
+        return []
+    store.record_payment("in", rail, str(payer or order.get("customer") or "?"), amount_usd, "usdc", "sent",
+                         tx_hash=tx, detail={"order_id": order_id})
+    wid = store.record_work_item("order", f"Order {order_id}: {order['offering']}", rail,
+                                 {"order_id": order_id, "offering": order["offering"], "inputs": order["inputs"],
+                                  "customer": order.get("customer"), "amount_usd": amount_usd},
+                                 dedup_key=f"order:{order_id}")
+    store.update_order(order_id, status="paid", paid_tx=tx, work_item_id=wid,
+                       customer=order.get("customer") or payer)
+    return [wid] if wid else []
+
+
+def run_once() -> str:
+    done = 0
+    for a in store.list_actions(status="approved"):
+        if a["kind"] in ("payment", "message", "deliver_order"):
+            if execute(a["id"]).get("ok"):
+                done += 1
+    moved = reconcile()
+    raised = ingest_orders()
+    return f"{done} executed · {moved} reconciled · {len(raised)} order(s) in"
+
+
+def check() -> None:
+    from core import business, registry
+    from core.actions import raise_action
+    store.save_profile(business.EXAMPLE, by="check")
+    wid = store.record_work_item("request", "check", "api", {})
+    rid = store.start_run(wid)
+    ok = {"verdict": "allow", "reasons": []}
+    with registry.bind_run(rid):
+        r = raise_action("payment", {"receiver": "dataco.testnet", "amount_usd": 2.0, "purpose": "api"}, ok,
+                         value_usd=2.0)
+    a = store.get_action(r.value["id"])
+    assert a["status"] == "sent" and a["reference"].startswith("simulated:"), a
+    pay = store.payment_for_action(a["id"])
+    assert pay["rail"] == "simulated" and pay["detail"]["simulated"], pay
+    assert execute(a["id"])["summary"] == "the action is sent", "a sent action is never sent twice"
+
+    store.create_order("ord_1", "brief", 15.0, {"industry": "coffee"}, customer="alice.testnet")
+    w = order_paid("ord_1", payer="alice.testnet", amount_usd=15.0, offering="brief", tx="tx9", rail="simulated")
+    assert w and order_paid("ord_1", payer="x", amount_usd=15, offering="brief", tx="tx9", rail="simulated") == []
+    assert store.get_order("ord_1")["status"] == "paid"
+    assert store.get_work_item(w[0])["payload"]["inputs"] == {"industry": "coffee"}
+    print("settle ok: simulated rail labelled ✓ · never sent twice ✓ · a paid order raises one work item ✓")
+
+
+if __name__ == "__main__":
+    if "--check" in sys.argv:
+        from core.config import fixtures_only
+        fixtures_only(__file__, "AERA_SETTLE_CHECK")
+        check()
+    else:
+        print(run_once())

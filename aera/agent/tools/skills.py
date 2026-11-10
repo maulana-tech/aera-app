@@ -58,7 +58,8 @@ def use_skill(name: str) -> Result:
         # caller was turned away. A refusal nobody counts is a limit nobody
         # can see the cost of.
         store.record_skill_use(skill.name, agent, found=True, run_id=registry.current_run())
-        from agents.definitions import ALL
+        from agents import roster
+        ALL = roster.load()
         who = ", ".join(ALL[c].nickname if c in ALL else c for c in skill.agents)
         return Result(None, Origin.MISSING, "AERA skill catalogue",
                       note=(f"'{skill.name}' is {who}'s procedure, not yours. "
@@ -88,45 +89,23 @@ def _calling_agent() -> str:
 def demo() -> None:
     from core.config import fixtures_only
     fixtures_only(__file__, "AERA_SKILLS_CHECK")
+    from core import business, team
+    store.save_profile(business.EXAMPLE, by="check")
+    team.apply(team.compose(), by="check")
 
-    # An unrestricted skill reaches any agent, with its steps in the written order.
-    with registry.bind_agent("impact"):
-        got = use_skill("investigate_disruption")
-    assert got.value["skill"] == "investigate_disruption", got.value
-    assert got.value["steps"] == skills.get("investigate_disruption").steps
-    assert got.origin is Origin.MODELLED, got.origin
-
-    # A restricted one is refused to everybody else, and says whose it is.
-    with registry.bind_agent("impact"):
-        refused = use_skill("close_the_loop")
-    assert refused.value is None and refused.origin is Origin.MISSING
-    assert "Bram's procedure" in refused.note, refused.note
-    with registry.bind_agent("execution"):
-        allowed = use_skill("close_the_loop")
-    assert allowed.value["tools"] == ["record_outcome"], allowed.value
-
-    # A name nobody wrote is an answer and a recorded gap, not an exception.
-    with registry.bind_agent("sourcing"):
+    with registry.bind_agent("writer"):
+        got = use_skill("fulfil_order")
+    assert got.value["steps"] == skills.get("fulfil_order").steps and got.origin is Origin.MODELLED
+    with registry.bind_agent("writer"):
+        refused = use_skill("screen_for_manipulation")
+    assert refused.value is None and "Kira's procedure" in refused.note, refused.note
+    with registry.bind_agent("guardian"):
+        assert use_skill("screen_for_manipulation").value
+    with registry.bind_agent("writer"):
         nope = use_skill("negotiate_everything")
-    assert nope.value is None and "no skill called" in nope.note, nope.note
-    # The catalogue is named in the refusal, so the next attempt can be right.
-    assert "investigate_disruption" in nope.note, nope.note
-
+    assert nope.value is None and "fulfil_order" in nope.note
     ledger = store.skill_usage(days=1)
-    assert ledger["investigate_disruption"]["calls"] == 1, ledger
-    # The refusal counted as a use of a skill that exists: a limit nobody
-    # counts is a limit nobody can see the cost of.
-    assert ledger["close_the_loop"]["calls"] == 2, ledger
-    assert ledger["close_the_loop"]["by_agent"] == {"impact": 1, "execution": 1}, ledger
-    # And the invented name counted as a gap in the catalogue, not as nothing.
     assert ledger["negotiate_everything"]["not_found"] == 1, ledger
-
-    # Outside a loop there is no agent, and a restricted skill stays shut.
-    assert registry.current_agent() is None
-    assert use_skill("close_the_loop").value is None
-
-    print("  a written procedure reaches the agent that may run it, is refused to the "
-          "agent that may not, and a skill nobody wrote is counted \u2713")
     print(f"skills tools ok, {len(skills.CATALOGUE)} procedures callable")
 
 

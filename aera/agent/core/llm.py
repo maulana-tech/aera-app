@@ -56,7 +56,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 import core.config as _config
 
-PROVIDERS = ("bedrock", "bedrock-openai")
+PROVIDERS = ("nearai", "bedrock", "bedrock-openai")
 
 #: The exchange rate the original single rate was worked out at (Opus 5 list
 #: price, $5/$25, is 82,000/410,000 IDR per million). One constant, so the
@@ -74,6 +74,13 @@ IDR_PER_USD = int(os.environ.get("AERA_IDR_PER_USD") or 16_400)
 #: `global.` ids bill at; a regional profile costs 10% more. Checked in order,
 #: so a longer id comes before its prefix.
 _USD_PER_MTOK: Tuple[Tuple[str, float, float], ...] = (
+    # NEAR AI Cloud (GET /v1/models pricing, read 2026-11-10).
+    ("glm-5.3-flash", 0.04, 1.35),
+    ("qwen3.8-27b", 0.04, 1.35),
+    ("qwen3.6-35b", 0.17, 1.10),
+    ("deepseek-v4.1-flash", 0.30, 1.20),
+    ("glm-5.3", 0.60, 2.20),
+    ("kimi-k3", 0.60, 2.50),
     ("claude-opus-5-5", 4.00, 20.00),
     ("claude-opus-5", 5.00, 25.00),
     ("claude-opus-4-6", 5.00, 25.00),
@@ -195,6 +202,9 @@ def parse(raw: str) -> Spec:
         raise ValueError(f"unknown provider '{head}' in '{raw}' (one of: {', '.join(PROVIDERS)})")
     if "anthropic." in raw:
         return Spec("bedrock", raw)
+    if "/" in raw:
+        # `org/model` is how NEAR AI Cloud names its models (z-ai/glm-5.3).
+        return Spec("nearai", raw)
     return Spec("bedrock-openai", raw)
 
 
@@ -295,6 +305,8 @@ def caps(spec: Spec) -> Caps:
         return Caps(thinking=False, max_output=64_000)
     if "minimax" in m:
         return Caps(thinking=False, max_output=8_192, images=False)
+    if spec.provider == "nearai":
+        return Caps(thinking=False, max_output=32_000, images="-vl" in m)
     if spec.provider == "bedrock-openai":
         # The open-weight models on Bedrock read text. The vision ones say so in
         # their name, and an image sent to the others is a 400, not a guess.
@@ -314,6 +326,8 @@ def _runtime_id(model: str) -> bool:
 
 def route_of(spec: Spec) -> str:
     """Where a call to this model goes, in words, for the Models page."""
+    if spec.provider == "nearai":
+        return "NEAR AI Cloud (TEE)" if attested(spec) else "NEAR AI Cloud (proxied, not private)"
     if spec.provider == "bedrock":
         return "Bedrock InvokeModel" if _runtime_id(spec.model) else "Bedrock Mantle"
     return "Bedrock runtime (chat)" if _runtime_id(spec.model) else "Bedrock Mantle (chat)"
@@ -325,6 +339,15 @@ def ready(spec: Spec, cfg=None) -> Tuple[bool, str]:
     prove access (only a call does), but it catches the configuration gaps that
     otherwise surface as a stack trace in the middle of a handling."""
     cfg = cfg or _config.CFG
+    if spec.provider == "nearai":
+        if not os.environ.get("NEARAI_API_KEY", "").strip():
+            return False, "NEARAI_API_KEY is not set (cloud.near.ai, or the NEAR Builders credit)"
+        if private_mode() and not attested(spec):
+            return False, (f"{spec.model} does not run in an attested TEE on NEAR AI Cloud, and "
+                           "AERA_PRIVATE=1 allows only attested models")
+        return True, ""
+    if private_mode():
+        return False, f"{spec} is not a NEAR AI TEE model, and AERA_PRIVATE=1 allows only those"
     if spec.provider in ("bedrock", "bedrock-openai"):
         if not cfg.aws_region:
             return False, "AWS_REGION is not set"
@@ -389,6 +412,17 @@ def usd_per_mtok(spec: Optional[Spec], input_tokens: int = 0) -> Tuple[float, fl
     return DEFAULT_USD_PER_MTOK
 
 
+def price_usd(usage) -> float:
+    """Dollars for one call's usage, at the rate of the model that served it."""
+    spec = getattr(usage, "spec", None)
+    inp = ((getattr(usage, "input_tokens", 0) or 0)
+           + (getattr(usage, "cache_read_input_tokens", 0) or 0)
+           + (getattr(usage, "cache_creation_input_tokens", 0) or 0))
+    out = getattr(usage, "output_tokens", 0) or 0
+    i, o = usd_per_mtok(spec, inp)
+    return inp / 1e6 * i + out / 1e6 * o
+
+
 def price_idr(usage) -> float:
     """Rupiah for one call's usage, at the rate of the model that served it.
     Cache reads and writes are priced as input: overstated, never understated."""
@@ -444,6 +478,8 @@ class Reply:
         self.fell_back_from: Optional[Tuple[str, str]] = None
         #: Why the same model was served through explicit fallback AWS credentials.
         self.account_failover: Optional[str] = None
+        #: For a NEAR AI call: {model, chat_id, attested, req_sha256, resp_sha256, proof_id}.
+        self.proof: Optional[Dict[str, Any]] = None
 
 
 def _get(b: Any, key: str, default: Any = None) -> Any:
@@ -785,8 +821,136 @@ class _BedrockChatBackend:
             return reply
 
 
+# ------------------------------------------------------------- NEAR AI Cloud
+NEARAI_BASE = os.environ.get("NEARAI_BASE_URL", "https://cloud-api.near.ai/v1").rstrip("/")
+
+#: NEAR AI models that run in an attested TEE (metadata.verifiable on
+#: /v1/model/list, read 2026-11-10). Anything else NEAR AI serves is proxied
+#: to its vendor and is NOT private. Refreshed from the live list when the
+#: service can reach it (refresh_attested), this is only the starting point.
+_ATTESTED = {
+    "z-ai/glm-5.3", "z-ai/glm-5.3-flash", "zai-org/glm-5.1-fp8", "moonshotai/kimi-k3", "moonshotai/kimi-k2.6",
+    "qwen/qwen3.6-35b-a3b-fp8", "qwen/qwen3.8-27b", "qwen/qwen3-vl-30b-a3b-instruct", "qwen/qwen3.5-397b-a17b",
+    "deepseek-ai/deepseek-v4.1-flash-1017", "deepseek/deepseek-v3.2",
+}
+_ATTESTED_AT = 0.0
+
+
+def private_mode() -> bool:
+    return os.environ.get("AERA_PRIVATE", "1").strip() not in ("0", "false", "no", "")
+
+
+def refresh_attested(force: bool = False) -> set:
+    """The attested set, from NEAR AI's public model list (hourly)."""
+    global _ATTESTED, _ATTESTED_AT
+    if not force and time.monotonic() - _ATTESTED_AT < 3600 and _ATTESTED_AT:
+        return _ATTESTED
+    _ATTESTED_AT = time.monotonic()
+    try:
+        from core import attest
+        rows = attest.fetch_model_list()
+        live = set()
+        for r in rows:
+            meta = r.get("metadata") or {}
+            if meta.get("verifiable") or r.get("attestationSupported"):
+                for k in ("modelId", "id", "model", "name"):
+                    if r.get(k):
+                        live.add(str(r[k]).lower())
+                for a in r.get("aliases") or []:
+                    live.add(str(a).lower())
+        if live:
+            _ATTESTED = live
+    except Exception:                                                  # noqa: BLE001
+        pass
+    return _ATTESTED
+
+
+def attested(spec: Spec) -> bool:
+    return spec.provider == "nearai" and spec.model.lower() in _ATTESTED
+
+
+#: Raw request/response bytes of recent NEAR AI calls, held IN MEMORY ONLY
+#: until their signature is verified (core/attest.py needs the exact bytes to
+#: hash). Never written to disk: the prompt carries customer data, and the
+#: record keeps only the two hashes.
+_PENDING_BYTES: Dict[str, Tuple[bytes, bytes]] = {}
+_PROOF_POOL = None
+
+
+def _verify_later(proof_id: str, model: str, chat_id: str, req: bytes, resp: bytes) -> None:
+    global _PROOF_POOL
+    from concurrent.futures import ThreadPoolExecutor
+    _PENDING_BYTES[proof_id] = (req, resp)
+    if _PROOF_POOL is None:
+        _PROOF_POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="attest")
+
+    def work() -> None:
+        from core import attest, store
+        try:
+            time.sleep(1.0)                 # the signature record appears shortly after the reply
+            out = attest.proof(model, chat_id, req, resp)
+            store.settle_proof(proof_id, out["verdict"], out["checks"], out.get("signing_address"))
+        except Exception as e:                                         # noqa: BLE001
+            try:
+                store.settle_proof(proof_id, "failed", [{"name": "verification", "status": "fail",
+                                                         "detail": f"{type(e).__name__}: {e}"}], None)
+            except Exception:                                          # noqa: BLE001
+                pass
+        finally:
+            _PENDING_BYTES.pop(proof_id, None)
+
+    _PROOF_POOL.submit(work)
+
+
+class _NearAIBackend:
+    """Chat Completions on NEAR AI Cloud, keeping the exact bytes for the proof."""
+
+    def __init__(self, spec: Spec, cfg):
+        self.spec = spec
+        self.url = NEARAI_BASE + "/chat/completions"
+
+    def create(self, req: dict) -> Reply:
+        body = to_chat(req, self.spec)
+        body.pop("stream", None)
+        data = json.dumps(body, ensure_ascii=False).encode()
+        headers = {"Authorization": f"Bearer {os.environ.get('NEARAI_API_KEY', '').strip()}",
+                   "Content-Type": "application/json", "Accept-Encoding": "identity",
+                   "x-no-aliasing": "true"}
+        raw = b""
+        for attempt in range(3):
+            r = urllib.request.Request(self.url, data=data, method="POST", headers=headers)
+            try:
+                with urllib.request.urlopen(r, timeout=180) as resp:
+                    raw = resp.read()
+                break
+            except urllib.error.HTTPError as e:
+                detail = e.read().decode(errors="replace")
+                if e.code not in (429, 500, 502, 503, 504) or attempt == 2:
+                    raise ModelCallFailed(self.spec, e.code, detail) from None
+            except urllib.error.URLError:
+                if attempt == 2:
+                    raise
+            time.sleep(1.5 * (attempt + 1))
+        parsed = json.loads(raw.decode())
+        reply = from_chat(parsed, self.spec)
+        chat_id = str(parsed.get("id") or "")
+        import hashlib
+        reply.proof = {"model": self.spec.model, "chat_id": chat_id, "attested": attested(self.spec),
+                       "req_sha256": hashlib.sha256(data).hexdigest(),
+                       "resp_sha256": hashlib.sha256(raw).hexdigest()}
+        if chat_id and attested(self.spec):
+            from core import registry, store
+            pid = store.record_proof(registry.current_agent() or "aux", self.spec.model, chat_id,
+                                     reply.proof["req_sha256"], reply.proof["resp_sha256"],
+                                     run_id=registry.current_run())
+            reply.proof["proof_id"] = pid
+            _verify_later(pid, self.spec.model, chat_id, data, raw)
+        return reply
+
+
 def _make_backend(spec: Spec, cfg):
-    return {"bedrock": _AnthropicBackend,
+    return {"nearai": _NearAIBackend,
+            "bedrock": _AnthropicBackend,
             "bedrock-openai": _BedrockChatBackend}[spec.provider](spec, cfg)
 
 

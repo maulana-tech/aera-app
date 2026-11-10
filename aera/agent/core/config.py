@@ -1,4 +1,4 @@
-"""Configuration. Production refuses to run on modelled data."""
+"""Configuration, read once from the environment (and .env in development)."""
 from __future__ import annotations
 
 import os
@@ -31,7 +31,7 @@ def _value(raw: str) -> str:
 #: credential that is not an AWS access key still never sits in `.env`.
 #: `.secrets/notify.env` holds the alert channels' secrets (SMTP password, bot
 #: token, webhook URLs; clients/channels.py).
-_ENV_FILES = (".env", ".secrets/bedrock.env", ".secrets/notify.env")
+_ENV_FILES = (".env", ".secrets/bedrock.env", ".secrets/notify.env", ".secrets/near.env")
 
 
 def _load_env() -> None:
@@ -47,11 +47,6 @@ def _load_env() -> None:
                 continue
             k, v = line.split("=", 1)
             os.environ.setdefault(k.strip(), _value(v))
-    # The product was called SIGAP before it was AERA. A deployment whose
-    # .env still carries the old names keeps working: each SIGAP_* value fills
-    # its AERA_* name unless that is already set.
-    for k in [k for k in os.environ if k.startswith("SIGAP_")]:
-        os.environ.setdefault("AERA_" + k[len("SIGAP_"):], os.environ[k])
 
 
 _load_env()
@@ -67,14 +62,15 @@ class Config:
     aws_region: str
     model: str
     aux_model: str
-    autonomous_limit_idr: int
-    cost_cap_per_event_idr: int
+    #: Money the team may move on its own authority, per payment (USD). At or
+    #: over it a payment waits for a person, whatever the business profile says;
+    #: the profile can only lower it. The vault holds its own cap on chain.
+    autonomous_limit_usd: float
+    #: What one handling may spend on model calls before it stops (USD).
+    cost_cap_per_run_usd: float
     database: str
     #: Where people open AERA. Every alert links to the handling it is about.
     web_url: str = "http://localhost:3000"
-    #: The rule pack Kira rules from (aera/references/README.md). Company
-    #: terms and certificates, so it is installed per deployment, not committed.
-    rule_pack: str = ""
 
     @property
     def production(self) -> bool:
@@ -91,34 +87,22 @@ class Config:
     @property
     def autonomous_limit_text(self) -> str:
         """The autonomy limit the way a prompt or a tool description says it."""
-        n = self.autonomous_limit_idr
-        if n and n % 1_000_000_000 == 0:
-            return f"Rp {n // 1_000_000_000:,} billion"
-        if n and n % 1_000_000 == 0:
-            return f"Rp {n // 1_000_000:,} million"
-        return f"Rp {n:,}"
-
-    @property
-    def may_use_modelled(self) -> bool:
-        """Modelled data is a dev affordance. Production guesses at nothing."""
-        return not self.production
+        return f"${self.autonomous_limit_usd:,.2f}"
 
 
 def load() -> Config:
     c = Config(
         env=os.environ.get("AERA_ENV", "dev"),
         aws_region=os.environ.get("AWS_REGION", ""),
-        model=os.environ.get("AERA_MODEL", "anthropic.claude-opus-5"),
+        model=os.environ.get("AERA_MODEL", "nearai:moonshotai/kimi-k3"),
         # The auxiliary model: a cheap, fast model for one-shot narration,
         # summaries and titles, so the expensive agent model is not spent on
         # boilerplate. Never sits on a decision or a figure (see core/aux.py).
-        aux_model=os.environ.get("AERA_AUX_MODEL", "anthropic.claude-haiku-5-5"),
-        autonomous_limit_idr=int(os.environ.get("AERA_AUTONOMOUS_LIMIT_IDR", "50000000")),
-        cost_cap_per_event_idr=int(os.environ.get("AERA_COST_CAP_IDR", "500000")),
-        database=os.environ.get("AERA_DB", "data/sigap.db"),
+        aux_model=os.environ.get("AERA_AUX_MODEL", "nearai:z-ai/glm-5.3-flash"),
+        autonomous_limit_usd=float(os.environ.get("AERA_PAY_AUTONOMOUS_LIMIT_USD", "50")),
+        cost_cap_per_run_usd=float(os.environ.get("AERA_COST_CAP_USD", "1.0")),
+        database=os.environ.get("AERA_DB", "data/aera.db"),
         web_url=(os.environ.get("AERA_WEB_URL", "").strip() or "http://localhost:3000").rstrip("/"),
-        rule_pack=os.environ.get("AERA_RULE_PACK", "").strip()
-        or str(pathlib.Path(__file__).resolve().parents[2] / "references" / "rule-pack.json"),
     )
     if c.production:
         from core import llm
@@ -136,12 +120,9 @@ def fixtures_only(script: str, flag: str) -> None:
 
     Returns only in the child.
 
-    A demo that asserts figures from `fixtures/` has to actually read fixtures,
-    not whatever was uploaded into the operator's database. So AERA_DB is
-    redirected to a scratch file, and CFG being frozen at import means only a
-    fresh process honours it. Besides, a check that
-    writes a specimen event into the operator's real database leaves a fake
-    disruption sitting in the record the approvals are kept in.
+    A self-check writes rows (a business, a run, an action). It must never
+    write them into the operator's real record, and CFG is frozen at import,
+    so only a fresh process pointed at a scratch database honours that.
     """
     import subprocess
     import sys
@@ -185,11 +166,9 @@ def demo() -> None:
     print("  .env values: comments stripped ✓ · quotes respected ✓ · bare # kept ✓")
 
     from dataclasses import replace
-    said = {n: replace(CFG, autonomous_limit_idr=n).autonomous_limit_text
-            for n in (50_000_000, 20_500_000, 1_000_000_000)}
-    assert said == {50_000_000: "Rp 50 million", 20_500_000: "Rp 20,500,000",
-                    1_000_000_000: "Rp 1 billion"}, said
-    print(f"  autonomy limit {CFG.autonomous_limit_text}, from AERA_AUTONOMOUS_LIMIT_IDR ✓")
+    said = replace(CFG, autonomous_limit_usd=50).autonomous_limit_text
+    assert said == "$50.00", said
+    print(f"  autonomy limit {CFG.autonomous_limit_text}, from AERA_PAY_AUTONOMOUS_LIMIT_USD ✓")
     print("config ok")
 
 

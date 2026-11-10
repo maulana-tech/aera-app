@@ -1,11 +1,8 @@
-# The agent service runs on the standard library alone. This is only needed
-# once a Bedrock model is configured (core/llm.py).
+# The agent service runs on the Python standard library alone: NEAR AI Cloud
+# (OpenAI-compatible HTTP), NEAR JSON-RPC and transaction signing (core/crypto.py,
+# clients/near.py), attestation checks (core/attest.py) and 1Click (clients/intents.py)
+# are all stdlib. Nothing below is needed for the default NEAR setup.
 #
-# [bedrock] brings boto3/botocore: the AWS credential chain and SigV4 signing,
-# for Claude on Mantle and for MiniMax on Mantle's Chat Completions endpoint.
-# Without the extra, the SDK imports and every call fails on a missing signer.
-#
-# Pinned on purpose. Later SDKs send API version 2026-10-21 by default, which
-# the ARN-versioned Bedrock models (`global.anthropic...-v1:0`, what EC2 runs
-# today) reject with a 400. Move the pin only after a call against Bedrock.
-anthropic[bedrock]==0.125.0
+# Optional:
+#   anthropic[bedrock]==0.125.0   only if an agent is pointed at a bedrock:* model (AERA_PRIVATE=0)
+#   dcap-qvl                      full Intel DCAP verification of the TDX quote (core/attest.py)

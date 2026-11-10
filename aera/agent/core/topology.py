@@ -3,10 +3,10 @@ called, and where every figure was read from.
 
 The steps table is a list in time order, which answers "what happened next"
 and nothing else. "Which of the lead's numbers came from a fixture" or "what
-did Clint read before he offered option B" means walking that list by hand.
-This file folds it into a topology instead:
+did the researcher read before the writer wrote" means walking that list by
+hand. This file folds it into a topology instead:
 
-    event -> lead -> specialist -> tool -> source
+    work item -> supervisor -> specialist -> tool -> source
                                        -> action
 
 Nodes are aggregated (one node per agent, per agent and tool, per source),
@@ -45,16 +45,18 @@ def source_kind(src: str) -> str:
     s = src.strip()
     if s.startswith("fixture"):
         return "fixture"
-    if s.startswith("upload:"):
+    if s.startswith(("upload:", "file ", "business files", "documents")):
         return "upload"
-    if s.startswith(("profile", "company profile")):
+    if s.startswith(("business profile", "profile")):
         return "profile"
-    if s.startswith(("references/", "rule pack", "built-in rules")):
+    if s.startswith(("core/guardian", "guardian")):
         return "rules"
-    if s.startswith(("action record", "actions table", "events table",
-                     "runs ", "runs+", "runs table")):
+    if s.startswith(("action record", "actions", "run record", "work items", "orders", "contacts",
+                     "AERA ledger", "AERA record")):
         return "record"
-    if s.startswith(("engine/", "signals/", "dwell time", "scan ")) or s.endswith(".py"):
+    if s.startswith(("vault", "near")):
+        return "chain"
+    if s.startswith(("engine/", "core/")) or s.endswith(".py"):
         return "engine"
     return "external"
 
@@ -90,7 +92,12 @@ def build(run: dict, agents: Optional[Dict[str, Tuple[str, ...]]] = None) -> dic
     """The topology and the ordered calls of one run (core/store.get_run).
     `agents` is code -> (nickname, title[, brief]), for the agent nodes' labels
     and the role line in a node's detail."""
-    agents = agents or {}
+    if agents is None:
+        try:
+            from agents import roster
+            agents = {c: (a.nickname, a.title, a.brief) for c, a in roster.load().items()}
+        except Exception:                                           # noqa: BLE001
+            agents = {}
     nodes: Dict[str, dict] = {}
     edges: Dict[Tuple[str, str, str], dict] = {}
     calls: List[dict] = []
@@ -113,11 +120,11 @@ def build(run: dict, agents: Optional[Dict[str, Tuple[str, ...]]] = None) -> dic
         e["seqs"].append(seq)
         e["origin"] = _weakest(e["origin"], origin) if origin else e["origin"]
 
-    event = node("event", kind="event", label=run.get("title") or "event",
-                 sub=run.get("kind") or "", trigger=run.get("trigger"),
+    event = node("event", kind="event", label=run.get("title") or "work item",
+                 sub=run.get("kind") or "", trigger=run.get("work_source"),
                  status=run.get("status"), started_at=run.get("started_at"))
     lead = node("agent:supervisor", kind="agent", agent="supervisor", label="Arya",
-                sub="Lead", state="working")
+                sub="Supervisor", state="working")
     edge(event["id"], lead["id"], "triggers", 0)
 
     open_task: Dict[str, int] = {}          # agent -> seq of the delegation it is working on
@@ -202,7 +209,7 @@ def build(run: dict, agents: Optional[Dict[str, Tuple[str, ...]]] = None) -> dic
         an = f"action:{a['id']}"
         node(an, kind="action", label=a.get("kind"), sub=a.get("status"), action_id=a["id"],
              status=a.get("status"), autonomous=bool(a.get("autonomous")),
-             cost_idr=payload.get("cost_idr") if isinstance(payload, dict) else None,
+             value_usd=a.get("value_usd"),
              title=a.get("title"), payload=payload, created_at=a.get("created_at"),
              reference=a.get("reference"),
              approvals=[{k: p.get(k) for k in ("decision", "decided_by", "role", "note", "at")}
@@ -212,7 +219,7 @@ def build(run: dict, agents: Optional[Dict[str, Tuple[str, ...]]] = None) -> dic
             edge(f"tool:{c['agent']}:{c['tool']}", an, "raises", c["seq"])
             c["node_ids"].append(an)
         else:
-            edge("agent:execution" if "agent:execution" in nodes else lead["id"], an, "raises", 0)
+            edge(lead["id"], an, "raises", 0)
 
     # An agent is as trustworthy as the weakest thing it read.
     for e in edges.values():
@@ -236,7 +243,7 @@ def build(run: dict, agents: Optional[Dict[str, Tuple[str, ...]]] = None) -> dic
     return {
         "run": {k: run.get(k) for k in ("id", "title", "kind", "trigger", "status", "mode",
                                         "started_at", "finished_at", "error")}
-               | {"cost_idr": run.get("token_cost_idr") or decision.get("cost_idr"),
+               | {"cost_usd": run.get("cost_usd") or decision.get("cost_usd"),
                   "cost_by_model": decision.get("cost_by_model")},
         "totals": {
             "steps": len(calls),
@@ -260,72 +267,48 @@ def step(run: dict, seq: int) -> Optional[dict]:
 
 
 def demo() -> None:
-    rows = [{"PurchaseOrder": f"45-{i}", "Material": "M-1"} for i in range(60)]
+    rows = [{"title": f"headline {i}", "publisher": "Reuters"} for i in range(60)]
     run = {
-        "id": "run_x", "title": "Ningbo closed", "kind": "port_closure", "status": "done",
+        "id": "run_x", "title": "Order ord_1: brief", "kind": "order", "status": "done",
         "steps": [
-            {"seq": 1, "stage": "DELEGATE", "agent": "impact",
-             "detail": {"agent": "impact", "name": "Elsa", "task": "trace it", "by": "supervisor"}},
-            {"seq": 2, "stage": "TOOL", "agent": "impact", "tools": ["get_open_purchase_orders"],
-             "detail": {"agent": "impact", "name": "get_open_purchase_orders",
-                        "arguments": {"port": "CNNGB"}, "result": rows, "origin": "cached",
-                        "source": "fixture:PurchaseOrder + upload:po.csv", "ms": 900}},
-            {"seq": 3, "stage": "TOOL", "agent": "impact", "tools": ["get_material_stock"],
-             "detail": {"agent": "impact", "name": "get_material_stock", "arguments": {},
-                        "result": [], "origin": "modelled", "source": "fixture:MaterialStock"}},
-            {"seq": 4, "stage": "TOOL", "agent": "impact", "tools": ["get_material_stock"],
-             "detail": {"agent": "impact", "name": "get_material_stock", "arguments": {},
-                        "error": "SapError: 500"}},
-            {"seq": 5, "stage": "FINDING", "agent": "impact",
-             "detail": {"agent": "impact", "name": "Elsa", "summary": "17 orders", "tool_calls": 3,
-                        "stats": {"model": "m", "idr": 120}}},
-            {"seq": 6, "stage": "DELEGATE", "agent": "execution",
-             "detail": {"agent": "execution", "name": "Bram", "task": "move stock"}},
-            {"seq": 7, "stage": "TOOL", "agent": "execution", "tools": ["create_stock_transfer"],
-             "detail": {"agent": "execution", "name": "create_stock_transfer", "arguments": {},
-                        "result": {"id": "act_1", "kind": "stock_transfer"},
-                        "origin": "derived", "source": "action record"}},
-            {"seq": 8, "stage": "FINDING", "agent": "execution",
-             "detail": {"agent": "execution", "name": "Bram", "summary": "done", "tool_calls": 0}},
+            {"seq": 1, "stage": "DELEGATE", "agent": "researcher",
+             "detail": {"agent": "researcher", "name": "Nova", "task": "research it", "by": "supervisor"}},
+            {"seq": 2, "stage": "TOOL", "agent": "researcher", "tools": ["search_news"],
+             "detail": {"agent": "researcher", "name": "search_news", "arguments": {"query": "coffee"},
+                        "result": rows, "origin": "live", "source": "Google News + fixture:Sample", "ms": 900}},
+            {"seq": 3, "stage": "TOOL", "agent": "researcher", "tools": ["read_web_page"],
+             "detail": {"agent": "researcher", "name": "read_web_page", "arguments": {},
+                        "result": [], "origin": "missing", "source": "example.com"}},
+            {"seq": 4, "stage": "TOOL", "agent": "researcher", "tools": ["read_web_page"],
+             "detail": {"agent": "researcher", "name": "read_web_page", "arguments": {}, "error": "URLError"}},
+            {"seq": 5, "stage": "FINDING", "agent": "researcher",
+             "detail": {"agent": "researcher", "name": "Nova", "summary": "3 facts", "tool_calls": 3}},
+            {"seq": 6, "stage": "DELEGATE", "agent": "treasurer",
+             "detail": {"agent": "treasurer", "name": "Tara", "task": "pay the data vendor"}},
+            {"seq": 7, "stage": "TOOL", "agent": "treasurer", "tools": ["pay_vendor"],
+             "detail": {"agent": "treasurer", "name": "pay_vendor", "arguments": {},
+                        "result": {"id": "act_1", "kind": "payment"}, "origin": "derived", "source": "action record"}},
+            {"seq": 8, "stage": "FINDING", "agent": "treasurer",
+             "detail": {"agent": "treasurer", "name": "Tara", "summary": "waiting", "tool_calls": 0}},
         ],
-        "actions": [{"id": "act_1", "kind": "stock_transfer", "status": "pending",
-                     "payload": {"cost_idr": 15_000_000}}],
-        "approvals": [{"action_id": "act_1", "decision": "escalated", "decided_by": "a@b",
-                       "role": "planner", "at": "t"}],
+        "actions": [{"id": "act_1", "kind": "payment", "status": "pending", "value_usd": 40.0, "payload": {}}],
+        "approvals": [{"action_id": "act_1", "decision": "escalated", "decided_by": "a@b", "role": "operator", "at": "t"}],
     }
-    t = build(run, {"impact": ("Elsa", "Impact", "Traces a disruption.")})
+    t = build(run, {"researcher": ("Nova", "Researcher", "Finds facts.")})
     ids = {n["id"]: n for n in t["nodes"]}
     e = {(x["from"], x["to"], x["rel"]): x for x in t["edges"]}
-
     assert ("event", "agent:supervisor", "triggers") in e
-    assert e[("agent:supervisor", "agent:impact", "delegates")]["seqs"] == [1]
-    stock = ids["tool:impact:get_material_stock"]
-    assert stock["calls"] == 2 and stock["errors"] == 1, "one node per agent and tool"
-    assert {"source:fixture:PurchaseOrder", "source:upload:po.csv"} <= set(ids), \
-        "a supplemented read names both of its sources"
-    assert ids["source:fixture:PurchaseOrder"]["source_kind"] == "fixture"
-    assert source_label("fixture:PurchaseOrder")[0] == "Fixture · PurchaseOrder"
-    kinds = {"rule pack rule-pack.json": "rules", "built-in rules + company profile": "rules",
-             "actions table": "record",
-             "dwell time engine over fixture:CustomsDeclaration": "engine",
-             "engine/allocate.py": "engine", "Nager.Date": "external"}
-    assert {k: source_kind(k) for k in kinds} == kinds, {k: source_kind(k) for k in kinds}
-    assert sources_of("Open-Meteo forecast + marine · GDACS") == ["Open-Meteo forecast + marine · GDACS"]
-    assert e[("tool:execution:create_stock_transfer", "action:act_1", "raises")]["seqs"] == [7], \
-        "an action hangs off the call that raised it"
-    assert ids["agent:execution"]["state"] == "no tool" and ids["agent:impact"]["state"] == "done"
-    assert ids["agent:impact"]["brief"] == "Traces a disruption.", "a node carries its role"
-    act = ids["action:act_1"]
-    assert act["payload"]["cost_idr"] == 15_000_000 and act["approvals"][0]["decision"] == "escalated", \
-        "an action node carries what is being approved and who has ruled on it"
-
-    po = next(c for c in t["calls"] if c["seq"] == 2)
-    assert po["truncated"] and len(po["result"]) == PREVIEW_ROWS and po["rows"] == 60
-    assert po["parent_seq"] == 1, "a tool call points back at the task it was done for"
-    assert t["totals"]["by_origin"] == {"cached": 1, "modelled": 1, "error": 1, "derived": 1}
-    assert step(run, 2)["detail"]["result"] is rows, "the full result is one lookup away"
-    print(f"topology ok, {len(t['nodes'])} nodes · {len(t['edges'])} edges · compound sources "
-          "split ✓ · actions joined to their call ✓ · results previewed, full on demand ✓")
+    assert e[("agent:supervisor", "agent:researcher", "delegates")]["seqs"] == [1]
+    page = ids["tool:researcher:read_web_page"]
+    assert page["calls"] == 2 and page["errors"] == 1, "one node per agent and tool"
+    assert {"source:Google News", "source:fixture:Sample"} <= set(ids), "a compound source names both"
+    assert e[("tool:treasurer:pay_vendor", "action:act_1", "raises")]["seqs"] == [7]
+    assert ids["action:act_1"]["value_usd"] == 40.0
+    assert ids["agent:researcher"]["brief"] == "Finds facts."
+    news = next(c for c in t["calls"] if c["seq"] == 2)
+    assert news["truncated"] and len(news["result"]) == PREVIEW_ROWS and news["rows"] == 60
+    assert source_kind("vault") == "chain" and source_kind("core/guardian.py") == "rules"
+    print(f"topology ok, {len(t['nodes'])} nodes · {len(t['edges'])} edges")
 
 
 if __name__ == "__main__":

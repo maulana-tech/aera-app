@@ -1,0 +1,4 @@
+[
+  {"account": "attacker.testnet", "reason": "used in a prompt-injection payout attempt against an AERA demo business",
+   "evidence": "aera/demo/attack-log.md", "reported_by": "aera-guardian", "at": "2026-11-10"}
+]

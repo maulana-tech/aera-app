@@ -23,7 +23,7 @@ from core.provenance import Result
 @dataclass
 class Tool:
     name: str
-    owner: str                  # agent code
+    owner: str                  # capability (agents/roles.py CAPABILITIES) or SHARED
     description: str
     schema: Dict[str, Any]
     fn: Callable[..., Result]
@@ -69,24 +69,43 @@ def get(name: str) -> Tool:
 SHARED = "*"
 
 
-def owned_by(agent_code: str) -> List[Tool]:
-    return [t for t in _REGISTRY.values()
-            if t.owner == agent_code or t.owner == SHARED]
+def owned_by(capabilities: List[str]) -> List[Tool]:
+    """Every tool an agent with these capabilities may call (plus the shared ones)."""
+    caps = set(capabilities or [])
+    return [t for t in _REGISTRY.values() if t.owner in caps or t.owner == SHARED]
+
+
+def tools_of(capability: str) -> List[str]:
+    return sorted(t.name for t in _REGISTRY.values() if t.owner == capability)
+
+
+def _caps_of(agent: Any) -> tuple:
+    """(code, capabilities) for an Agent, or for a code looked up in the roster."""
+    if isinstance(agent, str):
+        try:
+            from agents import roster
+            a = roster.get(agent)
+            return a.code, list(a.capabilities)
+        except Exception:                                           # noqa: BLE001
+            return agent, []
+    return agent.code, list(agent.capabilities)
 
 
 def shared_tools() -> List[Tool]:
     return [t for t in _REGISTRY.values() if t.owner == SHARED]
 
 
-def schemas_for_model(agent_code: str) -> List[dict]:
-    """The shape sent to Claude as the `tools` parameter.
+def schemas_for_model(agent: Any) -> List[dict]:
+    """The shape sent to the model as the `tools` parameter.
 
-    Our own tools first, then any remote tool granted to this agent, so a
-    specialist's own instruments stay at the top of what it is shown.
+    `agent` is an Agent (agents/roster.py) or its code. Our own tools first,
+    then any remote tool granted to this agent, so a specialist's own
+    instruments stay at the top of what it is shown.
     """
+    agent_code, caps = _caps_of(agent)
     specs = [
         {"name": t.name, "description": t.description, "input_schema": t.schema, "strict": True}
-        for t in owned_by(agent_code)
+        for t in owned_by(caps)
     ]
     specs.extend(
         {"name": name, "description": _remote_description(r),
@@ -233,6 +252,17 @@ def check_argument(name: str, fn: Callable[[str], str]) -> None:
     _ARGUMENT_CHECKS[name] = fn
 
 
+def may_call(agent: Any, name: str) -> bool:
+    """Whether this agent was granted the tool. Checked on every call, because
+    a model can name a tool it was never shown."""
+    code, caps = _caps_of(agent)
+    if name.startswith(REMOTE_PREFIX):
+        r = remote_tools().get(name)
+        return bool(r) and code in r["agents"]
+    t = _REGISTRY.get(name)
+    return bool(t) and (t.owner == SHARED or t.owner in caps)
+
+
 def run(name: str, arguments: Dict[str, Any]) -> Result:
     if name.startswith(REMOTE_PREFIX):
         return _run_remote(name, arguments)
@@ -340,6 +370,10 @@ def bind_run(run_id: str) -> Iterator[str]:
 def demo() -> None:
     from core.provenance import Origin
 
+    from types import SimpleNamespace
+    inventory = SimpleNamespace(code="probe_agent", capabilities=["inventory"])
+    logistics = SimpleNamespace(code="other_agent", capabilities=["logistics"])
+
     @register("probe", "inventory", "A registered probe.",
               {"material": {"type": "string"}}, ["material"])
     def probe(material: str) -> Result:
@@ -350,7 +384,8 @@ def demo() -> None:
     assert t.schema["additionalProperties"] is False
 
     # What the model sees must name the same tool that actually runs.
-    (spec,) = schemas_for_model("inventory")
+    (spec,) = [x for x in schemas_for_model(inventory) if x["name"] == "probe"]
+    assert may_call(inventory, "probe") and not may_call(logistics, "probe")
     assert spec["name"] == "probe" and spec["strict"] is True
     assert spec["input_schema"] is t.schema
 
@@ -383,18 +418,18 @@ def demo() -> None:
         assert run("probe", {"material": "M-4471"}).value["material"] == "M-4471"
     assert current_run() is None, "bind_run leaked past its scope"
 
-    assert owned_by("logistics") == []
+    assert [t for t in owned_by(["logistics"]) if t.owner != SHARED] == []
     try:
         get("nope")
         raise AssertionError("an unregistered tool must raise")
     except KeyError:
         pass
 
-    _check_remote()
+    _check_remote(inventory, logistics)
     print(f"registry ok, {len(all_tools())} tool(s)")
 
 
-def _check_remote() -> None:
+def _check_remote(inventory: Any, logistics: Any) -> None:
     """Tools on a server we do not operate: what is offered, and what is not."""
     import core.registry as me
     from clients import mcp_client
@@ -417,11 +452,11 @@ def _check_remote() -> None:
     ]
     rows = [
         {"name": "jira", "url": "http://jira.invalid/mcp", "token": "t",
-         "enabled": True, "agents": ["inventory"], "tools": offered},
+         "enabled": True, "agents": ["probe_agent"], "tools": offered},
         {"name": "notion", "url": "http://notion.invalid/mcp", "token": None,
          "enabled": True, "agents": [], "tools": offered},        # granted to nobody
         {"name": "off", "url": "http://off.invalid/mcp", "token": None,
-         "enabled": False, "agents": ["inventory"], "tools": offered},
+         "enabled": False, "agents": ["probe_agent"], "tools": offered},
     ]
     real_servers, real_call = store.mcp_servers, mcp_client.call
     store.mcp_servers = lambda include_token=False: rows                # type: ignore[assignment]
@@ -444,12 +479,12 @@ def _check_remote() -> None:
         assert not any("off" in n for n in names), "a disabled server offers nothing"
 
         # It reaches the agent it was granted to, and nobody else.
-        inv = [sp["name"] for sp in schemas_for_model("inventory")]
+        inv = [sp["name"] for sp in schemas_for_model(inventory)]
         assert "mcp__jira__search_tickets" in inv, inv
         assert not any(sp["name"].startswith(REMOTE_PREFIX)
-                       for sp in schemas_for_model("logistics"))
+                       for sp in schemas_for_model(logistics))
 
-        (spec,) = [sp for sp in schemas_for_model("inventory")
+        (spec,) = [sp for sp in schemas_for_model(inventory)
                    if sp["name"].startswith(REMOTE_PREFIX)]
         assert spec["strict"] is True
         assert spec["input_schema"]["additionalProperties"] is False
@@ -481,7 +516,7 @@ def _check_remote() -> None:
         with no_remote():
             assert remote_tools(refresh=True) == {}
             assert not any(sp["name"].startswith(REMOTE_PREFIX)
-                           for sp in schemas_for_model("inventory"))
+                           for sp in schemas_for_model(inventory))
     finally:
         store.mcp_servers, mcp_client.call = real_servers, real_call   # type: ignore[assignment]
         forget_remote()

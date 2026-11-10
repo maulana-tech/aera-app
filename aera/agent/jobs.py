@@ -1,118 +1,109 @@
 """Everything AERA does on its own, in one list.
 
-The cadences, and why each one:
+  work      20 s    Claim the oldest new work item and hand it to the team.
+  settle    30 s    Execute approved actions, follow payments the vault holds,
+                    and turn orders paid to the vault into work items.
+  notify    30 s    The outbox.
+  attest    2 min   Settle TEE proofs whose verification never finished (a
+                    restart drops the in-memory bytes; the proof says so).
+  goals     daily   The profile's standing goals become work items.
+  digest    07:30   The morning summary.
 
-  bmkg       5 min    BMKG publishes within minutes and keeps a quake listed
-                      for hours; faster buys nothing.
-  hazards    30 min   GDACS, NASA EONET and USGS near a port or a plant.
-                      GDACS answers in ~17 s and grades a cyclone every few
-                      hours, so polling it often only costs the feed.
-  weather    3 h      Open-Meteo, three days ahead at the watched places. Its
-                      models run every few hours; a three-day outlook does
-                      not change in between.
-  exposure   weekly   Vega's Prevent-mode scan of our own data. Nothing it
-                      finds is urgent.
-  notify     30 s     The outbox. Alerts are queued the moment a handling
-                      ends; this is how long one waits at most.
-  send       10 min   Approved actions issued as documents (sender.py).
-  digest     07:30    The morning summary, WIB.
-
-The first four raise events, and an event starts a handling that spends model
-credit; AERA_WATCH=0 turns those four off and leaves the rest.
+`work` and `goals` start handlings that spend model credit; AERA_WATCH=0 turns
+those two off (somewhere that should not act on its own) and leaves the rest.
 """
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import Callable, List
 
 from core.schedule import Job, Scheduler
 
-RaiseEvent = Callable[[dict], str]
+StartWork = Callable[[dict], str]
 
 
-def _raised(ids: List[str], source: str) -> str:
-    return f"{len(ids)} event(s) raised from {source}" if ids else f"{source}: nothing new"
+def all_jobs(start_work: StartWork) -> List[Job]:
+    def work() -> str:
+        from core import business, store
+        p = business.current()
+        if p.get("kill_switch"):
+            return "kill switch on: no new work started"
+        spent = sum(r.get("cost_usd") or 0 for r in store.list_runs(200)
+                    if (r.get("started_at") or "")[:10] == datetime.now(timezone.utc).date().isoformat())
+        cap = p["constraints"]["inference_max_usd_per_day"]
+        if cap and spent >= cap:
+            return f"model spend today ${spent:.2f} reached the ${cap:.2f} daily cap: waiting until tomorrow"
+        item = store.next_new_work_item()
+        if not item:
+            return "nothing new"
+        return f"started {start_work(item)} for {item['id']}"
 
-
-def all_jobs(raise_event: RaiseEvent) -> List[Job]:
-    def bmkg() -> str:
-        from signals import watch
-        return _raised(watch.sweep(raise_event), "BMKG")
-
-    def hazards() -> str:
-        from signals import hazards as h
-        return _raised(h.sweep(raise_event), "GDACS, EONET, USGS")
-
-    def weather() -> str:
-        from signals import weather as w
-        return _raised(w.sweep(raise_event), "Open-Meteo")
-
-    def exposure() -> str:
-        from signals import watch
-        return _raised(watch.sweep_exposure(raise_event), "Vega")
-
-    def certificates() -> str:
-        from signals import watch
-        return _raised(watch.sweep_certificates(raise_event), "rule pack")
+    def settle_() -> str:
+        import settle
+        return settle.run_once()
 
     def deliver() -> str:
         import notify
-        import outreach
-        # An approval recorded while the mailbox was not connected is picked
-        # up here once it is.
-        n = outreach.queue_approved()
-        return (f"{n} outward message(s) queued; " if n else "") + notify.deliver_summary()
+        return notify.deliver_summary()
+
+    def attest() -> str:
+        from core import llm, store
+        stale = 0
+        cutoff = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+        for p in store.pending_proofs(50):
+            if p["created_at"] < cutoff and p["id"] not in llm._PENDING_BYTES:
+                store.settle_proof(p["id"], "partial", [{"name": "signature_text", "status": "skipped",
+                                                         "detail": "the service restarted before the response "
+                                                                   "signature was checked; the call's hashes are kept"}], None)
+                stale += 1
+        llm.refresh_attested()
+        return f"{stale} stale proof(s) settled"
+
+    def goals() -> str:
+        from core import business, store
+        p = business.current()
+        if p.get("kill_switch") or not p.get("name"):
+            return "no business or kill switch on"
+        day = datetime.now(timezone.utc).date().isoformat()
+        raised = [store.record_work_item("goal", g[:120], "schedule", {"goal": g, "day": day},
+                                         dedup_key=f"goal:{day}:{g[:80]}") for g in p.get("goals", [])]
+        return f"{len([r for r in raised if r])} goal(s) raised"
 
     def digest() -> str:
         import notify
         n = notify.queue_digest()
         return f"{n} digest message(s) queued; {notify.deliver_summary()}"
 
-    def send() -> str:
-        import sender
-        n = sender.send_approved()
-        return f"{n} action(s) issued"
-
     return [
-        Job("bmkg", "Earthquakes near a plant, from BMKG", bmkg, every=300, signal=True),
-        Job("hazards", "Cyclones, floods and quakes near a port or plant (GDACS, NASA EONET, USGS)",
-            hazards, every=1800, signal=True),
-        Job("weather", "Gales, high seas and heavy rain forecast at a port or plant (Open-Meteo)",
-            weather, every=3 * 3600, signal=True),
-        Job("exposure", "Vega's scan for risk that has not happened yet", exposure,
-            every=7 * 86400, signal=True),
-        Job("certificates",
-            "TKDN certificates running out, which no feed can see (rule pack)",
-            certificates, every=24 * 3600, signal=True),
-        Job("notify", "Deliver queued alerts and approved outward messages", deliver, every=30),
-        Job("send", "Issue approved actions as documents", send, every=600),
+        Job("work", "Hand the oldest new work item to the team", work, every=20, signal=True),
+        Job("settle", "Execute approved actions; follow the vault; ingest paid orders", settle_, every=30),
+        Job("notify", "Deliver queued alerts, messages and deliveries", deliver, every=30),
+        Job("attest", "Settle TEE proofs that never finished verifying", attest, every=120),
+        Job("goals", "Turn the profile's standing goals into work items", goals, every=24 * 3600, signal=True),
         Job("digest", "The morning digest", digest, at="07:30"),
     ]
 
 
-def scheduler(raise_event: RaiseEvent) -> Scheduler:
-    return Scheduler(all_jobs(raise_event))
+def scheduler(start_work: StartWork) -> Scheduler:
+    return Scheduler(all_jobs(start_work))
 
 
 def demo() -> None:
-    s = scheduler(lambda body: "evt_x")
-    d = {j["name"]: j for j in s.describe()}
-    watchers = ("bmkg", "hazards", "weather", "exposure", "certificates")
-    assert list(d) == [*watchers, "notify", "send", "digest"]
-    assert d["digest"]["cadence"] == "daily at 07:30 WIB" and d["exposure"]["cadence"] == "weekly"
-    assert all(d[n]["signal"] for n in watchers)
-    assert not any(d[n]["signal"] for n in ("notify", "send", "digest"))
-    off = {j["name"]: j["off"] for j in Scheduler(all_jobs(lambda b: ""), watch=False).describe()}
-    # Certificates are a watcher too: AERA_WATCH=0 must silence it with the rest.
-    assert off["hazards"] == off["certificates"] == "AERA_WATCH=0" and off["notify"] is None
-    # The two that touch nothing outside: run them for real on the scratch db.
-    assert s.run_now("send") and s.run_now("notify")
+    from core import business, store
+    store.save_profile(business.EXAMPLE, by="check")
+    started: List[str] = []
+    s = scheduler(lambda item: started.append(item["id"]) or "run_x")
+    names = [j["name"] for j in s.describe()]
+    assert names == ["work", "settle", "notify", "attest", "goals", "digest"], names
+    store.record_work_item("request", "hello", "api", {})
+    assert s.run_now("work") and s.run_now("settle") and s.run_now("goals")
     s.wait_idle()
     st = {j["name"]: j for j in s.describe()}
-    assert st["send"]["last_status"] == "ok", st["send"]
-    assert st["notify"]["last_detail"] == "nothing queued", st["notify"]
-    print("  jobs: eight, with their cadences ✓ · AERA_WATCH=0 stops only the watchers ✓ "
-          "· outbox and sender run ✓")
-    print("jobs ok")
+    assert st["work"]["last_status"] == "ok" and started, st["work"]
+    assert "1 goal(s) raised" in st["goals"]["last_detail"], st["goals"]
+    off = {j["name"]: j["off"] for j in Scheduler(all_jobs(lambda i: ""), watch=False).describe()}
+    assert off["work"] == off["goals"] == "AERA_WATCH=0" and off["settle"] is None
+    print("jobs ok: six jobs ✓ · work claims one item ✓ · goals raise work ✓ · AERA_WATCH=0 stops the autonomous two ✓")
 
 
 if __name__ == "__main__":
