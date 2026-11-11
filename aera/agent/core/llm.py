@@ -74,13 +74,14 @@ IDR_PER_USD = int(os.environ.get("AERA_IDR_PER_USD") or 16_400)
 #: `global.` ids bill at; a regional profile costs 10% more. Checked in order,
 #: so a longer id comes before its prefix.
 _USD_PER_MTOK: Tuple[Tuple[str, float, float], ...] = (
-    # NEAR AI Cloud (GET /v1/models pricing, read 2026-11-10).
-    ("glm-5.3-flash", 0.04, 1.35),
+    # NEAR AI Cloud, the fallback when the live list cannot be read (GET /v1/model/list,
+    # amount x 10^-9 USD per token, read 2026-11-11). The live list wins: see _LIVE_PRICES.
+    ("glm-5.3-flash", 0.08, 0.50),
     ("qwen3.8-27b", 0.04, 1.35),
     ("qwen3.6-35b", 0.17, 1.10),
     ("deepseek-v4.1-flash", 0.30, 1.20),
-    ("glm-5.3", 0.60, 2.20),
-    ("kimi-k3", 0.60, 2.50),
+    ("glm-5.3", 1.80, 5.75),
+    ("kimi-k3", 3.30, 16.50),
     ("claude-opus-5-5", 4.00, 20.00),
     ("claude-opus-5", 5.00, 25.00),
     ("claude-opus-4-6", 5.00, 25.00),
@@ -404,6 +405,8 @@ def usd_per_mtok(spec: Optional[Spec], input_tokens: int = 0) -> Tuple[float, fl
     if spec is None:
         return DEFAULT_USD_PER_MTOK
     m = spec.model.lower()
+    if spec.provider == "nearai" and m in _LIVE_PRICES:
+        return _LIVE_PRICES[m]
     if "claude-haiku-5-5" in m and input_tokens > 100_000:
         return (0.50, 2.50)
     for key, i, o in _USD_PER_MTOK:
@@ -844,6 +847,16 @@ _ATTESTED = {
     "deepseek-ai/deepseek-v4.1-flash-1017", "deepseek/deepseek-v3.2",
 }
 _ATTESTED_AT = 0.0
+#: model id -> (USD per million input, per million output), from NEAR AI's own model list, refreshed with
+#: the attested set. A hand-kept table once priced Kimi K3 at a fifth of its rate, so the live price wins.
+_LIVE_PRICES: Dict[str, Tuple[float, float]] = {}
+
+
+def _per_million(cost: Any) -> Optional[float]:
+    """NEAR AI quotes {"amount": 3300, "scale": 9, "currency": "USD"} per token."""
+    if isinstance(cost, dict) and isinstance(cost.get("amount"), (int, float)) and cost.get("currency", "USD") == "USD":
+        return cost["amount"] / 10 ** int(cost.get("scale", 9)) * 1e6
+    return None
 
 
 def private_mode() -> bool:
@@ -861,6 +874,9 @@ def refresh_attested(force: bool = False) -> set:
         rows = attest.fetch_model_list()
         live = set()
         for r in rows:
+            i, o = _per_million(r.get("inputCostPerToken")), _per_million(r.get("outputCostPerToken"))
+            if i is not None and o is not None and r.get("modelId"):
+                _LIVE_PRICES[str(r["modelId"]).lower()] = (i, o)
             meta = r.get("metadata") or {}
             if meta.get("verifiable") or r.get("attestationSupported"):
                 for k in ("modelId", "id", "model", "name"):
