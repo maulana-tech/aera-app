@@ -3,7 +3,7 @@
 import {
   BookUser, Briefcase, CalendarClock, ChevronDown, ChevronsUpDown, Cpu, FileText, Inbox, KeyRound,
   Landmark, LayoutDashboard, LogIn, LogOut, Menu, MessagesSquare, PanelLeftClose, PanelLeftOpen, Plug,
-  ReceiptText, ScrollText, Settings2, ShoppingBag, Sparkles, Users,
+  ReceiptText, ScrollText, Settings2, ShieldCheck, ShoppingBag, Sparkles, Users,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -59,6 +59,10 @@ function groups(pending: number): { label: string; items: Item[] }[] {
         { title: "Treasury", href: "/treasury", icon: Landmark, badge: pending },
         { title: "Ledger", href: "/ledger", icon: ReceiptText },
       ],
+    },
+    {
+      label: "Trust",
+      items: [{ title: "Trust center", href: "/trust", icon: ShieldCheck }],
     },
   ];
 }

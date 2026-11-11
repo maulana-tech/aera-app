@@ -191,6 +191,8 @@ def deliver(limit: int = 50) -> Dict[str, int]:
             (subject, body), how = privacy.redact_many([n["subject"], n["body"]])
             n = {**n, "subject": subject,
                  "body": body if how == "redacted" else f"{body}\n\n[not redacted: {how}]"}
+            store.record_privacy_event(n["id"], n["channel"], "redacted" if how == "redacted" else "not_redacted",
+                                       "" if how == "redacted" else how)
         try:
             files = files_for(n.get("attachments")) if n["channel"] == "email" else []
             ref = channels.send(n["channel"], n["address"], n["subject"], n["body"],

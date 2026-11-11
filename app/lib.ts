@@ -484,3 +484,31 @@ export type Trace = {
   };
   nodes: TraceNode[]; edges: TraceEdge[]; calls: TraceCall[];
 };
+
+/* ------------------------------------------------------------ trust center (core/trust.py) */
+export type TrustProofModel = { model: string; provider: string; attested: number; partial: number; failed: number; pending: number };
+export type TrustProof = { id: string; run_id: string | null; agent: string; model: string; verdict: string; at: string; provider: string };
+export type TrustCheck = {
+  id: string; run_id: string | null; kind: string; subject: string; verdict: string; at: string;
+  rules: { rule: string; verdict: string; detail: string }[];
+};
+export type TrustPayload = {
+  days: number; generated_at: string;
+  privacy: {
+    private_mode: boolean; attested_models: number; raw_prompts_stored: boolean;
+    proofs: { total: number; by_verdict: Record<string, number>; chat_calls: number; by_model: TrustProofModel[]; recent: TrustProof[] };
+    redaction: { redacted: number; not_redacted: number; recent: { id: string; channel: string; outcome: string; detail: string | null; at: string }[] };
+    guardian_privacy_stops: TrustCheck[];
+  };
+  security: {
+    vault: {
+      configured: boolean; network: string; vault: string | null; agent: string | null; note?: string; balance_usd?: number | null;
+      policy?: { per_tx_cap_usd: number; daily_cap_usd: number; spent_today_usd: number; frozen: boolean; owner: string; approvers: number };
+      agent_keys?: { full_access: number; function_call: { receiver: string; methods: string[] }[] } | { error: string };
+    };
+    guardian: { total: number; by_verdict: Record<string, number>; by_rule: { rule: string; block: number; warn: number }[]; stopped: TrustCheck[] };
+    decisions: { team_alone: number; person: number; waiting: number; blocked: number };
+    kill_switch: { version: number; on: boolean; by: string; note: string | null; at: string }[];
+    attack_demo: { at: string | null; network: string | null; vault: string | null; layers: { title: string; status: string | null; detail: string }[] } | null;
+  };
+};

@@ -1599,6 +1599,15 @@ def guardian_log(_m, b: dict, h) -> Tuple[int, dict]:
     return 200, {"checks": store.list_checks(limit=100, verdict=b.get("verdict") or None)}
 
 
+@route("GET", r"/trust")
+def trust_center(_m, b: dict, h) -> Tuple[int, dict]:
+    """The evidence for privacy and security in one place (core/trust.py)."""
+    from core import trust
+    _user(h)
+    days = int(b.get("days") or 30) if str(b.get("days") or "30").isdigit() else 30
+    return 200, trust.summary(max(1, min(days, 365)))
+
+
 @route("GET", r"/attestation/([A-Za-z0-9_.:\-/]+)")
 def attestation(m, _b, h) -> Tuple[int, dict]:
     """A fresh report for one model, checked with a nonce made now."""

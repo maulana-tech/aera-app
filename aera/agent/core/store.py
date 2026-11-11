@@ -193,6 +193,18 @@ CREATE TABLE IF NOT EXISTS tee_proofs (
 CREATE INDEX IF NOT EXISTS idx_tee_run ON tee_proofs(run_id);
 CREATE INDEX IF NOT EXISTS idx_tee_verdict ON tee_proofs(verdict, created_at);
 
+-- What happened to personal data on its way to a channel the business does not control
+-- (core/privacy.py): redacted, or sent as it was and why. The text itself is not kept here.
+CREATE TABLE IF NOT EXISTS privacy_events (
+  id              TEXT PRIMARY KEY,
+  notification_id TEXT,
+  channel         TEXT NOT NULL,
+  outcome         TEXT NOT NULL,         -- redacted | not_redacted
+  detail          TEXT,
+  at              TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_privacy_at ON privacy_events(at);
+
 -- What the business knows that no API does: price lists, briefs, style
 -- guides. Text only; read by the agents through read_business_file.
 CREATE TABLE IF NOT EXISTS files (
@@ -1199,6 +1211,17 @@ def mark_notification(nid: str, status: str, error: Optional[str] = None,
                   " reference=COALESCE(?, reference),"
                   " sent_at=CASE WHEN ?='sent' THEN ? ELSE sent_at END WHERE id=?",
                   (status, error, reference, status, _now(), nid))
+
+
+def record_privacy_event(notification_id: Optional[str], channel: str, outcome: str, detail: str = "") -> None:
+    with connect() as c:
+        c.execute("INSERT INTO privacy_events (id, notification_id, channel, outcome, detail, at) VALUES (?,?,?,?,?,?)",
+                  (new_id("prv"), notification_id, channel, outcome, detail[:300], _now()))
+
+
+def privacy_events(limit: int = 50) -> List[dict]:
+    with connect() as c:
+        return [dict(r) for r in c.execute("SELECT * FROM privacy_events ORDER BY at DESC LIMIT ?", (limit,))]
 
 
 def list_notifications(limit: int = 100) -> List[dict]:
