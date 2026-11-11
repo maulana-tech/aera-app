@@ -20,7 +20,7 @@ export default function TraceView({ trace, focusSeq }: { trace: Trace; focusSeq:
   return (
     <>
       <section className="mt-6">
-        <h2 className="mb-1 text-sm font-semibold">Topology</h2>
+        <h2 className="mb-1 text-sm font-medium">Topology</h2>
         <p className="text-muted-foreground mb-3 text-xs">
           Who asked whom, which tool each called, and where every figure was read from. Click a
           node to open its details: its numbers, what it connects to, and every step through it.
@@ -28,7 +28,7 @@ export default function TraceView({ trace, focusSeq }: { trace: Trace; focusSeq:
         <TraceTopology trace={trace} selected={selected} onSelect={pick} />
       </section>
       <section ref={list} className="mt-8 scroll-mt-4">
-        <h2 className="mb-3 text-sm font-semibold">Every step, in order</h2>
+        <h2 className="mb-3 text-sm font-medium">Every step, in order</h2>
         <TraceCalls
           trace={trace}
           runId={trace.run.id}

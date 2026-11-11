@@ -11,7 +11,7 @@ export default async function PublicLedger() {
   const [led, info] = await Promise.all([publicApi<Ledger>("ledger"), publicApi<PublicOfferings>("offerings")]);
   return (
     <PublicShell business={info?.business} simulated={!info?.vault}>
-      <h1 className="text-xl font-semibold tracking-tight md:text-2xl">Public ledger</h1>
+      <h1 className="text-xl font-medium tracking-tight md:text-2xl">Public ledger</h1>
       <p className="text-muted-foreground mt-1.5 text-sm leading-relaxed">
         Every figure this business is run on, for anyone to check: money in and out, revenue split,
         model spend, and how many decisions its agents made alone against those a person made. Last 30 days, times in UTC.

@@ -2,41 +2,77 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* AERA on the Dort blue system.
+ *
+ * The page IS the brand blue #0647B3 with a faint dot grid; white panels float on it and carry dark
+ * text. Every tone is the brand hue (217) at a different lightness, so a tone is only correct
+ * against the surface it sits on: --on-canvas-* for text directly on the blue, the rest inside a
+ * panel. Colour beyond the blue is used only as tiny semantic dots (green ok, yellow amount /
+ * waiting, red bad, blue external). Weights 400 / 500 only, sentence case, Outfit for UI and
+ * Geist Mono for ids, money, hashes and dates.
+ *
+ * Light only: the blue canvas is the brand, and a dark variant would be a second design to keep
+ * honest. `dark:` classes left in components are inert because no `.dark` class is ever set. */
+
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --muted: oklch(0.97 0 0);
-  --card: oklch(1 0 0);
-  --accent: oklch(0.97 0 0);
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  /* the canvas */
+  --brand: #0647b3;
+  --brand-lit: #0a5fe0;
+  --canvas: #0647b3;
+  --dot: #2a6fe8;
+  --on-canvas: #ffffff;
+  --on-canvas-dim: rgba(255, 255, 255, 0.82);
+
+  /* panels */
+  --card-top: #ffffff;
+  --card-bot: #f3f7fe;
+  --inner-top: #f8fbff;
+  --inner-bot: #eef4fd;
+  --raised: #eef3fb;
+  --hover: #e3ebf7;
+  --inset: #e9f0fb;
+
+  /* text ramp, measured on white */
+  --fg: #142745;
+  --text: #1f365d;
+  --body: #3a5177;
+
+  /* semantic dots: the only colour besides the brand */
+  --green: #126c34;
+  --yellow: #a16207;
+  --red: #b71e1e;
+  --blue: #1d4ed8;
+  --mint: #34d399;
+
+  /* shadcn's names, pointed at the same palette */
+  --background: #ffffff;
+  --foreground: var(--fg);
+  --card: #ffffff;
+  --card-foreground: var(--fg);
+  --popover: #ffffff;
+  --popover-foreground: var(--fg);
+  --primary: var(--brand);
+  --primary-foreground: #ffffff;
+  --secondary: var(--raised);
+  --secondary-foreground: var(--text);
+  --muted: var(--raised);
+  --muted-foreground: #4b5e7f;
+  --accent: var(--hover);
+  --accent-foreground: var(--fg);
+  --destructive: var(--red);
+  --border: rgba(6, 35, 89, 0.12);
+  --input: rgba(6, 35, 89, 0.18);
+  --ring: rgba(6, 71, 179, 0.45);
+  --chart-1: #0647b3;
+  --chart-2: #2a6fe8;
+  --chart-3: #6b9cf0;
+  --chart-4: #a9c6f6;
+  --chart-5: #d6e4fb;
+  --radius: 10px;
+
+  color-scheme: light;
 }
 
 @theme inline {
@@ -45,17 +81,9 @@
   --color-muted: var(--muted);
   --color-card: var(--card);
   --color-accent: var(--accent);
-  --font-sans: var(--font-sans);
+  --font-sans: var(--font-outfit);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
+  --font-heading: var(--font-outfit);
   --color-chart-5: var(--chart-5);
   --color-chart-4: var(--chart-4);
   --color-chart-3: var(--chart-3);
@@ -74,86 +102,150 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+
+  --color-brand: var(--brand);
+  --color-brand-lit: var(--brand-lit);
+  --color-canvas: var(--canvas);
+  --color-on-canvas: var(--on-canvas);
+  --color-on-canvas-dim: var(--on-canvas-dim);
+  --color-raised: var(--raised);
+  --color-hover: var(--hover);
+  --color-inset: var(--inset);
+  --color-fg: var(--fg);
+  --color-text: var(--text);
+  --color-body: var(--body);
+  --color-ok: var(--green);
+  --color-warn: var(--yellow);
+  --color-bad: var(--red);
+  --color-info: var(--blue);
+  --color-mint: var(--mint);
+
+  /* one radius scale: chip 8 · tile (buttons, controls) 10 · inner card 12 · card 18 */
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 18px;
+  --radius-2xl: 18px;
+  --radius-3xl: 22px;
+  --radius-4xl: 26px;
+  --radius-chip: 8px;
+  --radius-tile: 10px;
+  --radius-inner: 12px;
+  --radius-card: 18px;
+
+  --shadow-soft: 0 8px 24px rgba(6, 35, 89, 0.14);
+  --shadow-float: 0 14px 40px rgba(6, 35, 89, 0.22);
+
+  --animate-rise: rise 0.35s ease-out both;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* the canvas: brand blue with a faint 22px dot grid */
+@utility dot-grid {
+  background-color: var(--canvas);
+  background-image: radial-gradient(circle, var(--dot) 1px, transparent 1.4px);
+  background-size: 22px 22px;
+}
+
+/* the same grid inside a white panel */
+@utility dot-grid-soft {
+  background-color: var(--inset);
+  background-image: radial-gradient(circle, rgb(6 35 89 / 0.16) 1px, transparent 1.4px);
+  background-size: 22px 22px;
+}
+
+/* outer card and the nested inner card */
+@utility bg-card-grad {
+  background: linear-gradient(180deg, var(--card-top) 0%, var(--card-bot) 100%);
+}
+@utility bg-inner-grad {
+  background: linear-gradient(180deg, var(--inner-top) 0%, var(--inner-bot) 100%);
+}
+
+/* a row that scrolls sideways when it runs out of room, with no scrollbar drawn */
+@utility rail-x {
+  overflow-x: auto;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* very soft glow behind the top edge of the ONE selected or running card */
+@utility glow-top {
+  position: relative;
+  isolation: isolate;
+  &::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    left: 12%;
+    right: 12%;
+    top: -10px;
+    height: 46px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(6, 71, 179, 0.28), rgba(37, 108, 231, 0.18));
+    filter: blur(22px);
+    pointer-events: none;
+  }
 }
 
 html {
   scroll-behavior: smooth;
-  /* next-themes sets color-scheme inline once it has hydrated. These two keep
-     the browser chrome (scrollbars, native controls) correct before that and
-     when JavaScript never runs, instead of pinning everything to dark. */
   color-scheme: light;
-}
-
-html.dark {
-  color-scheme: dark;
-}
-
-body {
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
-}
-
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground;
-  }
   html {
     @apply font-sans;
   }
+  body {
+    @apply dot-grid text-foreground;
+    font-family: var(--font-outfit), system-ui, sans-serif;
+  }
+  /* weights 400 / 500 only: headings carry size and tone, not boldness */
+  b,
+  strong,
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-weight: 500;
+  }
+  h1 {
+    letter-spacing: -0.02em;
+  }
+  /* anything you can click shows a pointer */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"],
+  [role="option"],
+  [role="menuitem"],
+  a[href],
+  summary,
+  select:not(:disabled) {
+    cursor: pointer;
+  }
+  ::selection {
+    background: rgba(6, 71, 179, 0.18);
+  }
 }
+
 /* ------------------------------------------------------------------ charts
-   One series hue only. Critical vs safe is carried by the threshold line,
-   row order, and direct labels — not by red/green, which fails the
-   colour-blind legibility check (deutan ΔE 4.1 on the palette validator). */
+   One series hue only: the brand blue. Critical vs safe is carried by the threshold line,
+   row order and direct labels, not by red/green. */
 .viz {
-  --viz-series: #2a78d6;
-  --viz-track: color-mix(in oklab, var(--viz-series) 14%, transparent);
+  --viz-series: #0647b3;
+  --viz-track: color-mix(in oklab, var(--viz-series) 12%, transparent);
   --viz-rule: var(--border);
-}
-.dark .viz {
-  --viz-series: #3987e5;
-  --viz-track: color-mix(in oklab, var(--viz-series) 20%, transparent);
 }

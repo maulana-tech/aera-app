@@ -4,8 +4,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Field } from "@/components/profile-editor";
-import { ThemeToggle } from "@/components/theme";
-import AuthSectionOne from "@/components/ui/auth-section-1";
+import { AeraMark } from "@/components/aera-mark";
+import { Dot } from "@/components/dort";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -47,53 +47,53 @@ export default function Login() {
     }
   }
 
-  if (needsOwner) {
-    return (
-      <main className="bg-background flex min-h-svh items-center justify-center px-4">
-        <form
-          className="w-full max-w-sm space-y-4 rounded-xl border p-6"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void send("/api/setup", { email, password, name }, "/onboarding");
-          }}
-        >
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <h1 className="text-lg font-semibold">Set up AERA</h1>
-              <p className="text-muted-foreground mt-1 text-sm">
-                No account exists yet. Create the owner: the person who describes the business, sets its limits and
-                approves the team.
-              </p>
-            </div>
-            <ThemeToggle />
-          </div>
-          <Field label="Your name"><Input value={name} autoComplete="name" onChange={(e) => setName(e.target.value)} required /></Field>
-          <Field label="Email"><Input type="email" value={email} autoComplete="email" onChange={(e) => setEmail(e.target.value)} required /></Field>
-          <Field label="Password" hint="At least 10 characters. You sign in with it from now on.">
-            <Input type="password" value={password} minLength={10} autoComplete="new-password"
-                   onChange={(e) => setPassword(e.target.value)} required />
-          </Field>
-          {error && <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p>}
-          <Button type="submit" className="w-full" disabled={busy}>{busy ? "Creating…" : "Create owner and continue"}</Button>
-        </form>
-      </main>
-    );
-  }
-
+  const setup = needsOwner;
   return (
-    <AuthSectionOne
-      email={email}
-      password={password}
-      onEmailChange={setEmail}
-      onPasswordChange={setPassword}
-      onSubmit={(e) => {
-        e.preventDefault();
-        void send("/api/login", { email, password }, "/");
-      }}
-      busy={busy}
-      error={error}
-      header={<ThemeToggle />}
-      note={<>No account? Ask the business owner to add you under Settings → Accounts.</>}
-    />
+    <main className="flex min-h-svh flex-col items-center justify-center gap-8 px-4 py-10">
+      <div className="flex items-center gap-2.5 text-white">
+        <AeraMark className="size-8" />
+        <span className="text-[26px] tracking-[-0.02em]">aera</span>
+      </div>
+      <form
+        className="bg-card-grad shadow-float w-full max-w-[420px] space-y-5 rounded-xl border border-white/40 p-6 md:p-8"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (setup) void send("/api/setup", { email, password, name }, "/onboarding");
+          else void send("/api/login", { email, password }, "/");
+        }}
+      >
+        <div>
+          <h1 className="text-[22px]">{setup ? "Set up AERA" : "Sign in"}</h1>
+          <p className="text-muted-foreground mt-1.5 text-[13px] leading-relaxed">
+            {setup
+              ? "No account exists yet. Create the owner: the person who describes the business, sets its limits and approves the team."
+              : "A team of agents runs the business; you set the limits and approve what goes past them."}
+          </p>
+        </div>
+        {setup && (
+          <Field label="Your name"><Input value={name} autoComplete="name" onChange={(e) => setName(e.target.value)} required /></Field>
+        )}
+        <Field label="Email"><Input type="email" value={email} autoComplete="email" onChange={(e) => setEmail(e.target.value)} required /></Field>
+        <Field label="Password" hint={setup ? "At least 10 characters. You sign in with it from now on." : undefined}>
+          <Input type="password" value={password} minLength={setup ? 10 : undefined}
+                 autoComplete={setup ? "new-password" : "current-password"}
+                 onChange={(e) => setPassword(e.target.value)} required />
+        </Field>
+        {error && (
+          <p className="text-bad flex items-center gap-2 text-[13px]"><Dot tone="bad" />{error}</p>
+        )}
+        <Button type="submit" size="lg" className="w-full" disabled={busy}>
+          {busy ? (setup ? "Creating…" : "Signing in…") : setup ? "Create owner and continue" : "Sign in"}
+        </Button>
+        {!setup && (
+          <p className="text-muted-foreground text-center text-[12.5px]">
+            No account? Ask the business owner to add you under Settings → Accounts.
+          </p>
+        )}
+      </form>
+      <p className="text-on-canvas-dim max-w-sm text-center text-[12.5px]">
+        Agents on TEE-attested NEAR AI models · money only through an on-chain vault with limits a person sets.
+      </p>
+    </main>
   );
 }

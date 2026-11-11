@@ -38,9 +38,9 @@ const HEAD = 30;
 const PAD_Y = 10;
 
 const STRIPE: Record<string, string> = {
-  event: "border-l-slate-400 dark:border-l-slate-500",
+  event: "border-l-slate-400 ",
   agent: "border-l-sky-500",
-  tool: "border-l-zinc-400 dark:border-l-zinc-500",
+  tool: "border-l-zinc-400 ",
   action: "border-l-rose-500",
   upload: "border-l-cyan-500",
   fixture: "border-l-amber-500",
@@ -54,16 +54,16 @@ const STRIPE: Record<string, string> = {
 };
 
 const ORIGIN_STROKE: Record<string, string> = {
-  live: "stroke-emerald-500",
-  cached: "stroke-sky-500",
-  derived: "stroke-violet-500",
-  modelled: "stroke-amber-500",
-  missing: "stroke-rose-500",
+  live: "stroke-ok",
+  cached: "stroke-info",
+  derived: "stroke-info",
+  modelled: "stroke-warn",
+  missing: "stroke-bad",
 };
 
 const STATE_DOT: Record<string, string> = {
-  working: "bg-sky-500", done: "bg-emerald-500", failed: "bg-rose-500",
-  "no tool": "bg-amber-500", unfinished: "bg-zinc-400",
+  working: "bg-info", done: "bg-ok", failed: "bg-bad",
+  "no tool": "bg-warn", unfinished: "bg-zinc-400",
 };
 
 type Placed = TraceNode & { x: number; y: number; col: number };
@@ -147,7 +147,7 @@ export function TraceTopology({
         {COLUMNS.map((c, ci) => {
           const x = colX(ci);
           return x === undefined ? null : (
-            <p key={c.title} className="text-muted-foreground absolute font-mono text-[10px] uppercase tracking-wider"
+            <p key={c.title} className="text-muted-foreground absolute font-mono text-[10px]"
                style={{ left: x, top: 4, width: NODE_W }}>
               {c.title}
             </p>
@@ -175,8 +175,8 @@ export function TraceTopology({
             const on = lit ? lit.has(e.from) && lit.has(e.to) : false;
             const w = 1 + Math.min(3.5, Math.log2(Math.max(1, e.count)));
             const stroke = e.rel === "reads" && e.origin ? ORIGIN_STROKE[e.origin] ?? "stroke-border"
-              : e.rel === "raises" ? "stroke-rose-500"
-              : e.rel === "delegates" ? "stroke-sky-500" : "stroke-border";
+              : e.rel === "raises" ? "stroke-bad"
+              : e.rel === "delegates" ? "stroke-info" : "stroke-border";
             const midX = a.col === b.col ? a.x + NODE_W + 45 : (a.x + NODE_W + b.x) / 2;
             const midY = (ay + by) / 2;
             return (
@@ -225,7 +225,7 @@ function NodeBody({ n }: { n: TraceNode }) {
       <>
         <div className="flex min-w-0 items-center gap-1.5">
           <AgentBadge nickname={n.label} size="xs" />
-          <span className="truncate text-xs font-semibold">{n.label}</span>
+          <span className="truncate text-xs font-medium">{n.label}</span>
           <span className="text-muted-foreground truncate text-[10px]">{n.sub}</span>
           {n.state && (
             <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-[10px]">
@@ -253,7 +253,7 @@ function NodeBody({ n }: { n: TraceNode }) {
           <span className="text-muted-foreground font-mono text-[10px]">
             ×{n.calls}{n.ms ? ` · ${seconds(n.ms)}` : ""}
           </span>
-          {n.errors > 0 && <span className="font-mono text-[10px] text-rose-600 dark:text-rose-400">{n.errors} failed</span>}
+          {n.errors > 0 && <span className="font-mono text-[10px] text-bad ">{n.errors} failed</span>}
           {n.origin && <span className="ml-auto origin-right scale-90"><OriginBadge origin={n.origin} /></span>}
         </div>
       </>
@@ -283,7 +283,7 @@ function NodeBody({ n }: { n: TraceNode }) {
   }
   return (
     <>
-      <span className="text-muted-foreground font-mono text-[9px] uppercase tracking-wide">{n.sub || "event"}</span>
+      <span className="text-muted-foreground font-mono text-[9px]">{n.sub || "event"}</span>
       <p className="line-clamp-2 text-xs font-medium leading-tight">{n.label}</p>
     </>
   );
@@ -301,14 +301,14 @@ function titleFor(n: TraceNode): string {
 
 function Legend() {
   const items: { cls: string; label: string }[] = [
-    { cls: "bg-cyan-500", label: "business file" },
-    { cls: "bg-amber-500", label: "profile / sample" },
-    { cls: "bg-emerald-500", label: "vault (chain)" },
-    { cls: "bg-orange-500", label: "guardian rules" },
-    { cls: "bg-teal-500", label: "outside feed" },
-    { cls: "bg-violet-500", label: "engine (calculation)" },
-    { cls: "bg-fuchsia-500", label: "AERA record" },
-    { cls: "bg-rose-500", label: "action" },
+    { cls: "bg-info", label: "business file" },
+    { cls: "bg-warn", label: "profile / sample" },
+    { cls: "bg-ok", label: "vault (chain)" },
+    { cls: "bg-warn", label: "guardian rules" },
+    { cls: "bg-ok", label: "outside feed" },
+    { cls: "bg-info", label: "engine (calculation)" },
+    { cls: "bg-bad", label: "AERA record" },
+    { cls: "bg-bad", label: "action" },
   ];
   return (
     <div className="text-muted-foreground mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px]">

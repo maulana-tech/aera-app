@@ -307,20 +307,20 @@ type AgentBotStyle = {
  */
 const AGENT_BOT_STYLES: Record<string, AgentBotStyle> = {
   // Core: Supervisor plans, Guardian can veto, Treasurer holds the money.
-  Supervisor: { shape: "cercle", expression: "attentif", color: "#0a0a0c", rotDeg: 0 },
-  Guardian: { shape: "diamond", expression: "colere", color: "#e8483f", rotDeg: 0 },
-  Treasurer: { shape: "galet", expression: "fier", color: "#f0b429", rotDeg: 15 },
+  Supervisor: { shape: "cercle", expression: "attentif", color: "#142745", rotDeg: 0 },
+  Guardian: { shape: "diamond", expression: "colere", color: "#0647b3", rotDeg: 0 },
+  Treasurer: { shape: "galet", expression: "fier", color: "#0a5fe0", rotDeg: 15 },
   // The role library (agents/roles.py).
-  Researcher: { shape: "goutte", expression: "curieux", color: "#3b93f0", rotDeg: 0 },
-  Writer: { shape: "squircle", expression: "neutre", color: "#2fbfa0", rotDeg: -8 },
-  Analyst: { shape: "hexagone", expression: "mefiant", color: "#8b5cf6", rotDeg: 12 },
-  Sales: { shape: "capsule", expression: "heureux", color: "#3ecf8e", rotDeg: -14 },
-  "Customer Support": { shape: "nuage", expression: "heureux", color: "#e152b0", rotDeg: -6 },
-  Marketing: { shape: "triangle", expression: "excite", color: "#f08a24", rotDeg: 0 },
-  Fulfilment: { shape: "pentagone", expression: "hilare", color: "#06b6d4", rotDeg: 8 },
-  Procurement: { shape: "octogone", expression: "mefiant", color: "#4f46e5", rotDeg: 0 },
-  Designer: { shape: "egg", expression: "curieux", color: "#c026d3", rotDeg: -8 },
-  "Quality Review": { shape: "squircle", expression: "attentif", color: "#8b5e3c", rotDeg: 6 },
+  Researcher: { shape: "goutte", expression: "curieux", color: "#2a6fe8", rotDeg: 0 },
+  Writer: { shape: "squircle", expression: "neutre", color: "#1d5fd1", rotDeg: -8 },
+  Analyst: { shape: "hexagone", expression: "mefiant", color: "#3b7cf0", rotDeg: 12 },
+  Sales: { shape: "capsule", expression: "heureux", color: "#1550b8", rotDeg: -14 },
+  "Customer Support": { shape: "nuage", expression: "heureux", color: "#4f8af2", rotDeg: -6 },
+  Marketing: { shape: "triangle", expression: "excite", color: "#2563c9", rotDeg: 0 },
+  Fulfilment: { shape: "pentagone", expression: "hilare", color: "#3a74e0", rotDeg: 8 },
+  Procurement: { shape: "octogone", expression: "mefiant", color: "#0d4fc2", rotDeg: 0 },
+  Designer: { shape: "egg", expression: "curieux", color: "#5b93f3", rotDeg: -8 },
+  "Quality Review": { shape: "squircle", expression: "attentif", color: "#2f5fa8", rotDeg: 6 },
 };
 
 const FALLBACK_STYLES: AgentBotStyle[] = Object.values(AGENT_BOT_STYLES);
@@ -369,12 +369,12 @@ function getBotGeometry(nickname: string) {
 
 /** Per-agent badge colour, kept exported for any callers that still import hue. */
 const HUES = [
-  "bg-sky-500/15 text-sky-700 dark:text-sky-400",
-  "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
-  "bg-violet-500/15 text-violet-700 dark:text-violet-400",
-  "bg-amber-500/15 text-amber-700 dark:text-amber-400",
-  "bg-rose-500/15 text-rose-700 dark:text-rose-400",
-  "bg-teal-500/15 text-teal-700 dark:text-teal-400",
+  "bg-raised text-info ",
+  "bg-raised text-ok ",
+  "bg-raised text-info ",
+  "bg-raised text-warn ",
+  "bg-raised text-bad ",
+  "bg-raised text-ok ",
 ];
 export const hue = (s: string) => HUES[s.charCodeAt(0) % HUES.length];
 
@@ -403,7 +403,7 @@ export function AgentBadge({
   align?: "center" | "end";
 }) {
   const { bodyPath, eyes, color } = getBotGeometry(nickname);
-  const isInk = color === "#0a0a0c";
+  const isInk = color === "#142745";
   const isXs = size === "xs";
   const sizeClass = isXs
     ? "size-4"

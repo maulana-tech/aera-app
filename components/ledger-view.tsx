@@ -49,7 +49,7 @@ export function LedgerView({ led, network }: { led: Ledger; network: string }) {
       </div>
 
       {simulated && (
-        <p className="mt-6 rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-900 dark:text-amber-200">
+        <p className="mt-6 rounded-lg border border-border bg-raised px-4 py-2.5 text-xs text-warn ">
           Some entries are on the SIMULATED rail: recorded by AERA, not on any chain. They have no transaction to check.
         </p>
       )}
@@ -61,7 +61,7 @@ export function LedgerView({ led, network }: { led: Ledger; network: string }) {
           <div className="overflow-x-auto rounded-lg border">
             <table className="w-full min-w-[600px] text-sm">
               <thead>
-                <tr className="text-muted-foreground border-b text-left font-mono text-[10px] uppercase tracking-wider">
+                <tr className="text-muted-foreground border-b text-left font-mono text-[10px]">
                   <th className="px-4 py-2.5 font-medium">When</th>
                   <th className="px-4 py-2.5 font-medium">Direction</th>
                   <th className="px-4 py-2.5 font-medium">Rail</th>

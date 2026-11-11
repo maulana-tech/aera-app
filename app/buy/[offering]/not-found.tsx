@@ -10,7 +10,7 @@ import { PublicShell } from "@/components/public-shell";
 export default function OfferingNotFound() {
   return (
     <PublicShell>
-      <h1 className="text-xl font-semibold tracking-tight">This offering is not on sale</h1>
+      <h1 className="text-xl font-medium tracking-tight">This offering is not on sale</h1>
       <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
         The link may be old, or the business may have changed what it sells. Nothing was ordered and nothing was charged.
       </p>

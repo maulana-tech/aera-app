@@ -155,7 +155,7 @@ export function Wizard({ initial, example, library, mayChange }: {
   return (
     <div className="mt-6 space-y-6">
       {stored && !dismissed && !touched && (
-        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-sky-500/40 bg-sky-500/10 px-4 py-3 text-sm">
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-raised px-4 py-3 text-sm">
           <RotateCcw className="size-4 shrink-0" />
           <span className="flex-1">You have an unsaved draft from earlier in this browser.</span>
           <Button size="sm" variant="outline" onClick={restore}>Restore it</Button>
@@ -181,7 +181,7 @@ export function Wizard({ initial, example, library, mayChange }: {
 
       <header className="rounded-lg border p-4">
         <p className="text-muted-foreground font-mono text-[11px]">Step {step + 1} of {STEPS.length}</p>
-        <h2 className="mt-1 text-lg font-semibold">{meta.title}</h2>
+        <h2 className="mt-1 text-lg font-medium">{meta.title}</h2>
         <p className="text-muted-foreground mt-1 text-sm leading-relaxed">{meta.why}</p>
         <p className="text-muted-foreground mt-2 inline-flex items-center gap-1.5 text-xs"><Info className="size-3.5" />{meta.who}</p>
       </header>
@@ -209,7 +209,7 @@ export function Wizard({ initial, example, library, mayChange }: {
               The draft is written by a TEE-attested model on NEAR AI and is not saved until you finish. Or skip this box and fill in the fields below.
             </p>
             {drafted && (
-              <p className="mt-3 rounded-md bg-emerald-500/10 px-3 py-2 text-sm text-emerald-900 dark:text-emerald-200">{drafted}</p>
+              <p className="mt-3 rounded-md bg-raised px-3 py-2 text-sm text-ok ">{drafted}</p>
             )}
           </div>
           <BasicsFields p={p} set={setP} />
@@ -218,7 +218,7 @@ export function Wizard({ initial, example, library, mayChange }: {
       {step === 1 && (
         <>
           {p.offerings.length === 0 && (
-            <p className="text-sm text-amber-800 dark:text-amber-300">
+            <p className="text-sm text-warn ">
               No offering yet. You can continue without one (the team can still do work you ask for), but customers will have nothing to buy.
             </p>
           )}
@@ -230,7 +230,7 @@ export function Wizard({ initial, example, library, mayChange }: {
       {step === 4 && <Review p={p} team={team} onEdit={setStep} />}
 
       <Problems problems={problems} />
-      {error && <p className="text-sm text-rose-700 dark:text-rose-400">{error}</p>}
+      {error && <p className="text-sm text-bad ">{error}</p>}
 
       <div className="flex flex-wrap items-center gap-2 border-t pt-4">
         <Button type="button" variant="outline" onClick={() => setStep(step - 1)} disabled={step === 0}>
@@ -246,7 +246,7 @@ export function Wizard({ initial, example, library, mayChange }: {
             Save and start the business
           </Button>
         )}
-        {blocker && <span className="text-xs text-amber-800 dark:text-amber-300">{blocker}</span>}
+        {blocker && <span className="text-xs text-warn ">{blocker}</span>}
         {!mayChange && <span className="text-muted-foreground text-xs">Only an owner or admin can save a business.</span>}
       </div>
     </div>
@@ -279,7 +279,7 @@ function Row({ label, step, onEdit, children }: {
 }) {
   return (
     <div className="grid gap-1 border-b py-3 last:border-b-0 sm:grid-cols-[180px_1fr_auto] sm:gap-4">
-      <p className="text-muted-foreground text-xs font-medium uppercase tracking-wide">{label}</p>
+      <p className="text-muted-foreground text-xs font-medium">{label}</p>
       <div className="text-sm leading-relaxed">{children}</div>
       <button type="button" onClick={() => onEdit(step)} className="justify-self-start text-xs underline underline-offset-2">Edit</button>
     </div>
@@ -345,7 +345,7 @@ function Review({ p, team, onEdit }: { p: Profile; team: TeamAgent[] | null; onE
       </div>
 
       <div className="rounded-lg border p-4">
-        <h3 className="text-sm font-semibold">What happens when you save</h3>
+        <h3 className="text-sm font-medium">What happens when you save</h3>
         <ol className="text-muted-foreground mt-2 list-inside list-decimal space-y-1 text-sm">
           <li>The profile is saved (version 1) and the team above is formed.</li>
           <li>The dashboard shows a short checklist: connect the models (NEAR AI key), connect the vault (NEAR), add an approver.</li>
@@ -399,7 +399,7 @@ function TeamStep({ p, set, library, onTeam }: {
         ))}
       </div>
 
-      {error && <p className="text-sm text-rose-700 dark:text-rose-400">{error}</p>}
+      {error && <p className="text-sm text-bad ">{error}</p>}
       {!team ? (
         <p className="text-muted-foreground inline-flex items-center gap-2 text-sm"><Loader2 className="size-4 animate-spin" /> Composing the team…</p>
       ) : (

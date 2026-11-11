@@ -66,7 +66,7 @@ export default async function SkillsPage() {
 
                   <div className="space-y-3">
                     <div>
-                      <p className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">
+                      <p className="text-muted-foreground text-[10px] font-medium">
                         Who may run it
                       </p>
                       <p className="mt-1 font-mono text-xs">
@@ -74,7 +74,7 @@ export default async function SkillsPage() {
                       </p>
                     </div>
                     <div>
-                      <p className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">
+                      <p className="text-muted-foreground text-[10px] font-medium">
                         Tools it composes
                       </p>
                       <ul className="mt-1 space-y-0.5">
@@ -85,7 +85,7 @@ export default async function SkillsPage() {
                     </div>
                     {Object.keys(s.usage.by_agent).length > 0 && (
                       <div>
-                        <p className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">
+                        <p className="text-muted-foreground text-[10px] font-medium">
                           Run by
                         </p>
                         <ul className="mt-1 space-y-0.5">

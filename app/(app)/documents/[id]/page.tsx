@@ -20,7 +20,7 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
     if (res.error?.includes("no such document")) notFound();
     return (
       <main className="w-full px-6 py-16">
-        <h1 className="text-xl font-semibold">This document could not be read</h1>
+        <h1 className="text-xl font-medium">This document could not be read</h1>
         <p className="text-muted-foreground mt-2 text-sm">{res.error}</p>
       </main>
     );
@@ -44,7 +44,7 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
       </Link>
       <header className="mt-3 flex flex-wrap items-start justify-between gap-3 border-b pb-4 md:mt-5 md:pb-6">
         <div className="min-w-0">
-          <h1 className="text-xl font-semibold tracking-tight md:text-2xl">{d.title}</h1>
+          <h1 className="text-xl font-medium tracking-tight md:text-2xl">{d.title}</h1>
           <p className="text-muted-foreground mt-1 font-mono text-[11px]">
             {d.format ?? "draft"} · written by {d.uploaded_by.replace(/^agent:/, "")} · {when(d.uploaded_at)}
           </p>
@@ -82,11 +82,11 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
               <p className="text-muted-foreground mb-1.5 text-xs font-medium">Delivered</p>
               <DeliveryReceipt delivery={delivered} network={health?.network} />
               {delivered.hash && (delivered.hash === d.pdf_sha256 ? (
-                <p className="mt-2 text-[11px] text-emerald-700 dark:text-emerald-400">
+                <p className="mt-2 text-[11px] text-ok ">
                   This PDF&apos;s sha256 matches the delivered hash on record: the download is byte-for-byte what the customer received.
                 </p>
               ) : (
-                <p className="mt-2 text-[11px] text-amber-700 dark:text-amber-400">
+                <p className="mt-2 text-[11px] text-warn ">
                   This PDF&apos;s sha256 does not match the delivered hash on record (it was delivered before PDFs were made
                   reproducible). The delivered hash above is the one on record.
                 </p>

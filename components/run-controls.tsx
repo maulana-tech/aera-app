@@ -30,7 +30,7 @@ export function RetryButton({ workItemId }: { workItemId: string }) {
       }}>
         <RotateCcw className="size-3.5" /> {busy ? "Starting…" : "Run again"}
       </Button>
-      {error && <p className="text-xs text-rose-600 dark:text-rose-400">{error}</p>}
+      {error && <p className="text-xs text-bad ">{error}</p>}
     </div>
   );
 }

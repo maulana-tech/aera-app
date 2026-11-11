@@ -13,7 +13,7 @@ export function CheckoutLinks({ offerings, open }: { offerings: Offering[]; open
   return (
     <div className="space-y-2">
       {!open && (
-        <p className="text-xs text-amber-700 dark:text-amber-400">
+        <p className="text-xs text-warn ">
           The kill switch is on: these pages tell customers the business is not taking orders.
         </p>
       )}

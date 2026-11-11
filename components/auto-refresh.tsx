@@ -26,8 +26,8 @@ export function AutoRefresh({ active, every = 4000 }: { active: boolean; every?:
   return (
     <span className="text-muted-foreground flex items-center gap-1.5 font-mono text-[11px]">
       <span className="relative flex size-1.5">
-        <span className="bg-sky-500 absolute inline-flex size-full animate-ping rounded-full opacity-75" />
-        <span className="bg-sky-500 relative inline-flex size-1.5 rounded-full" />
+        <span className="bg-info absolute inline-flex size-full animate-ping rounded-full opacity-75" />
+        <span className="bg-info relative inline-flex size-1.5 rounded-full" />
       </span>
       watching
     </span>

@@ -7,7 +7,7 @@ function cell(v: unknown, c: Column) {
     return <span className="text-muted-foreground">-</span>;
   if (typeof v === "boolean")
     return (
-      <span className={v ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400"}>
+      <span className={v ? "text-ok " : "text-bad "}>
         {v ? "yes" : "no"}
       </span>
     );
@@ -45,7 +45,7 @@ export function DataTable({
                 {columns.map((c) => (
                   <th
                     key={c.k}
-                    className={`text-muted-foreground px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider ${
+                    className={`text-muted-foreground px-4 py-2.5 font-mono text-[10px] font-medium ${
                       c.n || c.usd ? "text-right" : "text-left"
                     }`}
                   >

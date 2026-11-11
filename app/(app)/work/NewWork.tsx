@@ -66,7 +66,7 @@ export function NewWork({ disabled }: { disabled?: boolean }) {
         <TextArea rows={4} value={text} onChange={(e) => setText(e.target.value)}
           placeholder="What you want, for whom, by when. The team reads this as instructions from you." />
       </Field>
-      {error && <p className="text-sm text-rose-700 dark:text-rose-400">{error}</p>}
+      {error && <p className="text-sm text-bad ">{error}</p>}
       <div className="flex gap-2">
         <Button type="submit" size="sm" disabled={busy || !title.trim()}>
           {busy ? <Loader2 className="animate-spin" /> : <Send />}

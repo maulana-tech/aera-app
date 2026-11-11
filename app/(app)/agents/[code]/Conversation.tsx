@@ -1137,7 +1137,7 @@ export default function Conversation({
           <div className="flex justify-center">
             <AgentBadge nickname={name} large />
           </div>
-          <h2 className="mt-3 text-lg font-semibold tracking-tight">Ask {name}</h2>
+          <h2 className="mt-3 text-lg font-medium tracking-tight">Ask {name}</h2>
           <p className="text-muted-foreground mt-1.5 text-xs sm:text-sm leading-relaxed">
             {work}. Same tools as inside the team, and every figure keeps the
             label of where it came from.
@@ -1223,7 +1223,7 @@ export default function Conversation({
               <div key={i} className="space-y-2">
                 <div className="flex items-center gap-2">
                   <AgentBadge nickname={name} size="xs" showTooltip={false} />
-                  <span className="text-foreground text-xs font-semibold">{name}</span>
+                  <span className="text-foreground text-xs font-medium">{name}</span>
                   {m.from === "agent" && m.reply.thinking_time !== undefined && (
                     <span className="text-muted-foreground/70 font-mono text-[11px]">
                       · Thought for {m.reply.thinking_time.toFixed(1)}s
@@ -1275,7 +1275,7 @@ export default function Conversation({
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <AgentBadge nickname={name} size="xs" showTooltip={false} />
-                <span className="text-foreground text-xs font-semibold">{name}</span>
+                <span className="text-foreground text-xs font-medium">{name}</span>
                 <span className="text-muted-foreground/70 flex items-center gap-1 font-mono text-[11px]">
                   <Loader2 className="size-3 animate-spin" />
                   thinking…
@@ -1368,7 +1368,7 @@ export default function Conversation({
                     <ArrowLeft className="size-4" />
                   </Button>
                 </DialogPrimitive.Close>
-                <DialogPrimitive.Title className="text-sm font-semibold">
+                <DialogPrimitive.Title className="text-sm font-medium">
                   Conversations
                 </DialogPrimitive.Title>
               </div>

@@ -75,7 +75,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
         <div className="mt-6 overflow-x-auto rounded-lg border">
           <table className="w-full min-w-[860px] text-sm">
             <thead>
-              <tr className="text-muted-foreground border-b text-left font-mono text-[10px] uppercase tracking-wider">
+              <tr className="text-muted-foreground border-b text-left font-mono text-[10px]">
                 <th className="px-4 py-2.5 font-medium">Order</th>
                 <th className="px-4 py-2.5 font-medium">Offering</th>
                 <th className="px-4 py-2.5 font-medium">Inputs</th>
@@ -108,7 +108,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
                         <a href={explorer(health?.network, "txns", o.paid_tx)} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
                           {o.paid_tx.slice(0, 10)}…
                         </a>
-                      ) : o.status !== "awaiting_payment" && simulated ? <span className="text-amber-700 dark:text-amber-400">simulated</span> : "-"}
+                      ) : o.status !== "awaiting_payment" && simulated ? <span className="text-warn ">simulated</span> : "-"}
                     </td>
                     <td className="px-4 py-2.5 text-xs">
                       {doc ? (

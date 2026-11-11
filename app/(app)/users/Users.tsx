@@ -46,7 +46,7 @@ export function AddUser({ roles }: { roles: string[] }) {
         <Input type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} required autoComplete="off" />
       </Field>
       <Field label="Role" hint={ROLE_HELP[f.role]}>
-        <select className="border-input bg-background focus-visible:ring-ring/50 h-8 w-full rounded-lg border px-2 text-sm outline-none focus-visible:ring-3 dark:bg-input/30" value={f.role}
+        <select className="border-input bg-background focus-visible:ring-ring/50 h-8 w-full rounded-lg border px-2 text-sm outline-none focus-visible:ring-3 " value={f.role}
                 onChange={(e) => setF({ ...f, role: e.target.value })}>
           {roles.map((r) => <option key={r} value={r}>{r}</option>)}
         </select>
@@ -57,7 +57,7 @@ export function AddUser({ roles }: { roles: string[] }) {
       </Field>
       <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
         <Button type="submit" size="sm" disabled={busy}>{busy && <Loader2 className="animate-spin" />}{busy ? "Adding…" : "Add account"}</Button>
-        {msg && <span className={msg.ok ? "text-muted-foreground text-xs" : "text-xs text-rose-700 dark:text-rose-400"}>{msg.text}</span>}
+        {msg && <span className={msg.ok ? "text-muted-foreground text-xs" : "text-xs text-bad "}>{msg.text}</span>}
       </div>
     </form>
   );
@@ -84,7 +84,7 @@ export function RemoveUser({ id, name }: { id: string; name: string }) {
       }}>
         {busy ? <Loader2 className="animate-spin" /> : <UserMinus />} Remove
       </Button>
-      {error && <span className="text-[11px] text-rose-700 dark:text-rose-400">{error}</span>}
+      {error && <span className="text-[11px] text-bad ">{error}</span>}
     </span>
   );
 }

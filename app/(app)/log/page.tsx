@@ -23,7 +23,7 @@ export default async function Log() {
   if (!d) {
     return (
       <main className="w-full px-6 py-16">
-        <h1 className="text-xl font-semibold">The agent service is not responding</h1>
+        <h1 className="text-xl font-medium">The agent service is not responding</h1>
         <p className="text-muted-foreground mt-2 text-sm">The log is read from it. Start it (cd aera/agent &amp;&amp; python3 api.py) and reload.</p>
       </main>
     );
@@ -96,7 +96,7 @@ export default async function Log() {
               {d.steps.map((s) => (
                 <li key={s.id} className="grid grid-cols-[84px_1fr] gap-4 px-4 py-3">
                   <div>
-                    <p className="text-primary font-mono text-[11px] font-semibold tracking-wider">{stageLabel(s.stage)}</p>
+                    <p className="text-primary font-mono text-[11px] font-medium">{stageLabel(s.stage)}</p>
                     <p className="text-muted-foreground mt-0.5 text-[11px]">{stepAgentName(s)}</p>
                   </div>
                   <div className="min-w-0">

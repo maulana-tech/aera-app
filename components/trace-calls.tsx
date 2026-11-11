@@ -147,7 +147,7 @@ function CallRow({
             {c.kind === "delegate" ? `${by?.label ?? "Supervisor"} → ${who?.label ?? c.agent}` : who?.label ?? c.agent}
           </span>
           <span className="text-muted-foreground shrink-0 font-mono text-[10px]">{KIND_LABEL[c.kind] ?? c.kind}</span>
-          <span className={cn("truncate", c.kind === "tool" && "font-mono text-[11px]", failed && "text-rose-600 dark:text-rose-400")}>
+          <span className={cn("truncate", c.kind === "tool" && "font-mono text-[11px]", failed && "text-bad ")}>
             {brief(c)}
           </span>
         </span>
@@ -155,7 +155,7 @@ function CallRow({
           {c.rows != null && <span className="text-muted-foreground font-mono text-[10px]">{c.rows} rows</span>}
           {c.ms != null && <span className="text-muted-foreground font-mono text-[10px]">{c.ms} ms</span>}
           {c.origin && <OriginBadge origin={c.origin} />}
-          {failed && c.kind === "tool" && <span className="font-mono text-[10px] text-rose-600 dark:text-rose-400">error</span>}
+          {failed && c.kind === "tool" && <span className="font-mono text-[10px] text-bad ">error</span>}
         </span>
       </button>
       {open && <CallDetail c={c} runId={runId} />}
@@ -228,12 +228,12 @@ export function CallDetail({ c, runId, compact = false }: { c: TraceCall; runId:
           <Field k="rows">
             {c.rows}
             {c.rows_shown != null && c.rows_shown < c.rows && (
-              <span className="text-amber-700 dark:text-amber-400"> · the model was shown the first {c.rows_shown}</span>
+              <span className="text-warn "> · the model was shown the first {c.rows_shown}</span>
             )}
           </Field>
         )}
         {c.parent_seq != null && <Field k="for task"><a className="underline underline-offset-2" href={`#seq-${c.parent_seq}`}>#{c.parent_seq}</a></Field>}
-        {typeof c.error === "string" && <Field k="error"><span className="font-mono text-rose-600 dark:text-rose-400">{c.error}</span></Field>}
+        {typeof c.error === "string" && <Field k="error"><span className="font-mono text-bad ">{c.error}</span></Field>}
         {c.stats && (
           <Field k="model">
             <span className="font-mono">{c.stats.model}</span>
@@ -280,7 +280,7 @@ export function CallDetail({ c, runId, compact = false }: { c: TraceCall; runId:
             </span>
           }
         >
-          {err && <p className="mb-2 text-xs text-rose-600">{err}</p>}
+          {err && <p className="mb-2 text-xs text-bad">{err}</p>}
           <ResultView value={result} />
         </Block>
       )}

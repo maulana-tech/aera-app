@@ -22,7 +22,7 @@ export function PageHeader({
   return (
     <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 border-b pb-4 md:gap-x-8 md:gap-y-4 md:pb-6">
       <div className="min-w-0 max-w-2xl">
-        <h1 className="text-xl font-semibold tracking-tight md:text-2xl">{title}</h1>
+        <h1 className="text-xl font-medium tracking-tight md:text-2xl">{title}</h1>
         {lead && (
           <p className="text-muted-foreground mt-1.5 text-xs leading-relaxed md:mt-2 md:text-sm">{lead}</p>
         )}
@@ -91,7 +91,7 @@ export function Fact({
           "min-w-0 truncate text-right text-xs",
           mono && "font-mono tabular-nums",
           tone === "quiet" && "text-muted-foreground",
-          tone === "warn" && "text-amber-700 dark:text-amber-400",
+          tone === "warn" && "text-warn ",
         )}
       >
         {value}
@@ -131,7 +131,7 @@ export function Metric({
   const body = (
     <>
       <p className="text-muted-foreground text-xs">{label}{href && <span aria-hidden> →</span>}</p>
-      <p className="mt-1.5 font-mono text-xl font-semibold tabular-nums">{value}</p>
+      <p className="mt-1.5 font-mono text-xl font-medium tabular-nums">{value}</p>
       {note && <p className="text-muted-foreground mt-1 text-xs leading-relaxed">{note}</p>}
     </>
   );

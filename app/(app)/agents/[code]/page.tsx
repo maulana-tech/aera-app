@@ -53,7 +53,7 @@ export default async function AgentPage({ params }: { params: Promise<{ code: st
       <header className="mt-3 border-b pb-4 md:mt-5 md:pb-6">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <AgentBadge nickname={a.nickname} large />
-          <h1 className="text-xl font-semibold tracking-tight md:text-2xl">{a.nickname}</h1>
+          <h1 className="text-xl font-medium tracking-tight md:text-2xl">{a.nickname}</h1>
           {a.title !== a.nickname && <span className="text-muted-foreground text-sm">{a.title}</span>}
           <RoleMarks a={a} />
           {a.status !== "active" && <StatusBadge status={a.status} />}

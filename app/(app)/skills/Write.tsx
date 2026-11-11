@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 const FIELD =
   "h-9 w-full min-w-0 rounded-lg border border-input bg-transparent px-3 font-mono text-sm outline-none " +
   "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 " +
-  "disabled:cursor-not-allowed disabled:opacity-60 dark:bg-input/30";
+  "disabled:cursor-not-allowed disabled:opacity-60 ";
 
 const CHIP =
   "rounded-full border px-2 py-0.5 font-mono text-[10px] transition-colors disabled:opacity-60";
@@ -102,7 +102,7 @@ export function Write({ data }: { data: SkillsPayload }) {
         <div className="space-y-4 border-t px-4 py-4">
           <div className="grid gap-3 md:grid-cols-2">
             <div>
-              <label className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">
+              <label className="text-muted-foreground text-[10px] font-medium">
                 Name
               </label>
               <input
@@ -116,7 +116,7 @@ export function Write({ data }: { data: SkillsPayload }) {
               </p>
             </div>
             <div>
-              <label className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">
+              <label className="text-muted-foreground text-[10px] font-medium">
                 Title
               </label>
               <input
@@ -129,7 +129,7 @@ export function Write({ data }: { data: SkillsPayload }) {
           </div>
 
           <div>
-            <label className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">
+            <label className="text-muted-foreground text-[10px] font-medium">
               Why this order
             </label>
             <input
@@ -141,7 +141,7 @@ export function Write({ data }: { data: SkillsPayload }) {
           </div>
 
           <div>
-            <label className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">
+            <label className="text-muted-foreground text-[10px] font-medium">
               Steps, one per line
             </label>
             <textarea
@@ -161,7 +161,7 @@ export function Write({ data }: { data: SkillsPayload }) {
           </div>
 
           <div>
-            <label className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">
+            <label className="text-muted-foreground text-[10px] font-medium">
               Who may run it
             </label>
             <div className="mt-1 flex flex-wrap gap-1.5">
@@ -189,7 +189,7 @@ export function Write({ data }: { data: SkillsPayload }) {
           </div>
 
           <div>
-            <label className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">
+            <label className="text-muted-foreground text-[10px] font-medium">
               Tools it composes ({tools.length})
             </label>
             <div className="mt-1 flex max-h-40 flex-wrap gap-1.5 overflow-y-auto rounded-lg border p-2">

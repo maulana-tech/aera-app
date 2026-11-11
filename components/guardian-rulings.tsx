@@ -6,9 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 const TONE: Record<Verdict, { cls: string; icon: typeof ShieldCheck; word: string }> = {
-  allow: { cls: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400", icon: ShieldCheck, word: "allow" },
-  warn: { cls: "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400", icon: ShieldAlert, word: "warn · a person decides" },
-  block: { cls: "border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-400", icon: ShieldBan, word: "block · final" },
+  allow: { cls: "border-border bg-raised text-ok ", icon: ShieldCheck, word: "allow" },
+  warn: { cls: "border-border bg-raised text-warn ", icon: ShieldAlert, word: "warn · a person decides" },
+  block: { cls: "border-border bg-raised text-bad ", icon: ShieldBan, word: "block · final" },
 };
 
 export function VerdictBadge({ verdict, short }: { verdict: Verdict | string; short?: boolean }) {

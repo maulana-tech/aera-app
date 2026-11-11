@@ -188,7 +188,7 @@ export function Figure({
                     <th
                       key={h}
                       className={cn(
-                        "text-muted-foreground py-1.5 font-mono text-[10px] font-normal uppercase tracking-wider",
+                        "text-muted-foreground py-1.5 font-mono text-[10px] font-normal",
                         i === 0 ? "text-left" : "text-right",
                       )}
                     >

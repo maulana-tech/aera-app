@@ -44,7 +44,7 @@ export function WalletStatus({ network }: { network: string }) {
           Connect a NEAR wallet ({net})
         </Button>
       )}
-      {error && <span className="text-[11px] text-amber-700 dark:text-amber-400">{error}</span>}
+      {error && <span className="text-[11px] text-warn ">{error}</span>}
     </div>
   );
 }

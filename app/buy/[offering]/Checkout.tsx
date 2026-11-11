@@ -58,7 +58,7 @@ function OrderStatus({ id }: { id: string }) {
     <div className="rounded-lg border px-4 py-3" aria-live="polite">
       <div className="flex flex-wrap items-center gap-2">
         {final && order.status === "delivered"
-          ? <CircleCheck className="size-4 text-emerald-600 dark:text-emerald-400" />
+          ? <CircleCheck className="size-4 text-ok " />
           : final ? null : <Loader2 className="text-muted-foreground size-4 animate-spin" aria-hidden />}
         <span className="text-sm">{order ? STATUS_WORDS[order.status] ?? order.status : "Checking the order…"}</span>
         {order && <StatusBadge status={order.status} />}
@@ -118,7 +118,7 @@ export function Checkout({ offering, network, open }: { offering: Offering; netw
                 call={ftTransferCall(result.pay.token, ft.receiver_id, ft.amount, ft.msg)} />
             </div>
           ) : (
-            <p className="mt-3 rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
+            <p className="mt-3 rounded-md border border-border bg-raised px-3 py-2 text-xs text-warn ">
               SIMULATED payment: this business has no vault configured, so you pay nothing and no money moves. The owner marks
               the order paid from their dashboard, and the team starts on it then. The status below changes when they do.
             </p>
@@ -147,7 +147,7 @@ export function Checkout({ offering, network, open }: { offering: Offering; netw
           <Input value={account} onChange={(e) => setAccount(e.target.value.trim())} placeholder={network === "mainnet" ? "you.near" : "you.testnet"} />
         </Field>
       </div>
-      {error && <p className="text-sm text-rose-700 dark:text-rose-400">{error}</p>}
+      {error && <p className="text-sm text-bad ">{error}</p>}
       <Button type="submit" disabled={busy || !open}>
         {busy && <Loader2 className="animate-spin" />}
         Order for {usd(offering.price_usd)}

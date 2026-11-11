@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 const FIELD =
   "h-9 w-full min-w-0 rounded-lg border border-input bg-transparent px-3 font-mono text-sm outline-none " +
   "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 " +
-  "disabled:cursor-not-allowed disabled:opacity-60 dark:bg-input/30";
+  "disabled:cursor-not-allowed disabled:opacity-60 ";
 
 /** The team as it stands: who may be handed a remote server's tools. */
 export type Member = { code: string; name: string };
@@ -133,7 +133,7 @@ export function Servers({ data, team }: { data: McpPayload; team: Member[] }) {
                               className={
                                 t.read_only
                                   ? "text-muted-foreground font-mono text-[10px]"
-                                  : "text-amber-700 font-mono text-[10px] dark:text-amber-400"
+                                  : "text-warn font-mono text-[10px] "
                               }
                             >
                               {t.read_only ? "reads" : "writes"}

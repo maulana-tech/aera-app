@@ -32,7 +32,7 @@ export function CapChip({ name }: { name: string }) {
   const locked = LOCKED_CAPS.has(name);
   return (
     <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[10px] ${
-      locked ? "border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-400" : ""}`}>
+      locked ? "border-border bg-raised text-info " : ""}`}>
       {locked && <Lock className="size-2.5" />}
       {name}
     </span>
@@ -75,19 +75,19 @@ export function DiffView({ diff }: { diff: TeamDiff }) {
     <div className="space-y-4">
       {diff.add.length > 0 && (
         <div>
-          <p className="mb-2 text-xs font-medium text-emerald-700 dark:text-emerald-400">Joins the team ({diff.add.length})</p>
+          <p className="mb-2 text-xs font-medium text-ok ">Joins the team ({diff.add.length})</p>
           <TeamRows agents={diff.add} />
         </div>
       )}
       {diff.remove.length > 0 && (
         <div>
-          <p className="mb-2 text-xs font-medium text-rose-700 dark:text-rose-400">Would be disabled ({diff.remove.length})</p>
+          <p className="mb-2 text-xs font-medium text-bad ">Would be disabled ({diff.remove.length})</p>
           <TeamRows agents={diff.remove} />
         </div>
       )}
       {diff.change.length > 0 && (
         <div>
-          <p className="mb-2 text-xs font-medium text-amber-700 dark:text-amber-400">Changes ({diff.change.length})</p>
+          <p className="mb-2 text-xs font-medium text-warn ">Changes ({diff.change.length})</p>
           <ul className="divide-y rounded-lg border">
             {diff.change.map((c) => (
               <li key={c.code} className="flex flex-wrap items-center gap-2 px-4 py-2 text-sm">

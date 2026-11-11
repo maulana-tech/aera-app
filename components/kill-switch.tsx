@@ -38,12 +38,11 @@ export function KillSwitch({
   }
 
   return (
-    <div className={cn("rounded-lg border p-4",
-      on ? "border-rose-500/60 bg-rose-500/10" : "border-rose-500/30")}>
+    <div className={cn("rounded-lg border p-4", on ? "bg-raised" : "bg-white")}>
       <div className="flex flex-wrap items-center gap-3">
-        <OctagonX className={cn("size-6 shrink-0", on ? "text-rose-600" : "text-rose-500/70")} />
+        <OctagonX className={cn("size-5 shrink-0", on ? "text-bad" : "text-muted-foreground")} />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold">{on ? "Stopped: the kill switch is on" : "Kill switch"}</p>
+          <p className="text-sm font-medium">{on ? "Stopped: the kill switch is on" : "Kill switch"}</p>
           {!compact && (
             <p className="text-muted-foreground text-xs leading-relaxed">
               {on
@@ -60,14 +59,14 @@ export function KillSwitch({
           </Button>
         ) : confirm ? (
           <div className="flex gap-2">
-            <Button size="sm" className="bg-rose-600 text-white hover:bg-rose-700" onClick={() => flip(true)} disabled={busy}>
+            <Button size="sm" className="bg-bad text-white shadow-none hover:bg-bad/90" onClick={() => flip(true)} disabled={busy}>
               {busy ? <Loader2 className="animate-spin" /> : <OctagonX />}
               Yes, stop everything
             </Button>
             <Button size="sm" variant="ghost" onClick={() => setConfirm(false)} disabled={busy}>Cancel</Button>
           </div>
         ) : (
-          <Button size="lg" className="bg-rose-600 font-semibold text-white hover:bg-rose-700"
+          <Button size="sm" variant="destructive"
             onClick={() => setConfirm(true)} disabled={!mayStop}
             title={mayStop ? undefined : "only an approver or an owner can pull the kill switch"}>
             <OctagonX />
@@ -78,7 +77,7 @@ export function KillSwitch({
       {on && !mayResume && <p className="text-muted-foreground mt-2 text-xs">Only an owner can resume the business.</p>}
       {!on && !mayStop && <p className="text-muted-foreground mt-2 text-xs">Only an approver or an owner can pull the kill switch.</p>}
       {msg && <p className="text-muted-foreground mt-2 text-xs">{msg}</p>}
-      {error && <p className="mt-2 text-xs text-rose-700 dark:text-rose-400">{error}</p>}
+      {error && <p className="mt-2 text-xs text-bad ">{error}</p>}
     </div>
   );
 }

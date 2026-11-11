@@ -305,7 +305,7 @@ export function OrchestrationTimeline({
             {/* Participating Agent Squad Strip */}
             {squadOverview.length > 0 && (
               <div className="border-border/60 mt-3 flex flex-wrap items-center gap-1.5 border-t pt-2.5">
-                <span className="text-muted-foreground/60 mr-1 font-mono text-[10px] uppercase">
+                <span className="text-muted-foreground/60 mr-1 font-mono text-[10px]">
                   Squad:
                 </span>
                 {squadOverview.map(([agentName, count]) => (
@@ -364,23 +364,23 @@ export function OrchestrationTimeline({
                         <div className="flex flex-wrap items-center gap-1.5">
                           {step.kind === "specialist_start" && step.target_name ? (
                             <span className="text-muted-foreground inline-flex shrink-0 items-center gap-1 text-[11px] font-medium">
-                              <span className="text-foreground font-semibold">
+                              <span className="text-foreground font-medium">
                                 {step.agent_name || "Supervisor"}
                               </span>
                               <ArrowRight className="size-2.5" />
-                              <span className="text-primary font-semibold">
+                              <span className="text-primary font-medium">
                                 {step.target_name}
                               </span>
                             </span>
                           ) : (
-                            <span className="text-foreground text-xs font-semibold">
+                            <span className="text-foreground text-xs font-medium">
                               {currentActor}
                             </span>
                           )}
 
                           <span className="text-muted-foreground/40 select-none">·</span>
 
-                          <h3 className="text-foreground text-xs sm:text-sm font-semibold leading-snug">
+                          <h3 className="text-foreground text-xs sm:text-sm font-medium leading-snug">
                             {step.narrative}
                           </h3>
                         </div>
@@ -395,7 +395,7 @@ export function OrchestrationTimeline({
                       {/* Step Badge & Full Descriptive Detail (Placed below, full width without truncation) */}
                       <div className="space-y-1.5 pt-0.5">
                         <div>
-                          <span className="text-foreground/90 bg-muted/60 inline-flex items-center rounded px-1.5 py-0.5 font-mono text-[10px] font-medium tracking-wide uppercase">
+                          <span className="text-foreground/90 bg-muted/60 inline-flex items-center rounded px-1.5 py-0.5 font-mono text-[10px] font-medium">
                             {cleanBadge}
                           </span>
                         </div>
@@ -410,7 +410,7 @@ export function OrchestrationTimeline({
                       {/* 1. Agent Thinking Section (Clean Editorial Prose) */}
                       {step.thinking && (
                         <div className="space-y-1 pt-1">
-                          <span className="text-muted-foreground/60 flex items-center gap-1 text-[10px] font-semibold tracking-wider uppercase font-mono">
+                          <span className="text-muted-foreground/60 flex items-center gap-1 text-[10px] font-medium font-mono">
                             <Sparkles className="size-2.5" />
                             Thinking
                           </span>
@@ -457,7 +457,7 @@ export function OrchestrationTimeline({
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div className="flex items-center gap-1.5">
                               <Code2 className="text-muted-foreground size-3" />
-                              <code className="text-foreground font-mono text-[11px] font-semibold">
+                              <code className="text-foreground font-mono text-[11px] font-medium">
                                 {step.tool_name ||
                                   stripTrailingChevron(step.detail)}
                               </code>
@@ -499,7 +499,7 @@ export function OrchestrationTimeline({
                             </pre>
                           ) : step.result !== undefined ? (
                             <div className="space-y-1">
-                              <span className="text-muted-foreground/60 flex items-center gap-1 font-mono text-[10px] uppercase">
+                              <span className="text-muted-foreground/60 flex items-center gap-1 font-mono text-[10px]">
                                 <Database className="size-2.5" />
                                 Return Payload
                               </span>

@@ -24,7 +24,7 @@ export default async function Dashboard() {
   if (!biz.data) {
     return (
       <main className="w-full px-6 py-16">
-        <h1 className="text-xl font-semibold">The agent service is not responding</h1>
+        <h1 className="text-xl font-medium">The agent service is not responding</h1>
         <p className="text-muted-foreground mt-2 text-sm">{biz.error}</p>
         <pre className="bg-card mt-4 rounded-lg border p-4 font-mono text-sm">cd aera/agent{"\n"}python3 api.py</pre>
       </main>

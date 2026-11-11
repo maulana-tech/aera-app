@@ -63,7 +63,7 @@ export function WalletSign({
         )}
       </div>
       {error && (
-        <p className="text-xs text-amber-700 dark:text-amber-400">
+        <p className="text-xs text-warn ">
           The wallet could not sign: {error}. Run the command below instead.
         </p>
       )}

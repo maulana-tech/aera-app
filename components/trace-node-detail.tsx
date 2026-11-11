@@ -24,10 +24,10 @@ import { ZONE, usd, when as stamp, type Trace, type TraceCall, type TraceEdge, t
  * it keeps the last node it showed while it does. */
 
 const SWATCH: Record<string, string> = {
-  event: "bg-slate-400", agent: "bg-sky-500", tool: "bg-zinc-400", action: "bg-rose-500",
-  upload: "bg-cyan-500", fixture: "bg-amber-500", profile: "bg-amber-400",
-  rules: "bg-orange-500", engine: "bg-violet-500", record: "bg-fuchsia-500",
-  model: "bg-indigo-500", external: "bg-teal-500", chain: "bg-emerald-500",
+  event: "bg-slate-400", agent: "bg-info", tool: "bg-zinc-400", action: "bg-bad",
+  upload: "bg-info", fixture: "bg-warn", profile: "bg-warn",
+  rules: "bg-warn", engine: "bg-info", record: "bg-bad",
+  model: "bg-info", external: "bg-ok", chain: "bg-ok",
 };
 
 const swatchOf = (n: TraceNode) =>
@@ -120,7 +120,7 @@ function Body({
       <SheetHeader className="shrink-0 border-b px-5 py-4 pr-12">
         <SheetTitle className="flex items-center gap-2 text-sm">
           <span className={cn("h-4 w-1 rounded", swatchOf(n))} />
-          <span className="text-muted-foreground font-mono text-[10px] uppercase tracking-wide">{kindOf(n)}</span>
+          <span className="text-muted-foreground font-mono text-[10px]">{kindOf(n)}</span>
           {n.kind === "agent" && n.state && <StatusBadge status={STATE_STATUS[n.state] ?? n.state}>{n.state}</StatusBadge>}
           {n.kind === "action" && n.status && <StatusBadge status={n.status} />}
           {n.kind === "event" && n.status && <StatusBadge status={n.status} />}
@@ -129,7 +129,7 @@ function Body({
           <div className="text-foreground flex min-w-0 items-center gap-2.5">
             {n.kind === "agent" && <AgentBadge nickname={n.label} size="sm" />}
             <div className="min-w-0">
-              <p className={cn("break-words text-base font-semibold leading-snug", (n.kind === "tool" || n.kind === "action") && "font-mono text-sm")}>
+              <p className={cn("break-words text-base font-medium leading-snug", (n.kind === "tool" || n.kind === "action") && "font-mono text-sm")}>
                 {n.label}
               </p>
               {n.sub && n.kind !== "action" && (
@@ -370,7 +370,7 @@ function Part({ title, action, children }: { title: string; action?: ReactNode; 
   return (
     <section>
       <div className="mb-2 flex items-center justify-between gap-2">
-        <h3 className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">{title}</h3>
+        <h3 className="text-muted-foreground text-[11px] font-medium">{title}</h3>
         {action}
       </div>
       {children}
@@ -444,7 +444,7 @@ function Steps({ steps, byId, runId }: { steps: TraceCall[]; byId: Record<string
                   <span className="text-muted-foreground ml-auto shrink-0 font-mono text-[10px] tabular-nums">{time(c.at)}</span>
                 </span>
                 <span className={cn("mt-0.5 block truncate text-xs", c.kind === "tool" && "font-mono text-[11px]",
-                  c.error ? "text-rose-600 dark:text-rose-400" : "text-muted-foreground")}>
+                  c.error ? "text-bad " : "text-muted-foreground")}>
                   {brief(c)}
                 </span>
               </span>

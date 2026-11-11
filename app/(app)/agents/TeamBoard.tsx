@@ -103,7 +103,7 @@ function EditDialog({ a, caps, open, onOpenChange }: {
             <Field label="Title"><Input value={title} onChange={(e) => setTitle(e.target.value)} /></Field>
             <Field label="Status">
               <select value={status} disabled={a.core} onChange={(e) => setStatus(e.target.value as AgentStatus)}
-                className="border-input bg-background h-8 w-full rounded-lg border px-2 text-sm disabled:opacity-50 dark:bg-input/30">
+                className="border-input bg-background h-8 w-full rounded-lg border px-2 text-sm disabled:opacity-50 ">
                 <option value="active">active</option>
                 <option value="draft">draft</option>
                 <option value="disabled">disabled</option>
@@ -142,7 +142,7 @@ function EditDialog({ a, caps, open, onOpenChange }: {
           <Field label="Prompt" hint="{NAME} and {BUSINESS} are filled with the profile when the agent runs.">
             <TextArea rows={12} className="font-mono text-xs" value={prompt} onChange={(e) => setPrompt(e.target.value)} />
           </Field>
-          {error && <p className="text-sm text-rose-700 dark:text-rose-400">{error}</p>}
+          {error && <p className="text-sm text-bad ">{error}</p>}
         </div>
         <div className="flex gap-2 border-t px-5 py-3">
           <Button size="sm" onClick={save} disabled={busy}>{busy && <Loader2 className="animate-spin" />}Save</Button>
@@ -197,7 +197,7 @@ function NewRole({ caps }: { caps: Capability[] }) {
         })}
       </div>
       <p className="text-muted-foreground text-[11px]">Money, veto and delegation stay locked to Treasurer, Guardian and Supervisor.</p>
-      {error && <p className="text-sm text-rose-700 dark:text-rose-400">{error}</p>}
+      {error && <p className="text-sm text-bad ">{error}</p>}
       <Button type="submit" size="sm" disabled={busy || !title.trim()}>{busy ? <Loader2 className="animate-spin" /> : <Plus />}Add role</Button>
     </form>
   );
@@ -250,7 +250,7 @@ function Recompose() {
       {proposal && changes > 0 && (
         <Button size="sm" onClick={apply} disabled={!!busy}>{busy === "apply" && <Loader2 className="animate-spin" />}Apply {changes} change{changes === 1 ? "" : "s"}</Button>
       )}
-      {error && <p className="text-sm text-rose-700 dark:text-rose-400">{error}</p>}
+      {error && <p className="text-sm text-bad ">{error}</p>}
     </div>
   );
 }

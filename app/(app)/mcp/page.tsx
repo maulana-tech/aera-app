@@ -40,7 +40,7 @@ export default async function McpPage() {
             </div>
             <div className="grid gap-4 px-4 py-4 sm:grid-cols-3">
               <div>
-                <p className="text-2xl font-semibold tracking-tight">{data.ours.tools_total}</p>
+                <p className="text-2xl font-medium tracking-tight">{data.ours.tools_total}</p>
                 <p className="text-muted-foreground mt-0.5 text-xs leading-relaxed">
                   tools, of which <b>{data.ours.tools_writing}</b> raise an action. Each one
                   carries a readOnlyHint, so a client that did not write AERA can tell a read
@@ -48,7 +48,7 @@ export default async function McpPage() {
                 </p>
               </div>
               <div>
-                <p className="text-2xl font-semibold tracking-tight">
+                <p className="text-2xl font-medium tracking-tight">
                   {data.ours.resources.length}
                 </p>
                 <p className="text-muted-foreground mt-0.5 text-xs">resources</p>
@@ -59,7 +59,7 @@ export default async function McpPage() {
                 </ul>
               </div>
               <div>
-                <p className="text-2xl font-semibold tracking-tight">
+                <p className="text-2xl font-medium tracking-tight">
                   {data.ours.prompts.length}
                 </p>
                 <p className="text-muted-foreground mt-0.5 text-xs">

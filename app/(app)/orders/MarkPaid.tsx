@@ -30,7 +30,7 @@ export function MarkPaid({ id }: { id: string }) {
         {busy && <Loader2 className="animate-spin" />}
         Mark paid (simulated)
       </Button>
-      {error && <span className="text-[11px] text-rose-700 dark:text-rose-400">{error}</span>}
+      {error && <span className="text-[11px] text-bad ">{error}</span>}
     </span>
   );
 }

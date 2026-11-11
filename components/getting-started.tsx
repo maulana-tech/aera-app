@@ -11,14 +11,14 @@ export function GettingStarted({ steps }: { steps: Step[] }) {
   return (
     <section className="mt-6 rounded-lg border p-4">
       <div className="flex items-baseline justify-between gap-2">
-        <h2 className="text-sm font-semibold">Getting started</h2>
+        <h2 className="text-sm font-medium">Getting started</h2>
         <span className="text-muted-foreground font-mono text-xs">{steps.length - left}/{steps.length} done</span>
       </div>
       <ol className="mt-3 space-y-2">
         {steps.map((s) => (
           <li key={s.title} className="flex items-start gap-2.5">
             {s.done
-              ? <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+              ? <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-ok" />
               : <Circle className="text-muted-foreground mt-0.5 size-4 shrink-0" />}
             <div className="min-w-0 flex-1">
               <p className={`text-sm ${s.done ? "text-muted-foreground line-through" : "font-medium"}`}>{s.title}</p>

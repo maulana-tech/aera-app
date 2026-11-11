@@ -17,8 +17,8 @@ const VERDICT_TONE: Record<string, string> = {
 };
 
 function CheckIcon({ status }: { status: string }) {
-  if (status === "pass") return <CircleCheck className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-label="pass" />;
-  if (status === "fail") return <CircleX className="size-3.5 shrink-0 text-rose-600 dark:text-rose-400" aria-label="fail" />;
+  if (status === "pass") return <CircleCheck className="size-3.5 shrink-0 text-ok " aria-label="pass" />;
+  if (status === "fail") return <CircleX className="size-3.5 shrink-0 text-bad " aria-label="fail" />;
   return <CircleMinus className="text-muted-foreground size-3.5 shrink-0" aria-label={status} />;
 }
 
@@ -35,7 +35,7 @@ export function CheckList({ checks }: { checks: ProofCheck[] }) {
           <div className="min-w-0 flex-1">
             <p className="font-mono text-[11px]">
               {c.name}
-              <span className={cn("ml-1.5", c.status === "fail" ? "text-rose-700 dark:text-rose-400" : "text-muted-foreground")}>
+              <span className={cn("ml-1.5", c.status === "fail" ? "text-bad " : "text-muted-foreground")}>
                 {c.status}
               </span>
               {c.scope && <span className="text-muted-foreground ml-1.5">· {c.scope}</span>}
@@ -71,11 +71,11 @@ function VerifyAgain({ model }: { model: string }) {
         {busy ? <Loader2 className="animate-spin" /> : <RefreshCw />}
         Verify again
       </Button>
-      {error && <p className="text-xs text-rose-700 dark:text-rose-400">{error}</p>}
+      {error && <p className="text-xs text-bad ">{error}</p>}
       {result && (
         <div className="rounded-md border p-3">
           {result.error !== undefined ? (
-            <p className="text-xs text-rose-700 dark:text-rose-400">{result.error}</p>
+            <p className="text-xs text-bad ">{result.error}</p>
           ) : (
             <>
               <div className="flex flex-wrap items-center gap-2">

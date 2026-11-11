@@ -29,7 +29,7 @@ export default async function BuyPage({ params }: { params: Promise<{ offering: 
   if (!info) {
     return (
       <PublicShell>
-        <h1 className="text-xl font-semibold">Checkout is not available</h1>
+        <h1 className="text-xl font-medium">Checkout is not available</h1>
         <p className="text-muted-foreground mt-2 text-sm">The business could not be reached. Try again in a moment.</p>
       </PublicShell>
     );
@@ -42,13 +42,13 @@ export default async function BuyPage({ params }: { params: Promise<{ offering: 
   return (
     <PublicShell business={info.business} simulated={simulated}>
       <p className="text-muted-foreground text-xs">{info.business}</p>
-      <h1 className="mt-1 text-xl font-semibold tracking-tight md:text-2xl">{o.title}</h1>
+      <h1 className="mt-1 text-xl font-medium tracking-tight md:text-2xl">{o.title}</h1>
       {o.description && <p className="text-muted-foreground mt-2 text-sm leading-relaxed">{o.description}</p>}
 
       <dl className="mt-5 grid gap-x-6 gap-y-3 rounded-lg border p-4 text-sm sm:grid-cols-3">
         <div>
           <dt className="text-muted-foreground text-xs">Price</dt>
-          <dd className="mt-0.5 font-mono text-lg font-semibold tabular-nums">{usd(o.price_usd)}</dd>
+          <dd className="mt-0.5 font-mono text-lg font-medium tabular-nums">{usd(o.price_usd)}</dd>
           <dd className="text-muted-foreground text-[11px]">{simulated ? "simulated: no money moves" : "in USDC, one payment"}</dd>
         </div>
         <div>
@@ -62,7 +62,7 @@ export default async function BuyPage({ params }: { params: Promise<{ offering: 
       </dl>
 
       {simulated ? (
-        <p className="mt-4 rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-2.5 text-xs leading-relaxed text-amber-900 dark:text-amber-200">
+        <p className="mt-4 rounded-lg border border-border bg-raised px-4 py-2.5 text-xs leading-relaxed text-warn ">
           SIMULATED checkout. This business has not connected a vault yet, so you will not be asked to pay and
           no money moves. The owner confirms the order by hand, and then the team starts on it.
         </p>

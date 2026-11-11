@@ -89,7 +89,7 @@ export function ActionCard({
       )}
 
       {a.status === "blocked" && (
-        <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-rose-700 dark:text-rose-400">
+        <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-bad ">
           <Lock className="size-3.5" />
           Blocked by the guardian. A block is final and cannot be approved.
         </p>
@@ -140,7 +140,7 @@ export function ActionCard({
         </div>
       )}
       {result && <p className="text-muted-foreground mt-2 text-xs">{result}</p>}
-      {error && <p className="mt-2 text-xs text-rose-700 dark:text-rose-400">{error}</p>}
+      {error && <p className="mt-2 text-xs text-bad ">{error}</p>}
     </article>
   );
 }

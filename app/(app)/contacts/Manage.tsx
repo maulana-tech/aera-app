@@ -116,7 +116,7 @@ function ContactForm({ initial, submitLabel, onSave, onCancel, payoutEditable, c
       <fieldset className="rounded-lg border p-3">
         <legend className="text-muted-foreground px-1 text-xs">Payout details · where money to this contact goes</legend>
         {changedRecently(changedAt) && (
-          <p className="mb-2 inline-flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+          <p className="mb-2 inline-flex items-center gap-1.5 text-xs text-warn ">
             <AlertTriangle className="size-3.5" />
             Changed recently ({when(changedAt!)}): the guardian sends any payment here to a person.
           </p>
@@ -125,7 +125,7 @@ function ContactForm({ initial, submitLabel, onSave, onCancel, payoutEditable, c
           <label className="block">
             <span className="text-muted-foreground text-xs">Paid on</span>
             <select value={d.payout_chain} disabled={!payoutEditable} onChange={(e) => setD({ ...d, payout_chain: e.target.value })}
-              className="border-input bg-background focus-visible:ring-ring/50 mt-1.5 h-8 w-full rounded-lg border px-2 text-sm outline-none focus-visible:ring-3 disabled:opacity-50 dark:bg-input/30">
+              className="border-input bg-background focus-visible:ring-ring/50 mt-1.5 h-8 w-full rounded-lg border px-2 text-sm outline-none focus-visible:ring-3 disabled:opacity-50 ">
               {CHAINS.map((c) => <option key={c.v} value={c.v}>{c.l}</option>)}
               {!CHAINS.some((c) => c.v === d.payout_chain) && <option value={d.payout_chain}>{d.payout_chain}</option>}
             </select>
@@ -344,7 +344,7 @@ function ContactDetail({ contact, open, onOpenChange, canChange, payoutEditable 
                 )}
               </div>
               {changedRecently(contact.address_changed_at) && (
-                <p className="inline-flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+                <p className="inline-flex items-center gap-1.5 text-xs text-warn ">
                   <AlertTriangle className="size-3.5" />
                   Payout details changed {when(contact.address_changed_at!)}. Payments here wait for a person for {RECENT_DAYS} days.
                 </p>
@@ -454,7 +454,7 @@ export function ContactList({ contacts, canDelete, payoutEditable }: {
                   : c.near_account ? `payout ${c.near_account}` : ALERTED.has(c.role) ? (c.notify_for === "*" ? "every kind" : c.notify_for.split(",").join(" · ")) : "no payout account"}
               </span>
               {changedRecently(c.address_changed_at) && (
-                <span className="mt-0.5 block text-[10px] text-amber-700 dark:text-amber-400">payout changed recently</span>
+                <span className="mt-0.5 block text-[10px] text-warn ">payout changed recently</span>
               )}
             </span>
           </button>

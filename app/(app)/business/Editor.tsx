@@ -90,7 +90,7 @@ export function Editor({ profile }: { profile: Profile }) {
           </Button>
           <Button variant="ghost" onClick={() => setOpen(false)}>Close</Button>
         </div>
-        {error && <p className="text-sm text-rose-700 dark:text-rose-400">{error}</p>}
+        {error && <p className="text-sm text-bad ">{error}</p>}
       </div>
 
       {saved && (

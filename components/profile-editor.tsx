@@ -33,7 +33,7 @@ export function TextArea(props: React.ComponentProps<"textarea">) {
   return (
     <textarea
       {...props}
-      className={cn("border-input bg-background focus-visible:border-ring focus-visible:ring-ring/50 w-full rounded-lg border px-2.5 py-2 text-sm outline-none focus-visible:ring-3 dark:bg-input/30", props.className)}
+      className={cn("border-input bg-background focus-visible:border-ring focus-visible:ring-ring/50 w-full rounded-lg border px-2.5 py-2 text-sm outline-none focus-visible:ring-3 ", props.className)}
     />
   );
 }
@@ -134,7 +134,7 @@ export function OfferingsFields({ p, set }: Edit) {
             </Field>
             <Field label="Delivered as" className="sm:col-span-2">
               <select value={o.delivery} onChange={(e) => put(i, { delivery: e.target.value })}
-                className="border-input bg-background h-8 w-full rounded-lg border px-2 text-sm dark:bg-input/30">
+                className="border-input bg-background h-8 w-full rounded-lg border px-2 text-sm ">
                 {DELIVERIES.map((d) => <option key={d} value={d}>{d}</option>)}
               </select>
             </Field>
@@ -222,7 +222,7 @@ export function LimitsFields({ p, set }: Edit) {
       <div>
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <span className="text-muted-foreground text-xs">Revenue split, paid on chain as each order settles</span>
-          <span className={cn("font-mono text-[11px]", splitTotal > 10_000 ? "text-rose-700 dark:text-rose-400" : "text-muted-foreground")}>
+          <span className={cn("font-mono text-[11px]", splitTotal > 10_000 ? "text-bad " : "text-muted-foreground")}>
             {(splitTotal / 100).toFixed(2)}% of revenue
           </span>
         </div>
@@ -259,9 +259,9 @@ export function LimitsFields({ p, set }: Edit) {
 export function Problems({ problems }: { problems: string[] }) {
   if (!problems.length) return null;
   return (
-    <ul className="space-y-1 rounded-lg border border-amber-500/40 bg-amber-500/5 px-4 py-3">
+    <ul className="space-y-1 rounded-lg border border-border bg-raised px-4 py-3">
       {problems.map((x, i) => (
-        <li key={i} className="text-xs text-amber-800 dark:text-amber-300">{x}</li>
+        <li key={i} className="text-xs text-warn ">{x}</li>
       ))}
     </ul>
   );

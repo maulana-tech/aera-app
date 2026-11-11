@@ -66,9 +66,9 @@ export default async function TreasuryPage() {
       {onChain && <div className="mt-4"><SyncButton /></div>}
 
       {drift?.drift && (
-        <div className="mt-6 rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-3">
-          <p className="text-sm font-medium text-amber-900 dark:text-amber-200">The vault&apos;s limits differ from the business profile</p>
-          <p className="mt-1 text-xs leading-relaxed text-amber-900/90 dark:text-amber-200/90">
+        <div className="mt-6 rounded-lg border border-border bg-raised px-4 py-3">
+          <p className="text-sm font-medium text-warn ">The vault&apos;s limits differ from the business profile</p>
+          <p className="mt-1 text-xs leading-relaxed text-warn ">
             The vault enforces {usd(drift.vault.per_payment)} per payment and {usd(drift.vault.per_day)} per day; the profile says{" "}
             {usd(drift.profile.per_payment)} and {usd(drift.profile.per_day)}. The vault&apos;s figures are the ones that hold on chain,
             so until they agree the team may be stopped earlier, or allowed further, than the profile says.
@@ -78,14 +78,14 @@ export default async function TreasuryPage() {
               <SetPolicyOnChain contract={t.vault} network={t.network}
                 perTxCap={drift.set_policy.per_tx_cap} dailyCap={drift.set_policy.daily_cap} />
             ) : (
-              <p className="text-xs text-amber-900/90 dark:text-amber-200/90">Only the owner can write the limits to the vault, from the vault owner&apos;s wallet.</p>
+              <p className="text-xs text-warn ">Only the owner can write the limits to the vault, from the vault owner&apos;s wallet.</p>
             )}
           </div>
         </div>
       )}
 
       {!onChain && (
-        <div className="mt-6 rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
+        <div className="mt-6 rounded-lg border border-border bg-raised px-4 py-3 text-sm text-warn ">
           Simulated rail. Nothing on this page has touched a blockchain; figures are AERA&apos;s own record.
         </div>
       )}
@@ -178,7 +178,7 @@ export default async function TreasuryPage() {
               <div className="overflow-x-auto rounded-lg border">
                 <table className="w-full min-w-[680px] text-sm">
                   <thead>
-                    <tr className="text-muted-foreground border-b text-left font-mono text-[10px] uppercase tracking-wider">
+                    <tr className="text-muted-foreground border-b text-left font-mono text-[10px]">
                       <th className="px-4 py-2.5 font-medium">Status</th>
                       <th className="px-4 py-2.5 font-medium">Dir</th>
                       <th className="px-4 py-2.5 font-medium">Rail</th>

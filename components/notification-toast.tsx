@@ -262,12 +262,12 @@ export function NotificationToast() {
           <div className="flex items-center gap-2">
             <AgentBadge nickname={notification.agentName} size="xs" showTooltip={false} />
             <div className="flex items-center gap-1.5">
-              <span className="text-xs font-semibold tracking-tight text-foreground">
+              <span className="text-xs font-medium tracking-tight text-foreground">
                 {notification.agentName}
               </span>
               <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ok opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-ok" />
               </span>
             </div>
           </div>
@@ -289,7 +289,7 @@ export function NotificationToast() {
         {/* Title & Preview */}
         <div className="mt-2.5">
           <p className="text-xs font-medium text-foreground flex items-center gap-1.5">
-            <Sparkles className="size-3 text-amber-500" />
+            <Sparkles className="size-3 text-warn" />
             Response ready
           </p>
           {notification.preview && (

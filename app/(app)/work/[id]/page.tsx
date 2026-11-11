@@ -42,7 +42,7 @@ export default async function WorkRun({ params, searchParams }: {
     if (res.error?.includes("no such run")) notFound();
     return (
       <main className="w-full px-6 py-16">
-        <h1 className="text-xl font-semibold">This run could not be read</h1>
+        <h1 className="text-xl font-medium">This run could not be read</h1>
         <p className="text-muted-foreground mt-2 text-sm">{res.error}</p>
       </main>
     );
@@ -79,9 +79,9 @@ export default async function WorkRun({ params, searchParams }: {
           <span className="text-muted-foreground font-mono text-xs">{r.id}</span>
           <AutoRefresh active={r.status === "running"} />
         </div>
-        <h1 className="mt-2 text-xl font-semibold tracking-tight md:text-2xl">{r.title}</h1>
+        <h1 className="mt-2 text-xl font-medium tracking-tight md:text-2xl">{r.title}</h1>
         {payloadText && <p className="text-muted-foreground mt-1.5 max-w-3xl text-sm leading-relaxed whitespace-pre-wrap">{payloadText}</p>}
-        {r.error && <p className="mt-2 font-mono text-xs text-rose-600 dark:text-rose-400">{r.error}</p>}
+        {r.error && <p className="mt-2 font-mono text-xs text-bad ">{r.error}</p>}
         <div className="text-muted-foreground mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
           {order && <Link href="/orders" className="hover:text-foreground underline underline-offset-2">Order {order.id} · {order.status.replace(/_/g, " ")}</Link>}
           {runDocs.length > 0 && <a href="#documents" className="hover:text-foreground underline underline-offset-2">{runDocs.length} document{runDocs.length === 1 ? "" : "s"}</a>}
@@ -101,7 +101,7 @@ export default async function WorkRun({ params, searchParams }: {
               <p className="text-muted-foreground text-sm">{r.status === "running" ? "The team is still working." : "No outcome was written."}</p>
             )}
             {d.untrusted_on_board && d.untrusted_on_board.length > 0 && (
-              <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+              <p className="mt-2 text-xs text-warn ">
                 Rests partly on figures that are not live or derived: {d.untrusted_on_board.join(", ")}.
               </p>
             )}

@@ -24,7 +24,7 @@ export default async function TracePage({
     if (r.error?.includes("no such run")) notFound();
     return (
       <main className="w-full px-6 py-16">
-        <h1 className="text-xl font-semibold">The trace could not be read</h1>
+        <h1 className="text-xl font-medium">The trace could not be read</h1>
         <p className="text-muted-foreground mt-2 text-sm">{r.error}</p>
       </main>
     );
@@ -47,9 +47,9 @@ export default async function TracePage({
           <span className="text-muted-foreground font-mono text-xs">{t.run.id}</span>
           <AutoRefresh active={t.run.status === "running"} />
         </div>
-        <h1 className="mt-2 text-xl font-semibold tracking-tight md:text-2xl">Trace · {t.run.title}</h1>
+        <h1 className="mt-2 text-xl font-medium tracking-tight md:text-2xl">Trace · {t.run.title}</h1>
         <p className="text-muted-foreground mt-1.5 max-w-2xl text-sm leading-relaxed">{t.run.trigger}</p>
-        {t.run.error && <p className="mt-2 font-mono text-xs text-rose-600 dark:text-rose-400">{t.run.error}</p>}
+        {t.run.error && <p className="mt-2 font-mono text-xs text-bad ">{t.run.error}</p>}
 
         <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3 lg:grid-cols-6">
           {[

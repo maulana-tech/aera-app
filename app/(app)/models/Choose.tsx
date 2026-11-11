@@ -17,7 +17,7 @@ const ROLES = [
 const SELECT =
   "h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2 text-sm outline-none " +
   "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 " +
-  "disabled:cursor-not-allowed disabled:opacity-60 dark:bg-input/30";
+  "disabled:cursor-not-allowed disabled:opacity-60 ";
 
 function rate(m: ModelListing): string {
   const [i, o] = m.usd_per_mtok;

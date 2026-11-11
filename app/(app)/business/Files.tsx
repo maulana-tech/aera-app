@@ -85,7 +85,7 @@ export function Files({ files, mayChange }: { files: BusinessFile[]; mayChange: 
           </Field>
         </div>
         <Field label="Text"><TextArea rows={5} value={text} onChange={(e) => setText(e.target.value)} placeholder="Our tone of voice: plain, specific, no hype…" /></Field>
-        {error && <p className="text-sm text-rose-700 dark:text-rose-400">{error}</p>}
+        {error && <p className="text-sm text-bad ">{error}</p>}
         <Button type="submit" size="sm" disabled={!!busy || !name.trim() || !text.trim()}>
           {busy === "add" ? <Loader2 className="animate-spin" /> : <Upload />}
           Add file
