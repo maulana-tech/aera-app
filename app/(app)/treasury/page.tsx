@@ -91,7 +91,7 @@ export default async function TreasuryPage() {
       )}
 
       <div className="mt-6 grid grid-cols-2 gap-6 sm:grid-cols-4">
-        <Metric label="Vault balance" value={t.balance_usd != null ? usd(t.balance_usd) : "-"} note={onChain ? t.token : "no vault"} />
+        <Metric label="Vault balance" value={t.balance_usd != null ? usd(t.balance_usd) : "-"} note={onChain ? `USDC in ${t.vault}` : "no vault"} />
         <Metric label="Paid today (autonomous)" value={usd(t.paid_today_usd)} note={`cap ${usd(t.caps.per_day)} / day`} />
         <Metric label="Autonomous per payment" value={usd(t.caps.per_payment)} />
         <Metric label="Waiting for a person" value={String(t.pending_actions.length + t.pending_onchain.length + t.approved_refunds.length)} />

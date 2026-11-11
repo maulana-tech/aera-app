@@ -132,12 +132,13 @@ export function Metric({
     <>
       <p className="text-muted-foreground text-xs">{label}{href && <span aria-hidden> →</span>}</p>
       <p className="mt-1.5 font-mono text-xl font-medium tabular-nums">{value}</p>
-      {note && <p className="text-muted-foreground mt-1 text-xs leading-relaxed">{note}</p>}
+      {note && <p className="text-muted-foreground mt-1 text-xs leading-relaxed break-words">{note}</p>}
     </>
   );
-  if (!href) return <div className={className}>{body}</div>;
+  // min-w-0: in a grid a long unbroken note (an id, a hash) must wrap, not push into the next column.
+  if (!href) return <div className={cn("min-w-0", className)}>{body}</div>;
   return (
-    <Link href={href} className={cn("hover:bg-muted/40 focus-visible:ring-ring -m-2 block rounded-md p-2 outline-none focus-visible:ring-2", className)}>
+    <Link href={href} className={cn("hover:bg-muted/40 focus-visible:ring-ring -m-2 block min-w-0 rounded-md p-2 outline-none focus-visible:ring-2", className)}>
       {body}
     </Link>
   );
