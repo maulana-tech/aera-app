@@ -21,19 +21,15 @@ export default async function Users() {
       <PageHeader title="Accounts"
         lead="Who can sign in, and how much each may approve. Limits are checked by the agent service from the session, never from the page. Add at least one approver, so a payment above the team's limit has someone other than the owner to sign it." />
       {!data && <p className="text-muted-foreground mt-6 text-sm">{res.error}</p>}
-      <Section title="Roles" note="Anything above a person's limit waits for someone with a higher one.">
-        <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-5">
-          {Object.entries(data?.roles ?? {}).map(([r, limit]) => (
-            <div key={r} className="rounded-lg border px-3 py-2">
-              <p className="text-sm font-medium capitalize">{r}</p>
-              <p className="text-muted-foreground font-mono text-[11px]">{limit ? `approves up to ${usd(limit)}` : "approves nothing"}</p>
-              {ROLE_HELP[r] && <p className="text-muted-foreground mt-1 text-xs leading-relaxed">{ROLE_HELP[r]}</p>}
-            </div>
-          ))}
-        </div>
-      </Section>
+      {owner ? (
+        <Section title="Add an account" note="Pick the role by what the person may approve; the roles are explained at the bottom.">
+          <AddUser roles={Object.keys(data?.roles ?? {})} />
+        </Section>
+      ) : (
+        <p className="text-muted-foreground mt-8 text-xs">Only an owner or admin adds or removes accounts.</p>
+      )}
       <Section title={`Accounts (${users.length})`}
-        note={alone ? (owner ? "Only you so far. Add an approver below." : "Ask the owner to add the people who decide.") : undefined}>
+        note={alone ? (owner ? "Only you so far. Add an approver above." : "Ask the owner to add the people who decide.") : undefined}>
         <div className="divide-y rounded-lg border">
           {users.map((u) => (
             <div key={u.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
@@ -47,13 +43,17 @@ export default async function Users() {
           ))}
         </div>
       </Section>
-      {owner ? (
-        <Section title="Add an account">
-          <AddUser roles={Object.keys(data?.roles ?? {})} />
-        </Section>
-      ) : (
-        <p className="text-muted-foreground mt-8 text-xs">Only an owner or admin adds or removes accounts.</p>
-      )}
+      <Section title="Roles" note="Anything above a person's limit waits for someone with a higher one.">
+        <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-5">
+          {Object.entries(data?.roles ?? {}).map(([r, limit]) => (
+            <div key={r} className="rounded-lg border px-3 py-2">
+              <p className="text-sm font-medium capitalize">{r}</p>
+              <p className="text-muted-foreground font-mono text-[11px]">{limit ? `approves up to ${usd(limit)}` : "approves nothing"}</p>
+              {ROLE_HELP[r] && <p className="text-muted-foreground mt-1 text-xs leading-relaxed">{ROLE_HELP[r]}</p>}
+            </div>
+          ))}
+        </div>
+      </Section>
     </main>
   );
 }

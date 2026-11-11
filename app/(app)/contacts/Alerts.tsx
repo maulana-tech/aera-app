@@ -8,7 +8,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 
 const CHANNELS = [
-  { key: "email", label: "Email", hint: "One message per contact below, with the report attached." },
+  { key: "email", label: "Email", hint: "One message per contact on the list, with the report attached." },
   { key: "slack", label: "Slack", hint: "One message to the team's channel." },
   { key: "telegram", label: "Telegram", hint: "A person or a group the bot is in." },
   { key: "webhook", label: "Webhook", hint: "JSON, for Teams via Power Automate, n8n, a ticket queue." },
@@ -70,7 +70,7 @@ export function Alerts({ data }: { data: NotificationsPayload }) {
       <div>
         <h2 className="text-sm font-medium">Channels</h2>
         <p className="text-muted-foreground mt-1 max-w-2xl text-xs leading-relaxed">
-          When a run finishes, is held, or fails, the people below whose kinds match are
+          When a run finishes, is held, or fails, the contacts whose kinds match are
           told, and so is every team channel that is set up. Every figure in the message comes
           from the record. Channels are set up in <span className="font-mono">.secrets/notify.env</span>{" "}
           on the server (ENV.md, Alerts).

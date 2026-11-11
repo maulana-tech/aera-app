@@ -24,12 +24,14 @@ export default async function ContactsPage() {
       />
 
       <div className="mt-8 grid gap-10 xl:grid-cols-2 xl:gap-12">
+        {/* Contacts first, with "add" above the list; how alerts reach the team sits beside it. */}
         <div className="min-w-0 space-y-10">
-          {alerts.data ? (
-            <Alerts data={alerts.data} />
+          {mayChange ? (
+            <AddContact payoutEditable={payoutEditable} />
           ) : (
             <p className="text-muted-foreground rounded-lg border border-dashed p-6 text-sm">
-              {alerts.error ?? "The agent service did not answer."}
+              Only an owner or admin can add or change a contact: a contact may be paid, and may
+              receive what was decided and what it is worth.
             </p>
           )}
           <section>
@@ -40,12 +42,11 @@ export default async function ContactsPage() {
           </section>
         </div>
         <div className="min-w-0 space-y-10">
-          {mayChange ? (
-            <AddContact payoutEditable={payoutEditable} />
+          {alerts.data ? (
+            <Alerts data={alerts.data} />
           ) : (
             <p className="text-muted-foreground rounded-lg border border-dashed p-6 text-sm">
-              Only an owner or admin can add or change a contact: a contact may be paid, and may
-              receive what was decided and what it is worth.
+              {alerts.error ?? "The agent service did not answer."}
             </p>
           )}
           {alerts.data && <RecentAlerts recent={alerts.data.recent} />}

@@ -79,6 +79,75 @@ export function Servers({ data, team }: { data: McpPayload; team: Member[] }) {
           </span>
         </div>
 
+        <div className="border-b px-4 py-4">
+          <p className="text-sm font-medium">Add a server</p>
+          <p className="text-muted-foreground mt-1 max-w-3xl text-xs leading-relaxed">
+            It is called once before it is saved. A server nobody could reach, sitting enabled
+            in this list, is a tool an agent will try and a run will wait on.
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            <label className="space-y-1.5">
+              <span className="text-xs font-medium">Name</span>
+              <input className={FIELD} value={name} disabled={locked}
+                     placeholder="carrier-track" onChange={(e) => setName(e.target.value)} />
+            </label>
+            <label className="space-y-1.5 sm:col-span-2">
+              <span className="text-xs font-medium">Endpoint</span>
+              <input className={FIELD} value={url} disabled={locked} spellCheck={false}
+                     placeholder="https://tools.example.com/mcp"
+                     onChange={(e) => setUrl(e.target.value)} />
+            </label>
+            <label className="space-y-1.5">
+              <span className="text-xs font-medium">Bearer token</span>
+              <input className={FIELD} type="password" autoComplete="off" value={token}
+                     disabled={locked} placeholder="optional"
+                     onChange={(e) => setToken(e.target.value)} />
+            </label>
+            <div className="space-y-1.5 sm:col-span-2">
+              <span className="text-xs font-medium">Which agents may use it</span>
+              <div className="flex flex-wrap gap-1.5">
+                {team.length === 0 && (
+                  <span className="text-muted-foreground text-xs">The team has no agents yet: compose it on the Team page first.</span>
+                )}
+                {team.map(({ code: a, name: label }) => {
+                  const on = agents.includes(a);
+                  return (
+                    <button
+                      key={a}
+                      type="button"
+                      aria-pressed={on}
+                      disabled={locked}
+                      onClick={() =>
+                        setAgents((xs) => (on ? xs.filter((x) => x !== a) : [...xs, a]))
+                      }
+                      className={`rounded-full border px-2.5 py-1 font-mono text-[10px] transition-colors ${
+                        on ? "border-foreground" : "border-input text-muted-foreground"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+              <span className="text-muted-foreground block text-xs">
+                Pick nobody and the server is registered but reaches no
+                run. Verifying a server and giving an agent its tools are
+                two separate acts, and the second one is the one that matters.
+              </span>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <Button size="sm" disabled={locked || !name || !url} onClick={add}>
+              {busy === "add" ? "Calling it…" : "Add"}
+            </Button>
+            {!data.may_change && (
+              <p className="text-muted-foreground text-xs">
+                Only an owner or admin can change this.
+              </p>
+            )}
+            {error && <p className="text-destructive text-xs">{error}</p>}
+          </div>
+        </div>
         {data.servers.length > 0 && (
           <ul className="divide-y">
             {data.servers.map((s) => {
@@ -181,75 +250,7 @@ export function Servers({ data, team }: { data: McpPayload; team: Member[] }) {
           </ul>
         )}
 
-        <div className="border-t px-4 py-4">
-          <p className="text-sm font-medium">Add a server</p>
-          <p className="text-muted-foreground mt-1 max-w-3xl text-xs leading-relaxed">
-            It is called once before it is saved. A server nobody could reach, sitting enabled
-            in this list, is a tool an agent will try and a run will wait on.
-          </p>
-          <div className="mt-3 grid gap-3 sm:grid-cols-3">
-            <label className="space-y-1.5">
-              <span className="text-xs font-medium">Name</span>
-              <input className={FIELD} value={name} disabled={locked}
-                     placeholder="carrier-track" onChange={(e) => setName(e.target.value)} />
-            </label>
-            <label className="space-y-1.5 sm:col-span-2">
-              <span className="text-xs font-medium">Endpoint</span>
-              <input className={FIELD} value={url} disabled={locked} spellCheck={false}
-                     placeholder="https://tools.example.com/mcp"
-                     onChange={(e) => setUrl(e.target.value)} />
-            </label>
-            <label className="space-y-1.5">
-              <span className="text-xs font-medium">Bearer token</span>
-              <input className={FIELD} type="password" autoComplete="off" value={token}
-                     disabled={locked} placeholder="optional"
-                     onChange={(e) => setToken(e.target.value)} />
-            </label>
-            <div className="space-y-1.5 sm:col-span-2">
-              <span className="text-xs font-medium">Which agents may use it</span>
-              <div className="flex flex-wrap gap-1.5">
-                {team.length === 0 && (
-                  <span className="text-muted-foreground text-xs">The team has no agents yet: compose it on the Team page first.</span>
-                )}
-                {team.map(({ code: a, name: label }) => {
-                  const on = agents.includes(a);
-                  return (
-                    <button
-                      key={a}
-                      type="button"
-                      aria-pressed={on}
-                      disabled={locked}
-                      onClick={() =>
-                        setAgents((xs) => (on ? xs.filter((x) => x !== a) : [...xs, a]))
-                      }
-                      className={`rounded-full border px-2.5 py-1 font-mono text-[10px] transition-colors ${
-                        on ? "border-foreground" : "border-input text-muted-foreground"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-              <span className="text-muted-foreground block text-xs">
-                Pick nobody and the server is registered but reaches no
-                run. Verifying a server and giving an agent its tools are
-                two separate acts, and the second one is the one that matters.
-              </span>
-            </div>
-          </div>
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <Button size="sm" disabled={locked || !name || !url} onClick={add}>
-              {busy === "add" ? "Calling it…" : "Add"}
-            </Button>
-            {!data.may_change && (
-              <p className="text-muted-foreground text-xs">
-                Only an owner or admin can change this.
-              </p>
-            )}
-            {error && <p className="text-destructive text-xs">{error}</p>}
-          </div>
-        </div>
+
       </section>
     </div>
   );

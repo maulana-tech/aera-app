@@ -19,7 +19,7 @@ export default async function SkillsPage() {
             once, so the team follows the same steps every time instead of working them out
             again. Each skill names the agents that may run it and the tools it uses, and both
             are checked when it is saved. The built-in skills are part of AERA; write your own
-            at the bottom of the page.
+            just below.
           </>
         }
       />
@@ -30,6 +30,7 @@ export default async function SkillsPage() {
         </p>
       ) : (
         <>
+          <Write data={data} />
           <div className="mt-8 space-y-4">
             {data.skills.map((s) => (
               <section key={s.name} className="rounded-lg border">
@@ -103,7 +104,6 @@ export default async function SkillsPage() {
             ))}
           </div>
 
-          <Write data={data} />
 
           <p className="text-muted-foreground mt-6 max-w-3xl text-xs leading-relaxed">
             Every invocation is counted, including the ones that name a skill nobody wrote.
