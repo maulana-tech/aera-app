@@ -178,7 +178,7 @@ function NewRole({ caps }: { caps: Capability[] }) {
   }
 
   return (
-    <form onSubmit={add} className="space-y-3 rounded-lg border p-4">
+    <form onSubmit={add} className="bg-white space-y-3 rounded-lg border p-4">
       <h3 className="text-sm font-medium">Add a custom role</h3>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Title"><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Copy editor" required /></Field>
@@ -190,7 +190,7 @@ function NewRole({ caps }: { caps: Capability[] }) {
           return (
             <button key={c.name} type="button" title={c.description} aria-pressed={on}
               onClick={() => setChosen(on ? chosen.filter((x) => x !== c.name) : [...chosen, c.name])}
-              className={cn("rounded-full border px-3 py-1 font-mono text-[11px]", on ? "bg-primary text-primary-foreground border-primary" : "hover:border-foreground/30")}>
+              className={cn("rounded-sm px-2.5 py-1 font-mono text-[11px] transition-colors", on ? "bg-primary text-primary-foreground" : "bg-raised text-text hover:bg-hover")}>
               {c.name}
             </button>
           );
@@ -236,7 +236,7 @@ function Recompose() {
   const changes = proposal ? proposal.diff.add.length + proposal.diff.remove.length + proposal.diff.change.length : 0;
 
   return (
-    <div className="space-y-3 rounded-lg border p-4">
+    <div className="bg-white space-y-3 rounded-lg border p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="text-sm font-medium">Recompose from the profile</h3>
@@ -271,6 +271,13 @@ export function TeamBoard({ data }: { data: TeamPayload }) {
 
   return (
     <>
+      {/* Changing the team comes first: what the owner came here to do, before the roster. */}
+      {data.may_change && (
+        <section className="mt-8 grid items-start gap-4 lg:grid-cols-2">
+          <Recompose />
+          <NewRole caps={data.capabilities} />
+        </section>
+      )}
       <section className="mt-8">
         <h2 className="mb-3 text-sm font-medium">Core roles <span className="text-muted-foreground font-normal">· always present</span></h2>
         {grid(core)}
@@ -280,17 +287,11 @@ export function TeamBoard({ data }: { data: TeamPayload }) {
         {rest.length ? grid(rest) : (
           <p className="text-muted-foreground text-sm">
             No specialists yet. {data.may_change
-              ? <>They are composed from what the business sells: describe it on <Link href="/onboarding" className="underline underline-offset-2">onboarding</Link>, or use Propose below.</>
+              ? <>They are composed from what the business sells: describe it on <Link href="/onboarding" className="underline underline-offset-2">onboarding</Link>, or use Propose above.</>
               : "An owner composes them from the business profile."}
           </p>
         )}
       </section>
-      {data.may_change && (
-        <section className="mt-8 grid gap-4 lg:grid-cols-2">
-          <Recompose />
-          <NewRole caps={data.capabilities} />
-        </section>
-      )}
       {editingAgent && (
         <EditDialog key={editingAgent.code} a={editingAgent} caps={data.capabilities}
           open onOpenChange={(v) => !v && setEditing(null)} />
