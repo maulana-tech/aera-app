@@ -36,14 +36,16 @@ const isActive = (pathname: string, href: string) => pathname === href || pathna
 function groups(pending: number): { label: string; items: Item[] }[] {
   return [
     {
-      // The main feature: ask the Supervisor, and through it the whole team.
+      // The overview, then the main feature: ask the Supervisor, and through it the whole team.
       label: "",
-      items: [{ title: "Chat", href: "/chat", icon: MessagesSquare }],
+      items: [
+        { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+        { title: "Chat", href: "/chat", icon: MessagesSquare },
+      ],
     },
     {
       label: "Run the business",
       items: [
-        { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
         { title: "Work", href: "/work", icon: Inbox },
         { title: "Orders", href: "/orders", icon: ShoppingBag },
         { title: "Documents", href: "/documents", icon: FileText },
