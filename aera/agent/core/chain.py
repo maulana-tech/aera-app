@@ -191,8 +191,15 @@ def payment_failed(out: Dict[str, Any], req_id: str) -> bool:
     often: the receiver holds no USDC storage). The callback then emits `payment_failed`, which
     lands in the same transaction's receipts."""
     rid = request_id(req_id)
-    return any(e.get("event") == "payment_failed" and isinstance(e.get("data"), dict)
-               and e["data"].get("request_id") == rid for e in out.get("events") or [])
+    for e in out.get("events") or []:
+        if e.get("event") != "payment_failed":
+            continue
+        data = e.get("data")
+        # NEP-297: `data` is an array of objects (the vault emits [ {...} ]); accept a bare object too.
+        for d in data if isinstance(data, list) else [data]:
+            if isinstance(d, dict) and d.get("request_id") == rid:
+                return True
+    return False
 
 
 def deliver_receipt(order_id: str, content_hash: str) -> Dict[str, Any]:
@@ -206,6 +213,11 @@ def freeze() -> Dict[str, Any]:
 def demo() -> None:
     assert to_base(15) == "15000000" and to_base(0.1) == "100000" and from_base("2500000") == 2.5
     assert request_id("payment:ab/cd ef") == "payment:ab_cd_ef"
+    failed = {"events": [{"standard": "aera-vault", "event": "payment_failed",
+                          "data": [{"request_id": "payment:ab", "amount": "1"}]}]}
+    assert payment_failed(failed, "payment:ab") and not payment_failed(failed, "payment:cd")
+    assert not payment_failed({"events": [{"event": "payment_sent", "data": [{"request_id": "payment:ab"}]}]},
+                              "payment:ab")
     for ok in ("vendor.testnet", "a1.b-c_d.near", "17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1"):
         assert valid_account(ok), ok
     for bad in ("", "A.near", "x", "a..b", "-a.near", "a" * 65, "bad account"):

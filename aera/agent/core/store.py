@@ -944,6 +944,17 @@ def update_contact(cid: str, **fields: Optional[str]) -> Optional[dict]:
     return get_contact(cid)
 
 
+def restore_contact_payout(cid: str, near_account: Optional[str], address_changed_at: Optional[str]) -> None:
+    """Put a contact's payout account back exactly as it was, change stamp included.
+
+    Only for the attack demo, which poisons a record on purpose and must leave it as it found
+    it: going through update_contact would stamp the restore as a fresh address change and
+    hold every real payment to that vendor for the cooldown."""
+    with connect() as c:
+        c.execute("UPDATE contacts SET near_account=?, address_changed_at=? WHERE id=?",
+                  (near_account, address_changed_at, cid))
+
+
 def notifications_to(address: str, limit: int = 20) -> List[dict]:
     with connect() as c:
         rows = c.execute("SELECT id, run_id, kind, channel, address, subject, status, attempts,"

@@ -115,6 +115,12 @@ def load() -> Config:
 CFG = load()
 
 
+# Self-checks are offline: blank (not unset) so _load_env's setdefault cannot fill them back in
+# from .secrets/near.env. A check must never call the live vault or spend model credit.
+OFFLINE_ENV = {"AERA_VAULT_CONTRACT": "", "AERA_NEAR_AGENT_ACCOUNT": "", "AERA_NEAR_AGENT_KEY": "",
+               "NEARAI_API_KEY": ""}
+
+
 def fixtures_only(script: str, flag: str) -> None:
     """Re-exec a self-check on fixtures and a scratch database.
 
@@ -131,7 +137,7 @@ def fixtures_only(script: str, flag: str) -> None:
     if os.environ.get(flag) == "1":
         return
     scratch = pathlib.Path(tempfile.mkdtemp(prefix="aera-check-")) / "check.db"
-    env = {**os.environ, "AERA_DB": str(scratch), flag: "1",
+    env = {**os.environ, **OFFLINE_ENV, "AERA_DB": str(scratch), flag: "1",
            "PYTHONPATH": os.environ.get("PYTHONPATH", ".")}
     sys.exit(subprocess.call([sys.executable, script, *sys.argv[1:]], env=env))
 
