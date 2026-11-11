@@ -544,3 +544,29 @@ export const LANGUAGES: { code: string; label: string }[] = [
 /** An offering's id, made from its title: what the checkout link is built from. */
 export const slugify = (s: string) =>
   s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32);
+
+/* ------------------------------------------------------------- team activity (core/activity.py) */
+export type ActivityEvent = {
+  at: string; category: "team" | "money" | "guardian" | "work"; tone: "ok" | "warn" | "bad" | "info";
+  agent: string; title: string; detail: string;
+  run_id?: string; order_id?: string; tx?: string; action_id?: string; work_item_id?: string;
+};
+export type ActivityNow = {
+  run_id: string; title: string; kind: string; started_at: string; agent: string; agent_name: string;
+  doing: string; last_at: string; agents: string[]; steps: number;
+};
+export type ActivitySince = {
+  since: string; orders_paid: number; revenue_usd: number; paid_out_usd: number; work_done: number; held: number;
+  guardian_stops: number; model_cost_usd: number; waiting_now: number; running_now: number;
+};
+export type ActivityPayload = { now: ActivityNow[]; since: ActivitySince; events: ActivityEvent[]; generated_at: string };
+
+/** "3 min ago", "yesterday", or the date: for a feed, how long ago matters more than the clock. */
+export function ago(t: string, now: number = Date.now()): string {
+  const s = Math.max(0, Math.round((now - new Date(t).getTime()) / 1000));
+  if (s < 45) return "just now";
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  if (s < 172800) return "yesterday";
+  return new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+}

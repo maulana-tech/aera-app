@@ -4,11 +4,12 @@ import { redirect } from "next/navigation";
 
 import {
   api, apiResult, mayManage, mayStop, me, noBusiness, usd, when,
-  type Action, type BusinessPayload, type Health, type Ledger, type RunRow,
+  type Action, type ActivityPayload, type BusinessPayload, type Health, type Ledger, type RunRow,
 } from "@/app/lib";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { Bars, Figure, type Datum } from "@/components/charts";
 import { GettingStarted } from "@/components/getting-started";
+import { TeamLive } from "@/components/team-live";
 import { KillSwitch } from "@/components/kill-switch";
 import { Empty, Metric, PageHeader, Section } from "@/components/shell";
 import { StatusBadge } from "@/components/status-badge";
@@ -32,7 +33,7 @@ export default async function Dashboard() {
   }
   if (noBusiness(biz.data)) redirect("/onboarding");
 
-  const [led, pending, runs, health, user, accounts, orders] = await Promise.all([
+  const [led, pending, runs, health, user, accounts, orders, activity] = await Promise.all([
     api<Ledger>("ledger?days=30"),
     api<{ actions: Action[] }>("actions?status=pending"),
     api<{ runs: RunRow[] }>("runs"),
@@ -40,6 +41,7 @@ export default async function Dashboard() {
     me(),
     api<{ users: { role: string }[] }>("users"),
     api<{ orders: { status: string }[] }>("orders"),
+    api<ActivityPayload>("activity?limit=20"),
   ]);
   const p = biz.data.profile;
   const money = led?.money ?? [];
@@ -104,7 +106,8 @@ export default async function Dashboard() {
       </div>
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="min-w-0">
+        <div className="min-w-0 space-y-10">
+          {activity && <TeamLive initial={activity} network={health?.network ?? "testnet"} compact limit={20} />}
           <Section title="Recent work" className="mt-0" action={<Link href="/work" className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs">all work <ArrowRight className="size-3" /></Link>}>
             {recent.length === 0 ? (
               <Empty what="The team has not worked on anything yet." why="Give it a request on the Work page, or share a checkout link so a paid order arrives on its own."

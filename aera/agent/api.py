@@ -1599,6 +1599,15 @@ def guardian_log(_m, b: dict, h) -> Tuple[int, dict]:
     return 200, {"checks": store.list_checks(limit=100, verdict=b.get("verdict") or None)}
 
 
+@route("GET", r"/activity")
+def activity_feed(_m, b: dict, h) -> Tuple[int, dict]:
+    """What the team is doing and has done, in plain words (core/activity.py)."""
+    from core import activity
+    _user(h)
+    limit = int(b["limit"]) if str(b.get("limit") or "").isdigit() else 50
+    return 200, activity.summary(max(1, min(limit, 200)), b.get("category") or None, b.get("since") or None)
+
+
 @route("GET", r"/trust")
 def trust_center(_m, b: dict, h) -> Tuple[int, dict]:
     """The evidence for privacy and security in one place (core/trust.py)."""

@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  BookUser, Briefcase, CalendarClock, ChevronDown, ChevronsUpDown, Cpu, FileText, Inbox, KeyRound,
+  Activity, BookUser, Briefcase, CalendarClock, ChevronDown, ChevronsUpDown, Cpu, FileText, Inbox, KeyRound,
   Landmark, LayoutDashboard, LogIn, LogOut, Menu, MessagesSquare, PanelLeftClose, PanelLeftOpen, Plug,
   ReceiptText, ScrollText, Settings2, ShieldCheck, ShoppingBag, Sparkles, Users,
 } from "lucide-react";
@@ -41,6 +41,7 @@ function groups(pending: number): { label: string; items: Item[] }[] {
       items: [
         { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
         { title: "Chat", href: "/chat", icon: MessagesSquare },
+        { title: "Activity", href: "/activity", icon: Activity },
       ],
     },
     {
