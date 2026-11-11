@@ -169,9 +169,10 @@ def _entries(report: dict, model: Optional[str]) -> List[Tuple[str, dict]]:
     if isinstance(report.get("gateway_attestation"), dict):
         out.append(("gateway", report["gateway_attestation"]))
     for i, m in enumerate(report.get("model_attestations") or []):
-        if model and m.get("model_name") and m["model_name"] != model:
+        name = m.get("model_name") or m.get("model")
+        if model and name and name != model:
             continue
-        out.append(("model:%s#%d" % (m.get("model_name") or model or "?", i), m))
+        out.append(("model:%s#%d" % (name or model or "?", i), m))
     if not out and report.get("signing_address"):  # flat single-attestation shape
         out.append(("model:%s" % (model or "?"), report))
     return out
@@ -298,6 +299,46 @@ def _check_gpu(att: dict, nonce: str, scope: str) -> Check:
         return _check("gpu_nras", FAIL, "NRAS: %s" % e, scope)
 
 
+def _check_chutes(att: dict, nonce: str, scope: str) -> List[Check]:
+    """A model served through a provider that attests in its own shape (Chutes today):
+    ``{provider, verified, tcb_status, gpu_verdict, nonce, e2e_pubkey, quote_b64, ...}``.
+
+    The TDX quote's report_data[0:32] is sha256(nonce_hex + e2e_pubkey): the quote was made for
+    OUR nonce and binds the instance's end-to-end key. There is no dstack app_compose and no
+    per-model ECDSA key; the response is signed by the NEAR AI gateway enclave, whose own
+    attestation and signature are checked separately. Checks that do not apply are SKIPPED,
+    never passed."""
+    checks: List[Check] = []
+    prov = att.get("provider") or "provider"
+    quote_hex = ""
+    try:
+        quote_hex = base64.b64decode(att.get("quote_b64") or "").hex()
+        quote = parse_tdx_quote(quote_hex)
+        rd = bytes.fromhex(quote["report_data"])
+        bound = hashlib.sha256((nonce.lower() + (att.get("e2e_pubkey") or "")).encode()).digest()
+        if (att.get("nonce") or "").lower() != nonce.lower():
+            checks.append(_check("nonce_bound", FAIL, "%s echoed a different nonce" % prov, scope))
+        elif rd[:32] != bound:
+            checks.append(_check("nonce_bound", FAIL, "report_data[0:32] != sha256(nonce || e2e_pubkey)", scope))
+        else:
+            checks.append(_check("nonce_bound", PASS, "sha256(nonce || e2e_pubkey) bound in the %s TDX quote "
+                                 "(unverified body)" % prov, scope))
+    except (ValueError, KeyError) as e:
+        checks.append(_check("nonce_bound", FAIL, "cannot read the %s quote: %s" % (prov, e), scope))
+    checks.append(_check("compose_hash", SKIPPED, "%s attests the VM by its measurements (%s), not a dstack "
+                         "app_compose" % (prov, att.get("measurement_config") or "?"), scope))
+    checks.append(_check("signing_key_present", SKIPPED, "no per-model key: the response is signed by the "
+                         "gateway enclave, checked below", scope))
+    claims = {"verified": att.get("verified"), "tcb_status": att.get("tcb_status"),
+              "gpu_verdict": att.get("gpu_verdict")}
+    good = claims["verified"] is True and claims["tcb_status"] == "UpToDate" and claims["gpu_verdict"] == "PASS"
+    checks.append(_check("provider_claims", PASS if good else FAIL,
+                         "%s says %s (provider-asserted)" % (prov, claims), scope))
+    checks.append(_check_dcap({"intel_quote": quote_hex}, scope) if quote_hex
+                  else _check("tdx_quote_dcap", SKIPPED, "no quote", scope))
+    return checks
+
+
 def check_report(report: dict, nonce: str, model: Optional[str] = None,
                  model_list: Optional[List[dict]] = None) -> List[Check]:
     checks: List[Check] = []
@@ -306,6 +347,9 @@ def check_report(report: dict, nonce: str, model: Optional[str] = None,
         checks.append(_check("signing_key_present", FAIL, "report has no attestation for %s" % model,
                              "model:%s" % model))
     for scope, att in entries:
+        if att.get("quote_b64") and not att.get("intel_quote"):
+            checks.extend(_check_chutes(att, nonce, scope))
+            continue
         nc, quote = _check_nonce(att, nonce, scope)
         checks.append(nc)
         checks.append(_check_compose(att, quote, scope))
