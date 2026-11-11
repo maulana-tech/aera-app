@@ -14,11 +14,22 @@ import { errorText, get, post } from "@/lib/post";
 
 const STATUS_WORDS: Record<string, string> = {
   awaiting_payment: "Waiting for payment",
-  paid: "Paid. The team has it.",
+  paid: "Paid. The team has it and is starting.",
   working: "The team is working on it.",
-  delivered: "Delivered.",
+  delivered: "Delivered. Check your email.",
   refunded: "Refunded.",
-  failed: "Something went wrong; the business has been told.",
+  failed: "Something went wrong; the business has been told and will be in touch.",
+};
+
+const STEPS = [
+  { key: "awaiting_payment", label: "Ordered" },
+  { key: "paid", label: "Paid" },
+  { key: "working", label: "Team working" },
+  { key: "delivered", label: "Delivered" },
+] as const;
+const stepIndex = (status: string) => {
+  const i = STEPS.findIndex((s) => s.key === status);
+  return i < 0 ? 0 : i;
 };
 
 function OrderStatus({ id }: { id: string }) {
@@ -41,14 +52,31 @@ function OrderStatus({ id }: { id: string }) {
     return () => { live = false; clearTimeout(timer); };
   }, [id]);
 
+  const at = order ? stepIndex(order.status) : 0;
+  const final = order && (order.status === "delivered" || order.status === "refunded" || order.status === "failed");
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border px-4 py-3">
-      {order && order.status !== "awaiting_payment"
-        ? <CircleCheck className="size-4 text-emerald-600" />
-        : <Loader2 className="text-muted-foreground size-4 animate-spin" />}
-      <span className="text-sm">{order ? STATUS_WORDS[order.status] ?? order.status : "Checking the order…"}</span>
-      {order && <StatusBadge status={order.status} />}
-      <span className="text-muted-foreground ml-auto font-mono text-[11px]">{id}</span>
+    <div className="rounded-lg border px-4 py-3" aria-live="polite">
+      <div className="flex flex-wrap items-center gap-2">
+        {final && order.status === "delivered"
+          ? <CircleCheck className="size-4 text-emerald-600 dark:text-emerald-400" />
+          : final ? null : <Loader2 className="text-muted-foreground size-4 animate-spin" aria-hidden />}
+        <span className="text-sm">{order ? STATUS_WORDS[order.status] ?? order.status : "Checking the order…"}</span>
+        {order && <StatusBadge status={order.status} />}
+        <span className="text-muted-foreground ml-auto font-mono text-[11px]">{id}</span>
+      </div>
+      {order && order.status !== "refunded" && order.status !== "failed" && (
+        <ol className="mt-3 grid grid-cols-4 gap-1">
+          {STEPS.map((s, i) => (
+            <li key={s.key} className="min-w-0">
+              <span className={`block h-1 rounded-full ${i <= at ? "bg-primary" : "bg-muted"}`} />
+              <span className={`mt-1 block truncate text-[11px] ${i <= at ? "text-foreground" : "text-muted-foreground"}`}>{s.label}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+      {!final && (
+        <p className="text-muted-foreground mt-2 text-[11px]">This updates on its own. Keep the order number; you can close the page once it is paid.</p>
+      )}
     </div>
   );
 }
@@ -91,8 +119,8 @@ export function Checkout({ offering, network, open }: { offering: Offering; netw
             </div>
           ) : (
             <p className="mt-3 rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
-              Simulated payment: this business has no vault configured, so no money moves. The owner marks
-              the order paid from their dashboard, and the team starts on it then.
+              SIMULATED payment: this business has no vault configured, so you pay nothing and no money moves. The owner marks
+              the order paid from their dashboard, and the team starts on it then. The status below changes when they do.
             </p>
           )}
         </div>
@@ -103,14 +131,21 @@ export function Checkout({ offering, network, open }: { offering: Offering; netw
 
   return (
     <form onSubmit={submit} className="space-y-4">
+      {offering.inputs.length > 0 && (
+        <p className="text-muted-foreground text-xs">What the team needs from you to do the work. Plain words are fine.</p>
+      )}
       {offering.inputs.map((k) => (
-        <Field key={k} label={k.replace(/_/g, " ")}>
+        <Field key={k} label={`${k.charAt(0).toUpperCase()}${k.slice(1).replace(/_/g, " ")} (required)`}>
           <Input value={inputs[k] ?? ""} required maxLength={500} onChange={(e) => setInputs({ ...inputs, [k]: e.target.value })} />
         </Field>
       ))}
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Email (for delivery)"><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" /></Field>
-        <Field label="NEAR account (optional)"><Input value={account} onChange={(e) => setAccount(e.target.value.trim())} placeholder="you.testnet" /></Field>
+        <Field label="Email (for delivery)" hint={offering.delivery === "service" ? "Where the business tells you it is done." : "Where the result is sent. Without one, watch the status on this page."}>
+          <Input type="email" value={email} autoComplete="email" onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+        </Field>
+        <Field label="NEAR account (optional)" hint={network === "mainnet" ? "The account you will pay from, e.g. you.near." : "The account you will pay from, e.g. you.testnet."}>
+          <Input value={account} onChange={(e) => setAccount(e.target.value.trim())} placeholder={network === "mainnet" ? "you.near" : "you.testnet"} />
+        </Field>
       </div>
       {error && <p className="text-sm text-rose-700 dark:text-rose-400">{error}</p>}
       <Button type="submit" disabled={busy || !open}>

@@ -53,7 +53,9 @@ def read_business_file(file: str) -> Result:
 def write_document(title: str, markdown: str, format: str = "draft", order_id: str = "") -> Result:
     if not (markdown or "").strip():
         return Result(None, Origin.MISSING, "documents", note="an empty document was not saved")
-    meta = {"title": title.strip()[:120], "format": format, "order_id": order_id or None}
+    from core import registry
+    meta = {"title": title.strip()[:120], "format": format, "order_id": order_id or None,
+            "run_id": registry.current_run()}
     f = store.save_file(f"{DOC_PREFIX}{meta['title']}", "text/markdown;" + json.dumps(meta),
                         markdown, by=_by())
     sha = hashlib.sha256(markdown.encode()).hexdigest()

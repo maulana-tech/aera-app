@@ -35,7 +35,7 @@ function AgentCardEditable({ a, mayChange, onEdit }: {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <h3 className="font-medium leading-none">{a.nickname}</h3>
-            <span className="text-muted-foreground text-xs">{a.title}</span>
+            {a.title !== a.nickname && <span className="text-muted-foreground text-xs">{a.title}</span>}
             <RoleMarks a={a} />
             {a.status !== "active" && <StatusBadge status={a.status} />}
           </div>
@@ -277,7 +277,13 @@ export function TeamBoard({ data }: { data: TeamPayload }) {
       </section>
       <section className="mt-8">
         <h2 className="mb-3 text-sm font-medium">Specialists <span className="text-muted-foreground font-normal">· composed from the profile</span></h2>
-        {rest.length ? grid(rest) : <p className="text-muted-foreground text-sm">No specialists yet.</p>}
+        {rest.length ? grid(rest) : (
+          <p className="text-muted-foreground text-sm">
+            No specialists yet. {data.may_change
+              ? <>They are composed from what the business sells: describe it on <Link href="/onboarding" className="underline underline-offset-2">onboarding</Link>, or use Propose below.</>
+              : "An owner composes them from the business profile."}
+          </p>
+        )}
       </section>
       {data.may_change && (
         <section className="mt-8 grid gap-4 lg:grid-cols-2">

@@ -36,7 +36,8 @@ export function Files({ files, mayChange }: { files: BusinessFile[]; mayChange: 
     }
   }
 
-  async function remove(id: string) {
+  async function remove(id: string, name: string) {
+    if (!window.confirm(`Remove ${name}? The agents can no longer read it.`)) return;
     setBusy(id);
     setError(null);
     try {
@@ -52,7 +53,7 @@ export function Files({ files, mayChange }: { files: BusinessFile[]; mayChange: 
   return (
     <div className="space-y-4">
       {files.length === 0 ? (
-        <p className="text-muted-foreground text-sm">No files yet.</p>
+        <p className="text-muted-foreground text-sm">No files yet. Add what the team should know that is not in the profile: a price list, a style guide, a sample of past work.</p>
       ) : (
         <ul className="divide-y rounded-lg border">
           {files.map((f) => (
@@ -61,7 +62,7 @@ export function Files({ files, mayChange }: { files: BusinessFile[]; mayChange: 
               <span className="min-w-0 flex-1 truncate text-sm">{f.name}</span>
               <span className="text-muted-foreground font-mono text-[10px]">{f.size.toLocaleString("en-US")} chars · {f.uploaded_by} · {when(f.uploaded_at)}</span>
               {mayChange && !f.name.startsWith("doc:") && (
-                <Button size="icon-xs" variant="ghost" aria-label={`Remove ${f.name}`} disabled={busy === f.id} onClick={() => remove(f.id)}>
+                <Button size="icon-xs" variant="ghost" aria-label={`Remove ${f.name}`} disabled={busy === f.id} onClick={() => remove(f.id, f.name)}>
                   {busy === f.id ? <Loader2 className="animate-spin" /> : <Trash2 />}
                 </Button>
               )}
@@ -69,7 +70,7 @@ export function Files({ files, mayChange }: { files: BusinessFile[]; mayChange: 
           ))}
         </ul>
       )}
-      <form onSubmit={add} className="space-y-3 rounded-lg border p-4">
+      {mayChange && <form onSubmit={add} className="space-y-3 rounded-lg border p-4">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Name"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="price-list.md" required /></Field>
           <Field label="Or read a text file">
@@ -89,7 +90,7 @@ export function Files({ files, mayChange }: { files: BusinessFile[]; mayChange: 
           {busy === "add" ? <Loader2 className="animate-spin" /> : <Upload />}
           Add file
         </Button>
-      </form>
+      </form>}
     </div>
   );
 }

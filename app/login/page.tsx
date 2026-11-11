@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { Field } from "@/components/profile-editor";
 import { ThemeToggle } from "@/components/theme";
 import AuthSectionOne from "@/components/ui/auth-section-1";
 import { Button } from "@/components/ui/button";
@@ -66,10 +67,12 @@ export default function Login() {
             </div>
             <ThemeToggle />
           </div>
-          <Input placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} required />
-          <Input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          <Input type="password" placeholder="Password (10+ characters)" value={password} minLength={10}
-                 onChange={(e) => setPassword(e.target.value)} required />
+          <Field label="Your name"><Input value={name} autoComplete="name" onChange={(e) => setName(e.target.value)} required /></Field>
+          <Field label="Email"><Input type="email" value={email} autoComplete="email" onChange={(e) => setEmail(e.target.value)} required /></Field>
+          <Field label="Password" hint="At least 10 characters. You sign in with it from now on.">
+            <Input type="password" value={password} minLength={10} autoComplete="new-password"
+                   onChange={(e) => setPassword(e.target.value)} required />
+          </Field>
           {error && <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p>}
           <Button type="submit" className="w-full" disabled={busy}>{busy ? "Creating…" : "Create owner and continue"}</Button>
         </form>

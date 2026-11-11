@@ -25,11 +25,11 @@ export function CheckoutLinks({ offerings, open }: { offerings: Offering[]; open
               <p className="text-muted-foreground truncate font-mono text-xs">/buy/{o.id}</p>
             </div>
             <div className="flex items-center gap-1">
-              <button type="button" className="hover:bg-muted rounded p-1.5" title="Copy link"
+              <button type="button" className="hover:bg-muted rounded p-1.5" title="Copy link" aria-label={`Copy the checkout link for ${o.title}`}
                 onClick={() => { void navigator.clipboard.writeText(`${window.location.origin}/buy/${o.id}`); setCopied(o.id); setTimeout(() => setCopied(""), 1500); }}>
                 {copied === o.id ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
               </button>
-              <a href={`/buy/${o.id}`} target="_blank" rel="noopener noreferrer" className="hover:bg-muted rounded p-1.5" title="Open">
+              <a href={`/buy/${o.id}`} target="_blank" rel="noopener noreferrer" className="hover:bg-muted rounded p-1.5" title="Open" aria-label={`Open the checkout page for ${o.title}`}>
                 <ExternalLink className="size-3.5" />
               </a>
             </div>

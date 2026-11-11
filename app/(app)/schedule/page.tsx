@@ -12,14 +12,16 @@ export default async function SchedulePage() {
       <PageHeader title="Schedule" lead={<>
           What AERA does on its own: hands new work to the team, settles payments with the vault,
           verifies TEE attestation proofs, delivers alerts and sends the morning digest. A job that
-          starts work spends model credit. Times are UTC.
+          starts work spends model credit. Times are UTC. Run a job now to see it work instead of waiting for its turn.
         </>} />
 
       {data ? (
         <JobList data={data} />
       ) : (
         <p className="text-muted-foreground mt-8 rounded-lg border border-dashed p-6 text-sm">
-          {error ?? "The agent service did not answer."}
+          {error?.includes("not running in this process")
+            ? "The schedule is not running in this agent service process, so nothing runs on its own. Start the service with python3 api.py (not a test harness) to see the jobs."
+            : error ?? "The agent service did not answer."}
         </p>
       )}
     </main>

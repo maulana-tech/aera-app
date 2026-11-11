@@ -5,8 +5,7 @@ for one feed; with a hazard feed, a weather feed, an outbox and a daily digest
 it is five copies of the same loop, none of which can say when it last ran or
 be switched off without a restart. This is the one loop instead.
 
-A job is either `every` N seconds or `at` "HH:MM" Jakarta time (WIB, UTC+7,
-no daylight saving). Its memory is the `jobs` table, so a restart does not
+A job is either `every` N seconds or `at` "HH:MM" UTC. Its memory is the `jobs` table, so a restart does not
 re-run a weekly scan that ran yesterday, and does not forget one that failed.
 
 Three rules, each from a way a scheduler goes wrong:
@@ -36,7 +35,7 @@ from typing import Callable, Dict, List, Optional
 
 from core import store
 
-WIB = timezone(timedelta(hours=7))
+ZONE = timezone.utc
 TICK_SECONDS = 15
 GRACE = timedelta(hours=2)
 
@@ -47,12 +46,12 @@ class Job:
     what: str
     fn: Callable[[], str]               # returns a one-line account of what it did
     every: Optional[int] = None         # seconds
-    at: Optional[str] = None            # "HH:MM" WIB
+    at: Optional[str] = None            # "HH:MM" UTC
     signal: bool = False                # watches the outside world
 
     def cadence(self) -> str:
         if self.at:
-            return f"daily at {self.at} WIB"
+            return f"daily at {self.at} UTC"
         s = self.every or 0
         if s % 86400 == 0:
             n = s // 86400
@@ -71,7 +70,7 @@ def _parse(ts: Optional[str]) -> Optional[datetime]:
 def _slot(job: Job, now: datetime) -> datetime:
     """Today's occurrence of a daily job, in UTC."""
     h, m = (int(x) for x in job.at.split(":"))
-    local = now.astimezone(WIB)
+    local = now.astimezone(ZONE)
     return local.replace(hour=h, minute=m, second=0, microsecond=0).astimezone(timezone.utc)
 
 
@@ -245,7 +244,7 @@ def demo() -> None:
     # Daily: due inside the window, skipped outside it, once a day.
     s2 = Scheduler([digest], watch=True, enabled=True, clock=lambda: now["t"])
     day = datetime(2030, 1, 1, tzinfo=timezone.utc)                     # after any real stamp
-    slot = day.replace(hour=0, minute=30)                               # 07:30 WIB
+    slot = day.replace(hour=7, minute=30)                               # 07:30 UTC
     assert next_run(digest, None, slot - timedelta(minutes=5)) == slot
     assert next_run(digest, None, slot + timedelta(minutes=10)) == slot + timedelta(minutes=10)
     assert next_run(digest, None, slot + GRACE + timedelta(minutes=1)) == slot + timedelta(days=1), \

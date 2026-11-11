@@ -1,11 +1,15 @@
-import { apiResult, type McpPayload } from "@/app/lib";
+import { api, apiResult, type Agent, type McpPayload } from "@/app/lib";
 import { PageHeader } from "@/components/shell";
 import { Servers } from "./Servers";
 
 export const dynamic = "force-dynamic";
 
 export default async function McpPage() {
-  const { data, error } = await apiResult<McpPayload>("mcp/servers");
+  const [{ data, error }, roster] = await Promise.all([
+    apiResult<McpPayload>("mcp/servers"),
+    api<{ agents: Agent[] }>("agents"),
+  ]);
+  const team = (roster?.agents ?? []).map((a) => ({ code: a.code, name: a.nickname }));
 
   return (
     <main className="w-full px-4 py-4 md:px-6 md:py-8">
@@ -13,11 +17,10 @@ export default async function McpPage() {
         title="MCP"
         lead={
           <>
-            AERA is an MCP server and an MCP client. Other agents call in — AWS AgentCore
-            Gateway speaks it — and AERA calls out to tools somebody else
-            operates. Both directions are on this page on purpose: the question an operator
-            actually has is which tools exist here and who can reach them, and splitting that
-            across two screens is how a tool nobody audited ends up installed.
+            AERA speaks MCP (Model Context Protocol) both ways. Other agents and apps call in to
+            use the business&apos;s tools; AERA calls out to tools somebody else operates. Add a
+            server below and choose which agents may use it. Nothing is needed here to run the
+            business.
           </>
         }
       />
@@ -60,8 +63,7 @@ export default async function McpPage() {
                   {data.ours.prompts.length}
                 </p>
                 <p className="text-muted-foreground mt-0.5 text-xs">
-                  prompts — the same four the A2A agent card offers, so neither door is worse
-                  than the other
+                  prompts a connected client can start from
                 </p>
                 <ul className="mt-1.5 space-y-0.5">
                   {data.ours.prompts.map((p) => (
@@ -72,7 +74,7 @@ export default async function McpPage() {
             </div>
           </section>
 
-          <Servers data={data} />
+          <Servers data={data} team={team} />
 
           <section className="mt-6 rounded-lg border px-4 py-4">
             <h2 className="text-sm font-medium">What a remote tool does not get</h2>

@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { cn } from "@/lib/utils";
 
 /* Page furniture for the operations console.
@@ -100,7 +102,11 @@ export function Fact({
 
 /** An empty state that says why it is empty and what would fill it.
  *  The product's whole claim is that it does not pretend, so neither does this. */
-export function Empty({ what, why, fix }: { what: string; why: string; fix?: string }) {
+export function Empty({ what, why, fix, action }: {
+  what: string; why: string; fix?: string;
+  /** the next step: a link or a button */
+  action?: React.ReactNode;
+}) {
   return (
     <div className="rounded-lg border border-dashed px-5 py-8">
       <p className="text-sm font-medium">{what}</p>
@@ -110,6 +116,7 @@ export function Empty({ what, why, fix }: { what: string; why: string; fix?: str
           {fix}
         </p>
       )}
+      {action && <div className="mt-4 flex flex-wrap gap-2">{action}</div>}
     </div>
   );
 }
@@ -117,14 +124,22 @@ export function Empty({ what, why, fix }: { what: string; why: string; fix?: str
 /** A number that carries weight. Named Metric, not Figure, because charts.tsx
  *  already owns Figure as the chart wrapper. */
 export function Metric({
-  value, label, note, className,
-}: { value: string; label: string; note?: string; className?: string }) {
-  return (
-    <div className={className}>
-      <p className="text-muted-foreground text-xs">{label}</p>
+  value, label, note, className, href,
+}: { value: string; label: string; note?: string; className?: string;
+  /** the list this figure summarises */
+  href?: string }) {
+  const body = (
+    <>
+      <p className="text-muted-foreground text-xs">{label}{href && <span aria-hidden> →</span>}</p>
       <p className="mt-1.5 font-mono text-xl font-semibold tabular-nums">{value}</p>
       {note && <p className="text-muted-foreground mt-1 text-xs leading-relaxed">{note}</p>}
-    </div>
+    </>
+  );
+  if (!href) return <div className={className}>{body}</div>;
+  return (
+    <Link href={href} className={cn("hover:bg-muted/40 focus-visible:ring-ring -m-2 block rounded-md p-2 outline-none focus-visible:ring-2", className)}>
+      {body}
+    </Link>
   );
 }
 

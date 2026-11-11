@@ -3,16 +3,14 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import type { ScheduledJob, SchedulePayload } from "@/app/lib";
+import { when, type ScheduledJob, type SchedulePayload } from "@/app/lib";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 
-const wib = (t: string | null) =>
-  t
-    ? new Date(t).toLocaleString("en-GB", {
-        timeZone: "UTC", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
-      }) + " UTC"
-    : "never";
+const at = (t: string | null) => (t ? when(t) : "never");
+
+/** Daily cadences come from the service already in UTC. */
+const utcCadence = (c: string) => c;
 
 function state(j: ScheduledJob): { status: string; label: string } {
   if (j.running) return { status: "running", label: "running" };
@@ -58,7 +56,7 @@ export function JobList({ data }: { data: SchedulePayload }) {
       )}
       {!data.may_change && (
         <p className="text-muted-foreground rounded-lg border border-dashed p-4 text-sm">
-          Only an admin or a procurement lead can run or switch a job.
+          Only an owner or admin can run or switch a job.
         </p>
       )}
 
@@ -73,12 +71,12 @@ export function JobList({ data }: { data: SchedulePayload }) {
                   <StatusBadge status={s.status}>{s.label}</StatusBadge>
                 </div>
                 <p className="text-muted-foreground font-mono text-[11px]">
-                  {j.name} · {j.cadence}
+                  {j.name} · {utcCadence(j.cadence)}
                   {j.signal && " · raises events"}
                 </p>
                 <p className="text-muted-foreground font-mono text-[11px]">
-                  last {wib(j.last_started)}
-                  {j.next_at && ` · next ${wib(j.next_at)}`}
+                  last {at(j.last_started)}
+                  {j.next_at && ` · next ${at(j.next_at)}`}
                   {j.runs > 0 && ` · ${j.runs} run${j.runs > 1 ? "s" : ""}`}
                   {j.failures > 0 && `, ${j.failures} failed`}
                 </p>

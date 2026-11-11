@@ -6,6 +6,7 @@ import {
 } from "@/app/lib";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { Empty, PageHeader } from "@/components/shell";
+import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { gist } from "@/lib/gist";
 import { NewWork } from "./NewWork";
@@ -34,7 +35,7 @@ export default async function WorkPage({ searchParams }: { searchParams: Promise
 
       <nav className="mt-4 flex flex-wrap gap-2 text-xs">
         {["", "running", "held", "done", "failed"].map((s) => (
-          <Link key={s || "all"} href={s ? `/work?status=${s}` : "/work"}
+          <Link key={s || "all"} href={s ? `/work?status=${s}` : "/work"} aria-current={(status ?? "") === s ? "page" : undefined}
             className={`rounded-full border px-3 py-1 ${(status ?? "") === s ? "bg-primary text-primary-foreground border-primary" : "hover:border-foreground/30"}`}>
             {s || "all"}
           </Link>
@@ -45,7 +46,11 @@ export default async function WorkPage({ searchParams }: { searchParams: Promise
         <p className="text-muted-foreground mt-6 text-sm">{items.error}</p>
       ) : list.length === 0 ? (
         <div className="mt-6">
-          <Empty what="No work yet." why="Give the team a request, or share a checkout link: a paid order becomes work on its own." />
+          <Empty what={status ? `No ${status} work.` : "No work yet."}
+            why={status ? "Nothing is in this state right now." : "Use New request (top right) to give the team something to do, or share a checkout link from Orders: a paid order becomes work on its own."}
+            action={status
+              ? <Button asChild size="sm" variant="outline"><Link href="/work">Show all work</Link></Button>
+              : <Button asChild size="sm" variant="outline"><Link href="/orders">Checkout links</Link></Button>} />
         </div>
       ) : (
         <ul className="mt-6 divide-y rounded-lg border">

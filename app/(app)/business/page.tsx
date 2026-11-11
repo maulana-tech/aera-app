@@ -60,7 +60,7 @@ export default async function BusinessPage() {
         <div className="min-w-0">
           <Section title="Offerings" note="What customers can buy at the public checkout.">
             {p.offerings.length === 0 ? (
-              <Empty what="Nothing on sale." why="Add an offering to take orders." />
+              <Empty what="Nothing on sale." why={biz.data.may_change ? "Add an offering under Change the profile below, so customers have something to buy." : "An owner adds offerings; until then there is no checkout page."} />
             ) : (
               <ul className="divide-y rounded-lg border">
                 {p.offerings.map((o) => (
@@ -95,8 +95,9 @@ export default async function BusinessPage() {
             </Section>
           )}
 
-          <Section title="Business files" note="Price lists, style guides, past deliverables: text the agents with the knowledge capability can read.">
-            <Files files={files?.files ?? []} mayChange={(user?.role ?? "viewer") !== "viewer"} />
+          <Section title="Business files" note="Price lists, style guides, past deliverables: text the agents with the knowledge capability can read."
+            action={<Link href="/documents" className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2">Documents the team wrote</Link>}>
+            <Files files={(files?.files ?? []).filter((f) => !f.name.startsWith("doc:"))} mayChange={(user?.role ?? "viewer") !== "viewer"} />
           </Section>
 
           <Section title="What every agent reads" note="The profile as it is put in front of the team, word for word.">

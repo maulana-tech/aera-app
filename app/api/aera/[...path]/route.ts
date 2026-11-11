@@ -1,5 +1,7 @@
 import { cookies } from "next/headers";
 
+import { upstream } from "@/lib/upstream";
+
 // Bridge to the agent service. The browser never calls it directly, and the
 // session token is attached here, never from the page side.
 const UPSTREAM = process.env.AERA_API ?? "http://127.0.0.1:8787";
@@ -18,12 +20,15 @@ async function forward(req: Request, path: string[], method: "GET" | "POST") {
   const { search } = new URL(req.url);
 
   try {
-    const r = await fetch(`${UPSTREAM}/${path.join("/")}${search}`, {
+    const url = `${UPSTREAM}/${path.join("/")}${search}`;
+    const init: RequestInit = {
       method,
       headers,
       body: method === "POST" ? await req.text() : undefined,
       cache: "no-store",
-    });
+    };
+    // In turn with the pages' own reads, and a GET retried once (lib/upstream.ts).
+    const r = await upstream(url, init);
 
     const contentType = r.headers.get("content-type") || "application/json";
     if (contentType.includes("text/event-stream") && r.body) {

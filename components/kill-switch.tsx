@@ -69,12 +69,14 @@ export function KillSwitch({
         ) : (
           <Button size="lg" className="bg-rose-600 font-semibold text-white hover:bg-rose-700"
             onClick={() => setConfirm(true)} disabled={!mayStop}
-            title={mayStop ? undefined : "a viewer cannot pull the kill switch"}>
+            title={mayStop ? undefined : "only an approver or an owner can pull the kill switch"}>
             <OctagonX />
             Stop
           </Button>
         )}
       </div>
+      {on && !mayResume && <p className="text-muted-foreground mt-2 text-xs">Only an owner can resume the business.</p>}
+      {!on && !mayStop && <p className="text-muted-foreground mt-2 text-xs">Only an approver or an owner can pull the kill switch.</p>}
       {msg && <p className="text-muted-foreground mt-2 text-xs">{msg}</p>}
       {error && <p className="mt-2 text-xs text-rose-700 dark:text-rose-400">{error}</p>}
     </div>

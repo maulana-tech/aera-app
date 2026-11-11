@@ -188,7 +188,7 @@ CORE_ROLES: Dict[str, Dict] = {
                    "capabilities": ["supervisor", "memory", "knowledge"], "veto": False},
     "guardian": {"nickname": "Guardian", "title": "Guardian", "effort": "high",
                  "brief": "Rules on every outward action and every counterparty against the business's rules. "
-                          "Her block is final.",
+                          "Its block is final.",
                  "capabilities": ["guardian", "contacts", "memory"], "veto": True},
     "treasurer": {"nickname": "Treasurer", "title": "Treasurer", "effort": "medium",
                   "brief": "The only one who moves money: pays known vendors through the vault within the limits, "

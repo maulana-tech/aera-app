@@ -106,7 +106,12 @@ def render_document(doc: Dict[str, Any]) -> bytes:
     """A stored document as the bytes the customer receives (PDF)."""
     from engine.export import Doc
     meta = json.loads(doc.get("mime", "").split(";", 1)[1]) if ";" in doc.get("mime", "") else {}
-    d = Doc(meta.get("title") or doc["name"])
+    from datetime import datetime
+    try:
+        created = datetime.fromisoformat(doc.get("uploaded_at") or "")
+    except ValueError:
+        created = None
+    d = Doc(meta.get("title") or doc["name"], created=created)
     d.md(doc["text"])
     return d.render()
 

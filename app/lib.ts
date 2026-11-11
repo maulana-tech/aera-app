@@ -1,3 +1,5 @@
+import { upstream } from "@/lib/upstream";
+
 export const UPSTREAM = process.env.AERA_API ?? "http://127.0.0.1:8787";
 
 /* ------------------------------------------------------------------ format */
@@ -51,7 +53,7 @@ export async function apiResult<T>(path: string): Promise<
   const { cookies } = await import("next/headers");
   const token = (await cookies()).get("aera_session")?.value;
   try {
-    const r = await fetch(`${UPSTREAM}/${path}`, {
+    const r = await upstream(`${UPSTREAM}/${path}`, {
       cache: "no-store",
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
@@ -79,7 +81,7 @@ export async function api<T>(path: string): Promise<T | null> {
 /** The customer-facing routes (/public/*): no session, never a token. */
 export async function publicApi<T>(path: string): Promise<T | null> {
   try {
-    const r = await fetch(`${UPSTREAM}/public/${path}`, { cache: "no-store" });
+    const r = await upstream(`${UPSTREAM}/public/${path}`, { cache: "no-store" });
     return r.ok ? ((await r.json()) as T) : null;
   } catch {
     return null;
@@ -276,6 +278,14 @@ export type Treasury = {
   paid_today_usd: number; kill_switch: boolean;
   pending_actions: Action[]; pending_onchain: Payment[]; approved_refunds: Action[]; payments: Payment[];
   policy?: VaultPolicy | null; balance_usd?: number | null; explorer?: string;
+  /** When the vault's caps and the profile's disagree: the exact set_policy arguments to sign. */
+  policy_drift?: PolicyDrift;
+};
+export type PolicyDrift = {
+  drift: boolean;
+  vault: { per_payment: number; per_day: number };
+  profile: { per_payment: number; per_day: number };
+  set_policy: { per_tx_cap: string; daily_cap: string };
 };
 /** USDC has 6 decimals; vault figures arrive in base units. */
 export const fromBase = (base: string | number | null | undefined) => Number(base ?? 0) / 1e6;
@@ -307,6 +317,19 @@ export type Checkout = {
   };
 };
 export type PublicOrder = Pick<Order, "id" | "offering" | "status" | "amount_usd" | "created_at" | "updated_at">;
+
+/** A document the team wrote (write_document): a draft or a deliverable. */
+export type DocumentRow = {
+  id: string; title: string; format: string | null; order_id: string | null;
+  uploaded_at: string; uploaded_by: string; size: number; name?: string;
+};
+export type DocumentFull = DocumentRow & { markdown: string; pdf_sha256: string };
+/** What deliver_order wrote on the order: the PDF's sha256, and the vault receipt when there is one. */
+export type OrderDelivery = { hash?: string; document_id?: string; sent_to?: string; tx_hash?: string | null; explorer?: string | null; bytes?: number };
+export const orderDelivery = (o: Pick<Order, "delivery">): OrderDelivery | null =>
+  o.delivery && typeof o.delivery === "object" ? (o.delivery as OrderDelivery) : null;
+/** The PDF, through the proxy (which carries the session and passes the bytes through). */
+export const documentPdf = (id: string) => `/api/aera/documents/${encodeURIComponent(id)}.pdf`;
 
 export type BusinessFile = { id: string; name: string; mime: string; size: number; uploaded_by: string; uploaded_at: string };
 

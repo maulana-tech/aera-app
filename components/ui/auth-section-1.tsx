@@ -105,7 +105,7 @@ export default function AuthSectionOne({
               <button
                 type="submit"
                 disabled={busy}
-                className="mt-9 flex h-12 w-full items-center justify-center rounded-[10px] border border-black/40 bg-black text-xl font-medium text-white transition-colors hover:bg-black/85 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/40 dark:bg-white dark:text-black dark:hover:bg-white/85"
+                className="mt-9 flex h-12 w-full items-center justify-center rounded-[10px] border border-black/40 bg-black text-xl font-medium text-white outline-none transition-colors hover:bg-black/85 focus-visible:ring-2 focus-visible:ring-black/40 focus-visible:ring-offset-2 dark:focus-visible:ring-white/50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/40 dark:bg-white dark:text-black dark:hover:bg-white/85"
               >
                 {busy ? "Checking…" : "Sign in"}
               </button>
@@ -138,20 +138,19 @@ export default function AuthSectionOne({
 
           <div className="relative z-10 flex h-full w-full flex-col justify-between">
             <h2 className="max-w-[620px] pt-0 text-5xl font-medium tracking-[-0.05em] text-white sm:text-6xl lg:pt-16 lg:text-[64px] lg:leading-[0.98] xl:text-[70px]">
-              Think fast,
+              A business,
               <br />
-              Build faster
+              run by agents.
             </h2>
 
-            <a
-              href="#"
+            <div
               className="mb-0 inline-flex h-12 max-w-full items-center gap-3 rounded-[10px] border border-white/25 px-5 text-base font-medium text-white/85 backdrop-blur-sm transition-colors hover:border-white/45 hover:text-white xl:mb-32 xl:px-6 xl:text-2xl"
             >
               <AeraMark className="size-5 shrink-0 xl:size-7" />
               <span className="truncate whitespace-nowrap">
                 AERA | Autonomous Enterprise, Run by Agents
               </span>
-            </a>
+            </div>
           </div>
         </div>
       </div>
@@ -180,7 +179,7 @@ function FieldBox({
   const showLabel = !focused && !value;
 
   return (
-    <label className="flex h-14 items-center justify-between gap-4 rounded-[10px] border border-black/25 bg-white px-5 text-sm leading-none dark:border-white/15 dark:bg-white/5">
+    <label className="flex h-14 items-center justify-between gap-4 rounded-[10px] border border-black/25 bg-white px-5 focus-within:ring-2 focus-within:ring-black/40 dark:focus-within:ring-white/40 text-sm leading-none dark:border-white/15 dark:bg-white/5">
       <input
         type={type}
         value={value}

@@ -41,6 +41,9 @@ export const vault = {
   /** The vault takes a freeze from the owner, an approver or the agent, with no deposit. */
   freeze: (contract: string): ContractCall =>
     ({ contract, method: "freeze", args: {}, deposit: "0", tgas: 30 }),
+  /** The owner writes the spending caps (token base units) to the vault. 1 yoctoNEAR, owner only. */
+  setPolicy: (contract: string, perTxCap: string, dailyCap: string): ContractCall =>
+    ({ contract, method: "set_policy", args: { per_tx_cap: perTxCap, daily_cap: dailyCap }, deposit: ONE_YOCTO, tgas: 30 }),
   /** Only the owner may resume, and the vault asks for the 1 yoctoNEAR proof of a full-access key. */
   unfreeze: (contract: string): ContractCall =>
     ({ contract, method: "unfreeze", args: {}, deposit: ONE_YOCTO, tgas: 30 }),

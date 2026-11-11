@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 
 const ROLES = [
   { key: "lead", label: "Lead and veto", hint: "Supervisor decides what to do. Guardian decides what may be done." },
-  { key: "specialists", label: "Specialists", hint: "The ten agents that gather the evidence and compute." },
+  { key: "specialists", label: "Specialists", hint: "Every specialist on the team: research, writing, review, fulfilment and the rest." },
   { key: "fallback", label: "Fallback", hint: "Answers when an agent's own model fails, for the rest of that run." },
   { key: "aux", label: "Summaries", hint: "The one-paragraph report summaries. No tools." },
 ] as const;
@@ -146,7 +146,7 @@ export function ModelChoice({ data }: { data: ModelsPayload }) {
     <div className="mt-8 space-y-10">
       {!data.may_change && (
         <p className="text-muted-foreground rounded-lg border border-dashed p-4 text-sm">
-          Only an admin or a procurement lead can change the models. This is what the team runs on now.
+          Only an owner or admin can change the models. This is what the team runs on now.
         </p>
       )}
 

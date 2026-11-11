@@ -6,7 +6,7 @@ import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import Link from "next/link";
 
-import { api, me, type BusinessPayload, type Health } from "@/app/lib";
+import { api, me, noBusiness, type BusinessPayload, type Health } from "@/app/lib";
 import { redirect } from "next/navigation";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -17,7 +17,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // at all, stay: the pages say the service is down, which is the real news.
   if (health && !user) redirect("/login");
   const biz = user ? await api<BusinessPayload>("business") : null;
-  const stopped = !!biz?.profile.kill_switch;
+  // A business not yet described reads as switched off; that is not news.
+  const stopped = !noBusiness(biz) && !!biz?.profile.kill_switch;
 
   return (
     <SidebarProvider>
@@ -34,7 +35,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-2">
             {stopped && (
-              <Link href="/business" className="rounded-full bg-rose-600 px-2.5 py-0.5 font-mono text-[10px] font-semibold text-white">
+              <Link href="/business" title="The kill switch is on: nothing is sent and no money moves" className="rounded-full bg-rose-600 px-2.5 py-0.5 font-mono text-[10px] font-semibold text-white">
                 STOPPED
               </Link>
             )}

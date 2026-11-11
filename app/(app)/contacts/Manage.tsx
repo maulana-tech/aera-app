@@ -18,7 +18,16 @@ const ROLES = CONTACT_ROLES;
 const KINDS = ["order", "request", "goal", "payable", "digest"];
 /** Only these roles are alerted; the rest are counterparties. */
 const ALERTED = new Set(["team", "approver"]);
-const CHAINS = ["near", "base", "eth", "sol", "arb", "btc"];
+/** Where a vendor is paid. "near" pays the NEAR account straight from the vault;
+ *  the others are USDC on another chain, quoted and routed through NEAR Intents
+ *  (tools/money.py, quote_cross_chain_payment). */
+const CHAINS: { v: string; l: string }[] = [
+  { v: "near", l: "NEAR (USDC from the vault)" },
+  { v: "base", l: "Base (USDC, via NEAR Intents)" },
+  { v: "arb", l: "Arbitrum (USDC, via NEAR Intents)" },
+  { v: "eth", l: "Ethereum (USDC, via NEAR Intents)" },
+  { v: "sol", l: "Solana (USDC, via NEAR Intents)" },
+];
 
 const when = (t: string) => stamp(t);
 
@@ -113,15 +122,19 @@ function ContactForm({ initial, submitLabel, onSave, onCancel, payoutEditable, c
           </p>
         )}
         <div className="grid gap-3 sm:grid-cols-3">
-          {field("near_account", "NEAR account", { placeholder: "vendor.testnet", disabled: !payoutEditable })}
           <label className="block">
-            <span className="text-muted-foreground text-xs">Payout chain</span>
+            <span className="text-muted-foreground text-xs">Paid on</span>
             <select value={d.payout_chain} disabled={!payoutEditable} onChange={(e) => setD({ ...d, payout_chain: e.target.value })}
-              className="border-input bg-background mt-1.5 h-8 w-full rounded-lg border px-2 text-sm disabled:opacity-50 dark:bg-input/30">
-              {CHAINS.map((c) => <option key={c} value={c}>{c}</option>)}
+              className="border-input bg-background focus-visible:ring-ring/50 mt-1.5 h-8 w-full rounded-lg border px-2 text-sm outline-none focus-visible:ring-3 disabled:opacity-50 dark:bg-input/30">
+              {CHAINS.map((c) => <option key={c.v} value={c.v}>{c.l}</option>)}
+              {!CHAINS.some((c) => c.v === d.payout_chain) && <option value={d.payout_chain}>{d.payout_chain}</option>}
             </select>
           </label>
-          {field("payout_address", "Payout address (other chain)", { placeholder: "0x…", disabled: !payoutEditable })}
+          {field("near_account", "NEAR account", { placeholder: "vendor.testnet", disabled: !payoutEditable })}
+          {field("payout_address", d.payout_chain === "near" ? "Address on another chain (not used for NEAR)" : `Payout address on ${d.payout_chain}`, {
+            placeholder: d.payout_chain === "sol" ? "Solana address" : "0x…",
+            disabled: !payoutEditable || d.payout_chain === "near",
+          })}
         </div>
         <p className="text-muted-foreground mt-2 text-[11px] leading-relaxed">
           {payoutEditable
@@ -134,7 +147,7 @@ function ContactForm({ initial, submitLabel, onSave, onCancel, payoutEditable, c
         <span className="text-muted-foreground text-xs">Role</span>
         <div className="mt-1.5 flex flex-wrap gap-2">
           {ROLES.map((r) => (
-            <button key={r} type="button" onClick={() => setD({ ...d, role: r })} className={pill(d.role === r)}>
+            <button key={r} type="button" onClick={() => setD({ ...d, role: r })} className={pill(d.role === r)} aria-pressed={d.role === r}>
               {r}
             </button>
           ))}
@@ -147,7 +160,7 @@ function ContactForm({ initial, submitLabel, onSave, onCancel, payoutEditable, c
           {KINDS.map((k) => {
             const on = d.notify.includes(k);
             return (
-              <button key={k} type="button" className={pill(on)}
+              <button key={k} type="button" className={pill(on)} aria-pressed={on}
                 onClick={() => setD({ ...d, notify: on ? d.notify.filter((x) => x !== k) : [...d.notify, k] })}>
                 {k}
               </button>
@@ -268,6 +281,7 @@ function ContactDetail({ contact, open, onOpenChange, canChange, payoutEditable 
   }, [open, contact.id]);
 
   async function remove() {
+    if (!window.confirm(`Remove ${contact.name}? The team can no longer pay or alert them, and their payout details are deleted.`)) return;
     setBusy(true);
     setError("");
     const res = await fetch(`/api/aera/contacts/${contact.id}/delete`, { method: "POST" });
@@ -435,7 +449,9 @@ export function ContactList({ contacts, canDelete, payoutEditable }: {
                 {c.email}{c.phone && ` · ${c.phone}`}
               </span>
               <span className="text-muted-foreground mt-0.5 block truncate font-mono text-[10px]">
-                {c.near_account ? `payout ${c.near_account}` : ALERTED.has(c.role) ? (c.notify_for === "*" ? "every kind" : c.notify_for.split(",").join(" · ")) : "no payout account"}
+                {c.payout_chain && c.payout_chain !== "near" && c.payout_address
+                  ? `payout on ${c.payout_chain} ${c.payout_address.slice(0, 10)}…`
+                  : c.near_account ? `payout ${c.near_account}` : ALERTED.has(c.role) ? (c.notify_for === "*" ? "every kind" : c.notify_for.split(",").join(" · ")) : "no payout account"}
               </span>
               {changedRecently(c.address_changed_at) && (
                 <span className="mt-0.5 block text-[10px] text-amber-700 dark:text-amber-400">payout changed recently</span>

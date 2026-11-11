@@ -17,6 +17,7 @@ const toolLabels: Record<string, string> = {
   list_orders: "Listing orders",
   pay_vendor: "Paying a vendor on record",
   propose_refund: "Proposing a refund",
+  quote_cross_chain_payment: "Pricing a payment to another chain",
   read_business_file: "Reading a business file",
   read_document: "Reading a document",
   read_web_page: "Reading a web page (as untrusted text)",

@@ -3,8 +3,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import {
-  api, apiResult, me, usd, when, type BusinessPayload, type Run, type TeamPayload, type Trace,
+  api, apiResult, me, orderDelivery, usd, when,
+  type BusinessPayload, type DocumentRow, type Health, type Order, type Run, type TeamPayload, type Trace,
 } from "@/app/lib";
+import { DeliveryReceipt, DocumentList } from "@/components/documents";
 import { ActionCard } from "@/components/action-card";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { GuardianRulings } from "@/components/guardian-rulings";
@@ -26,12 +28,15 @@ export default async function WorkRun({ params, searchParams }: {
 }) {
   const { id } = await params;
   const seq = Number((await searchParams).seq) || null;
-  const [res, trace, user, team, biz] = await Promise.all([
+  const [res, trace, user, team, biz, docs, orders, health] = await Promise.all([
     apiResult<Run>(`runs/${id}`),
     api<Trace>(`runs/${id}/trace`),
     me(),
     api<TeamPayload>("team"),
     api<BusinessPayload>("business"),
+    api<{ documents: DocumentRow[] }>("documents"),
+    api<{ orders: Order[] }>("orders"),
+    api<Health>("health"),
   ]);
   if (!res.data) {
     if (res.error?.includes("no such run")) notFound();
@@ -49,6 +54,16 @@ export default async function WorkRun({ params, searchParams }: {
   const pending = r.actions.filter((a) => a.status === "pending").length;
   const blocked = r.actions.filter((a) => a.status === "blocked").length;
   const payloadText = typeof r.work_payload.text === "string" ? r.work_payload.text : null;
+  // The order this run works on (a paid order becomes a work item), and the
+  // documents it wrote: write_document's result carries the id.
+  const order = (orders?.orders ?? []).find((o) => o.work_item_id === r.work_item_id
+    || (typeof r.work_payload.order_id === "string" && o.id === r.work_payload.order_id)) ?? null;
+  const written = new Set(r.steps
+    .filter((s) => s.detail?.name === "write_document")
+    .map((s) => (s.detail.result as { id?: string } | null)?.id)
+    .filter((x): x is string => typeof x === "string"));
+  const runDocs = (docs?.documents ?? []).filter((d) => written.has(d.id) || (order && d.order_id === order.id));
+  const delivery = order ? orderDelivery(order) : null;
 
   return (
     <main className="w-full px-4 py-4 md:px-6 md:py-8">
@@ -67,6 +82,11 @@ export default async function WorkRun({ params, searchParams }: {
         <h1 className="mt-2 text-xl font-semibold tracking-tight md:text-2xl">{r.title}</h1>
         {payloadText && <p className="text-muted-foreground mt-1.5 max-w-3xl text-sm leading-relaxed whitespace-pre-wrap">{payloadText}</p>}
         {r.error && <p className="mt-2 font-mono text-xs text-rose-600 dark:text-rose-400">{r.error}</p>}
+        <div className="text-muted-foreground mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+          {order && <Link href="/orders" className="hover:text-foreground underline underline-offset-2">Order {order.id} · {order.status.replace(/_/g, " ")}</Link>}
+          {runDocs.length > 0 && <a href="#documents" className="hover:text-foreground underline underline-offset-2">{runDocs.length} document{runDocs.length === 1 ? "" : "s"}</a>}
+          <Link href={`/log/${r.id}`} className="hover:text-foreground underline underline-offset-2">Full trace</Link>
+        </div>
         {(r.status === "held" || r.status === "failed") && (
           <div className="mt-3"><RetryButton workItemId={r.work_item_id} /></div>
         )}
@@ -86,6 +106,20 @@ export default async function WorkRun({ params, searchParams }: {
               </p>
             )}
           </Section>
+
+          {(runDocs.length > 0 || delivery) && (
+            <Section title={`Documents (${runDocs.length})`} note="What the team wrote in this run. The PDF is exactly what the customer receives." className="scroll-mt-20">
+              <div id="documents" className="space-y-3">
+                <DocumentList docs={runDocs} />
+                {delivery && (
+                  <div>
+                    <p className="text-muted-foreground mb-1.5 text-xs">Delivered for order {order?.id}</p>
+                    <DeliveryReceipt delivery={delivery} network={health?.network} />
+                  </div>
+                )}
+              </div>
+            </Section>
+          )}
 
           <Section title={`Actions (${r.actions.length})`}
             note={pending ? `${pending} waiting for a person.` : blocked ? `${blocked} blocked by the guardian.` : "Everything the team tried to send or pay."}>

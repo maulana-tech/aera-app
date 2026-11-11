@@ -21,7 +21,7 @@ export default async function TracePage({
   const seq = Number((await searchParams).seq) || null;
   const r = await apiResult<Trace>(`runs/${id}/trace`);
   if (!r.data) {
-    if (r.error?.includes("not found")) notFound();
+    if (r.error?.includes("no such run")) notFound();
     return (
       <main className="w-full px-6 py-16">
         <h1 className="text-xl font-semibold">The trace could not be read</h1>

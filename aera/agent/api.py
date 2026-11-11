@@ -1479,10 +1479,13 @@ def decide(m, b: dict, h) -> Tuple[int, dict]:
     decision = str(b.get("decision") or "")
     if decision not in ("approved", "rejected", "escalated"):
         return 400, {"error": "decision is approved, rejected or escalated"}
+    if u.limit_usd <= 0:
+        return 403, {"error": f"a {u.role} cannot decide on actions"}
     if a["status"] == "blocked":
         return 409, {"error": "the guardian blocked this action; a block is final and cannot be approved"}
     if decision == "approved" and not u.may_approve(a["value_usd"]):
-        return 403, {"error": f"a {u.role} may approve up to ${u.limit_usd:,.2f}; this is ${a['value_usd']:,.2f}"}
+        art = "an" if u.role[:1] in "aeiou" else "a"
+        return 403, {"error": f"{art} {u.role} may approve up to ${u.limit_usd:,.2f}; this is ${a['value_usd']:,.2f}"}
     from core import business
     if decision == "approved" and business.current().get("kill_switch"):
         return 409, {"error": "the kill switch is on; resume the business before approving anything"}
@@ -1626,8 +1629,10 @@ def list_documents(_m, b: dict, h) -> Tuple[int, dict]:
         meta = json.loads(full.get("mime", "").split(";", 1)[1]) if ";" in full.get("mime", "") else {}
         if b.get("order_id") and meta.get("order_id") != b["order_id"]:
             continue
+        if b.get("run_id") and meta.get("run_id") != b["run_id"]:
+            continue
         out.append({**f, "title": meta.get("title") or f["name"][4:], "format": meta.get("format"),
-                    "order_id": meta.get("order_id")})
+                    "order_id": meta.get("order_id"), "run_id": meta.get("run_id")})
     return 200, {"documents": out}
 
 
@@ -1642,7 +1647,7 @@ def one_document(m, _b, h) -> Tuple[int, dict]:
     import settle
     pdf = settle.render_document(f)
     return 200, {"id": f["id"], "title": meta.get("title") or f["name"][4:], "format": meta.get("format"),
-                 "order_id": meta.get("order_id"), "markdown": f["text"], "uploaded_by": f["uploaded_by"],
+                 "order_id": meta.get("order_id"), "run_id": meta.get("run_id"), "markdown": f["text"], "uploaded_by": f["uploaded_by"],
                  "uploaded_at": f["uploaded_at"], "pdf_sha256": hashlib.sha256(pdf).hexdigest()}
 
 
@@ -1677,7 +1682,8 @@ def upload_file(_m, b: dict, h) -> Tuple[int, dict]:
 
 @route("POST", r"/files/([A-Za-z0-9_]+)/delete")
 def delete_file(m, _b, h) -> Tuple[int, dict]:
-    _user(h)
+    if not _user(h).may_manage:
+        return 403, {"error": "only an owner removes business files"}
     return (200, {"deleted": True}) if store.delete_file(m.group(1)) else (404, {"error": "no such file"})
 
 
@@ -1974,7 +1980,13 @@ if __name__ == "__main__":
     llm.refresh_attested()
     print(f"AERA API · env={CFG.env} · model={'ready' if CFG.model_ready else 'no'} "
           f"· private={'on' if llm.private_mode() else 'off'}")
-    server = ThreadingHTTPServer((HOST, PORT), Handler)
+    class _Server(ThreadingHTTPServer):
+        # A page fans out a dozen requests at once; the default backlog of 5
+        # resets some of them.
+        request_queue_size = 128
+        daemon_threads = True
+
+    server = _Server((HOST, PORT), Handler)
     print(f"listening on http://{HOST}:{PORT}")
     import jobs
     SCHEDULE = jobs.scheduler(start_work)

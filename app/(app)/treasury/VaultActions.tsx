@@ -1,6 +1,7 @@
 "use client";
 
 import { Loader2, LogOut, Wallet } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Input } from "@/components/ui/input";
@@ -66,6 +67,18 @@ export function RefundOnChain({ contract, network, orderId, amountBase }: {
   contract: string; network: string; orderId: string; amountBase: string;
 }) {
   return <WalletSign call={vault.refund(contract, orderId, amountBase)} network={asNetwork(network)} label="Sign the refund" variant="default" />;
+}
+
+/** The owner writes the profile's spending limits to the vault, so the two agree. */
+export function SetPolicyOnChain({ contract, network, perTxCap, dailyCap }: {
+  contract: string; network: string; perTxCap: string; dailyCap: string;
+}) {
+  const router = useRouter();
+  return (
+    <WalletSign call={vault.setPolicy(contract, perTxCap, dailyCap)} network={asNetwork(network)}
+      label="Write the profile's limits to the vault" variant="default"
+      onSigned={() => setTimeout(() => router.refresh(), 2500)} />
+  );
 }
 
 export function FreezeOnChain({ contract, network, frozen }: { contract: string; network: string; frozen: boolean }) {

@@ -42,16 +42,19 @@ export function NewWork({ disabled }: { disabled?: boolean }) {
 
   if (!open) {
     return (
-      <Button size="sm" onClick={() => setOpen(true)} disabled={disabled}
-        title={disabled ? "the kill switch is on" : undefined}>
-        <Plus /> New request
-      </Button>
+      <span className="inline-flex flex-col items-end gap-1">
+        <Button size="sm" onClick={() => setOpen(true)} disabled={disabled}
+          title={disabled ? "the kill switch is on" : undefined}>
+          <Plus /> New request
+        </Button>
+        {disabled && <span className="text-muted-foreground text-[11px]">The kill switch is on: resume the business first.</span>}
+      </span>
     );
   }
 
   return (
-    <form onSubmit={submit} className="w-full space-y-4 rounded-lg border p-4">
-      <div className="flex flex-wrap gap-2">
+    <form onSubmit={submit} className="w-[min(32rem,calc(100vw-2rem))] space-y-4 rounded-lg border p-4">
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Kind of work">
         {WORK_KINDS.map((k) => (
           <button key={k} type="button" className={pill(kind === k)} onClick={() => setKind(k)} aria-pressed={kind === k}>{k}</button>
         ))}

@@ -367,7 +367,9 @@ class Doc:
     """A document laid out top to bottom onto A4 pages. Each method adds a
     block and returns the Doc, so a report reads as one chain."""
 
-    def __init__(self, title: str, kicker: str = "AERA", subtitle: str = "", footer: str = ""):
+    def __init__(self, title: str, kicker: str = "AERA", subtitle: str = "", footer: str = "",
+                 created: Optional[datetime] = None):
+        self.created = created
         self.title, self.kicker, self.subtitle = title, kicker, subtitle
         self.footer = footer or title
         self.w, self.h = A4
@@ -696,7 +698,9 @@ class Doc:
         objs[catalog - 1] = f"<< /Type /Catalog /Pages {tree} 0 R >>".encode()
         objs[tree - 1] = (f"<< /Type /Pages /Kids [{' '.join(f'{k} 0 R' for k in kids)}] "
                           f"/Count {len(kids)} >>").encode()
-        stamp = datetime.now(timezone.utc).strftime("D:%Y%m%d%H%M%SZ")
+        # A fixed creation date (the document's own) makes the bytes, and so the
+        # sha256 the vault records as the delivery receipt, reproducible.
+        stamp = (self.created or datetime.now(timezone.utc)).strftime("D:%Y%m%d%H%M%SZ")
         info = add(b"<< /Title " + _pdf_str(pdf_text(self.title)) + b" /Producer (AERA) /Creator (AERA)"
                    + f" /CreationDate ({stamp}) >>".encode())
 

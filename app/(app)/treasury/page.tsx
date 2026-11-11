@@ -9,7 +9,7 @@ import { KillSwitch } from "@/components/kill-switch";
 import { Empty, Fact, Metric, PageHeader, Rail, Section } from "@/components/shell";
 import { StatusBadge } from "@/components/status-badge";
 import { SyncButton } from "@/components/run-controls";
-import { ApproveOnChain, FreezeOnChain, RefundOnChain, WalletStatus } from "./VaultActions";
+import { ApproveOnChain, FreezeOnChain, RefundOnChain, SetPolicyOnChain, WalletStatus } from "./VaultActions";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +28,7 @@ function PaymentRow({ p, network }: { p: Payment; network: string }) {
     <tr className="align-top">
       <td className="px-4 py-2.5"><StatusBadge status={p.status} /></td>
       <td className="px-4 py-2.5 font-mono text-xs">{p.direction}</td>
-      <td className="px-4 py-2.5"><StatusBadge status={p.rail === "vault" ? "vault" : "simulated"}>{p.rail}</StatusBadge></td>
+      <td className="px-4 py-2.5"><StatusBadge status={p.rail === "simulated" ? "simulated" : "vault"}>{p.rail === "simulated" ? "SIMULATED" : p.rail}</StatusBadge></td>
       <td className="max-w-48 truncate px-4 py-2.5 font-mono text-xs">{p.counterparty}</td>
       <td className="px-4 py-2.5 text-right font-mono tabular-nums">{usd(p.amount_usd)}</td>
       <td className="px-4 py-2.5 font-mono text-[11px]"><TxLink network={network} tx={p.tx_hash} /></td>
@@ -51,6 +51,7 @@ export default async function TreasuryPage() {
   const onChain = t.rail === "vault" && !!t.vault;
   const pol = t.policy ?? null;
   const approver = mayStop(user);
+  const drift = t.policy_drift;
 
   return (
     <main className="w-full px-4 py-4 md:px-6 md:py-8">
@@ -63,6 +64,25 @@ export default async function TreasuryPage() {
       />
 
       {onChain && <div className="mt-4"><SyncButton /></div>}
+
+      {drift?.drift && (
+        <div className="mt-6 rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-3">
+          <p className="text-sm font-medium text-amber-900 dark:text-amber-200">The vault&apos;s limits differ from the business profile</p>
+          <p className="mt-1 text-xs leading-relaxed text-amber-900/90 dark:text-amber-200/90">
+            The vault enforces {usd(drift.vault.per_payment)} per payment and {usd(drift.vault.per_day)} per day; the profile says{" "}
+            {usd(drift.profile.per_payment)} and {usd(drift.profile.per_day)}. The vault&apos;s figures are the ones that hold on chain,
+            so until they agree the team may be stopped earlier, or allowed further, than the profile says.
+          </p>
+          <div className="mt-3">
+            {mayManage(user) && t.vault ? (
+              <SetPolicyOnChain contract={t.vault} network={t.network}
+                perTxCap={drift.set_policy.per_tx_cap} dailyCap={drift.set_policy.daily_cap} />
+            ) : (
+              <p className="text-xs text-amber-900/90 dark:text-amber-200/90">Only the owner can write the limits to the vault, from the vault owner&apos;s wallet.</p>
+            )}
+          </div>
+        </div>
+      )}
 
       {!onChain && (
         <div className="mt-6 rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
@@ -205,11 +225,7 @@ export default async function TreasuryPage() {
               <FreezeOnChain contract={t.vault} network={t.network} frozen={!!pol?.frozen} />
             </div>
           )}
-          {pol && Math.abs(fromBase(pol.per_tx_cap) - t.caps.per_payment) > 0.001 && (
-            <p className="text-xs text-amber-700 dark:text-amber-400">
-              The vault&apos;s per-tx cap ({usd(fromBase(pol.per_tx_cap))}) differs from the profile ({usd(t.caps.per_payment)}). The owner sets it with set_policy from their wallet.
-            </p>
-          )}
+
         </aside>
       </div>
     </main>

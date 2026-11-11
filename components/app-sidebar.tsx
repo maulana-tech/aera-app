@@ -3,7 +3,7 @@
 import Link from "next/link";
 
 import {
-  Briefcase, Inbox, Landmark, LayoutDashboard, MessagesSquare, ReceiptText,
+  Briefcase, FileText, Inbox, Landmark, LayoutDashboard, MessagesSquare, ReceiptText,
   Settings2, ShoppingBag, Users,
 } from "lucide-react";
 
@@ -19,6 +19,7 @@ const RUN: NavItem[] = [
   { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { title: "Work", href: "/work", icon: Inbox },
   { title: "Orders", href: "/orders", icon: ShoppingBag },
+  { title: "Documents", href: "/documents", icon: FileText },
   { title: "Team", href: "/agents", icon: Users },
   { title: "Business", href: "/business", icon: Briefcase },
 ];

@@ -12,12 +12,11 @@ const FIELD =
   "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 " +
   "disabled:cursor-not-allowed disabled:opacity-60 dark:bg-input/30";
 
-const AGENTS = [
-  "supervisor", "impact", "demand", "inventory", "sourcing", "procurement",
-  "logistics", "compliance", "simulation", "precedent", "execution", "exposure",
-] as const;
+/** The team as it stands: who may be handed a remote server's tools. */
+export type Member = { code: string; name: string };
 
-export function Servers({ data }: { data: McpPayload }) {
+export function Servers({ data, team }: { data: McpPayload; team: Member[] }) {
+  const nameOf = (code: string) => team.find((m) => m.code === code)?.name ?? code;
   const router = useRouter();
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
@@ -105,7 +104,7 @@ export function Servers({ data }: { data: McpPayload }) {
                     {s.agents.length ? (
                       <>
                         {s.offered} of {s.tools.length} usable by{" "}
-                        <span className="font-mono">{s.agents.join(", ")}</span>
+                        <span>{s.agents.map(nameOf).join(", ")}</span>
                       </>
                     ) : (
                       "verified, but no agent may use it yet"
@@ -168,11 +167,12 @@ export function Servers({ data }: { data: McpPayload }) {
                       variant="ghost"
                       disabled={locked}
                       onClick={async () => {
+                        if (!window.confirm(`Remove ${s.name}? Its tools are taken from every agent at once.`)) return;
                         await post(`mcp/servers/${s.id}/delete`, {}, `d-${s.id}`);
                         router.refresh();
                       }}
                     >
-                      Remove
+                      {busy === `d-${s.id}` ? "Removing…" : "Remove"}
                     </Button>
                   </div>
                 </li>
@@ -208,12 +208,16 @@ export function Servers({ data }: { data: McpPayload }) {
             <div className="space-y-1.5 sm:col-span-2">
               <span className="text-xs font-medium">Which agents may use it</span>
               <div className="flex flex-wrap gap-1.5">
-                {AGENTS.map((a) => {
+                {team.length === 0 && (
+                  <span className="text-muted-foreground text-xs">The team has no agents yet: compose it on the Team page first.</span>
+                )}
+                {team.map(({ code: a, name: label }) => {
                   const on = agents.includes(a);
                   return (
                     <button
                       key={a}
                       type="button"
+                      aria-pressed={on}
                       disabled={locked}
                       onClick={() =>
                         setAgents((xs) => (on ? xs.filter((x) => x !== a) : [...xs, a]))
@@ -222,7 +226,7 @@ export function Servers({ data }: { data: McpPayload }) {
                         on ? "border-foreground" : "border-input text-muted-foreground"
                       }`}
                     >
-                      {a}
+                      {label}
                     </button>
                   );
                 })}
@@ -240,7 +244,7 @@ export function Servers({ data }: { data: McpPayload }) {
             </Button>
             {!data.may_change && (
               <p className="text-muted-foreground text-xs">
-                Only an admin or a procurement lead can change this.
+                Only an owner or admin can change this.
               </p>
             )}
             {error && <p className="text-destructive text-xs">{error}</p>}

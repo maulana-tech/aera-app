@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Markdown } from "@/components/markdown";
 import { OriginBadge } from "@/components/status-badge";
 import { cn } from "@/lib/utils";
-import { usd, type Trace, type TraceCall, type TraceNode } from "@/app/lib";
+import { usd, when, type Trace, type TraceCall, type TraceNode } from "@/app/lib";
 
 /* Every step of a handling, in order, with what it carried in full.
  *
@@ -219,7 +219,7 @@ export function CallDetail({ c, runId, compact = false }: { c: TraceCall; runId:
         {c.fetched_at && (
           <Field k="read at">
             <span suppressHydrationWarning>
-              {new Date(c.fetched_at).toLocaleString("en-GB", { timeZone: "UTC" })}
+              {when(c.fetched_at, { seconds: true })}
             </span>
           </Field>
         )}

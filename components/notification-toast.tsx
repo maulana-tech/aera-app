@@ -252,7 +252,7 @@ export function NotificationToast() {
 
   return (
     <div
-      className="fixed bottom-5 right-5 z-[9999] max-w-sm w-[360px] animate-in slide-in-from-bottom-5 fade-in duration-300 pointer-events-auto"
+      className="fixed bottom-5 right-5 z-[9999] max-w-sm w-[min(360px,calc(100vw-2.5rem))] animate-in slide-in-from-bottom-5 fade-in duration-300 pointer-events-auto"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >

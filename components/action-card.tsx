@@ -39,7 +39,11 @@ export function ActionCard({
     try {
       const r = await post<{ action: Action; executed?: { ok?: boolean; summary?: string; error?: string } }>(
         `actions/${a.id}/decision`, { decision, note });
-      setResult(r.executed?.summary ?? r.executed?.error ?? `${decision}`);
+      if (r.executed && r.executed.ok === false) {
+        setError(`${decision === "approved" ? "Approved, but it could not be carried out" : "Recorded, but"}: ${r.executed.summary ?? r.executed.error ?? "unknown error"}`);
+      } else {
+        setResult(r.executed?.summary ?? (decision === "escalated" ? "Escalated: it waits for someone with a higher limit." : decision === "rejected" ? "Rejected. Nothing was sent." : "Approved."));
+      }
       router.refresh();
     } catch (e) {
       setError(errorText(e));
@@ -59,7 +63,7 @@ export function ActionCard({
       </header>
       {showWork && a.work_title && (
         <Link href={`/work/${a.run_id}`} className="text-muted-foreground hover:text-foreground mt-1 block truncate text-xs underline-offset-2 hover:underline">
-          {a.work_title}
+          {a.work_title} · open the run
         </Link>
       )}
       {a.reason && <p className="text-muted-foreground mt-2 text-xs leading-relaxed">{a.reason}</p>}
@@ -95,31 +99,42 @@ export function ActionCard({
         <p className="text-muted-foreground mt-2 font-mono text-[10px] break-all">reference {a.reference}</p>
       )}
 
-      {a.status === "pending" && user && (
+      {a.status === "pending" && user && limit <= 0 && (
+        <p className="text-muted-foreground mt-4 border-t pt-3 text-xs">
+          Waiting for a person. Your account ({user.role}) can see this but not decide it; an operator approves up to $100, an approver up to $1,000.
+        </p>
+      )}
+      {a.status === "pending" && user && limit > 0 && (
         <div className="mt-4 space-y-2 border-t pt-3">
-          <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="A note for the record (optional)" maxLength={500} />
+          <label className="block">
+            <span className="sr-only">A note for the record</span>
+            <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="A note for the record (optional)" maxLength={500} />
+          </label>
           <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" onClick={() => decide("approved")} disabled={!!busy || overLimit || limit <= 0 || killSwitch}>
-              {busy === "approved" ? <Loader2 className="animate-spin" /> : <Check />}
-              Approve
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => decide("rejected")} disabled={!!busy || limit <= 0}>
+            {!overLimit && (
+              <Button size="sm" onClick={() => decide("approved")} disabled={!!busy || killSwitch}>
+                {busy === "approved" ? <Loader2 className="animate-spin" /> : <Check />}
+                Approve{a.value_usd > 0 ? ` ${usd(a.value_usd)}` : ""}
+              </Button>
+            )}
+            <Button size="sm" variant="outline" disabled={!!busy} onClick={() => {
+              if (window.confirm(`Reject this ${a.kind}${a.value_usd > 0 ? ` of ${usd(a.value_usd)}` : ""}? It will not be sent, and the team is told it was refused.`)) decide("rejected");
+            }}>
               {busy === "rejected" ? <Loader2 className="animate-spin" /> : <X />}
               Reject
             </Button>
-            {overLimit && limit > 0 && (
+            {overLimit && (
               <Button size="sm" variant="ghost" onClick={() => decide("escalated")} disabled={!!busy}>
+                {busy === "escalated" && <Loader2 className="animate-spin" />}
                 Escalate
               </Button>
             )}
             <span className="text-muted-foreground text-[11px]">
-              {limit <= 0
-                ? "a viewer approves nothing"
-                : killSwitch
-                  ? "the kill switch is on: resume the business before approving"
-                  : overLimit
-                    ? `above your limit of ${usd(limit)}: escalate to someone with a higher one`
-                    : `you may approve up to ${usd(limit)}`}
+              {killSwitch
+                ? "the kill switch is on: resume the business before approving"
+                : overLimit
+                  ? `${usd(a.value_usd)} is above your limit of ${usd(limit)}: escalate it to someone with a higher one`
+                  : `you may approve up to ${usd(limit)}`}
             </span>
           </div>
         </div>

@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import type { NotificationsPayload } from "@/app/lib";
+import { when as stamp, type NotificationsPayload } from "@/app/lib";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 
@@ -14,10 +14,7 @@ const CHANNELS = [
   { key: "webhook", label: "Webhook", hint: "JSON, for Teams via Power Automate, n8n, a ticket queue." },
 ] as const;
 
-const when = (t: string) =>
-  new Date(t).toLocaleString("en-GB", {
-    timeZone: "UTC", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
-  });
+const when = (t: string) => stamp(t);
 
 export function Alerts({ data }: { data: NotificationsPayload }) {
   const router = useRouter();

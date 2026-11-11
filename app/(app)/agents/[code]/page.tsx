@@ -14,7 +14,8 @@ export const dynamic = "force-dynamic";
 
 /** What to ask each role, to start a conversation that is worth having. */
 const EXAMPLES: Record<string, string[]> = {
-  supervisor: ["What is the team working on right now?", "Summarise this week's orders and spend"],
+  supervisor: ["What is the team working on right now?", "Summarise this week's orders and spend",
+    "Ask the specialists what would win us our next ten customers"],
   guardian: ["Which actions did you block this week, and why?", "Would a $12 payment to a new vendor pass?"],
   treasurer: ["What is in the vault and what did we pay today?", "Which payments are waiting for a person?"],
   researcher: ["What sources would you use for a market brief?", "Find three recent signals in our customers' market"],
@@ -22,7 +23,8 @@ const EXAMPLES: Record<string, string[]> = {
   analyst: ["Which offering earns the most per hour of model spend?"],
   sales: ["Draft a reply to a customer asking about pricing"],
   support: ["How would you answer a late-delivery complaint?"],
-  marketing: ["Draft this week's free sample announcement"],
+  marketing: ["Draft a short announcement of our main offering"],
+  designer: ["Suggest a simple visual style for our deliverables"],
   ops: ["Which paid orders are not delivered yet?"],
   procurement: ["Which vendors are on record and allowlisted?"],
   qa: ["What do you check before a deliverable goes out?"],
@@ -57,7 +59,7 @@ export default async function AgentPage({ params }: { params: Promise<{ code: st
           {a.status !== "active" && <StatusBadge status={a.status} />}
           <div className="ml-auto">
             {r ? (
-              <AskDrawer code={a.code} name={a.nickname} title={a.title} work={a.title}
+              <AskDrawer code={a.code} name={a.nickname} title={a.title} work={a.code === "supervisor" ? "Plans the work and delegates it to the specialists" : a.title}
                 examples={EXAMPLES[a.role] ?? EXAMPLES[a.code] ?? []} signedIn={!!user} />
             ) : (
               <span className="text-muted-foreground text-xs">not active, so not available to talk to</span>

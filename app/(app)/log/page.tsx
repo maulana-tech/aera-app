@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { Button } from "@/components/ui/button";
 import { StepSummary, stageLabel, stepAgentName } from "@/components/agent-activity";
 import { api, usd, when as stamp, type Action, type RunRow, type Step } from "@/app/lib";
 import { Empty, PageHeader, Section } from "@/components/shell";
@@ -23,6 +24,7 @@ export default async function Log() {
     return (
       <main className="w-full px-6 py-16">
         <h1 className="text-xl font-semibold">The agent service is not responding</h1>
+        <p className="text-muted-foreground mt-2 text-sm">The log is read from it. Start it (cd aera/agent &amp;&amp; python3 api.py) and reload.</p>
       </main>
     );
   }
@@ -32,7 +34,7 @@ export default async function Log() {
     <main className="w-full px-4 py-4 md:px-6 md:py-8">
       <PageHeader
         title="Log"
-        lead="What the team did, what it proposed, and who decided. Rows here are never edited; a correction is written as a new row. Times are UTC."
+        lead="The raw trail, newest first: what the team did, what it proposed, and who decided. Rows are never edited; a correction is written as a new row. Open a trace to see one run as a graph. Times are UTC."
       />
 
       <div className="mt-8 space-y-10">
@@ -56,7 +58,8 @@ export default async function Log() {
           </Section>
         )}
 
-        {empty && <Empty what="Nothing recorded yet." why="The team has not worked on anything, so there is no trail to show." />}
+        {empty && <Empty what="Nothing recorded yet." why="The team has not worked on anything, so there is no trail to show."
+          action={<Button asChild size="sm" variant="outline"><Link href="/work">Give the team a request</Link></Button>} />}
 
         {d.actions.length > 0 && (
           <Section title={`Actions (${d.actions.length})`} className="mt-0">

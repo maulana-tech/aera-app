@@ -721,6 +721,7 @@ export default function Conversation({
   }
 
   async function remove(target: string) {
+    if (!window.confirm("Delete this conversation? It cannot be brought back.")) return;
     await fetch(`/api/aera/conversations/${target}/delete`, { method: "POST" });
     setThreads((t) => t.filter((x) => x.id !== target));
     if (target === id) startNew();

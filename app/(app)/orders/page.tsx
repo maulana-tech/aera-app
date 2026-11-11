@@ -1,8 +1,10 @@
 import Link from "next/link";
 
 import {
-  api, apiResult, explorer, mayManage, me, usd, when, type BusinessPayload, type Health, type Order, type WorkItem,
+  api, apiResult, documentPdf, explorer, mayManage, me, orderDelivery, usd, when,
+  type BusinessPayload, type DocumentRow, type Health, type Order, type WorkItem,
 } from "@/app/lib";
+import { DeliveryReceipt } from "@/components/documents";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { CheckoutLinks } from "@/components/checkout-links";
 import { Empty, PageHeader } from "@/components/shell";
@@ -11,14 +13,20 @@ import { MarkPaid } from "./MarkPaid";
 
 export const dynamic = "force-dynamic";
 
-export default async function OrdersPage() {
-  const [orders, health, user, biz, work] = await Promise.all([
-    apiResult<{ orders: Order[] }>("orders"),
+const FILTERS = ["", "awaiting_payment", "paid", "working", "delivered", "refunded", "failed"];
+
+export default async function OrdersPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
+  const { status } = await searchParams;
+  const [orders, health, user, biz, work, docs] = await Promise.all([
+    apiResult<{ orders: Order[] }>(`orders${status ? `?status=${encodeURIComponent(status)}` : ""}`),
     api<Health>("health"),
     me(),
     api<BusinessPayload>("business"),
     api<{ items: WorkItem[] }>("work"),
+    api<{ documents: DocumentRow[] }>("documents"),
   ]);
+  const docById = new Map((docs?.documents ?? []).map((d) => [d.id, d]));
+  const docByOrder = new Map((docs?.documents ?? []).filter((d) => d.order_id).map((d) => [d.order_id!, d]));
   const simulated = health?.rail !== "vault";
   const titles = new Map((biz?.profile.offerings ?? []).map((o) => [o.id, o.title]));
   const runOf = new Map((work?.items ?? []).map((w) => [w.id, w.run_id]));
@@ -29,8 +37,8 @@ export default async function OrdersPage() {
       <PageHeader
         title="Orders"
         lead={simulated
-          ? "No vault is configured, so payments run on the SIMULATED rail: a customer's order waits until an owner marks it paid here. Every such order is labelled simulated in the ledger."
-          : "Customers pay USDC to the vault from their own wallet; the vault records the order and splits revenue, and the paid order becomes work for the team."}
+          ? "What customers bought, and where each order is. No vault is configured, so payments run on the SIMULATED rail: an order waits until an owner marks it paid here, then the team starts on it. Every such order is labelled simulated in the ledger."
+          : "What customers bought, and where each order is. Customers pay USDC to the vault from their own wallet; the vault records the order and splits revenue, and the paid order becomes work for the team."}
         aside={<>
           <AutoRefresh active={list.some((o) => o.status === "paid" || o.status === "working")} />
           <StatusBadge status={simulated ? "simulated" : "vault"}>{simulated ? "SIMULATED rail" : `vault · ${health?.network}`}</StatusBadge>
@@ -44,16 +52,28 @@ export default async function OrdersPage() {
         </div>
       </details>
 
+      <nav className="mt-6 flex flex-wrap gap-2 text-xs" aria-label="Filter orders by status">
+        {FILTERS.map((f) => (
+          <Link key={f || "all"} href={f ? `/orders?status=${f}` : "/orders"}
+            aria-current={(status ?? "") === f ? "page" : undefined}
+            className={`rounded-full border px-3 py-1 ${(status ?? "") === f ? "bg-primary text-primary-foreground border-primary" : "hover:border-foreground/30"}`}>
+            {f ? f.replace(/_/g, " ") : "all"}
+          </Link>
+        ))}
+      </nav>
+
       {!orders.data ? (
         <p className="text-muted-foreground mt-6 text-sm">{orders.error}</p>
       ) : list.length === 0 ? (
         <div className="mt-6">
-          <Empty what="No orders yet." why="Share a checkout link from the Business page. Each offering has one at /buy/<id>."
-            fix={biz?.profile.offerings[0] ? `/buy/${biz.profile.offerings[0].id}` : undefined} />
+          <Empty what={status ? `No ${status.replace(/_/g, " ")} orders.` : "No orders yet."}
+            why={status ? "Nothing is in this state right now." : "Share a checkout link (above) with a customer. Each offering has its own page at /buy/<id>; a paid order becomes work for the team on its own."}
+            action={status ? <Link href="/orders" className="text-xs underline underline-offset-2">Show all orders</Link>
+              : biz?.profile.offerings[0] ? <a href={`/buy/${biz.profile.offerings[0].id}`} target="_blank" rel="noopener noreferrer" className="text-xs underline underline-offset-2">Open a checkout page</a> : undefined} />
         </div>
       ) : (
         <div className="mt-6 overflow-x-auto rounded-lg border">
-          <table className="w-full min-w-[720px] text-sm">
+          <table className="w-full min-w-[860px] text-sm">
             <thead>
               <tr className="text-muted-foreground border-b text-left font-mono text-[10px] uppercase tracking-wider">
                 <th className="px-4 py-2.5 font-medium">Order</th>
@@ -62,12 +82,15 @@ export default async function OrdersPage() {
                 <th className="px-4 py-2.5 text-right font-medium">Amount</th>
                 <th className="px-4 py-2.5 font-medium">Status</th>
                 <th className="px-4 py-2.5 font-medium">Paid</th>
-                <th className="px-4 py-2.5 text-right font-medium" />
+                <th className="px-4 py-2.5 font-medium">Delivered</th>
+                <th className="px-4 py-2.5 text-right font-medium"><span className="sr-only">Next step</span></th>
               </tr>
             </thead>
             <tbody className="divide-y">
               {list.map((o) => {
                 const run = o.work_item_id ? runOf.get(o.work_item_id) : null;
+                const dl = orderDelivery(o);
+                const doc = (dl?.document_id ? docById.get(dl.document_id) : undefined) ?? docByOrder.get(o.id);
                 return (
                   <tr key={o.id} className="align-top">
                     <td className="px-4 py-2.5">
@@ -87,11 +110,22 @@ export default async function OrdersPage() {
                         </a>
                       ) : o.status !== "awaiting_payment" && simulated ? <span className="text-amber-700 dark:text-amber-400">simulated</span> : "-"}
                     </td>
+                    <td className="px-4 py-2.5 text-xs">
+                      {doc ? (
+                        <div className="space-y-1">
+                          <Link href={`/documents/${doc.id}`} className="block max-w-48 truncate underline underline-offset-2">{doc.title}</Link>
+                          <a href={documentPdf(doc.id)} download className="text-muted-foreground hover:text-foreground font-mono text-[10px] underline underline-offset-2">download PDF</a>
+                        </div>
+                      ) : <span className="text-muted-foreground">-</span>}
+                      {dl && <div className="mt-1"><DeliveryReceipt delivery={dl} network={health?.network} compact /></div>}
+                    </td>
                     <td className="px-4 py-2.5 text-right">
                       {run ? (
-                        <Link href={`/work/${run}`} className="text-xs underline underline-offset-2">the work</Link>
+                        <Link href={`/work/${run}`} className="text-xs whitespace-nowrap underline underline-offset-2">open the run</Link>
                       ) : o.status === "awaiting_payment" && simulated && mayManage(user) ? (
                         <MarkPaid id={o.id} />
+                      ) : o.status === "awaiting_payment" ? (
+                        <span className="text-muted-foreground text-[11px]">{simulated ? "an owner marks it paid" : "waiting for the customer's payment"}</span>
                       ) : null}
                     </td>
                   </tr>

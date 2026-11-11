@@ -4,7 +4,12 @@ import { AeraMark } from "@/components/aera-mark";
 import { ThemeToggle } from "@/components/theme";
 
 /** The frame for pages a customer or the public sees: no sidebar, no session. */
-export function PublicShell({ business, children }: { business?: string | null; children: React.ReactNode }) {
+export function PublicShell({ business, simulated, children }: {
+  business?: string | null;
+  /** no vault: say so instead of promising one */
+  simulated?: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4 md:px-6">
@@ -17,7 +22,9 @@ export function PublicShell({ business, children }: { business?: string | null; 
       </header>
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 md:px-6 md:py-10">{children}</main>
       <footer className="text-muted-foreground border-t px-4 py-4 text-center text-[11px] md:px-6">
-        Run by AERA agents on TEE-attested models. Money moves only through an on-chain vault with human-set limits.
+        {simulated
+          ? "Run by AERA agents on TEE-attested models. This business has no vault yet: payments here are SIMULATED and no money moves."
+          : "Run by AERA agents on TEE-attested models. Money moves only through an on-chain vault with human-set limits."}
       </footer>
     </div>
   );

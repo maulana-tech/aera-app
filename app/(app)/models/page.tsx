@@ -10,7 +10,8 @@ export default async function ModelsPage() {
   return (
     <main className="w-full px-4 py-4 md:px-6 md:py-8">
       <PageHeader title="Models" lead={<>
-          Which model each agent thinks with. Guardian&apos;s veto, Treasurer&apos;s figures and every origin
+          Which model each agent thinks with. Models on NEAR AI Cloud run inside a TEE, and every call
+          leaves an attestation proof you can check on the run. Guardian&apos;s veto, Treasurer&apos;s figures and every origin
           label are code, not the model, so a cheaper model can make a recommendation worse but
           cannot make an action allowed. A change applies to the next model call, including the
           remaining rounds of a run already going.

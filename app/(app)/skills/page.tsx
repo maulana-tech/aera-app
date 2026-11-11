@@ -15,12 +15,11 @@ export default async function SkillsPage() {
         title="Skills"
         lead={
           <>
-            A tool is one call. A skill is a named procedure that composes several of them in
-            an order somebody decided once, so the order is not re-derived — differently — on
-            every run. Each one names the agents that may run it and the tools it uses,
-            and both are checked against the registry: a skill naming a tool that does not
-            exist fails the build rather than a run. The five we wrote are code; the
-            ones below them are yours, checked the same way at the moment you save them.
+            A tool is one call. A skill is a named procedure: several tools in an order decided
+            once, so the team follows the same steps every time instead of working them out
+            again. Each skill names the agents that may run it and the tools it uses, and both
+            are checked when it is saved. The built-in skills are part of AERA; write your own
+            at the bottom of the page.
           </>
         }
       />

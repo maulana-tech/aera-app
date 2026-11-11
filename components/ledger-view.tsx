@@ -75,7 +75,7 @@ export function LedgerView({ led, network }: { led: Ledger; network: string }) {
                   <tr key={e.id ?? i}>
                     <td className="text-muted-foreground px-4 py-2.5 font-mono text-[11px]">{when(e.created_at)}</td>
                     <td className="px-4 py-2.5 font-mono text-xs">{e.direction}{e.counterparty ? <span className="text-muted-foreground"> · {e.counterparty}</span> : null}</td>
-                    <td className="px-4 py-2.5"><StatusBadge status={e.rail === "vault" ? "vault" : "simulated"}>{e.rail}</StatusBadge></td>
+                    <td className="px-4 py-2.5"><StatusBadge status={e.rail === "simulated" ? "simulated" : "vault"}>{e.rail === "simulated" ? "SIMULATED" : e.rail}</StatusBadge></td>
                     <td className="px-4 py-2.5"><StatusBadge status={e.status} /></td>
                     <td className="px-4 py-2.5 text-right font-mono tabular-nums">{usd(e.amount_usd)}</td>
                     <td className="px-4 py-2.5 font-mono text-[11px]">

@@ -45,6 +45,7 @@ export default async function Dashboard() {
   const money = led?.money ?? [];
   const sum = (dir: string) => money.filter((m) => m.direction === dir && SETTLED.has(m.status)).reduce((s, m) => s + m.total, 0);
   const revenue = sum("in");
+  const paymentsIn = money.filter((m) => m.direction === "in").reduce((s, m) => s + m.n, 0);
   const spend = sum("out") + (led?.model_spend_usd ?? 0);
   const waiting = pending?.actions ?? [];
   const waitingValue = waiting.reduce((s, a) => s + a.value_usd, 0);
@@ -95,18 +96,22 @@ export default async function Dashboard() {
       )}
 
       <div className="mt-6 grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-5">
-        <Metric label="Revenue (30 days)" value={usd(revenue)} note={`${money.filter((m) => m.direction === "in").reduce((s, m) => s + m.n, 0)} payments in`} />
-        <Metric label="Spend (30 days)" value={usd(spend)} note={`${usd(led?.model_spend_usd ?? 0)} of it on models`} />
-        <Metric label="Waiting for approval" value={String(waiting.length)} note={waitingValue ? `${usd(waitingValue)} in value` : undefined} />
-        <Metric label="Blocked by the guardian" value={String(led?.blocked_by_guardian ?? 0)} note="checks that said no" />
-        <Metric label="TEE proofs attested" value={`${proofs.attested ?? 0}/${proofsTotal}`} note={proofs.pending ? `${proofs.pending} being verified` : undefined} />
+        <Metric href="/ledger?days=30" label="Revenue (30 days)" value={usd(revenue)} note={`${paymentsIn} payment${paymentsIn === 1 ? "" : "s"} in`} />
+        <Metric href="/ledger?days=30" label="Spend (30 days)" value={usd(spend)} note={`${usd(led?.model_spend_usd ?? 0)} of it on models`} />
+        <Metric href="/treasury" label="Waiting for approval" value={String(waiting.length)} note={waitingValue ? `${usd(waitingValue)} in value` : undefined} />
+        <Metric href="/agents/guardian" label="Blocked by the guardian" value={String(led?.blocked_by_guardian ?? 0)} note="checks that said no" />
+        <Metric href="/work" label="TEE proofs attested" value={`${proofs.attested ?? 0}/${proofsTotal}`} note={proofs.pending ? `${proofs.pending} being verified` : undefined} />
       </div>
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="min-w-0">
           <Section title="Recent work" className="mt-0" action={<Link href="/work" className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs">all work <ArrowRight className="size-3" /></Link>}>
             {recent.length === 0 ? (
-              <Empty what="The team has not worked on anything yet." why="Give it a request on the Work page, or share a checkout link so a paid order arrives on its own." />
+              <Empty what="The team has not worked on anything yet." why="Give it a request on the Work page, or share a checkout link so a paid order arrives on its own."
+                action={<>
+                  <Button asChild size="sm" variant="outline"><Link href="/work">Give the team a request</Link></Button>
+                  <Button asChild size="sm" variant="ghost"><Link href="/orders">Checkout links</Link></Button>
+                </>} />
             ) : (
               <ul className="divide-y rounded-lg border">
                 {recent.map((r) => (
@@ -141,7 +146,7 @@ export default async function Dashboard() {
                   <li key={a.id} className="flex items-center gap-2 text-xs">
                     <span className="font-mono">{a.kind}</span>
                     <span className="font-mono tabular-nums">{usd(a.value_usd)}</span>
-                    <Link href={`/work/${a.run_id}`} className="text-muted-foreground min-w-0 flex-1 truncate underline-offset-2 hover:underline">{a.work_title}</Link>
+                    <Link href={`/work/${a.run_id}`} className="text-muted-foreground min-w-0 flex-1 truncate underline-offset-2 hover:underline">{a.work_title || "open the run"}</Link>
                   </li>
                 ))}
               </ul>
