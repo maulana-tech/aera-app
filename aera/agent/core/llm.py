@@ -737,6 +737,17 @@ def _aws_credentials():
         return _BOTO_SESSION.get_credentials()
 
 
+def _read_timeout(spec: Spec) -> int:
+    """Seconds to wait on one model call before giving up on it (and letting the fallback answer).
+
+    The small "flash" models answer in 10-20 s; one that has not answered in 75 s is stuck, and
+    waiting the full three minutes cost a run its deadline. Thinking models get the long wait."""
+    env = os.environ.get("AERA_MODEL_TIMEOUT_S")
+    if env and env.isdigit():
+        return int(env)
+    return 75 if "flash" in spec.model.lower() else 180
+
+
 def _post_json(spec: Spec, url: str, body: dict, headers_for: Callable[[bytes], dict],
                timeout: int = 180) -> dict:
     """POST, retrying twice on 429 and 5xx with a short backoff."""
@@ -920,7 +931,7 @@ class _NearAIBackend:
         for attempt in range(3):
             r = urllib.request.Request(self.url, data=data, method="POST", headers=headers)
             try:
-                with urllib.request.urlopen(r, timeout=180) as resp:
+                with urllib.request.urlopen(r, timeout=_read_timeout(self.spec)) as resp:
                     raw = resp.read()
                 break
             except urllib.error.HTTPError as e:

@@ -339,6 +339,29 @@ def _check_chutes(att: dict, nonce: str, scope: str) -> List[Check]:
     return checks
 
 
+def _check_router_attested(att: dict, scope: str) -> List[Check]:
+    """A model behind a provider's attested router (Tinfoil today): AMD SEV-SNP, the enclave's
+    measurement pinned through sigstore, ``trust: router_attested``. The report carries no nonce
+    of ours, so freshness is NOT proven per request: nonce_bound is SKIPPED, never passed. The
+    response is still signed by the NEAR AI gateway enclave, checked separately."""
+    prov = att.get("provider") or "provider"
+    router = att.get("router") or {}
+    checks = [
+        _check("nonce_bound", SKIPPED, "%s attests its router by a pinned measurement (%s, rekor #%s), "
+               "not a per-request nonce: freshness is not proven" % (prov, (router.get("measurement") or "?")[:16],
+                                                                      router.get("rekor_log_index") or "?"), scope),
+        _check("compose_hash", SKIPPED, "%s pins the image by measurement (%s), not a dstack app_compose"
+               % (prov, router.get("format") or "?"), scope),
+        _check("signing_key_present", SKIPPED, "no per-model key: the response is signed by the gateway "
+               "enclave, checked below", scope),
+    ]
+    good = att.get("verified") is True and att.get("trust") == "router_attested" and bool(router.get("measurement"))
+    checks.append(_check("provider_claims", PASS if good else FAIL,
+                         "%s says verified=%s trust=%s (provider-asserted)" % (prov, att.get("verified"), att.get("trust")),
+                         scope))
+    return checks
+
+
 def check_report(report: dict, nonce: str, model: Optional[str] = None,
                  model_list: Optional[List[dict]] = None) -> List[Check]:
     checks: List[Check] = []
@@ -349,6 +372,9 @@ def check_report(report: dict, nonce: str, model: Optional[str] = None,
     for scope, att in entries:
         if att.get("quote_b64") and not att.get("intel_quote"):
             checks.extend(_check_chutes(att, nonce, scope))
+            continue
+        if att.get("trust") == "router_attested" and not att.get("intel_quote"):
+            checks.extend(_check_router_attested(att, scope))
             continue
         nc, quote = _check_nonce(att, nonce, scope)
         checks.append(nc)
@@ -458,6 +484,11 @@ def verdict(checks: Iterable[Check]) -> str:
     if any(c["status"] == FAIL for c in checks):
         return "failed"
     passed = {c["name"] for c in checks if c["status"] == PASS}
+    # A model leg whose freshness is unproven (no nonce of ours in its attestation) is at most partial,
+    # however well the gateway checks out.
+    if any(c["name"] == "nonce_bound" and c["status"] == SKIPPED and str(c.get("scope") or "").startswith("model:")
+           for c in checks):
+        return "partial"
     return "attested" if all(r in passed for r in REQUIRED) else "partial"
 
 

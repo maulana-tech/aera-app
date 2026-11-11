@@ -528,6 +528,8 @@ def close_run(run_id: str, status: str, decision: Optional[dict] = None,
         r = c.execute("SELECT work_item_id FROM runs WHERE id=?", (run_id,)).fetchone()
         if r:
             ws = {"done": "done", "partial": "done", "held": "held"}.get(status, "failed")
+            if status == "partial" and (decision or {}).get("retryable"):
+                ws = "held"      # stopped early with no outcome: a paid order must not read as done
             c.execute("UPDATE work_items SET status=? WHERE id=?", (ws, r["work_item_id"]))
 
 

@@ -15,6 +15,7 @@ conclusion.
 from __future__ import annotations
 
 import json
+import os
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -31,7 +32,9 @@ INPUT_USD_PER_MILLION = 5.0
 OUTPUT_USD_PER_MILLION = 25.0
 MAX_SPECIALIST_ROUNDS = 8
 MAX_LEAD_ROUNDS = 14
-MAX_SECONDS_PER_RUN = 600
+#: Wall-clock budget for one run. A 5-page brief takes several research rounds in turn on TEE models
+#: that answer in 10-50 s each; the cost cap (AERA_COST_CAP_USD) is what bounds the spend.
+MAX_SECONDS_PER_RUN = int(os.environ.get("AERA_RUN_SECONDS", "1200"))
 MODEL_ROWS = 50
 
 
@@ -432,7 +435,8 @@ def _salvage(board: Board, called: List[str], cost: Cost, reason: str) -> dict:
     lines += [f"  - {k}: {e.origin} (from {e.source})" for k, e in board.entries.items()]
     if not board.entries:
         lines.append("  (nothing was gathered before the stop)")
-    return {"status": "partial", "reason": reason, "recommendation": "\n".join(lines),
+    # No outcome was produced, so the work is not done: it is held for a person to run again.
+    return {"status": "partial", "retryable": True, "reason": reason, "recommendation": "\n".join(lines),
             "agents_called": called, "cost_usd": cost.usd, "cost_by_model": cost.split(),
             "trusted_on_board": trusted, "untrusted_on_board": board.untrusted_keys()}
 
