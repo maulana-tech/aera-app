@@ -98,6 +98,49 @@ def pay_vendor(contact_id: str, amount_usd: float, purpose: str, reference: str 
                                      "purpose": payload["purpose"], "reference": payload["reference"]})
 
 
+#: USDC on each chain, as NEAR Intents names it (1Click /v0/tokens, read 2026-11-10).
+USDC_ON = {
+    "near": "nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1",
+    "base": "nep141:base-0x833589fcd6edb6e08f4c7c32d4f71b54bda02913.omft.near",
+    "arb": "nep141:arb-0xaf88d065e77c8cc2239327c5edb3a432268e5831.omft.near",
+    "eth": "nep141:eth-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48.omft.near",
+    "sol": "nep141:sol-5ce3bf3a31af18be40ba30f721101b4341690186.omft.near",
+}
+
+
+@register("quote_cross_chain_payment", "treasury",
+          "Price paying a vendor ON RECORD whose payout is on another chain (Base, Arbitrum, Ethereum, "
+          "Solana) in USDC, through NEAR Intents 1Click. A dry quote only: what it would cost in USDC on "
+          "NEAR, the fee and the time. Nothing is paid.",
+          {"contact_id": {"type": "string"}, "amount_usd": {"type": "number"}},
+          ["contact_id", "amount_usd"])
+def quote_cross_chain_payment(contact_id: str, amount_usd: float) -> Result:
+    from clients import intents
+    c = store.get_contact(contact_id)
+    if not c:
+        return Result(None, Origin.MISSING, "contacts", note=f"no contact {contact_id}")
+    chain_id = (c.get("payout_chain") or "").lower()
+    dest = USDC_ON.get(chain_id)
+    if not dest or not c.get("payout_address"):
+        return Result(None, Origin.MISSING, "contacts",
+                      note=f"{c['name']} has no cross-chain payout on record (chain one of {', '.join(USDC_ON)}, plus an address)")
+    amount = chain.to_base(float(amount_usd))
+    refund_to = chain.vault_id() or "aera.near"
+    try:
+        q = intents.quote(USDC_ON["near"], dest, amount, c["payout_address"], refund_to,
+                          swap_type="EXACT_OUTPUT", dry=True)
+    except Exception as e:                                             # noqa: BLE001
+        return Result(None, Origin.MISSING, "NEAR Intents 1Click", note=f"{type(e).__name__}: {e}"[:300])
+    quote = q.get("quote") or {}
+    amount_in = chain.from_base(quote.get("amountIn", 0))
+    return Result({"to": c["name"], "chain": chain_id, "address": c["payout_address"],
+                   "vendor_receives_usd": float(amount_usd), "costs_usdc_on_near": amount_in,
+                   "fee_usd": round(amount_in - float(amount_usd), 4), "seconds": quote.get("timeEstimate"),
+                   "correlation_id": q.get("correlationId")},
+                  Origin.LIVE, "NEAR Intents 1Click (dry quote)",
+                  note="a quote, not a payment; 1Click runs on mainnet only, so executing it needs a mainnet treasury")
+
+
 @register("propose_refund", "treasury",
           "Propose refunding (part of) an order to the customer who paid. Always waits for a person; "
           "the refund is signed from an approver's wallet.",

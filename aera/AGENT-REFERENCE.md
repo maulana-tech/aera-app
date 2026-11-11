@@ -88,6 +88,8 @@ LOCKED to the treasurer: vault status, pay a known vendor, propose a refund, rea
   <br>Pay a vendor or contributor ON RECORD, to the payout account a person put on their contact. You give the contact id and amount; the address is read from the record. The guardian's checks run first; within the limits it is paid now, otherwise it waits for a person.
 - **`propose_refund`**(order_id, amount_usd, reason) — writes
   <br>Propose refunding (part of) an order to the customer who paid. Always waits for a person; the refund is signed from an approver's wallet.
+- **`quote_cross_chain_payment`**(contact_id, amount_usd)
+  <br>Price paying a vendor ON RECORD whose payout is on another chain (Base, Arbitrum, Ethereum, Solana) in USDC, through NEAR Intents 1Click. A dry quote only: what it would cost in USDC on NEAR, the fee and the time. Nothing is paid.
 - **`treasury_status`**()
   <br>The vault's policy and balance, what the team paid today, the autonomous limits, and whether payments are frozen.
 

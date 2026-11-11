@@ -1549,6 +1549,17 @@ def treasury(_m, _b, h) -> Tuple[int, dict]:
     if chain.readable():
         out["policy"] = chain.policy()
         out["balance_usd"] = chain.vault_balance()
+        pol = out["policy"] or {}
+        if pol:
+            caps = out["caps"]
+            onchain = {"per_payment": chain.from_base(pol.get("per_tx_cap", 0)),
+                       "per_day": chain.from_base(pol.get("daily_cap", 0))}
+            drift = any(abs(onchain[k] - caps[k]) >= 0.01 for k in ("per_payment", "per_day"))
+            # The profile and the vault must agree. When they do not, the owner signs
+            # set_policy with these exact arguments from their wallet.
+            out["policy_drift"] = {"drift": drift, "vault": onchain, "profile": caps,
+                                   "set_policy": {"per_tx_cap": chain.to_base(caps["per_payment"]),
+                                                  "daily_cap": chain.to_base(caps["per_day"])}}
         out["explorer"] = (("https://testnet.nearblocks.io" if chain.network() == "testnet"
                             else "https://nearblocks.io") + f"/address/{chain.vault_id()}")
     return 200, out
@@ -1603,6 +1614,50 @@ def proofs(_m, _b, h) -> Tuple[int, dict]:
 
 
 # ---------------------------------------------------------------------- files
+@route("GET", r"/documents")
+def list_documents(_m, b: dict, h) -> Tuple[int, dict]:
+    """The team's own documents (deliverables and drafts), newest first; ?order_id= filters."""
+    _user(h)
+    out = []
+    for f in store.list_files():
+        if not f["name"].startswith("doc:"):
+            continue
+        full = store.get_file(f["id"]) or {}
+        meta = json.loads(full.get("mime", "").split(";", 1)[1]) if ";" in full.get("mime", "") else {}
+        if b.get("order_id") and meta.get("order_id") != b["order_id"]:
+            continue
+        out.append({**f, "title": meta.get("title") or f["name"][4:], "format": meta.get("format"),
+                    "order_id": meta.get("order_id")})
+    return 200, {"documents": out}
+
+
+@route("GET", r"/documents/([A-Za-z0-9_]+)")
+def one_document(m, _b, h) -> Tuple[int, dict]:
+    _user(h)
+    f = store.get_file(m.group(1))
+    if not f or not f["name"].startswith("doc:"):
+        return 404, {"error": "no such document"}
+    meta = json.loads(f["mime"].split(";", 1)[1]) if ";" in f["mime"] else {}
+    import hashlib
+    import settle
+    pdf = settle.render_document(f)
+    return 200, {"id": f["id"], "title": meta.get("title") or f["name"][4:], "format": meta.get("format"),
+                 "order_id": meta.get("order_id"), "markdown": f["text"], "uploaded_by": f["uploaded_by"],
+                 "uploaded_at": f["uploaded_at"], "pdf_sha256": hashlib.sha256(pdf).hexdigest()}
+
+
+@route("GET", r"/documents/([A-Za-z0-9_]+)\.pdf")
+def document_pdf(m, _b, h):
+    """The document as the customer receives it. Its sha256 is what deliver_receipt writes on chain."""
+    _user(h)
+    f = store.get_file(m.group(1))
+    if not f or not f["name"].startswith("doc:"):
+        return 404, {"error": "no such document"}
+    import settle
+    title = f["name"][4:] or "document"
+    return 200, Download(settle.render_document(f), f"{title[:60]}.pdf", "application/pdf")
+
+
 @route("GET", r"/files")
 def list_files(_m, _b, h) -> Tuple[int, dict]:
     _user(h)
@@ -1797,7 +1852,7 @@ PUBLIC = {("GET", "/health"), ("POST", "/login"), ("GET", "/setup"), ("POST", "/
 
 _SAMPLES = ((r"([A-Za-z0-9_]+)", "x1"), (r"([A-Za-z]+)", "Thing"), (r"([a-z0-9_]+)", "a_skill"),
             (r"([a-z_]+)", "digest"), (r"([a-z]+)", "impact"), (r"(\d+)", "0"), (r"(pdf|xlsx)", "pdf"),
-            (r"([A-Za-z0-9_\-]+)", "ord_x"), (r"([A-Za-z0-9_.:\-/]+)", "z-ai/glm-5.3"))
+            (r"([A-Za-z0-9_\-]+)", "ord_x"), (r"([A-Za-z0-9_]+)\.pdf", "x1.pdf"), (r"([A-Za-z0-9_.:\-/]+)", "z-ai/glm-5.3"))
 
 
 def _sample_path(pattern) -> str:

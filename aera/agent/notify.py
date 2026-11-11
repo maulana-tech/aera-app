@@ -185,6 +185,12 @@ def deliver(limit: int = 50) -> Dict[str, int]:
             continue
         if why:
             n = {**n, "address": address, "body": f"[{why}]\n\n{n['body']}"}
+        if n["channel"] in ("slack", "telegram", "webhook"):
+            # Somebody else's servers: personal data is replaced first (core/privacy.py).
+            from core import privacy
+            (subject, body), how = privacy.redact_many([n["subject"], n["body"]])
+            n = {**n, "subject": subject,
+                 "body": body if how == "redacted" else f"{body}\n\n[not redacted: {how}]"}
         try:
             files = files_for(n.get("attachments")) if n["channel"] == "email" else []
             ref = channels.send(n["channel"], n["address"], n["subject"], n["body"],
