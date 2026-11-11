@@ -357,7 +357,7 @@ def _tool_loop(cl, agent: Agent, task: str, board: Board, cost: Cost,
             raise BudgetExhausted(f"over ${CFG.cost_cap_per_run_usd:.2f} for this run")
         if deadline and time.monotonic() > deadline:
             raise DeadlineExceeded(f"{agent.title} still working after {MAX_SECONDS_PER_RUN}s")
-        req = _model_request(agent, max_tokens=16000 if lead else 8000, system=agent.instructions,
+        req = _model_request(agent, max_tokens=16000, system=agent.instructions,
                              tools=tool_specs, messages=messages)
         with registry.bind_agent(agent.code):
             r = cl.messages.create(**req)

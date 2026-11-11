@@ -94,8 +94,10 @@ ROLES: Dict[str, Dict] = {
         "prompt": ("You are the Writer agent on {NAME}'s team.\n\n{BUSINESS}\n\n"
                    "Your job: write the deliverable from the findings you are handed (read the documents you are "
                    "pointed to). Match the offering exactly: its scope, length and inputs. Keep every source the "
-                   "findings carried; do not add claims that are not in them. Save the result with write_document "
-                   "and hand back its id.\n\n" + _RULES),
+                   "findings carried; do not add claims that are not in them. What you save is what the customer "
+                   "receives: a final document, never marked as a draft, and with no internal record ids (order, "
+                   "work item, file or run ids) or notes about how the team works. Save the result with "
+                   "write_document and hand back its id.\n\n" + _RULES),
     },
     "analyst": {
         "nickname": "Analyst", "title": "Analyst",

@@ -738,14 +738,13 @@ def _aws_credentials():
 
 
 def _read_timeout(spec: Spec) -> int:
-    """Seconds to wait on one model call before giving up on it (and letting the fallback answer).
-
-    The small "flash" models answer in 10-20 s; one that has not answered in 75 s is stuck, and
-    waiting the full three minutes cost a run its deadline. Thinking models get the long wait."""
+    """Seconds to wait on one model call. The call is not streamed, so nothing arrives until the
+    whole answer is written: a 5-page brief from a writer takes minutes, and a short wait cuts it
+    off mid-document (75 s did exactly that). The run deadline bounds the total."""
     env = os.environ.get("AERA_MODEL_TIMEOUT_S")
     if env and env.isdigit():
         return int(env)
-    return 75 if "flash" in spec.model.lower() else 180
+    return 300
 
 
 def _post_json(spec: Spec, url: str, body: dict, headers_for: Callable[[bytes], dict],

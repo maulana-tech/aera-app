@@ -94,6 +94,7 @@ def _handle(run_id: str, item: dict) -> None:
             with registry.bind_run(run_id):
                 result = graph.run(item, report)
         store.close_run(run_id, result.get("status", "done"), result, cost_usd=result.get("cost_usd", 0))
+        _hold_undelivered_order(item)
     except Exception as e:                                           # noqa: BLE001
         if llm.is_rate_limited(e):
             store.close_run(run_id, "held", decision={"status": "held", "retryable": True,
@@ -102,6 +103,15 @@ def _handle(run_id: str, item: dict) -> None:
             store.close_run(run_id, "failed", error=f"{type(e).__name__}: {e}")
             traceback.print_exc()
     _tell(run_id)
+
+
+def _hold_undelivered_order(item: dict) -> None:
+    """A paid order whose run ended without delivering is not done, whatever the run says:
+    hold it, so it shows as waiting and "Run again" is offered."""
+    oid = (item.get("payload") or {}).get("order_id") if item.get("kind") == "order" else None
+    order = store.get_order(oid) if oid else None
+    if order and order.get("status") == "paid":
+        store.set_work_status(item["id"], "held")
 
 
 SCHEDULE = None
