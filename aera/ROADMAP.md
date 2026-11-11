@@ -63,6 +63,17 @@ kedua hanya berjalan setelah ditandatangani owner.
 
 ---
 
+## Fase 2b — Finance: buku keuangan yang dihitung kode ✅ selesai 2026-11-11
+
+- `core/finance.py`: receipt PDF per order (hanya setelah dibayar, byte-nya selalu sama), laporan bulanan
+  (pendapatan, refund, bagi hasil, vendor, biaya AI, bersih, margin), rekonsiliasi AERA ↔ vault.
+- Agen **Finance** (capability `finance`: baca dan tulis dokumen, tidak bisa memindahkan uang), skill
+  `monthly_close`, otomatis masuk tim bila bisnis punya offering.
+- Receipt di halaman Orders dan di halaman status checkout pelanggan; bagian **Books** di Ledger.
+- Terbukti pada data nyata: rekonsiliasi *balanced* (vault $12.00 = $15 − $3), November: bersih $11.42,
+  margin 76.1%. Finance menolak menutup bulan yang belum selesai dan menandai pemasukan vault tanpa tx hash.
+- Berikutnya: Legal & Compliance, lalu CTO / Tech lead (lihat diskusi peran).
+
 ## Fase 3 — Agen untuk pelanggan (2–3 hari)
 
 **Tujuan:** bisnis melayani calon pelanggan sendiri, bukan hanya owner-nya.

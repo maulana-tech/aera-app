@@ -570,3 +570,18 @@ export function ago(t: string, now: number = Date.now()): string {
   if (s < 172800) return "yesterday";
   return new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
 }
+
+/* ------------------------------------------------------------------- the books (core/finance.py) */
+export type FinanceReport = {
+  month: string; label: string; revenue_usd: number; refunds_usd: number; revenue_shares_usd: number;
+  vendor_spend_usd: number; ai_cost_usd: number; net_usd: number; margin_pct: number | null;
+  orders_paid: number; orders_unpaid: number; runs: number; ai_cost_per_order_usd: number; waiting_out_usd: number;
+  by_offering: { offering: string; orders: number; revenue_usd: number }[];
+  by_vendor: { vendor: string; paid_usd: number }[];
+  includes_simulated: boolean;
+};
+export type Reconciliation = {
+  status: "balanced" | "differences" | "in flight" | "not applicable" | "unknown";
+  summary: string; differences: string[]; balance_usd?: number; expected_usd?: number; orders_on_chain?: number;
+};
+export type FinancePayload = { report: FinanceReport; reconcile: Reconciliation; filed: { id: string; name: string; uploaded_at: string }[] };

@@ -72,6 +72,9 @@ def pick_roles(p: Dict[str, Any]) -> List[str]:
         # Talking to customers needs somebody whose job it is.
         if set(p.get("channels", [])) & {"email", "telegram", "chat"} and "support" not in picked:
             picked.append("support")
+        # A business that takes money keeps books: receipts, the monthly report, the reconciliation.
+        if offers and "finance" not in picked:
+            picked.append("finance")
         # Money the team may spend on its own is money somebody has to source.
         if (p.get("constraints", {}).get("autonomous_spend_usd", {}).get("per_payment") or 0) > 0 \
                 and "procurement" not in picked:

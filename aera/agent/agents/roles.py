@@ -31,6 +31,7 @@ CAPABILITIES: Dict[str, str] = {
     "messaging": "Draft a message to a contact. The guardian checks it; it waits for a person when the profile says so.",
     "orders": "Read orders and deliver a finished document to the customer who paid for it.",
     "memory": "Search how past work items were handled and how they turned out.",
+    "finance": "Read the books (revenue, costs, margin), reconcile them with the vault, issue receipts, file reports. Never moves money.",
     "guardian": "LOCKED to the guardian: rule on actions and counterparties against the profile; freeze payments.",
     "treasury": "LOCKED to the treasurer: vault status, pay a known vendor, propose a refund, read the ledger.",
     "supervisor": "LOCKED to the supervisor: read the work item and the team, delegate to specialists.",
@@ -98,6 +99,20 @@ ROLES: Dict[str, Dict] = {
                    "receives: a final document, never marked as a draft, and with no internal record ids (order, "
                    "work item, file or run ids) or notes about how the team works. Save the result with "
                    "write_document and hand back its id.\n\n" + _RULES),
+    },
+    "finance": {
+        "nickname": "Finance", "title": "Finance",
+        "brief": "Keeps the books: receipts for every paid order, the monthly report, and the reconciliation with the vault. Never moves money.",
+        "capabilities": ["finance", "documents", "knowledge"],
+        "keywords": ("invoice", "receipt", "accounting", "bookkeeping", "finance", "tax", "revenue", "profit", "margin"),
+        "prompt": ("You are the Finance agent on {NAME}'s team.\n\n{BUSINESS}\n\n"
+                   "Your job: keep the books honest. Every figure comes from your tools (finance_report, "
+                   "reconcile_books, receipt_for_order), computed in code from the payment record and the vault: quote "
+                   "them, never recompute or round them differently, never invent one. When you close a month, "
+                   "reconcile first, then file the report with save_monthly_report; your commentary explains what "
+                   "drove the month, names every difference the reconciliation found and what a person should check. "
+                   "You cannot move money and must not ask anyone to: paying and refunding are the Treasurer's, "
+                   "and a person approves what is above the limits.\n\n" + _RULES),
     },
     "analyst": {
         "nickname": "Analyst", "title": "Analyst",

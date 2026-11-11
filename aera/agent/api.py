@@ -1599,6 +1599,45 @@ def guardian_log(_m, b: dict, h) -> Tuple[int, dict]:
     return 200, {"checks": store.list_checks(limit=100, verdict=b.get("verdict") or None)}
 
 
+@route("GET", r"/orders/([A-Za-z0-9_\-]+)/receipt\.pdf")
+def order_receipt(m, _b, h):
+    from core import finance
+    _user(h)
+    pdf = finance.receipt_pdf(m.group(1))
+    if not pdf:
+        return 404, {"error": "no receipt: the order is unknown or not paid yet"}
+    return 200, Download(pdf, f"receipt-{m.group(1)}.pdf", "application/pdf")
+
+
+@route("GET", r"/finance")
+def finance_books(_m, b: dict, h) -> Tuple[int, dict]:
+    """The month's books and the reconciliation with the vault (core/finance.py)."""
+    from core import finance
+    _user(h)
+    try:
+        rep = finance.report(b.get("month") or None)
+    except ValueError:
+        return 400, {"error": "month must look like 2026-11"}
+    with store.connect() as c:
+        filed = [dict(r) for r in c.execute("SELECT id, name, uploaded_at FROM files WHERE name LIKE 'doc:Monthly report%'"
+                                            " ORDER BY uploaded_at DESC LIMIT 12")]
+    return 200, {"report": rep, "reconcile": finance.reconcile(), "filed": filed}
+
+
+@route("GET", r"/finance/report\.pdf")
+def finance_report_pdf(_m, b: dict, h):
+    from core import business, finance
+    from engine.export import Doc
+    _user(h)
+    try:
+        rep = finance.report(b.get("month") or None)
+    except ValueError:
+        return 400, {"error": "month must look like 2026-11"}
+    d = Doc(f"Monthly report — {rep['label']}", kicker=(business.current().get("name") or "AERA"))
+    d.md(finance.report_markdown(rep, "", finance.reconcile()).split("\n", 1)[1])
+    return 200, Download(d.render(), f"report-{rep['month']}.pdf", "application/pdf")
+
+
 @route("GET", r"/activity")
 def activity_feed(_m, b: dict, h) -> Tuple[int, dict]:
     """What the team is doing and has done, in plain words (core/activity.py)."""
@@ -1768,6 +1807,16 @@ def public_order(m, _b, _h) -> Tuple[int, dict]:
     if not o:
         return 404, {"error": "no such order"}
     return 200, {k: o[k] for k in ("id", "offering", "status", "amount_usd", "created_at", "updated_at")}
+
+
+@route("GET", r"/public/orders/([A-Za-z0-9_\-]+)/receipt\.pdf")
+def public_receipt(m, _b, _h):
+    """The customer's receipt. Only for a paid order; the order id is the customer's own secret link."""
+    from core import finance
+    pdf = finance.receipt_pdf(m.group(1))
+    if not pdf:
+        return 404, {"error": "no receipt: the order is unknown or not paid yet"}
+    return 200, Download(pdf, f"receipt-{m.group(1)}.pdf", "application/pdf")
 
 
 @route("GET", r"/public/ledger")

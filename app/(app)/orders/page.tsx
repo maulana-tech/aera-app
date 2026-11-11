@@ -118,6 +118,10 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
                         </div>
                       ) : <span className="text-muted-foreground">-</span>}
                       {dl && <div className="mt-1"><DeliveryReceipt delivery={dl} network={health?.network} compact /></div>}
+                      {o.status !== "awaiting_payment" && (
+                        <a href={`/api/aera/orders/${o.id}/receipt.pdf`} download
+                          className="text-muted-foreground hover:text-foreground mt-1 block font-mono text-[10px] underline underline-offset-2">receipt PDF</a>
+                      )}
                     </td>
                     <td className="px-4 py-2.5 text-right">
                       {run ? (

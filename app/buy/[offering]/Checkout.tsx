@@ -77,6 +77,10 @@ function OrderStatus({ id }: { id: string }) {
       {!final && (
         <p className="text-muted-foreground mt-2 text-[11px]">This updates on its own. Keep the order number; you can close the page once it is paid.</p>
       )}
+      {order && order.status !== "awaiting_payment" && (
+        <a href={`/api/aera/public/orders/${id}/receipt.pdf`} download
+          className="mt-2 inline-block text-xs underline underline-offset-2">Download your receipt (PDF)</a>
+      )}
     </div>
   );
 }

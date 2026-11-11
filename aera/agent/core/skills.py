@@ -112,6 +112,20 @@ CATALOGUE: List[Skill] = [
         ],
         external=False,
     ),
+    Skill(
+        name="monthly_close",
+        title="Close the month's books",
+        description="Reconcile the record with the vault, then file the monthly report with the figures the books computed.",
+        agents=["finance"],
+        tools=["reconcile_books", "finance_report", "save_monthly_report"],
+        steps=[
+            "Reconcile first: if the vault and AERA's record disagree, every difference goes into the report, unexplained ones flagged for a person.",
+            "Read the month's figures; quote them exactly, never recompute.",
+            "Explain what drove the month: which offerings sold, what was spent and why, what the AI cost per order was.",
+            "File the report with save_monthly_report and hand back its document id with anything a person must check.",
+        ],
+        external=False,
+    ),
 ]
 
 BY_NAME: Dict[str, Skill] = {s.name: s for s in CATALOGUE}
