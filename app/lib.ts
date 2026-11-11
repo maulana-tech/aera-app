@@ -512,3 +512,35 @@ export type TrustPayload = {
     attack_demo: { at: string | null; network: string | null; vault: string | null; layers: { title: string; status: string | null; detail: string }[] } | null;
   };
 };
+
+/* ------------------------------------------------- what the profile's ids mean, in plain words */
+export const CHANNEL_INFO: Record<(typeof CHANNELS)[number], { label: string; hint: string }> = {
+  web_checkout: { label: "Checkout page", hint: "A public page per offering where customers order and pay" },
+  intents_checkout: { label: "Pay from any chain", hint: "Customers pay with tokens on other chains through NEAR Intents" },
+  email: { label: "Email", hint: "Deliveries and replies go to the customer's inbox" },
+  telegram: { label: "Telegram", hint: "Customers reach the team through a Telegram bot" },
+  chat: { label: "Chat", hint: "Customers ask the team questions in a chat window" },
+  mcp: { label: "Other AI agents (MCP)", hint: "Other agents and apps can call the business's tools" },
+};
+export const DELIVERY_INFO: Record<Delivery, string> = {
+  pdf: "PDF document", xlsx: "Spreadsheet (Excel)", message: "A message", file: "A file", service: "A service, done for them",
+};
+export const APPROVAL_INFO: Record<(typeof APPROVAL_KINDS)[number], { label: string; hint: string }> = {
+  refund: { label: "Refunds", hint: "Money back to a customer" },
+  new_vendor: { label: "Paying a new vendor", hint: "The first payment to anyone not paid before" },
+  discount: { label: "Discounts", hint: "Selling below the listed price" },
+  message_to_new_contact: { label: "First message to someone new", hint: "Anyone the team has not written to before" },
+  payment: { label: "Every payment", hint: "Even small ones inside the spend limit" },
+  message: { label: "Every outgoing message", hint: "Nothing is sent without you" },
+  deliver_order: { label: "Every delivery", hint: "You see each deliverable before the customer does" },
+};
+export const LANGUAGES: { code: string; label: string }[] = [
+  { code: "en", label: "English" }, { code: "id", label: "Bahasa Indonesia" }, { code: "ms", label: "Bahasa Melayu" },
+  { code: "vi", label: "Tiếng Việt" }, { code: "th", label: "ไทย (Thai)" }, { code: "tl", label: "Filipino" },
+  { code: "zh", label: "中文 (Chinese)" }, { code: "ja", label: "日本語 (Japanese)" }, { code: "ko", label: "한국어 (Korean)" },
+  { code: "es", label: "Español" }, { code: "fr", label: "Français" }, { code: "de", label: "Deutsch" },
+  { code: "pt", label: "Português" }, { code: "ar", label: "العربية (Arabic)" }, { code: "hi", label: "हिन्दी (Hindi)" },
+];
+/** An offering's id, made from its title: what the checkout link is built from. */
+export const slugify = (s: string) =>
+  s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32);

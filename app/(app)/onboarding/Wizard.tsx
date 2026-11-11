@@ -7,9 +7,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
 import type { ComposeResult, ExtraRole, LibraryRole, Profile, TeamAgent } from "@/app/lib";
-import { usd } from "@/app/lib";
+import { APPROVAL_INFO, DELIVERY_INFO, usd } from "@/app/lib";
 import {
-  BasicsFields, Field, LimitsFields, OfferingsFields, Problems, TextArea,
+  BasicsFields, Field, Group, LimitsFields, OfferingsFields, Problems, TextArea,
 } from "@/components/profile-editor";
 import { completeProfile } from "@/lib/profile";
 import { TeamRows } from "@/components/team-list";
@@ -247,15 +247,23 @@ export function Wizard({ initial, example, library, mayChange }: {
           <div className="space-y-6">
             {step === 0 && (
               <section className="space-y-6">
-                <div className="bg-white rounded-lg border p-4">
-                  <Field label="Fastest: describe the business in a few sentences and let AI fill in the steps. Say what you sell, to whom, at what price, what the team may spend on its own, and what it must never do.">
-                    <TextArea rows={5} value={text} onChange={(e) => setText(e.target.value)}
-                      placeholder="We write 5-page market briefs for founders in Southeast Asia, $15 each, delivered as a PDF within 2 hours. The team may spend up to $5 per payment on data, $20 a day. Never promise investment returns; refunds always need me." />
-                  </Field>
+                <div className="bg-raised rounded-lg border border-brand/15 p-4">
+                  <div className="flex items-start gap-2.5">
+                    <Sparkles className="text-brand mt-0.5 size-4 shrink-0" />
+                    <div>
+                      <h3 className="text-[14px] font-medium">Fastest: let AI draft every step</h3>
+                      <p className="text-muted-foreground mt-0.5 text-xs leading-relaxed">
+                        A few sentences are enough: what you sell, to whom, at what price, what the team may spend on its own,
+                        and what it must never do. You check and change everything before anything is saved.
+                      </p>
+                    </div>
+                  </div>
+                  <TextArea rows={4} className="mt-3" value={text} onChange={(e) => setText(e.target.value)} aria-label="Describe the business"
+                    placeholder="We write 5-page market briefs for founders in Southeast Asia, $15 each, delivered as a PDF within 2 hours. The team may spend up to $5 per payment on data, $20 a day. Never promise investment returns; refunds always need me." />
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <Button type="button" onClick={draft} disabled={drafting || text.trim().length < 20}>
                       {drafting ? <Loader2 className="animate-spin" /> : <Sparkles />}
-                      {drafting ? "Drafting…" : "Draft with AI"}
+                      {drafting ? "Drafting… (about 20 seconds)" : "Draft with AI"}
                     </Button>
                     <Button type="button" variant="ghost" onClick={() => {
                       setP(completeProfile(example)); setProblems([]);
@@ -263,27 +271,26 @@ export function Wizard({ initial, example, library, mayChange }: {
                     }}>
                       Use the example business
                     </Button>
+                    {text.trim().length > 0 && text.trim().length < 20 && (
+                      <span className="text-muted-foreground text-xs">A little more, please: at least a sentence.</span>
+                    )}
                   </div>
                   <p className="text-muted-foreground mt-2 text-[11px]">
-                    The draft is written by a TEE-attested model on NEAR AI and is not saved until you finish. Or skip this box and fill in the fields below.
+                    Drafted by a TEE-attested model on NEAR AI: what you write here is not seen by the model&apos;s operator.
                   </p>
                   {drafted && (
-                    <p className="mt-3 rounded-md bg-raised px-3 py-2 text-sm text-ok ">{drafted}</p>
+                    <p className="mt-3 flex items-start gap-2 rounded-md bg-white px-3 py-2 text-sm text-ok"><Check className="mt-0.5 size-4 shrink-0" />{drafted}</p>
                   )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="bg-border h-px flex-1" />
+                  <span className="text-muted-foreground text-xs">or fill it in yourself</span>
+                  <span className="bg-border h-px flex-1" />
                 </div>
                 <BasicsFields p={p} set={setP} />
               </section>
             )}
-            {step === 1 && (
-              <>
-                {p.offerings.length === 0 && (
-                  <p className="text-sm text-warn ">
-                    No offering yet. You can continue without one (the team can still do work you ask for), but customers will have nothing to buy.
-                  </p>
-                )}
-                <OfferingsFields p={p} set={setP} />
-              </>
-            )}
+            {step === 1 && <OfferingsFields p={p} set={setP} />}
             {step === 2 && <LimitsFields p={p} set={setP} />}
             {step === 3 && <TeamStep p={p} set={setP} library={library} onTeam={setTeam} />}
             {step === 4 && <Review p={p} team={team} onEdit={setStep} />}
@@ -351,7 +358,7 @@ function Review({ p, team, onEdit }: { p: Profile; team: TeamAgent[] | null; onE
             <ul className="space-y-1">
               {p.offerings.map((o) => (
                 <li key={o.id || o.title}>
-                  <span className="font-medium">{o.title}</span> for {usd(o.price_usd)}, delivered as {o.delivery} within {o.sla_hours}h
+                  <span className="font-medium">{o.title}</span> for {usd(o.price_usd)}, delivered as {DELIVERY_INFO[o.delivery as keyof typeof DELIVERY_INFO] ?? o.delivery} within {o.sla_hours}h
                   {o.inputs.length > 0 && <span className="text-muted-foreground"> · asks the customer for {o.inputs.join(", ")}</span>}
                   <span className="text-muted-foreground font-mono text-xs"> · /buy/{o.id || "…"}</span>
                 </li>
@@ -362,19 +369,19 @@ function Review({ p, team, onEdit }: { p: Profile; team: TeamAgent[] | null; onE
         <Row label="Without you" step={2} onEdit={onEdit}>
           <p>
             The team may pay up to <b>{usd(c.autonomous_spend_usd.per_payment)}</b> per payment and{" "}
-            <b>{usd(c.autonomous_spend_usd.per_day)}</b> a day on its own. Model spend stops at {usd(c.inference_max_usd_per_day)} a day.
+            <b>{usd(c.autonomous_spend_usd.per_day)}</b> a day on its own. AI cost stops at {usd(c.inference_max_usd_per_day)} a day.
           </p>
-          <p className="text-muted-foreground">Always asks you first: {c.approval_required.join(", ") || "nothing extra"}.</p>
+          <p className="text-muted-foreground">Always asks you first: {c.approval_required.map((k) => APPROVAL_INFO[k as keyof typeof APPROVAL_INFO]?.label.toLowerCase() ?? k).join(", ") || "nothing extra"}.</p>
           {c.min_price_usd > 0 && <p className="text-muted-foreground">Never sells below {usd(c.min_price_usd)}.</p>}
         </Row>
-        <Row label="Never" step={2} onEdit={onEdit}>
+        <Row label="Must never" step={2} onEdit={onEdit}>
           {c.forbidden.length ? <ul className="list-inside list-disc">{c.forbidden.map((f) => <li key={f}>{f}</li>)}</ul>
             : <p className="text-muted-foreground">Nothing listed. The Guardian still blocks payments to unknown accounts and suspected manipulation.</p>}
         </Row>
-        <Row label="Sensitive data" step={2} onEdit={onEdit}>
+        <Row label="Private data" step={2} onEdit={onEdit}>
           {p.privacy.sensitive.length ? p.privacy.sensitive.join(", ")
             : <span className="text-muted-foreground">Nothing listed.</span>}
-          <p className="text-muted-foreground text-xs">Every agent thinks on a TEE-attested model; prompts are not kept by the model provider.</p>
+          <p className="text-muted-foreground text-xs">{p.privacy.tee_only ? "Private AI only: every agent thinks inside an attested enclave, and each call is proven." : "Private AI is off: models outside a TEE may be used."}</p>
         </Row>
         {split.length > 0 && (
           <Row label="Revenue share" step={2} onEdit={onEdit}>
@@ -433,39 +440,40 @@ function TeamStep({ p, set, library, onTeam }: {
   const dropExtra = (title: string) => set({ ...p, team: { ...t, extra_roles: t.extra_roles.filter((r) => roleTitle(r) !== title) } });
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-7">
+      <Group title="Always on the team" note="These three are part of every AERA business and cannot be removed.">
       <div className="grid gap-2 sm:grid-cols-3">
         {[
           ["Supervisor", "Plans each piece of work and decides who does it."],
           ["Guardian", "Checks every payment and message against your rules. Its block is final."],
           ["Treasurer", "The only one who can move money, and only through the vault."],
         ].map(([n, d]) => (
-          <div key={n} className="rounded-lg border px-3 py-2">
-            <p className="text-sm font-medium">{n} <span className="text-muted-foreground font-mono text-[10px]">always on</span></p>
-            <p className="text-muted-foreground text-xs">{d}</p>
+          <div key={n} className="bg-white rounded-lg border px-3 py-2.5">
+            <p className="text-[13.5px] font-medium">{n}</p>
+            <p className="text-muted-foreground mt-0.5 text-xs leading-relaxed">{d}</p>
           </div>
         ))}
       </div>
+      </Group>
 
       {error && <p className="text-sm text-bad ">{error}</p>}
       {!team ? (
         <p className="text-muted-foreground inline-flex items-center gap-2 text-sm"><Loader2 className="size-4 animate-spin" /> Composing the team…</p>
       ) : (
-        <>
-          <p className="text-muted-foreground text-xs">Proposed for your business. Specialists were picked from your offerings, channels and limits.</p>
-          <TeamRows agents={team} action={(a) =>
-            a.core ? <span className="text-muted-foreground font-mono text-[10px]">always</span>
-              : a.role === "custom" ? (
+        <Group title={`Specialists picked for your business (${team.filter((a) => !a.core).length})`}
+          note="Chosen from your offerings, channels and limits. Leave out any you do not need; you can change the team later on the Team page.">
+          <TeamRows agents={team.filter((a) => !a.core)} action={(a) =>
+            a.role === "custom" ? (
                 <Button size="xs" variant="ghost" onClick={() => dropExtra(a.title)}><X /> Drop</Button>
               ) : (
                 <Button size="xs" variant="ghost" onClick={() => exclude(a.code)}><X /> Leave out</Button>
               )} />
-        </>
+        </Group>
       )}
 
       {addable.length > 0 && (
         <div>
-          <p className="text-muted-foreground mb-2 text-xs">Add a specialist from the role library</p>
+          <p className="text-text mb-2 text-[13px]">Add a specialist</p>
           <div className="flex flex-wrap gap-2">
             {addable.map((r) => (
               <Button key={r.key} size="sm" variant="outline" onClick={() => include(r.key)} title={r.brief}>
@@ -476,18 +484,22 @@ function TeamStep({ p, set, library, onTeam }: {
         </div>
       )}
 
-      <form className="flex flex-wrap items-end gap-2" onSubmit={(e) => {
+      <form className="space-y-1" onSubmit={(e) => {
         e.preventDefault();
         const title = extra.trim();
         if (!title) return;
         set({ ...p, team: { ...t, extra_roles: [...t.extra_roles, title] } });
         setExtra("");
       }}>
-        <Field label="A role the library does not have, in your words" className="min-w-56 flex-1"
-          hint="It joins as a draft with only basic capabilities (read files, write documents). It can never be given money or the veto. Activate it on the Team page.">
-          <Input value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="Copy editor" />
-        </Field>
-        <Button type="submit" variant="outline" disabled={!extra.trim()}><Plus /> Add role</Button>
+        <div className="flex flex-wrap items-end gap-2">
+          <Field label="A role that is not listed, in your words" className="min-w-56 flex-1" optional>
+            <Input value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="e.g. Copy editor" />
+          </Field>
+          <Button type="submit" variant="outline" disabled={!extra.trim()}><Plus /> Add role</Button>
+        </div>
+        <p className="text-muted-foreground text-[11px] leading-relaxed">
+          It joins as a draft that can read files and write documents only, never money or the veto. You switch it on later on the Team page.
+        </p>
       </form>
     </section>
   );

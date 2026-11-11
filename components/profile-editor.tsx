@@ -1,9 +1,10 @@
 "use client";
 
-import { Plus, Trash2 } from "lucide-react";
+import { Check, Plus, Trash2 } from "lucide-react";
 
 import {
-  APPROVAL_KINDS, CHANNELS, DELIVERIES, type Offering, type Profile,
+  APPROVAL_INFO, APPROVAL_KINDS, CHANNEL_INFO, CHANNELS, DELIVERIES, DELIVERY_INFO, LANGUAGES, slugify,
+  type Offering, type Profile,
 } from "@/app/lib";
 import { emptyOffering } from "@/lib/profile";
 import { Button } from "@/components/ui/button";
@@ -17,12 +18,18 @@ import { cn } from "@/lib/utils";
 
 /* ------------------------------------------------------------------ fields */
 
-export function Field({ label, hint, children, className }: {
+export function Field({ label, hint, children, className, required, optional }: {
   label: string; hint?: string; children: React.ReactNode; className?: string;
+  /** say it, so a person knows what they may skip */
+  required?: boolean; optional?: boolean;
 }) {
   return (
     <label className={cn("block min-w-0", className)}>
-      <span className="text-muted-foreground text-xs">{label}</span>
+      <span className="text-text text-[12.5px]">
+        {label}
+        {required && <span className="text-bad ml-0.5" aria-hidden>*</span>}
+        {optional && <span className="text-muted-foreground ml-1.5 text-[11px]">optional</span>}
+      </span>
       <div className="mt-1.5">{children}</div>
       {hint && <span className="text-muted-foreground mt-1 block text-[11px] leading-relaxed">{hint}</span>}
     </label>
@@ -33,7 +40,7 @@ export function TextArea(props: React.ComponentProps<"textarea">) {
   return (
     <textarea
       {...props}
-      className={cn("border-input bg-background focus-visible:border-ring focus-visible:ring-ring/50 w-full rounded-lg border px-2.5 py-2 text-sm outline-none focus-visible:ring-3 ", props.className)}
+      className={cn("border-input w-full rounded-lg border bg-white px-3 py-2 text-[13.5px] text-fg outline-none placeholder:text-muted-foreground/80 hover:border-[rgba(6,35,89,0.28)] focus-visible:border-[rgba(6,71,179,0.55)] focus-visible:ring-3 focus-visible:ring-[rgba(6,71,179,0.08)]", props.className)}
     />
   );
 }
@@ -63,11 +70,42 @@ export function Num({ value, onChange, step = "any", min = 0, prefix }: {
 }
 
 export const pill = (on: boolean) =>
-  cn("rounded-full border px-3 py-1 font-mono text-[11px] transition-colors",
-     on ? "bg-primary text-primary-foreground border-primary" : "hover:border-foreground/30");
+  cn("rounded-sm px-2.5 py-1 font-mono text-[11px] transition-colors",
+     on ? "bg-primary text-primary-foreground" : "bg-raised text-text hover:bg-hover");
+
+const SELECT = "border-input h-9 w-full rounded-lg border bg-white px-3 text-[13.5px] text-fg outline-none focus-visible:border-[rgba(6,71,179,0.55)]";
 
 function toggle(list: string[], v: string) {
   return list.includes(v) ? list.filter((x) => x !== v) : [...list, v];
+}
+
+/** A titled group of fields, so a long step reads as a few short ones. */
+export function Group({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
+  return (
+    <section>
+      <h3 className="text-[14px] font-medium">{title}</h3>
+      {note && <p className="text-muted-foreground mt-0.5 max-w-2xl text-xs leading-relaxed">{note}</p>}
+      <div className="mt-3">{children}</div>
+    </section>
+  );
+}
+
+/** A choice that explains itself: a label, a line on what it means, and a tick. */
+function ChoiceCard({ on, label, hint, onClick }: { on: boolean; label: string; hint: string; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} aria-pressed={on}
+      className={cn("flex items-start gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors",
+        on ? "border-brand/40 bg-raised" : "bg-white hover:border-[rgba(6,35,89,0.28)]")}>
+      <span className={cn("mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-[5px] border",
+        on ? "border-brand bg-brand text-white" : "border-[rgba(6,35,89,0.3)] bg-white")}>
+        {on && <Check className="size-3" />}
+      </span>
+      <span className="min-w-0">
+        <span className="text-fg block text-[13px] leading-tight">{label}</span>
+        <span className="text-muted-foreground mt-0.5 block text-[11.5px] leading-snug">{hint}</span>
+      </span>
+    </button>
+  );
 }
 
 type Edit = { p: Profile; set: (p: Profile) => void };
@@ -75,32 +113,44 @@ type Edit = { p: Profile; set: (p: Profile) => void };
 /* ------------------------------------------------------------------ basics */
 
 export function BasicsFields({ p, set }: Edit) {
+  const known = LANGUAGES.some((l) => l.code === p.language);
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      <Field label="Business name"><Input value={p.name} onChange={(e) => set({ ...p, name: e.target.value })} required /></Field>
-      <Field label="Language customers are answered in" hint="ISO code: en, id, es…">
-        <Input value={p.language} maxLength={8} onChange={(e) => set({ ...p, language: e.target.value })} />
-      </Field>
-      <Field label="Mission" className="sm:col-span-2">
-        <TextArea rows={2} value={p.mission} onChange={(e) => set({ ...p, mission: e.target.value })} />
-      </Field>
-      <Field label="Customers" className="sm:col-span-2">
-        <Input value={p.customers} onChange={(e) => set({ ...p, customers: e.target.value })} placeholder="Founders and SMEs in Southeast Asia" />
-      </Field>
-      <div className="sm:col-span-2">
-        <span className="text-muted-foreground text-xs">Channels</span>
-        <div className="mt-1.5 flex flex-wrap gap-2">
+    <div className="space-y-8">
+      <Group title="The business">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Business name" required>
+            <Input value={p.name} onChange={(e) => set({ ...p, name: e.target.value })} placeholder="e.g. Lumen Research" required />
+          </Field>
+          <Field label="Customers are answered in" hint="The language the team writes to customers in.">
+            <select className={SELECT} value={p.language} onChange={(e) => set({ ...p, language: e.target.value })}>
+              {!known && p.language && <option value={p.language}>{p.language}</option>}
+              {LANGUAGES.map((l) => <option key={l.code} value={l.code}>{l.label}</option>)}
+            </select>
+          </Field>
+          <Field label="What the business does" className="sm:col-span-2" optional
+            hint="One or two sentences. Every agent reads it before every task.">
+            <TextArea rows={2} value={p.mission} onChange={(e) => set({ ...p, mission: e.target.value })}
+              placeholder="e.g. Short, sourced market briefs for founders and small businesses in Southeast Asia." />
+          </Field>
+          <Field label="Who the customers are" className="sm:col-span-2" optional>
+            <Input value={p.customers} onChange={(e) => set({ ...p, customers: e.target.value })} placeholder="e.g. Founders and SMEs in Southeast Asia" />
+          </Field>
+        </div>
+      </Group>
+
+      <Group title="Where customers reach you" note="Pick every way customers order or talk to the business. The team gets the agents each one needs.">
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
           {CHANNELS.map((c) => (
-            <button key={c} type="button" className={pill(p.channels.includes(c))}
-              onClick={() => set({ ...p, channels: toggle(p.channels, c) })} aria-pressed={p.channels.includes(c)}>
-              {c}
-            </button>
+            <ChoiceCard key={c} on={p.channels.includes(c)} label={CHANNEL_INFO[c].label} hint={CHANNEL_INFO[c].hint}
+              onClick={() => set({ ...p, channels: toggle(p.channels, c) })} />
           ))}
         </div>
-      </div>
-      <Field label="Standing goals (one per line)" className="sm:col-span-2" hint="Recurring work the team takes on without being asked.">
-        <Lines value={p.goals} onChange={(goals) => set({ ...p, goals })} rows={2} />
-      </Field>
+      </Group>
+
+      <Group title="Standing goals" note="Recurring work the team takes on without being asked, one per line. Leave it empty if the team should only work on orders and your requests.">
+        <Lines value={p.goals} onChange={(goals) => set({ ...p, goals })} rows={2}
+          placeholder={"Publish one free sample brief each week\nFollow up with every customer a week after delivery"} />
+      </Group>
     </div>
   );
 }
@@ -110,53 +160,70 @@ export function BasicsFields({ p, set }: Edit) {
 export function OfferingsFields({ p, set }: Edit) {
   const put = (i: number, o: Partial<Offering>) =>
     set({ ...p, offerings: p.offerings.map((x, j) => (j === i ? { ...x, ...o } : x)) });
+  const minPrice = p.constraints.min_price_usd;
   return (
     <div className="space-y-4">
       {p.offerings.length === 0 && (
         <p className="text-muted-foreground rounded-lg border border-dashed p-4 text-sm">
-          Nothing on sale yet. A business without an offering can still work requests and goals, but takes no orders.
+          Nothing on sale yet. You can continue without an offering: the team still works on your requests and goals,
+          but customers will have nothing to buy.
         </p>
       )}
-      {p.offerings.map((o, i) => (
-        <fieldset key={i} className="rounded-lg border p-4">
-          <div className="grid gap-3 sm:grid-cols-6">
-            <Field label="Id" className="sm:col-span-2" hint="Short, used in checkout links">
-              <Input value={o.id} onChange={(e) => put(i, { id: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, "") })} placeholder="brief" />
-            </Field>
-            <Field label="Title" className="sm:col-span-4">
-              <Input value={o.title} onChange={(e) => put(i, { title: e.target.value })} />
-            </Field>
-            <Field label="Description" className="sm:col-span-6">
-              <TextArea rows={2} value={o.description ?? ""} onChange={(e) => put(i, { description: e.target.value })} />
-            </Field>
-            <Field label="Price (USD)" className="sm:col-span-2">
-              <Num value={o.price_usd} onChange={(price_usd) => put(i, { price_usd })} prefix="$" />
-            </Field>
-            <Field label="Delivered as" className="sm:col-span-2">
-              <select value={o.delivery} onChange={(e) => put(i, { delivery: e.target.value })}
-                className="border-input bg-background h-8 w-full rounded-lg border px-2 text-sm ">
-                {DELIVERIES.map((d) => <option key={d} value={d}>{d}</option>)}
-              </select>
-            </Field>
-            <Field label="SLA (hours)" className="sm:col-span-2">
-              <Num value={o.sla_hours} onChange={(sla_hours) => put(i, { sla_hours })} />
-            </Field>
-            <Field label="Inputs the customer gives (comma separated)" className="sm:col-span-5">
-              <Input value={o.inputs.join(", ")} placeholder="industry, country"
-                onChange={(e) => put(i, { inputs: e.target.value.split(",").map((s) => s.trimStart()) })}
-                onBlur={() => put(i, { inputs: o.inputs.map((s) => s.trim()).filter(Boolean) })} />
-            </Field>
-            <div className="flex items-end sm:col-span-1">
-              <Button type="button" variant="ghost" size="sm" className="text-destructive"
+      {p.offerings.map((o, i) => {
+        const autoId = !o.id || o.id === slugify(o.title);
+        const cheap = minPrice > 0 && o.price_usd < minPrice;
+        return (
+          <fieldset key={i} className="bg-white rounded-lg border p-4">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <legend className="text-muted-foreground text-xs">Offering {i + 1}</legend>
+              <Button type="button" variant="ghost" size="xs" className="text-bad"
                 onClick={() => set({ ...p, offerings: p.offerings.filter((_, j) => j !== i) })}>
                 <Trash2 /> Remove
               </Button>
             </div>
-          </div>
-        </fieldset>
-      ))}
+            <div className="grid gap-4 sm:grid-cols-6">
+              <Field label="Name" required className="sm:col-span-4">
+                <Input value={o.title} placeholder="e.g. Market brief (5 pages)"
+                  onChange={(e) => put(i, { title: e.target.value, ...(autoId ? { id: slugify(e.target.value) } : {}) })} />
+              </Field>
+              <Field label="Price" className="sm:col-span-2" hint={cheap ? `Below your minimum price of $${minPrice}: orders would be refused.` : "In USD, paid in USDC."}>
+                <Num value={o.price_usd} onChange={(price_usd) => put(i, { price_usd })} prefix="$" />
+              </Field>
+              <Field label="What the customer gets" className="sm:col-span-6" optional>
+                <TextArea rows={2} value={o.description ?? ""} onChange={(e) => put(i, { description: e.target.value })}
+                  placeholder="e.g. Market size, competitors, recent news and three opportunities, every claim sourced." />
+              </Field>
+              <Field label="Delivered as" className="sm:col-span-3">
+                <select value={o.delivery} onChange={(e) => put(i, { delivery: e.target.value })} className={SELECT}>
+                  {DELIVERIES.map((d) => <option key={d} value={d}>{DELIVERY_INFO[d]}</option>)}
+                </select>
+              </Field>
+              <Field label="Delivered within" className="sm:col-span-3" hint="Hours after payment. The team plans its work to this.">
+                <div className="flex items-center gap-2">
+                  <Num value={o.sla_hours} onChange={(sla_hours) => put(i, { sla_hours })} />
+                  <span className="text-muted-foreground text-xs">hours</span>
+                </div>
+              </Field>
+              <Field label="What the customer must tell you" className="sm:col-span-6" optional
+                hint="Separated by commas. The checkout page asks for each one; the team cannot start without them.">
+                <Input value={o.inputs.join(", ")} placeholder="e.g. industry, country"
+                  onChange={(e) => put(i, { inputs: e.target.value.split(",").map((s) => s.trimStart()) })}
+                  onBlur={() => put(i, { inputs: o.inputs.map((s) => s.trim()).filter(Boolean) })} />
+              </Field>
+              <Field label="Checkout link" className="sm:col-span-6"
+                hint={autoId ? "Made from the name. Change it only if you want a different link." : "Set by hand."}>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-muted-foreground shrink-0 font-mono text-xs">/buy/</span>
+                  <Input value={o.id} className="font-mono" placeholder="market-brief"
+                    onChange={(e) => put(i, { id: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, "") })} />
+                </div>
+              </Field>
+            </div>
+          </fieldset>
+        );
+      })}
       <Button type="button" variant="outline" size="sm" onClick={() => set({ ...p, offerings: [...p.offerings, emptyOffering()] })}>
-        <Plus /> Add an offering
+        <Plus /> {p.offerings.length ? "Add another offering" : "Add an offering"}
       </Button>
     </div>
   );
@@ -168,75 +235,75 @@ export function LimitsFields({ p, set }: Edit) {
   const c = p.constraints;
   const setC = (x: Partial<Profile["constraints"]>) => set({ ...p, constraints: { ...c, ...x } });
   const splitTotal = p.revenue_split.reduce((s, r) => s + (Number(r.bps) || 0), 0);
+  const perDayLow = c.autonomous_spend_usd.per_day < c.autonomous_spend_usd.per_payment;
   return (
-    <div className="space-y-8">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Field label="Autonomous spend, per payment" hint="Above this, a person approves.">
-          <Num prefix="$" value={c.autonomous_spend_usd.per_payment}
-            onChange={(v) => setC({ autonomous_spend_usd: { ...c.autonomous_spend_usd, per_payment: v } })} />
-        </Field>
-        <Field label="Autonomous spend, per day">
-          <Num prefix="$" value={c.autonomous_spend_usd.per_day}
-            onChange={(v) => setC({ autonomous_spend_usd: { ...c.autonomous_spend_usd, per_day: v } })} />
-        </Field>
-        <Field label="Model spend cap, per day" hint="The team stops reasoning past it.">
-          <Num prefix="$" value={c.inference_max_usd_per_day} onChange={(v) => setC({ inference_max_usd_per_day: v })} />
-        </Field>
-        <Field label="Minimum price">
-          <Num prefix="$" value={c.min_price_usd} onChange={(v) => setC({ min_price_usd: v })} />
-        </Field>
-      </div>
+    <div className="space-y-9">
+      <Group title="Money the team may spend without you" note="Anything above these waits for your approval. They are also written to the vault on chain, so even a compromised server cannot pay past them.">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Field label="Per payment" hint="e.g. buying data or an API call.">
+            <Num prefix="$" value={c.autonomous_spend_usd.per_payment}
+              onChange={(v) => setC({ autonomous_spend_usd: { ...c.autonomous_spend_usd, per_payment: v } })} />
+          </Field>
+          <Field label="Per day, in total" hint={perDayLow ? "Lower than one payment: no payment could go through alone." : "All payments in one day together."}>
+            <Num prefix="$" value={c.autonomous_spend_usd.per_day}
+              onChange={(v) => setC({ autonomous_spend_usd: { ...c.autonomous_spend_usd, per_day: v } })} />
+          </Field>
+          <Field label="AI cost per day" hint="What the agents' thinking may cost. Past it, work is held until tomorrow.">
+            <Num prefix="$" value={c.inference_max_usd_per_day} onChange={(v) => setC({ inference_max_usd_per_day: v })} />
+          </Field>
+          <Field label="Lowest price you sell at" hint="Orders below it are refused.">
+            <Num prefix="$" value={c.min_price_usd} onChange={(v) => setC({ min_price_usd: v })} />
+          </Field>
+        </div>
+      </Group>
 
-      <div>
-        <span className="text-muted-foreground text-xs">Always needs a person, whatever the amount</span>
-        <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <Group title="Always ask me first" note="Whatever the amount, the team waits for you before doing these.">
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
           {APPROVAL_KINDS.map((k) => (
-            <label key={k} className="flex items-center gap-2 text-sm">
-              <input type="checkbox" className="accent-primary size-4" checked={c.approval_required.includes(k)}
-                onChange={() => setC({ approval_required: toggle(c.approval_required, k) })} />
-              <span className="font-mono text-xs">{k}</span>
-            </label>
+            <ChoiceCard key={k} on={c.approval_required.includes(k)} label={APPROVAL_INFO[k].label} hint={APPROVAL_INFO[k].hint}
+              onClick={() => setC({ approval_required: toggle(c.approval_required, k) })} />
           ))}
         </div>
-      </div>
+      </Group>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Field label="Never (one per line)" hint="The guardian blocks any action that does one of these.">
-          <Lines value={c.forbidden} onChange={(forbidden) => setC({ forbidden })} rows={4}
-            placeholder={"promise investment returns\nshare one customer's data with another"} />
-        </Field>
-        <Field label="Sensitive data (one per line)" hint="Never sent outside the business, never to another customer.">
-          <Lines value={p.privacy.sensitive} onChange={(sensitive) => set({ ...p, privacy: { ...p.privacy, sensitive } })} rows={4}
-            placeholder={"customer inputs\ncustomer contact details"} />
-        </Field>
-      </div>
-      <label className="flex items-start gap-2 text-sm">
-        <input type="checkbox" className="accent-primary mt-0.5 size-4" checked={p.privacy.tee_only}
-          onChange={(e) => set({ ...p, privacy: { ...p.privacy, tee_only: e.target.checked } })} />
-        <span>
-          Only TEE-attested models
-          <span className="text-muted-foreground block text-xs">Every agent thinks inside an attested enclave on NEAR AI Cloud; proxied models are refused.</span>
-        </span>
-      </label>
-
-      <div>
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <span className="text-muted-foreground text-xs">Revenue split, paid on chain as each order settles</span>
-          <span className={cn("font-mono text-[11px]", splitTotal > 10_000 ? "text-bad " : "text-muted-foreground")}>
-            {(splitTotal / 100).toFixed(2)}% of revenue
-          </span>
+      <Group title="Rules and private data" note="The Guardian checks every outgoing action against these, in code, and its block is final.">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Field label="The team must never…" hint="One per line. The Guardian blocks any action that does one of these.">
+            <Lines value={c.forbidden} onChange={(forbidden) => setC({ forbidden })} rows={4}
+              placeholder={"promise investment returns\nshare one customer's data with another"} />
+          </Field>
+          <Field label="Private data" hint="One per line. Never sent outside the business, never to another customer.">
+            <Lines value={p.privacy.sensitive} onChange={(sensitive) => set({ ...p, privacy: { ...p.privacy, sensitive } })} rows={4}
+              placeholder={"customer inputs\ncustomer contact details"} />
+          </Field>
         </div>
-        <div className="mt-2 space-y-2">
+        <label className="mt-4 flex items-start gap-2.5 text-[13px]">
+          <input type="checkbox" className="accent-primary mt-0.5 size-4" checked={p.privacy.tee_only}
+            onChange={(e) => set({ ...p, privacy: { ...p.privacy, tee_only: e.target.checked } })} />
+          <span>
+            Private AI only
+            <span className="text-muted-foreground block text-xs">
+              Every agent thinks inside an attested enclave (TEE) on NEAR AI Cloud, and each call is proven.
+            </span>
+            {!p.privacy.tee_only && (
+              <span className="text-warn mt-1 block text-xs">Off: models outside a TEE may see the business&apos;s and customers&apos; data.</span>
+            )}
+          </span>
+        </label>
+      </Group>
+
+      <Group title="Share revenue" note="Optional. The vault pays each account its share of every paid order, on chain, the moment the order is paid.">
+        <div className="space-y-2">
           {p.revenue_split.map((s, i) => (
-            <div key={i} className="grid grid-cols-[1fr_6rem_auto] gap-2 sm:grid-cols-[1fr_1fr_7rem_auto]">
-              <Input placeholder="contributor.testnet" value={s.account}
+            <div key={i} className="grid grid-cols-[1fr_6.5rem_auto] items-center gap-2 sm:grid-cols-[1fr_1fr_7rem_auto]">
+              <Input placeholder="partner.near" aria-label="NEAR account" value={s.account}
                 onChange={(e) => set({ ...p, revenue_split: p.revenue_split.map((x, j) => j === i ? { ...x, account: e.target.value.trim() } : x) })} />
-              <Input placeholder="label" className="hidden sm:block" value={s.label ?? ""}
+              <Input placeholder="Who it is (e.g. co-founder)" className="hidden sm:block" value={s.label ?? ""}
                 onChange={(e) => set({ ...p, revenue_split: p.revenue_split.map((x, j) => j === i ? { ...x, label: e.target.value } : x) })} />
               <div className="flex items-center gap-1">
-                <Input type="number" min={0} max={10000} value={s.bps} aria-label="basis points"
-                  onChange={(e) => set({ ...p, revenue_split: p.revenue_split.map((x, j) => j === i ? { ...x, bps: Number(e.target.value) } : x) })} />
-                <span className="text-muted-foreground font-mono text-[10px]">bps</span>
+                <Input type="number" min={0} max={100} step="0.01" value={(Number(s.bps) || 0) / 100} aria-label="percent of revenue"
+                  onChange={(e) => set({ ...p, revenue_split: p.revenue_split.map((x, j) => j === i ? { ...x, bps: Math.round(Number(e.target.value) * 100) } : x) })} />
+                <span className="text-muted-foreground text-xs">%</span>
               </div>
               <Button type="button" size="icon-sm" variant="ghost" aria-label="Remove"
                 onClick={() => set({ ...p, revenue_split: p.revenue_split.filter((_, j) => j !== i) })}>
@@ -244,13 +311,19 @@ export function LimitsFields({ p, set }: Edit) {
               </Button>
             </div>
           ))}
-          <Button type="button" variant="outline" size="sm"
-            onClick={() => set({ ...p, revenue_split: [...p.revenue_split, { account: "", bps: 1000, label: "" }] })}>
-            <Plus /> Add a split
-          </Button>
-          <p className="text-muted-foreground text-[11px]">100 bps = 1%. The vault pays each account its share of every paid order.</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="button" variant="outline" size="sm"
+              onClick={() => set({ ...p, revenue_split: [...p.revenue_split, { account: "", bps: 1000, label: "" }] })}>
+              <Plus /> Add a share
+            </Button>
+            {p.revenue_split.length > 0 && (
+              <span className={cn("text-xs", splitTotal > 10_000 ? "text-bad" : "text-muted-foreground")}>
+                {(splitTotal / 100).toFixed(2)}% of revenue shared{splitTotal > 10_000 ? ": more than 100%" : ""}
+              </span>
+            )}
+          </div>
         </div>
-      </div>
+      </Group>
     </div>
   );
 }
