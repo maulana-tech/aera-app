@@ -6,7 +6,7 @@ Every step can be checked. Python 3.9+ (3.12 in Docker), Node 20+. No Python pac
 
 ```bash
 cd aera/agent
-PYTHONPATH=. python3 manage.py check        # every self-check, offline (39 of them)
+PYTHONPATH=. python3 manage.py check        # every self-check, offline (40 of them)
 ```
 
 ## 1. The demo business, locally
@@ -15,14 +15,17 @@ PYTHONPATH=. python3 manage.py check        # every self-check, offline (39 of t
 cd aera/agent
 cp .env.example .env
 PYTHONPATH=. python3 manage.py secret        # paste into .env as AERA_SECRET
-PYTHONPATH=. python3 manage.py demo          # Lumen Research: profile, composed team, contacts
-PYTHONPATH=. python3 manage.py user owner@lumen.example "Owner" owner "a-long-password"
+PYTHONPATH=. python3 manage.py demo          # optional: the example business, its team, contacts
 PYTHONPATH=. python3 api.py                  # :8787
 
 # in the repo root, another terminal
 cp .env.example .env.local                   # AERA_API=http://127.0.0.1:8787
-npm install && npm run dev                   # :3000, sign in as the owner
+npm install && npm run dev                   # :3000
 ```
+
+On a fresh install the login page offers **Set up AERA**: it creates the first account, as owner,
+and closes for good once any account exists. Owners add the rest under Settings → Accounts (or
+`manage.py user <email> "<name>" <role> "<password>"`).
 
 Without a model key, work items are recorded and **held** ("the supervisor's model cannot be
 called"); without a vault, payments run on the **simulated** rail. Both are labelled everywhere.
