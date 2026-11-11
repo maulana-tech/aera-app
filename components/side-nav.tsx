@@ -36,6 +36,11 @@ const isActive = (pathname: string, href: string) => pathname === href || pathna
 function groups(pending: number): { label: string; items: Item[] }[] {
   return [
     {
+      // The main feature: ask the Supervisor, and through it the whole team.
+      label: "",
+      items: [{ title: "Chat", href: "/chat", icon: MessagesSquare }],
+    },
+    {
       label: "Run the business",
       items: [
         { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -52,10 +57,6 @@ function groups(pending: number): { label: string; items: Item[] }[] {
         { title: "Treasury", href: "/treasury", icon: Landmark, badge: pending },
         { title: "Ledger", href: "/ledger", icon: ReceiptText },
       ],
-    },
-    {
-      label: "Ask",
-      items: [{ title: "Chat", href: "/chat", icon: MessagesSquare }],
     },
   ];
 }
@@ -250,7 +251,7 @@ function NavBody({ user, connection, pending = 0, stopped, slim, onNavigate, onC
       <nav aria-label="Main" className={cn("-mx-1 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-1 pt-1", slim && "items-center")}>
         {groups(pending).map((g) => (
           <div key={g.label} className={cn("flex flex-col gap-0.5", slim && "items-center")}>
-            {slim ? <div className="mx-auto mb-1 h-px w-6 bg-white/15" /> : <p className="mb-1 px-3 text-[12px] text-white/60">{g.label}</p>}
+            {g.label && (slim ? <div className="mx-auto mb-1 h-px w-6 bg-white/15" /> : <p className="mb-1 px-3 text-[12px] text-white/60">{g.label}</p>)}
             {g.items.map((it) => (
               <NavTile key={it.href} item={it} on={isActive(pathname, it.href)} slim={slim} onNavigate={onNavigate} />
             ))}
