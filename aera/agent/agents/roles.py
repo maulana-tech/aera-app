@@ -137,7 +137,7 @@ ROLES: Dict[str, Dict] = {
     "support": {
         "nickname": "Customer Support", "title": "Customer Support",
         "brief": "Handles customer questions and problems with an order; proposes refunds but never grants them.",
-        "capabilities": ["contacts", "messaging", "orders", "knowledge"],
+        "capabilities": ["contacts", "messaging", "orders", "knowledge", "memory"],
         "keywords": ("support", "email", "telegram", "chat", "customer", "help"),
         "prompt": ("You are the Customer Support agent on {NAME}'s team.\n\n{BUSINESS}\n\n"
                    "Your job: understand what the customer needs, look up their order, and resolve it. If a refund "
@@ -185,7 +185,7 @@ ROLES: Dict[str, Dict] = {
     "qa": {
         "nickname": "Quality Review", "title": "Quality Review",
         "brief": "Reviews a deliverable against the offering and its sources before it goes out.",
-        "capabilities": ["documents", "knowledge", "orders"],
+        "capabilities": ["documents", "knowledge", "orders", "research"],
         "keywords": ("pdf", "report", "brief", "deliverable", "quality", "review"),
         "prompt": ("You are the Quality Review agent on {NAME}'s team.\n\n{BUSINESS}\n\n"
                    "Your job: read the deliverable you are pointed to and check it against the offering (scope, "
