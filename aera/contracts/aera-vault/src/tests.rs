@@ -386,14 +386,14 @@ fn ft_on_transfer_invalid_msg_refunds() {
 #[test]
 fn order_recorded_and_duplicate_refunded() {
     let mut v = setup();
-    assert_eq!(pay_order(&mut v, "o1", 500), U128(0));
+    assert_eq!(pay_order(&mut v, "o1", 500_000), U128(0));
     assert!(has_event("order_paid"));
     let o = v.get_order("o1".into()).unwrap();
     assert_eq!(o.payer, customer());
-    assert_eq!(o.amount, U128(500));
+    assert_eq!(o.amount, U128(500_000));
     assert_eq!(o.offering, "consult-1h");
-    assert_eq!(pay_order(&mut v, "o1", 700), U128(700));
-    assert_eq!(v.get_order("o1".into()).unwrap().amount, U128(500));
+    assert_eq!(pay_order(&mut v, "o1", 700_000), U128(700_000));
+    assert_eq!(v.get_order("o1".into()).unwrap().amount, U128(500_000));
     assert_eq!(v.list_orders(0, 10).len(), 1);
 }
 
@@ -429,14 +429,16 @@ fn order_pays_split_events() {
         SplitEntry { account_id: acc("a.testnet"), bps: 6_000 },
         SplitEntry { account_id: acc("b.testnet"), bps: 1_000 },
     ]);
-    pay_order(&mut v, "o1", 1_000);
+    pay_order(&mut v, "o1", 1_000_000);
     let splits: Vec<String> = get_logs()
         .into_iter()
-        .filter(|l| l.contains("\"event\":\"split_paid\""))
+        .filter(|l| l.contains("\"event\":\"split_started\""))
         .collect();
     assert_eq!(splits.len(), 2);
-    assert!(splits[0].contains("\"amount\":\"600\""));
-    assert!(splits[1].contains("\"amount\":\"100\""));
+    assert!(splits[0].contains("\"amount\":\"600000\""));
+    assert!(splits[1].contains("\"amount\":\"100000\""));
+    // nothing is reported paid until the token has answered
+    assert!(!has_event("split_paid"));
 }
 
 #[test]
@@ -446,9 +448,30 @@ fn frozen_vault_records_order_but_skips_split() {
     v.set_split(vec![SplitEntry { account_id: acc("a.testnet"), bps: 5_000 }]);
     ctx(owner(), 0, T0);
     v.freeze();
-    assert_eq!(pay_order(&mut v, "o1", 1_000), U128(0));
+    assert_eq!(pay_order(&mut v, "o1", 1_000_000), U128(0));
     assert!(v.get_order("o1".into()).is_some());
-    assert!(!has_event("split_paid"));
+    assert!(!has_event("split_paid") && !has_event("split_started"));
+}
+
+#[test]
+fn split_outcome_events() {
+    let _ = setup();
+    resolve_split("o1".into(), acc("a.testnet"), U128(600_000), true);
+    assert!(has_event("split_paid"));
+    let _ = setup();
+    resolve_split("o1".into(), acc("a.testnet"), U128(600_000), false);
+    assert!(has_event("split_failed") && !has_event("split_paid"));
+}
+
+#[test]
+fn dust_and_oversized_orders_refunded() {
+    let mut v = setup();
+    assert_eq!(pay_order(&mut v, "o1", MIN_ORDER_AMOUNT - 1), U128(MIN_ORDER_AMOUNT - 1));
+    assert!(v.get_order("o1".into()).is_none());
+    let long = "x".repeat(MAX_ID_LEN + 1);
+    assert_eq!(pay_order(&mut v, &long, 500_000), U128(500_000));
+    assert!(v.get_order(long).is_none());
+    assert_eq!(pay_order(&mut v, "o2", MIN_ORDER_AMOUNT), U128(0));
 }
 
 #[test]
@@ -479,7 +502,7 @@ fn split_duplicate_account_rejected() {
 #[should_panic(expected = "agent cannot refund")]
 fn agent_cannot_refund() {
     let mut v = setup();
-    pay_order(&mut v, "o1", 500);
+    pay_order(&mut v, "o1", 500_000);
     ctx(agent(), 1, T0);
     let _ = v.refund("o1".into(), U128(100));
 }
@@ -487,7 +510,7 @@ fn agent_cannot_refund() {
 #[test]
 fn approver_refund_partial_and_limits() {
     let mut v = setup();
-    pay_order(&mut v, "o1", 500);
+    pay_order(&mut v, "o1", 500_000);
     ctx(approver(), 1, T0);
     let _ = v.refund("o1".into(), U128(200));
     assert_eq!(v.get_order("o1".into()).unwrap().refunded, U128(200));
@@ -500,9 +523,9 @@ fn approver_refund_partial_and_limits() {
 #[should_panic(expected = "refund exceeds paid amount")]
 fn refund_over_paid_rejected() {
     let mut v = setup();
-    pay_order(&mut v, "o1", 500);
+    pay_order(&mut v, "o1", 500_000);
     ctx(owner(), 1, T0);
-    let _ = v.refund("o1".into(), U128(501));
+    let _ = v.refund("o1".into(), U128(500_001));
 }
 
 // ------------------------------------------------------- deliver_receipt
@@ -510,7 +533,7 @@ fn refund_over_paid_rejected() {
 #[test]
 fn deliver_receipt_once() {
     let mut v = setup();
-    pay_order(&mut v, "o1", 500);
+    pay_order(&mut v, "o1", 500_000);
     ctx(agent(), 0, T0);
     v.deliver_receipt("o1".into(), "sha256:abc".into());
     assert_eq!(
@@ -524,7 +547,7 @@ fn deliver_receipt_once() {
 #[should_panic(expected = "receipt already delivered")]
 fn deliver_receipt_twice_rejected() {
     let mut v = setup();
-    pay_order(&mut v, "o1", 500);
+    pay_order(&mut v, "o1", 500_000);
     ctx(agent(), 0, T0);
     v.deliver_receipt("o1".into(), "h1".into());
     v.deliver_receipt("o1".into(), "h2".into());

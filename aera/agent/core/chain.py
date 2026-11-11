@@ -142,12 +142,16 @@ def account_age_days(account_id: str) -> Optional[float]:
     from datetime import datetime, timezone
     base = "https://api-testnet.nearblocks.io" if network() == "testnet" else "https://api.nearblocks.io"
     try:
-        req = urllib.request.Request(f"{base}/v1/account/{account_id}",
+        # NearBlocks retired /v1 (testnet 2026-11-05, mainnet 2026-11-22); /v3 returns
+        # {"data": {"created": {"block_timestamp": "<ns>"}, ...}}.
+        req = urllib.request.Request(f"{base}/v3/accounts/{account_id}",
                                      headers={"User-Agent": "aera-agent", "Accept": "application/json"})
         with urllib.request.urlopen(req, timeout=10) as r:
             data = json.loads(r.read().decode())
-        acct = (data.get("account") or [{}])[0]
-        ts = acct.get("created", {}).get("block_timestamp") or acct.get("block_timestamp")
+        acct = data.get("data") or {}
+        if isinstance(acct, list):
+            acct = acct[0] if acct else {}
+        ts = (acct.get("created") or {}).get("block_timestamp")
         if not ts:
             return None
         created = datetime.fromtimestamp(int(ts) / 1e9, tz=timezone.utc)
@@ -173,9 +177,22 @@ def call(method: str, args: dict, gas_tgas: int = 100) -> Dict[str, Any]:
 
 
 def request_payment(req_id: str, receiver: str, amount_usd: float, purpose: str, reference: str) -> Dict[str, Any]:
+    # 50 Tgas: the method itself plus 10 for ft_transfer and 10 for the on_transfer callback.
+    # Prepaid gas is charged against the function-call key's allowance, so no more than needed.
     return call("request_payment", {"request_id": request_id(req_id), "receiver_id": receiver,
                                     "amount": to_base(amount_usd), "purpose": purpose[:200],
-                                    "reference": reference[:100]})
+                                    "reference": reference[:100]}, gas_tgas=50)
+
+
+def payment_failed(out: Dict[str, Any], req_id: str) -> bool:
+    """True when the vault's own callback said the transfer for this request failed.
+
+    The vault returns "sent" when it STARTS ft_transfer; the token can still refuse it (most
+    often: the receiver holds no USDC storage). The callback then emits `payment_failed`, which
+    lands in the same transaction's receipts."""
+    rid = request_id(req_id)
+    return any(e.get("event") == "payment_failed" and isinstance(e.get("data"), dict)
+               and e["data"].get("request_id") == rid for e in out.get("events") or [])
 
 
 def deliver_receipt(order_id: str, content_hash: str) -> Dict[str, Any]:

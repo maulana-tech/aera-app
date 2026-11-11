@@ -635,7 +635,8 @@ def list_actions(status: Optional[str] = None, kind: Optional[str] = None,
 _FORWARD = {
     "pending": {"approved", "rejected", "blocked"},
     "approved": {"sent", "failed", "blocked"},
-    "sent": set(),
+    # A vault payment reads "sent" when the transfer starts; the token can still refuse it.
+    "sent": {"failed"},
     "failed": {"approved"},          # a resend after a fix is a fresh approval
     "rejected": set(),
     "blocked": set(),

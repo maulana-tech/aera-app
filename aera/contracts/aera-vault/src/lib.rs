@@ -28,6 +28,11 @@ pub const GAS_FT_TRANSFER: Gas = Gas::from_tgas(10);
 pub const GAS_CALLBACK: Gas = Gas::from_tgas(10);
 pub const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
 pub const MAX_PAGE: u64 = 100;
+/// Smallest order the vault records: 0.10 USDC (6 decimals). Every order is stored at the vault's
+/// own expense (storage staking), so dust orders with fresh ids could otherwise drain its NEAR.
+pub const MIN_ORDER_AMOUNT: u128 = 100_000;
+/// Longest order id / offering code stored, for the same reason.
+pub const MAX_ID_LEN: usize = 64;
 
 pub const STATUS_SENT: &str = "sent";
 pub const STATUS_PENDING: &str = "pending";
@@ -216,6 +221,14 @@ impl AeraVault {
             env::log_str("aera-vault: empty order_id or zero amount, refunding");
             return PromiseOrValue::Value(amount);
         }
+        if amount.0 < MIN_ORDER_AMOUNT {
+            env::log_str("aera-vault: order below the minimum amount, refunding");
+            return PromiseOrValue::Value(amount);
+        }
+        if parsed.order_id.len() > MAX_ID_LEN || parsed.offering.len() > MAX_ID_LEN {
+            env::log_str("aera-vault: order_id or offering too long, refunding");
+            return PromiseOrValue::Value(amount);
+        }
         if self.orders.contains_key(&parsed.order_id) {
             env::log_str("aera-vault: duplicate order_id, refunding");
             return PromiseOrValue::Value(amount);
@@ -248,9 +261,12 @@ impl AeraVault {
             return PromiseOrValue::Value(U128(0));
         }
 
+        // `split_started` now; `split_paid` or `split_failed` from the callback once the token has
+        // answered. A recipient without USDC storage makes ft_transfer panic, and the share then
+        // stays in the vault: that must not be reported as paid.
         for (account_id, share) in split_amounts(&self.split, amount.0) {
             emit(
-                "split_paid",
+                "split_started",
                 json!({
                     "order_id": parsed.order_id,
                     "account_id": account_id,
@@ -261,9 +277,14 @@ impl AeraVault {
                 .with_attached_deposit(ONE_YOCTO)
                 .with_static_gas(GAS_FT_TRANSFER)
                 .ft_transfer(
-                    account_id,
+                    account_id.clone(),
                     U128(share),
                     Some(format!("aera split {}", parsed.order_id)),
+                )
+                .then(
+                    Self::ext(env::current_account_id())
+                        .with_static_gas(GAS_CALLBACK)
+                        .on_split(parsed.order_id.clone(), account_id, U128(share)),
                 )
                 .detach();
         }
@@ -471,6 +492,13 @@ impl AeraVault {
     pub fn on_transfer(&mut self, request_id: String) -> bool {
         let ok = near_sdk::is_promise_success();
         self.resolve_transfer(request_id, ok);
+        ok
+    }
+
+    #[private]
+    pub fn on_split(&mut self, order_id: String, account_id: AccountId, amount: U128) -> bool {
+        let ok = near_sdk::is_promise_success();
+        resolve_split(order_id, account_id, amount, ok);
         ok
     }
 
@@ -748,6 +776,14 @@ pub(crate) fn validate_split(split: &[SplitEntry]) {
         total += e.bps as u32;
     }
     require!(total <= MAX_BPS as u32, "split bps sum exceeds 10000");
+}
+
+/// The outcome of one revenue-split transfer, as an event. Separate so unit tests can drive both.
+pub(crate) fn resolve_split(order_id: String, account_id: AccountId, amount: U128, ok: bool) {
+    emit(
+        if ok { "split_paid" } else { "split_failed" },
+        json!({ "order_id": order_id, "account_id": account_id, "amount": amount }),
+    );
 }
 
 /// `amount * bps / 10000` per entry, zero shares skipped. The remainder stays in the vault.

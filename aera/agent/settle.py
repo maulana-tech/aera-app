@@ -73,6 +73,12 @@ def _pay(a: Dict[str, Any]) -> Dict[str, Any]:
         store.update_payment(pay["id"], "pending_onchain", tx_hash=out.get("tx_hash"), detail=detail)
         return {"ok": True, "summary": f"the vault holds ${amount:.2f} for an approver's signature "
                                        f"(over its own cap); tx {out.get('tx_hash')}", "explorer": out.get("explorer")}
+    if chain.payment_failed(out, a["idempotency_key"]):
+        why = "the token refused the transfer (does the receiver hold USDC storage? storage_deposit first)"
+        store.update_payment(pay["id"], "failed", tx_hash=out.get("tx_hash"), detail=detail)
+        store.move_action(a["id"], "failed", reference=out.get("tx_hash"), reason=why)
+        return {"ok": False, "summary": f"payment of ${amount:.2f} to {receiver} failed on chain: {why}; "
+                                        f"tx {out.get('tx_hash')}", "explorer": out.get("explorer")}
     store.update_payment(pay["id"], "sent", tx_hash=out.get("tx_hash"), detail=detail)
     store.move_action(a["id"], "sent", reference=out.get("tx_hash"))
     return {"ok": True, "summary": f"paid ${amount:.2f} to {receiver}; tx {out.get('tx_hash')}",
@@ -178,6 +184,8 @@ def reconcile() -> int:
         st = (req or {}).get("status")
         if st == "failed":
             store.update_payment(pay["id"], "failed", detail={"vault": req})
+            if pay["action_id"]:
+                store.move_action(pay["action_id"], "failed", reason="vault: the token refused the transfer")
             moved += 1
         elif st in ("sent", "approved"):
             store.update_payment(pay["id"], "sent", detail={"confirmed": True})

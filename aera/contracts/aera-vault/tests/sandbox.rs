@@ -79,7 +79,7 @@ async fn vault_end_to_end() -> anyhow::Result<()> {
     let ft_acc = sub(&root, "usdc").await?;
     let ft = ft_acc.deploy(&read_wasm(FT_WASM)?).await?.into_result()?;
     ft.call("new")
-        .args_json(json!({ "owner_id": customer.id(), "total_supply": "1000000" }))
+        .args_json(json!({ "owner_id": customer.id(), "total_supply": "10000000" }))
         .transact()
         .await?
         .into_result()?;
@@ -121,7 +121,7 @@ async fn vault_end_to_end() -> anyhow::Result<()> {
     let out = customer
         .call(ft.id(), "ft_transfer_call")
         .args_json(json!({
-            "receiver_id": vault.id(), "amount": "10000",
+            "receiver_id": vault.id(), "amount": "1000000",
             "msg": json!({ "order_id": "ord-1", "offering": "consult-1h" }).to_string()
         }))
         .deposit(ONE_YOCTO)
@@ -130,21 +130,22 @@ async fn vault_end_to_end() -> anyhow::Result<()> {
         .await?;
     assert!(out.is_success(), "{:?}", out.failures());
     assert!(out.logs().iter().any(|l| l.contains("\"event\":\"order_paid\"")));
-    assert_eq!(balance(&ft, payee.id().as_str()).await?, 1000);
-    assert_eq!(balance(&ft, vault.id().as_str()).await?, 9000);
+    assert_eq!(balance(&ft, payee.id().as_str()).await?, 100_000);
+    assert!(out.logs().iter().any(|l| l.contains("\"event\":\"split_paid\"")));
+    assert_eq!(balance(&ft, vault.id().as_str()).await?, 900_000);
     let order: Value = vault
         .view("get_order")
         .args_json(json!({ "order_id": "ord-1" }))
         .await?
         .json()?;
-    assert_eq!(order["amount"], "10000");
+    assert_eq!(order["amount"], "1000000");
     assert_eq!(order["payer"], customer.id().as_str());
 
     // duplicate order id is refunded in full by the token's resolve step
     let out = customer
         .call(ft.id(), "ft_transfer_call")
         .args_json(json!({
-            "receiver_id": vault.id(), "amount": "500",
+            "receiver_id": vault.id(), "amount": "500000",
             "msg": json!({ "order_id": "ord-1", "offering": "x" }).to_string()
         }))
         .deposit(ONE_YOCTO)
@@ -152,7 +153,7 @@ async fn vault_end_to_end() -> anyhow::Result<()> {
         .transact()
         .await?;
     assert!(out.is_success());
-    assert_eq!(balance(&ft, vault.id().as_str()).await?, 9000);
+    assert_eq!(balance(&ft, vault.id().as_str()).await?, 900_000);
 
     // --- 2. autonomous payment
     let out = agent
@@ -209,7 +210,7 @@ async fn vault_end_to_end() -> anyhow::Result<()> {
     assert_eq!(out.json::<String>()?, "sent");
     assert_eq!(request(&vault, "pay-3").await?["status"], "failed");
     assert_eq!(policy(&vault).await?["spent_today"], "50");
-    assert_eq!(balance(&ft, vault.id().as_str()).await?, 9000 - 50 - 500);
+    assert_eq!(balance(&ft, vault.id().as_str()).await?, 900_000 - 50 - 500);
 
     // --- 5. not allowlisted -> contract panics
     let out = agent

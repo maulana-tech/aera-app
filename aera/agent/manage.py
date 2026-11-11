@@ -140,8 +140,22 @@ def near_setup() -> None:
     vault = os.environ.get("AERA_VAULT_CONTRACT", f"vault.{owner}")
     agent = os.environ.get("AERA_NEAR_AGENT_ACCOUNT", f"agent.{owner}")
     from core import business, chain
+    from core import store
     caps = business.spend_caps()
     token = chain.token_id()
+    # Every account the vault pays must hold USDC storage (NEP-145), or ft_transfer panics and
+    # the payment fails on chain: vendors on record and revenue-split recipients alike.
+    vendors = [(c["near_account"], c.get("name") or c["near_account"])
+               for c in store.list_contacts("vendor") if c.get("near_account")] or [("dataco.testnet", "DataCo API")]
+    splits = [s["account"] for s in business.current().get("revenue_split") or [] if s.get("account")]
+    reg = lambda acct: (f"near contract call-function as-transaction {token} storage_deposit json-args "  # noqa: E731
+                        f"'{{\"account_id\":\"{acct}\",\"registration_only\":true}}' prepaid-gas '30 Tgas' "
+                        f"attached-deposit '0.0125 NEAR' sign-as {owner} network-config testnet sign-with-keychain send")
+    step4 = "\n".join([reg(vault)] + [
+        reg(a) + "\n" + f"near contract call-function as-transaction {vault} add_counterparty json-args "
+        f"'{{\"account_id\":\"{a}\",\"label\":\"{label}\"}}' prepaid-gas '30 Tgas' attached-deposit "
+        f"'1 yoctoNEAR' sign-as {owner} network-config testnet sign-with-keychain send" for a, label in vendors]
+        + [reg(a) for a in splits])
     wasm = "aera/contracts/aera-vault/target/near/aera_vault.wasm"
     print(f"""# 1. accounts (signed by the owner, {owner})
 near account create-account fund-myself {vault} '5 NEAR' autogenerate-new-keypair save-to-keychain sign-as {owner} network-config testnet sign-with-keychain send
@@ -151,14 +165,15 @@ near account create-account fund-myself {agent} '1 NEAR' autogenerate-new-keypai
 near contract deploy {vault} use-file {wasm} with-init-call new json-args '{{"owner":"{owner}","agent":"{agent}","token":"{token}","per_tx_cap":"{chain.to_base(caps["per_payment"])}","daily_cap":"{chain.to_base(caps["per_day"])}"}}' prepaid-gas '100 Tgas' attached-deposit '0 NEAR' network-config testnet sign-with-keychain send
 
 # 3. the agent's ONLY key: a function-call key on the vault (no deposit can be attached)
-near account add-key {agent} grant-function-call-access --allowance '0.5 NEAR' --contract-account-id {vault} --function-names 'request_payment, deliver_receipt, freeze' autogenerate-new-keypair print-to-terminal network-config testnet sign-with-keychain send
+near account add-key {agent} grant-function-call-access --allowance '2 NEAR' --contract-account-id {vault} --function-names 'request_payment, deliver_receipt, freeze' autogenerate-new-keypair print-to-terminal network-config testnet sign-with-keychain send
 #    -> put the printed private key in aera/agent/.secrets/near.env as AERA_NEAR_AGENT_KEY=ed25519:...
 #    then DELETE the agent's full-access key:
 near account delete-keys {agent} public-keys <the full-access public key> network-config testnet sign-with-keychain send
 
-# 4. storage on the USDC token for the vault and each counterparty, then allowlist them
-near contract call-function as-transaction {token} storage_deposit json-args '{{"account_id":"{vault}"}}' prepaid-gas '30 Tgas' attached-deposit '0.0125 NEAR' sign-as {owner} network-config testnet sign-with-keychain send
-near contract call-function as-transaction {vault} add_counterparty json-args '{{"account_id":"dataco.testnet","label":"DataCo API"}}' prepaid-gas '30 Tgas' attached-deposit '1 yoctoNEAR' sign-as {owner} network-config testnet sign-with-keychain send
+# 4. USDC storage (NEP-145) for the vault, each vendor and each revenue-split recipient, then
+#    allowlist the vendors. Without storage, ft_transfer panics and the payment fails on chain.
+#    The token refunds whatever is above its storage_balance_bounds (0.00125 NEAR today).
+{step4}
 
 # 5. approvers (their wallets sign approvals above the vault's cap)
 near contract call-function as-transaction {vault} set_approver json-args '{{"account_id":"<approver>.testnet","role":"approver","limit":"{chain.to_base(1000)}"}}' prepaid-gas '30 Tgas' attached-deposit '1 yoctoNEAR' sign-as {owner} network-config testnet sign-with-keychain send

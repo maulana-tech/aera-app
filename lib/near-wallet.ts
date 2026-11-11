@@ -30,14 +30,16 @@ export const ONE_YOCTO = "1";
 
 /* ---------------------------------------------------------- the vault calls */
 
+/* approve and refund start ft_transfer (10 Tgas) plus a callback (10 Tgas) on top of the method
+ * itself, so they get 50 Tgas; the rest only write state. */
 export const vault = {
   approve: (contract: string, requestId: string): ContractCall =>
-    ({ contract, method: "approve", args: { request_id: requestId }, deposit: ONE_YOCTO, tgas: 30 }),
+    ({ contract, method: "approve", args: { request_id: requestId }, deposit: ONE_YOCTO, tgas: 50 }),
   reject: (contract: string, requestId: string, reason: string): ContractCall =>
     ({ contract, method: "reject", args: { request_id: requestId, reason }, deposit: ONE_YOCTO, tgas: 30 }),
   /** `amount` in token base units (USDC: 6 decimals). */
   refund: (contract: string, orderId: string, amount: string): ContractCall =>
-    ({ contract, method: "refund", args: { order_id: orderId, amount }, deposit: ONE_YOCTO, tgas: 30 }),
+    ({ contract, method: "refund", args: { order_id: orderId, amount }, deposit: ONE_YOCTO, tgas: 50 }),
   /** The vault takes a freeze from the owner, an approver or the agent, with no deposit. */
   freeze: (contract: string): ContractCall =>
     ({ contract, method: "freeze", args: {}, deposit: "0", tgas: 30 }),
@@ -142,8 +144,19 @@ export async function signAndSend(call: ContractCall, network: Network): Promise
       },
     }],
   });
-  const failure = (outcome?.status as { Failure?: unknown } | undefined)?.Failure;
-  if (failure) throw new Error(`the transaction failed: ${JSON.stringify(failure).slice(0, 300)}`);
+  const status = outcome?.status as { Failure?: unknown; SuccessValue?: string } | undefined;
+  if (status?.Failure) throw new Error(`the transaction failed: ${JSON.stringify(status.Failure).slice(0, 300)}`);
+  // approve and refund return their callback's verdict. A transfer the token refused (most often:
+  // the receiver holds no USDC storage) is caught there and returned as `false`, so the
+  // transaction "succeeds" while no money moved. Read the value, and the vault's own events.
+  let value = "";
+  try { value = status?.SuccessValue ? atob(status.SuccessValue) : ""; } catch { value = ""; }
+  const logs = (outcome?.receipts_outcome ?? []).flatMap((r: { outcome?: { logs?: string[] } }) => r.outcome?.logs ?? []);
+  const refused = logs.some((l: string) => l.startsWith("EVENT_JSON:") && /"event":"(payment_failed|refund_failed)"/.test(l));
+  if (value.trim() === "false" || refused) {
+    throw new Error("the transaction went through but the token refused the transfer, so no money moved. "
+      + "Does the receiver hold USDC storage? (storage_deposit on the token first)");
+  }
   return outcome?.transaction?.hash ?? outcome?.transaction_outcome?.id ?? "";
 }
 
