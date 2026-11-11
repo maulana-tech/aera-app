@@ -21,7 +21,7 @@ export default async function Onboarding() {
   const existing = biz.data.version != null && biz.data.profile.name;
 
   return (
-    <main className="w-full max-w-5xl px-4 py-4 md:px-6 md:py-8">
+    <main className="w-full max-w-6xl px-4 py-4 md:px-6 md:py-8">
       <PageHeader
         title={existing ? `Re-describe ${biz.data.profile.name}` : "Describe your business"}
         lead={existing

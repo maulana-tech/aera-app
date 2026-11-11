@@ -28,7 +28,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="flex min-h-dvh flex-col md:flex-row">
       <SideNav user={user ?? undefined} connection={health ?? undefined} stopped={stopped} pending={pending} collapsed={collapsed} />
       <div className="flex min-w-0 flex-1 flex-col px-2 pb-2 md:py-3 md:pr-3 md:pl-0">
-        <div className="bg-card-grad flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-white/40 shadow-float">
+        <div className="bg-card-grad flex min-w-0 flex-1 flex-col overflow-clip rounded-xl border border-white/40 shadow-float">
           {health && !health.model_ready && (
             <div className="bg-raised text-body flex items-start gap-2.5 border-b px-4 py-2.5 text-[12.5px] leading-relaxed md:px-6">
               <Dot tone="warn" className="mt-[7px]" />

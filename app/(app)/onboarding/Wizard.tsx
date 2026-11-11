@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  ArrowLeft, ArrowRight, Check, Coins, Info, Loader2, Plus, RotateCcw, ShieldCheck, Sparkles, Users, X,
+  ArrowLeft, ArrowRight, Check, Info, Loader2, Plus, RotateCcw, Sparkles, X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
@@ -23,30 +23,35 @@ import { cn } from "@/lib/utils";
 const STEPS = [
   {
     short: "Describe",
+    hint: "Name, mission, customers",
     title: "Describe the business",
     why: "Every agent reads this before every task: it is the context for each decision the team makes.",
     who: "Read by the whole team.",
   },
   {
     short: "Offerings",
+    hint: "What you sell, and for how much",
     title: "What customers can buy",
     why: "Each offering gets its own public checkout page (/buy/<id>). When a customer pays, the order becomes work for the team, delivered as you specify here.",
     who: "Used by Sales, Fulfilment and the checkout.",
   },
   {
     short: "Limits & rules",
+    hint: "What the team may do without you",
     title: "What the team may do without you",
     why: "The Guardian checks every payment, refund and outgoing message against these rules in code, before anything happens. The spend limits are also written to the vault on chain, so even a compromised server cannot pay past them. Anything above a limit waits for your approval.",
     who: "Enforced by the Guardian, the Treasurer and the vault.",
   },
   {
     short: "Team",
+    hint: "The agents that run it",
     title: "Who works for you",
     why: "AERA proposes a team from your offerings and channels. Supervisor, Guardian and Treasurer are always on it; leave out any specialist or add one.",
     who: "You can change the team any time on the Team page.",
   },
   {
     short: "Review",
+    hint: "Check, then start",
     title: "Check it, then start",
     why: "This is exactly what will be saved. Nothing is stored until you press the button below.",
     who: "Every later change is saved as a new version you can look back at.",
@@ -78,6 +83,7 @@ export function Wizard({ initial, example, library, mayChange }: {
 }) {
   const router = useRouter();
   const [step, setStepRaw] = useState(0);
+  const [reached, setReached] = useState(0);
   const [p, setPRaw] = useState<Profile>(initial);
   const [touched, setTouched] = useState(false);
   const [text, setText] = useState("");
@@ -93,6 +99,7 @@ export function Wizard({ initial, example, library, mayChange }: {
   const setP = (next: Profile) => { setPRaw(next); setTouched(true); writeDraft({ p: next, step }); };
   const setStep = (n: number) => {
     setStepRaw(n);
+    setReached((r) => Math.max(r, n));
     if (touched) writeDraft({ p, step: n });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -101,7 +108,9 @@ export function Wizard({ initial, example, library, mayChange }: {
     try {
       const d = JSON.parse(stored ?? "") as { p: Profile; step: number };
       setPRaw(completeProfile(d.p));
-      setStepRaw(Math.min(Math.max(d.step ?? 0, 0), STEPS.length - 1));
+      const at = Math.min(Math.max(d.step ?? 0, 0), STEPS.length - 1);
+      setStepRaw(at);
+      setReached(at);
       setTouched(true);
     } catch { /* a draft that does not parse is no draft */ }
     setDismissed(true);
@@ -151,11 +160,20 @@ export function Wizard({ initial, example, library, mayChange }: {
       : step === 1 && p.offerings.some((o) => !o.title.trim()) ? "Every offering needs a title."
         : null;
   const meta = STEPS[step];
+  // A step reads as done when what it asks for is there, not merely because it was passed.
+  const done = [
+    !!p.name.trim(),
+    p.offerings.length > 0 && p.offerings.every((o) => o.title.trim()),
+    reached > 2,
+    reached > 3,
+    false,
+  ];
+  const mayOpen = (i: number) => i <= reached || (i === step + 1 && !blocker);
 
   return (
-    <div className="mt-6 space-y-6">
+    <div className="mt-6">
       {stored && !dismissed && !touched && (
-        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-raised px-4 py-3 text-sm">
+        <div className="mb-6 flex flex-wrap items-center gap-3 rounded-lg border bg-raised px-4 py-3 text-sm">
           <RotateCcw className="size-4 shrink-0" />
           <span className="flex-1">You have an unsaved draft from earlier in this browser.</span>
           <Button size="sm" variant="outline" onClick={restore}>Restore it</Button>
@@ -163,114 +181,144 @@ export function Wizard({ initial, example, library, mayChange }: {
         </div>
       )}
 
-      {step === 0 && <Overview />}
+      {/* Phones: where you are, in one line, and how far there is to go. */}
+      <div className="mb-5 lg:hidden">
+        <div className="flex items-baseline justify-between gap-3">
+          <p className="text-[13px]"><span className="text-muted-foreground">Step {step + 1} of {STEPS.length} · </span>{meta.short}</p>
+          {step < STEPS.length - 1 && <p className="text-muted-foreground text-xs">Next: {STEPS[step + 1].short}</p>}
+        </div>
+        <div className="mt-2 grid grid-cols-5 gap-1">
+          {STEPS.map((s, i) => (
+            <button key={s.short} type="button" aria-label={`Step ${i + 1}: ${s.short}`} disabled={!mayOpen(i)}
+              onClick={() => setStep(i)}
+              className={cn("h-1.5 rounded-full transition-colors", i < step || (i <= reached && done[i]) ? "bg-brand" : i === step ? "bg-brand/60" : "bg-raised")} />
+          ))}
+        </div>
+      </div>
 
-      <ol className="grid grid-cols-5 gap-1.5">
-        {STEPS.map((s, i) => (
-          <li key={s.short}>
-            <button type="button" onClick={() => (i <= step || !blocker) && setStep(i)}
-              className={cn("w-full rounded-md border px-2 py-1.5 text-left text-xs transition-colors",
-                i === step ? "bg-primary text-primary-foreground border-primary"
-                  : i < step ? "border-foreground/30" : "text-muted-foreground")}>
-              <span className="font-mono">{i < step ? <Check className="inline size-3" /> : i + 1}</span>{" "}
-              <span className="hidden sm:inline">{s.short}</span>
-            </button>
-          </li>
-        ))}
-      </ol>
+      <div className="grid gap-8 lg:grid-cols-[230px_minmax(0,1fr)]">
+        {/* Desktop: the whole path, always in view. */}
+        <nav aria-label="Onboarding steps" className="hidden lg:block">
+          {/* The steps and the note travel together: sticking only the list let the note scroll under it. */}
+          <div className="sticky top-6">
+          <ol>
+            {STEPS.map((s, i) => {
+              const current = i === step;
+              const complete = !current && i < reached + 1 && done[i] && i !== step;
+              const open = mayOpen(i);
+              return (
+                <li key={s.short} className="relative pb-6 last:pb-0">
+                  {i < STEPS.length - 1 && (
+                    <span aria-hidden className={cn("absolute top-8 bottom-0 left-[15px] w-px", i < reached ? "bg-brand/40" : "bg-border")} />
+                  )}
+                  <button type="button" disabled={!open} onClick={() => setStep(i)} aria-current={current ? "step" : undefined}
+                    className={cn("group flex w-full items-start gap-3 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      open && !current && "cursor-pointer", !open && "cursor-not-allowed")}>
+                    <span className={cn("relative z-10 flex size-8 shrink-0 items-center justify-center rounded-full border text-[13px] transition-colors",
+                      current ? "border-brand bg-brand text-white shadow-[0_0_0_4px_rgba(6,71,179,0.12)]"
+                        : complete ? "border-brand/30 bg-raised text-brand"
+                          : "border-border bg-white text-muted-foreground",
+                      open && !current && "group-hover:border-brand/50")}>
+                      {complete ? <Check className="size-4" /> : i + 1}
+                    </span>
+                    <span className="min-w-0 pt-1">
+                      <span className={cn("block text-[14px] leading-tight", current ? "text-fg font-medium" : open ? "text-text" : "text-muted-foreground")}>{s.short}</span>
+                      <span className="text-muted-foreground mt-0.5 block text-[12px] leading-snug">{s.hint}</span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+          <p className="text-muted-foreground mt-8 border-t pt-4 text-[11.5px] leading-relaxed">
+            About three minutes. Nothing is saved until the last step; your answers are kept in this browser meanwhile.
+          </p>
+          </div>
+        </nav>
 
-      <header className="rounded-lg border p-4">
-        <p className="text-muted-foreground font-mono text-[11px]">Step {step + 1} of {STEPS.length}</p>
-        <h2 className="mt-1 text-lg font-medium">{meta.title}</h2>
-        <p className="text-muted-foreground mt-1 text-sm leading-relaxed">{meta.why}</p>
-        <p className="text-muted-foreground mt-2 inline-flex items-center gap-1.5 text-xs"><Info className="size-3.5" />{meta.who}</p>
-      </header>
+        <div className="min-w-0">
+          <header className="mb-6">
+            <p className="text-muted-foreground hidden text-xs lg:block">Step {step + 1} of {STEPS.length}</p>
+            <h2 className="mt-1 text-[22px] leading-tight">{meta.title}</h2>
+            <p className="text-body mt-2 max-w-2xl text-[13.5px] leading-relaxed">{meta.why}</p>
+            <p className="bg-raised text-text mt-3 inline-flex items-center gap-1.5 rounded-sm px-2 py-1 text-xs"><Info className="size-3.5" />{meta.who}</p>
+          </header>
 
-      {step === 0 && (
-        <section className="space-y-6">
-          <div className="rounded-lg border p-4">
-            <Field label="Fastest: describe the business in a few sentences and let AI fill in the steps. Say what you sell, to whom, at what price, what the team may spend on its own, and what it must never do.">
-              <TextArea rows={5} value={text} onChange={(e) => setText(e.target.value)}
-                placeholder="We write 5-page market briefs for founders in Southeast Asia, $15 each, delivered as a PDF within 2 hours. The team may spend up to $5 per payment on data, $20 a day. Never promise investment returns; refunds always need me." />
-            </Field>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Button type="button" onClick={draft} disabled={drafting || text.trim().length < 20}>
-                {drafting ? <Loader2 className="animate-spin" /> : <Sparkles />}
-                {drafting ? "Drafting…" : "Draft with AI"}
+          <div className="space-y-6">
+            {step === 0 && (
+              <section className="space-y-6">
+                <div className="bg-white rounded-lg border p-4">
+                  <Field label="Fastest: describe the business in a few sentences and let AI fill in the steps. Say what you sell, to whom, at what price, what the team may spend on its own, and what it must never do.">
+                    <TextArea rows={5} value={text} onChange={(e) => setText(e.target.value)}
+                      placeholder="We write 5-page market briefs for founders in Southeast Asia, $15 each, delivered as a PDF within 2 hours. The team may spend up to $5 per payment on data, $20 a day. Never promise investment returns; refunds always need me." />
+                  </Field>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Button type="button" onClick={draft} disabled={drafting || text.trim().length < 20}>
+                      {drafting ? <Loader2 className="animate-spin" /> : <Sparkles />}
+                      {drafting ? "Drafting…" : "Draft with AI"}
+                    </Button>
+                    <Button type="button" variant="ghost" onClick={() => {
+                      setP(completeProfile(example)); setProblems([]);
+                      setDrafted("Filled with the example business (a market-research shop). Change anything, or keep it to try AERA out.");
+                    }}>
+                      Use the example business
+                    </Button>
+                  </div>
+                  <p className="text-muted-foreground mt-2 text-[11px]">
+                    The draft is written by a TEE-attested model on NEAR AI and is not saved until you finish. Or skip this box and fill in the fields below.
+                  </p>
+                  {drafted && (
+                    <p className="mt-3 rounded-md bg-raised px-3 py-2 text-sm text-ok ">{drafted}</p>
+                  )}
+                </div>
+                <BasicsFields p={p} set={setP} />
+              </section>
+            )}
+            {step === 1 && (
+              <>
+                {p.offerings.length === 0 && (
+                  <p className="text-sm text-warn ">
+                    No offering yet. You can continue without one (the team can still do work you ask for), but customers will have nothing to buy.
+                  </p>
+                )}
+                <OfferingsFields p={p} set={setP} />
+              </>
+            )}
+            {step === 2 && <LimitsFields p={p} set={setP} />}
+            {step === 3 && <TeamStep p={p} set={setP} library={library} onTeam={setTeam} />}
+            {step === 4 && <Review p={p} team={team} onEdit={setStep} />}
+
+            <Problems problems={problems} />
+            {error && <p className="text-sm text-bad ">{error}</p>}
+          </div>
+
+          {/* Always in reach, however long the step. */}
+          <div className="bg-card-grad sticky bottom-0 z-10 -mx-4 mt-8 flex flex-wrap items-center gap-x-2 gap-y-2 border-t px-4 py-3 md:-mx-6 md:px-6">
+            {/* On a phone the reason sits on its own line above, so Back and Next stay side by side. */}
+            {(blocker || !mayChange) && (
+              <p className="order-first w-full text-xs sm:order-none sm:w-auto">
+                {blocker && <span className="text-warn">{blocker}</span>}
+                {!mayChange && <span className="text-muted-foreground">Only an owner or admin can save a business.</span>}
+              </p>
+            )}
+            <Button type="button" variant="outline" className="sm:order-first" onClick={() => setStep(step - 1)} disabled={step === 0}>
+              <ArrowLeft /> Back
+            </Button>
+            <span className="ml-auto" />
+            {step < STEPS.length - 1 ? (
+              <Button type="button" onClick={() => setStep(step + 1)} disabled={!!blocker}>
+                Next: {STEPS[step + 1].short} <ArrowRight />
               </Button>
-              <Button type="button" variant="ghost" onClick={() => {
-                setP(completeProfile(example)); setProblems([]);
-                setDrafted("Filled with the example business (a market-research shop). Change anything, or keep it to try AERA out.");
-              }}>
-                Use the example business
+            ) : (
+              <Button type="button" onClick={save} disabled={saving || !mayChange || !p.name.trim()}>
+                {saving && <Loader2 className="animate-spin" />}
+                Save and start the business
               </Button>
-            </div>
-            <p className="text-muted-foreground mt-2 text-[11px]">
-              The draft is written by a TEE-attested model on NEAR AI and is not saved until you finish. Or skip this box and fill in the fields below.
-            </p>
-            {drafted && (
-              <p className="mt-3 rounded-md bg-raised px-3 py-2 text-sm text-ok ">{drafted}</p>
             )}
           </div>
-          <BasicsFields p={p} set={setP} />
-        </section>
-      )}
-      {step === 1 && (
-        <>
-          {p.offerings.length === 0 && (
-            <p className="text-sm text-warn ">
-              No offering yet. You can continue without one (the team can still do work you ask for), but customers will have nothing to buy.
-            </p>
-          )}
-          <OfferingsFields p={p} set={setP} />
-        </>
-      )}
-      {step === 2 && <LimitsFields p={p} set={setP} />}
-      {step === 3 && <TeamStep p={p} set={setP} library={library} onTeam={setTeam} />}
-      {step === 4 && <Review p={p} team={team} onEdit={setStep} />}
-
-      <Problems problems={problems} />
-      {error && <p className="text-sm text-bad ">{error}</p>}
-
-      <div className="flex flex-wrap items-center gap-2 border-t pt-4">
-        <Button type="button" variant="outline" onClick={() => setStep(step - 1)} disabled={step === 0}>
-          <ArrowLeft /> Back
-        </Button>
-        {step < STEPS.length - 1 ? (
-          <Button type="button" onClick={() => setStep(step + 1)} disabled={!!blocker}>
-            Next: {STEPS[step + 1].short} <ArrowRight />
-          </Button>
-        ) : (
-          <Button type="button" onClick={save} disabled={saving || !mayChange || !p.name.trim()}>
-            {saving && <Loader2 className="animate-spin" />}
-            Save and start the business
-          </Button>
-        )}
-        {blocker && <span className="text-xs text-warn ">{blocker}</span>}
-        {!mayChange && <span className="text-muted-foreground text-xs">Only an owner or admin can save a business.</span>}
+        </div>
       </div>
     </div>
-  );
-}
-
-/** What onboarding is, before the first question. */
-function Overview() {
-  const items = [
-    { icon: Sparkles, title: "1. Describe it", text: "In your words, or let AI draft it. About three minutes." },
-    { icon: ShieldCheck, title: "2. Set the limits", text: "What the team may spend and do without you. The Guardian and the vault enforce them." },
-    { icon: Users, title: "3. Meet the team", text: "AERA proposes the agents your business needs. You choose." },
-    { icon: Coins, title: "4. Start", text: "Share your checkout link. Paid orders become work; you approve what is above the limits." },
-  ];
-  return (
-    <section className="grid gap-3 sm:grid-cols-4">
-      {items.map(({ icon: Icon, title, text }) => (
-        <div key={title} className="rounded-lg border p-3">
-          <Icon className="text-muted-foreground size-4" />
-          <p className="mt-2 text-sm font-medium">{title}</p>
-          <p className="text-muted-foreground mt-0.5 text-xs leading-relaxed">{text}</p>
-        </div>
-      ))}
-    </section>
   );
 }
 
