@@ -1,9 +1,11 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { api, me, noBusiness, type BusinessPayload, type Health } from "@/app/lib";
+import { api, me, noBusiness, type Action, type BusinessPayload, type Health } from "@/app/lib";
 import { Dot } from "@/components/dort";
 import { NotificationToast } from "@/components/notification-toast";
-import { TopNav } from "@/components/top-nav";
+import { SideNav } from "@/components/side-nav";
+import { NAV_COOKIE } from "@/lib/nav";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const [user, health] = await Promise.all([me(), api<Health>("health")]);
@@ -12,14 +14,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // the login page is the only useful thing to show. When it does not answer
   // at all, stay: the pages say the service is down, which is the real news.
   if (health && !user) redirect("/login");
-  const biz = user ? await api<BusinessPayload>("business") : null;
+  const [biz, waiting, jar] = await Promise.all([
+    user ? api<BusinessPayload>("business") : null,
+    user ? api<{ actions: Action[] }>("actions?status=pending") : null,
+    cookies(),
+  ]);
+  const pending = waiting?.actions.length ?? 0;
+  const collapsed = jar.get(NAV_COOKIE)?.value === "slim";
   // A business not yet described reads as switched off; that is not news.
   const stopped = !noBusiness(biz) && !!biz?.profile.kill_switch;
 
   return (
-    <div className="flex min-h-dvh flex-col">
-      <TopNav user={user ?? undefined} connection={health ?? undefined} stopped={stopped} />
-      <div className="flex flex-1 flex-col px-2 pb-3 md:px-4 md:pb-4">
+    <div className="flex min-h-dvh flex-col md:flex-row">
+      <SideNav user={user ?? undefined} connection={health ?? undefined} stopped={stopped} pending={pending} collapsed={collapsed} />
+      <div className="flex min-w-0 flex-1 flex-col px-2 pb-2 md:py-3 md:pr-3 md:pl-0">
         <div className="bg-card-grad flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-white/40 shadow-float">
           {health && !health.model_ready && (
             <div className="bg-raised text-body flex items-start gap-2.5 border-b px-4 py-2.5 text-[12.5px] leading-relaxed md:px-6">
