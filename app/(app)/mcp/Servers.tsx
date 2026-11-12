@@ -196,7 +196,7 @@ export function Servers({ data, team }: { data: McpPayload; team: Member[] }) {
                       </summary>
                       <ul className="mt-1.5 space-y-1">
                         {s.tools.map((t) => (
-                          <li key={t.name} className="flex items-baseline gap-2 text-xs">
+                          <li key={t.name} className="flex items-center gap-2 text-xs">
                             <span className="font-mono">{t.name}</span>
                             <span
                               className={
@@ -207,9 +207,26 @@ export function Servers({ data, team }: { data: McpPayload; team: Member[] }) {
                             >
                               {t.read_only ? "reads" : "writes"}
                             </span>
-                            <span className="text-muted-foreground truncate">
+                            <span className="text-muted-foreground min-w-0 flex-1 truncate">
                               {t.description}
                             </span>
+                            {!t.read_only && (
+                              t.write_allowed ? (
+                                <span className="text-ok shrink-0 text-[10px]">allowed, with approval</span>
+                              ) : (
+                                <span className="text-muted-foreground shrink-0 text-[10px]">off</span>
+                              )
+                            )}
+                            {!t.read_only && data.may_change && (
+                              <Button size="xs" variant="outline" disabled={locked} className="shrink-0"
+                                title={t.write_allowed ? "Agents can no longer raise this change" : "Agents may raise this change as an action; the Guardian checks it and a person approves it before it happens"}
+                                onClick={async () => {
+                                  if (!t.write_allowed && !window.confirm(`Let agents ask to run ${t.name} on ${s.name}? Every call becomes an action the Guardian checks and a person approves before it happens.`)) return;
+                                  if (await post(`mcp/servers/${s.id}/write`, { tool: t.name, allowed: !t.write_allowed }, `w-${s.id}-${t.name}`)) router.refresh();
+                                }}>
+                                {t.write_allowed ? "Turn off" : "Allow with approval"}
+                              </Button>
+                            )}
                           </li>
                         ))}
                       </ul>

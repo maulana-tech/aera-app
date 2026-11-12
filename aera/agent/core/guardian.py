@@ -160,6 +160,14 @@ def check_action(kind: str, payload: Dict[str, Any], *, profile: Optional[Dict[s
         if words and all(w in low for w in words):
             reasons.append(_r("forbidden", "block", f"the profile forbids: {f}"))
 
+    if kind == "external_write":
+        reasons.append(_r("external_write", "warn",
+                          f"changes something on {payload.get('server') or 'a server'} AERA does not operate: a person approves"))
+    from core import registry
+    if kind in ("payment", "refund", "external_write") and registry.run_read_untrusted(run_id):
+        reasons.append(_r("untrusted_input", "warn",
+                          "this run read text from outside AERA (a web page or a remote tool); what an outsider wrote "
+                          "is never the whole reason money moves or something changes elsewhere"))
     if business.needs_approval(kind, p):
         reasons.append(_r("approval_required", "warn", f"the profile says a person approves every {kind}"))
 

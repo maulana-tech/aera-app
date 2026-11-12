@@ -73,6 +73,8 @@ def read_web_page(url: str) -> Result:
         body, at = feeds.get(u.geturl(), ttl=900, timeout=20, as_json=False)
     except feeds.FeedError as e:
         return Result(None, Origin.MISSING, u.hostname, note=str(e))
+    from core import registry
+    registry.mark_untrusted()
     text = page_text(body)
     return Result({"url": u.geturl(), "text": text[:PAGE_CHARS], "truncated": len(text) > PAGE_CHARS},
                   Origin.LIVE, u.hostname, fetched_at=at,

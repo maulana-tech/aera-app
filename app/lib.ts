@@ -352,7 +352,7 @@ export type SkillsPayload = {
   may_change: boolean;
 };
 
-export type McpTool = { name: string; description: string; read_only: boolean };
+export type McpTool = { name: string; description: string; read_only: boolean; write_allowed?: boolean };
 export type McpServer = {
   id: string; name: string; url: string; enabled: boolean;
   agents: string[]; tools: McpTool[]; token_set: boolean;

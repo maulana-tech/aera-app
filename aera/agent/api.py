@@ -346,11 +346,41 @@ def test_mcp_server(m, _b, h) -> Tuple[int, dict]:
     if row is None:
         return 404, {"error": f"no MCP server {sid}"}
     ok, note, tools = mcp_client.probe(row["url"], row.get("token"))
+    # A re-probe keeps what the owner allowed: a write permission is a decision, not a probe result.
+    allowed = {t.get("name") for t in row["tools"] if t.get("write_allowed")}
+    for t in tools:
+        if t.get("name") in allowed and not t.get("read_only"):
+            t["write_allowed"] = True
     registry.forget_remote()
     store.update_mcp_server(sid, tools=tools if ok else row["tools"],
                             last_ok=store._now() if ok else row.get("last_ok"),
                             last_error=None if ok else note)
     return 200, {"ok": ok, "note": note, "tools": tools}
+
+
+@route("POST", r"/mcp/servers/([A-Za-z0-9_]+)/write")
+def allow_mcp_write(m, b: dict, h) -> Tuple[int, dict]:
+    """{"tool", "allowed"}: let a remote tool that changes things be raised as a guarded action.
+
+    Owner or admin only. Allowed or not, the tool never writes on an agent's call: the call becomes
+    an external_write action the Guardian checks and a person approves (settle.py performs it)."""
+    user = _user(h)
+    if user.role not in ("owner", "admin"):
+        return 403, {"error": "only an owner or admin decides which remote tools may change things"}
+    sid = m.group(1)
+    row = next((r for r in store.mcp_servers(include_token=True) if r["id"] == sid), None)
+    if row is None:
+        return 404, {"error": f"no MCP server {sid}"}
+    name = str(b.get("tool") or "")
+    tool = next((t for t in row["tools"] if t.get("name") == name), None)
+    if tool is None:
+        return 404, {"error": f"{row['name']} has no tool '{name}'"}
+    if tool.get("read_only"):
+        return 400, {"error": f"'{name}' only reads; it needs no permission to write"}
+    tool["write_allowed"] = bool(b.get("allowed"))
+    store.update_mcp_server(sid, tools=row["tools"])
+    registry.forget_remote()
+    return 200, {"servers": [_mcp_row(r) for r in store.mcp_servers()]}
 
 
 @route("POST", r"/mcp/servers/([A-Za-z0-9_]+)/delete")

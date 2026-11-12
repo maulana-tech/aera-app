@@ -26,7 +26,7 @@ CHECKS = [
     "core/config.py", "core/provenance.py", "core/registry.py", "core/identity.py", "core/store.py",
     "core/business.py", "core/team.py", "core/guardian.py", "core/actions.py", "core/chain.py",
     "core/crypto.py --check", "core/attest.py --check", "core/admission.py", "core/aux.py", "core/skills.py",
-    "core/llm.py", "core/topology.py", "core/schedule.py", "core/privacy.py", "core/trust.py", "core/activity.py", "core/finance.py", "tools/finance.py", "core/public_chat.py", "core/templates.py",
+    "core/llm.py", "core/topology.py", "core/schedule.py", "core/privacy.py", "core/trust.py", "core/activity.py", "core/finance.py", "tools/finance.py", "core/public_chat.py", "core/templates.py", "core/external.py",
     "agents/roles.py", "agents/roster.py",
     "tools/research.py", "tools/workspace.py", "tools/commerce.py", "tools/money.py", "tools/skills.py",
     "clients/near.py --check", "clients/intents.py --check", "clients/feeds.py", "clients/web_data.py",

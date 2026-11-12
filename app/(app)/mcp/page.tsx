@@ -83,10 +83,16 @@ export default async function McpPage() {
               a remote tool called <span className="font-mono">check_local_constraints</span>{" "}
               can never shadow Guardian&apos;s. Whatever it returns is labelled with the server it
               came from and is never promoted to live: a figure from a tool we do not operate
-              is not a figure from our own records, however confident it sounds. And a server that says
-              nothing about whether a tool writes is read as a writer, because the cautious
-              reading is the right one when the answer decides whether an agent may call it
-              unattended.
+              is not a figure from our own records, however confident it sounds. A server that says
+              nothing about whether a tool writes is read as a writer.
+            </p>
+            <p className="text-muted-foreground mt-2 max-w-3xl text-xs leading-relaxed">
+              <span className="text-fg">Tools that change things</span> (append a row, publish a post) are off until an
+              owner allows one with <span className="font-mono">Allow with approval</span>. Even then an agent&apos;s call
+              writes nothing: it becomes an action the Guardian checks and a person approves, and only then does AERA
+              run it, after checking again that it is still allowed. And once a run has read anything from outside
+              AERA (a web page, a remote tool), any payment, refund or outside change in that run waits for a person:
+              what an outsider wrote is never the whole reason something happens.
             </p>
           </section>
         </>

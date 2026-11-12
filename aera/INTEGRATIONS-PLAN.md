@@ -183,7 +183,7 @@ pemakaiannya, seperti sekarang.
 | Fase | Isi | Perkiraan | Selesai bila |
 |---|---|---|---|
 | **0** | Model murah (bagian 1) | 1 hari | order penuh < $0.15, attested |
-| **1** | `clients/connectors.py`, jalur tulis yang dijaga, aturan "data luar bukan bukti", halaman Integrations | 3–4 hari | aksi tulis remote lewat Guardian + approval, teruji dengan server MCP tiruan |
+| **1** ✅ | Jalur tulis yang dijaga (`core/external.py`), aturan "data luar bukan dasar aksi" (`untrusted_input`), izin tulis per tool di halaman MCP | selesai 2026-11-12 | teruji end-to-end dengan server MCP tiruan, lewat UI: diizinkan → diajukan agen → disetujui → dieksekusi |
 | **2** | **Google Sheets/Docs** (`workspace`) + skill `sync_orders_to_sheet`, `weekly_ads_report` (versi tanpa iklan) | 2–3 hari | order masuk otomatis tercatat di Sheets bisnis |
 | **3** | **Facebook Pages + LinkedIn** (`social`) + `weekly_content_calendar`, `publish_social_post` | 3–4 hari | satu minggu konten disetujui sekali lalu terbit sendiri |
 | **4** | **Meta Ads** (`ads`) + `launch_ad_campaign`, laporan iklan | 4–5 hari, ditambah waktu review app Meta | kampanye dibuat sebagai draf, diaktifkan setelah persetujuan, anggaran tidak bisa melewati batas |

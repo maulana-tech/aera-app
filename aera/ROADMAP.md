@@ -103,7 +103,7 @@ langkah Team.
 
 ---
 
-## Fase 5 — Integrasi tool sungguhan
+## Fase 5 — Integrasi tool sungguhan (fondasi ✅ 2026-11-12; tinggal akun nyata)
 
 Lihat `INTEGRATIONS-PLAN.md`. Dimulai dari Google Sheets (risiko rendah), lalu media sosial, lalu
 Meta Ads.

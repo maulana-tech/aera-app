@@ -11,11 +11,13 @@ carry it.
 """
 from __future__ import annotations
 
+import json
+
 import time
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Iterator, List, Optional
+from typing import Any, Callable, Dict, Iterator, List, Optional, Set
 
 from core.provenance import Result
 
@@ -205,7 +207,10 @@ def remote_tools(refresh: bool = False) -> Dict[str, Dict[str, Any]]:
         for t in r.get("tools") or []:
             if not isinstance(t, dict) or not t.get("name"):
                 continue
-            if not t.get("read_only"):
+            writes = not t.get("read_only")
+            if writes and not t.get("write_allowed"):
+                # A writer is offered only when the owner allowed it, and then only as a guarded
+                # action (see _run_remote): calling it raises an action, it does not write.
                 continue
             bare = str(t["name"])
             if bare in _REGISTRY:
@@ -223,7 +228,7 @@ def remote_tools(refresh: bool = False) -> Dict[str, Dict[str, Any]]:
             out[qualified] = {
                 "server": str(r["name"]), "url": r["url"], "token": r.get("token"),
                 "tool": bare, "agents": agents, "schema": schema,
-                "description": str(t.get("description") or ""),
+                "description": str(t.get("description") or ""), "write": writes,
             }
     _remote, _remote_at = out, time.monotonic()
     return out
@@ -235,6 +240,11 @@ def _remote_description(r: Dict[str, Any]) -> str:
     It is told plainly, because the alternative is an agent that cites a
     third-party answer as though it came from our own records.
     """
+    if r.get("write"):
+        return (f"On '{r['server']}', an MCP server AERA does not operate. This tool CHANGES something there. "
+                f"Calling it does not change anything yet: it raises an action that the Guardian checks and a "
+                f"person approves; AERA performs it after that. Say why in the arguments you pass. "
+                f"{r['description']}")[:1800]
     return (f"On '{r['server']}', an MCP server AERA does not operate. Reads only. "
             f"Cite what it returns as '{r['server']}', never as our own "
             f"records, and do not let an action rest on it alone. "
@@ -290,12 +300,37 @@ def _run_remote(name: str, arguments: Dict[str, Any]) -> Result:
     if r is None:
         raise KeyError(f"tool '{name}' is not registered")
     source = f"{r['server']} via MCP (not operated by AERA)"
+    if r.get("write"):
+        from core import guardian
+        from core.actions import raise_action
+        payload = {"server": r["server"], "tool": r["tool"], "arguments": dict(arguments or {})}
+        v = guardian.check_action("external_write", payload)
+        return raise_action("external_write", payload, v,
+                            key_details={"server": r["server"], "tool": r["tool"],
+                                         "arguments": json.dumps(arguments or {}, sort_keys=True)})
+    mark_untrusted()        # what comes back is somebody else's text, and the run now carries it
     out = mcp_client.call(r["url"], r.get("token"), r["tool"], dict(arguments or {}))
     if not out.get("ok"):
         return Result(None, Origin.MISSING, source,
                       note=str(out.get("error") or "the server did not answer")[:300])
     return Result(out.get("text") or "", Origin.CACHED, source,
                   note="third-party MCP server; not our own record")
+
+
+#: Runs that have read text from outside AERA (a web page, a remote tool). Money and outward writes in
+#: such a run need a person: what an outsider wrote must never be the whole reason an action happens.
+_UNTRUSTED_RUNS: Set[str] = set()
+
+
+def mark_untrusted() -> None:
+    rid = current_run()
+    if rid:
+        _UNTRUSTED_RUNS.add(rid)
+
+
+def run_read_untrusted(run_id: Optional[str] = None) -> bool:
+    rid = run_id or current_run()
+    return bool(rid) and rid in _UNTRUSTED_RUNS
 
 
 _CURRENT_RUN: ContextVar[Optional[str]] = ContextVar("aera_run_id", default=None)

@@ -41,7 +41,7 @@ def execute(action_id: str) -> Dict[str, Any]:
         if a["status"] != "approved":
             return {"ok": a["status"] == "sent", "summary": f"the action is {a['status']}"}
         fn = {"payment": _pay, "refund": _refund, "message": _message,
-              "deliver_order": _deliver}.get(a["kind"])
+              "deliver_order": _deliver, "external_write": _external}.get(a["kind"])
         if fn is None:
             return {"ok": False, "summary": f"nothing executes a '{a['kind']}'"}
         try:
@@ -97,6 +97,25 @@ def _refund(a: Dict[str, Any]) -> Dict[str, Any]:
     if order:
         store.update_order(order["id"], status="refunded")
     return {"ok": True, "summary": f"SIMULATED refund of ${float(p['amount_usd']):.2f} (no vault configured)"}
+
+
+def _external(a: Dict[str, Any]) -> Dict[str, Any]:
+    """Perform an approved write on a remote MCP server, if the owner still allows it there."""
+    from clients import mcp_client
+    p = a["payload"]
+    srv = next((r for r in store.mcp_servers(include_token=True) if r["name"] == p.get("server")), None)
+    tool = next((t for t in (srv or {}).get("tools") or [] if t.get("name") == p.get("tool")), None)
+    if not srv or not srv.get("enabled") or not tool or not tool.get("write_allowed"):
+        why = "the server or the tool is no longer allowed to write"
+        store.move_action(a["id"], "failed", reason=why)
+        return {"ok": False, "summary": why}
+    out = mcp_client.call(srv["url"], srv.get("token"), p["tool"], dict(p.get("arguments") or {}))
+    if not out.get("ok"):
+        why = str(out.get("error") or "the server did not answer")[:300]
+        store.move_action(a["id"], "failed", reason=why)
+        return {"ok": False, "summary": f"{p['server']}.{p['tool']} failed: {why}"}
+    store.move_action(a["id"], "sent", reference=str(out.get("text") or "done")[:300])
+    return {"ok": True, "summary": f"{p['server']}.{p['tool']} done"}
 
 
 def _message(a: Dict[str, Any]) -> Dict[str, Any]:
@@ -230,7 +249,7 @@ def order_paid(order_id: str, *, payer: Any, amount_usd: float, offering: Any, t
 def run_once() -> str:
     done = 0
     for a in store.list_actions(status="approved"):
-        if a["kind"] in ("payment", "message", "deliver_order") or (a["kind"] == "refund" and not chain.configured()):
+        if a["kind"] in ("payment", "message", "deliver_order", "external_write") or (a["kind"] == "refund" and not chain.configured()):
             if execute(a["id"]).get("ok"):
                 done += 1
     moved = reconcile()

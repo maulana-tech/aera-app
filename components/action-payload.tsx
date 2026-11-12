@@ -38,8 +38,12 @@ function show(v: unknown): string {
 
 export function ActionPayload({ payload }: { payload: Record<string, unknown> }) {
   const email = typeof payload.subject === "string" && typeof payload.body === "string";
+  // A change on another server: what will be sent is the whole point of the approval, so it is shown in full.
+  const args = payload.arguments && typeof payload.arguments === "object" && !Array.isArray(payload.arguments)
+    ? (payload.arguments as Record<string, unknown>) : null;
   const keys = Object.keys(payload)
-    .filter((k) => !k.startsWith("_") && !HIDDEN.has(k) && !(email && (k === "subject" || k === "body" || k === "to")))
+    .filter((k) => !k.startsWith("_") && !HIDDEN.has(k) && !(email && (k === "subject" || k === "body" || k === "to"))
+      && !(args && k === "arguments"))
     .sort((a, b) => {
       const ia = ORDER.indexOf(a), ib = ORDER.indexOf(b);
       return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
@@ -62,6 +66,22 @@ export function ActionPayload({ payload }: { payload: Record<string, unknown> })
           );
         })}
       </dl>
+      {args && (
+        <div className="bg-muted/40 mt-3 rounded-md border px-4 py-3">
+          <p className="text-muted-foreground text-xs">
+            What will be sent to <span className="text-foreground font-mono">{String(payload.server ?? "the server")}</span>
+            {payload.tool ? <> as <span className="text-foreground font-mono">{String(payload.tool)}</span></> : null}
+          </p>
+          <dl className="mt-2 space-y-1.5">
+            {Object.entries(args).map(([k, v]) => (
+              <div key={k} className="grid gap-x-3 sm:grid-cols-[8rem_minmax(0,1fr)]">
+                <dt className="text-muted-foreground font-mono text-xs">{k}</dt>
+                <dd className="text-sm break-words whitespace-pre-wrap">{typeof v === "string" ? v : JSON.stringify(v, null, 2)}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      )}
       {email && (
         <div className="bg-muted/40 mt-3 rounded-md border px-4 py-3">
           <p className="text-muted-foreground text-xs">
