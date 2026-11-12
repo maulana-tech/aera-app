@@ -58,7 +58,9 @@ def pick_roles(p: Dict[str, Any]) -> List[str]:
         picked = [_slug(x) for x in re.split(r"[,\s]+", preset) if _slug(x) in R.ROLES]
     else:
         text = _haystack(p)
-        picked = [k for k, r in R.ROLES.items() if any(kw in text for kw in r["keywords"])]
+        # Whole words (a short suffix allowed: "designs", "designer"): "ui" must not match "guide".
+        picked = [k for k, r in R.ROLES.items()
+                  if any(re.search(r"(?<![a-z0-9])" + re.escape(kw) + r"[a-z]{0,3}(?![a-z0-9])", text) for kw in r["keywords"])]
         offers = p.get("offerings", [])
         documents = [o for o in offers if o.get("delivery") in ("pdf", "xlsx", "file")]
         # A business that sells something must be able to deliver it...

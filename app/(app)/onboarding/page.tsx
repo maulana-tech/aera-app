@@ -31,6 +31,7 @@ export default async function Onboarding() {
       <Wizard
         initial={completeProfile(existing ? biz.data.profile : null)}
         example={biz.data.example}
+        templates={biz.data.templates ?? []}
         library={team.data?.library ?? []}
         mayChange={biz.data.may_change}
       />

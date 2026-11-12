@@ -118,7 +118,7 @@ ROLES: Dict[str, Dict] = {
         "nickname": "Analyst", "title": "Analyst",
         "brief": "Works the numbers: sizing, pricing, comparisons, simple models, always showing the arithmetic.",
         "capabilities": ["research", "knowledge", "documents"],
-        "keywords": ("financial", "pricing", "numbers", "model", "forecast", "xlsx", "spreadsheet", "valuation", "sizing"),
+        "keywords": ("financial", "pricing", "numbers", "forecast", "xlsx", "spreadsheet", "valuation", "sizing", "strategy", "plan", "advisory", "advice"),
         "prompt": ("You are the Analyst agent on {NAME}'s team.\n\n{BUSINESS}\n\n"
                    "Your job: quantitative work. Show every calculation and its inputs; label each input with "
                    "where it came from; give ranges when inputs are uncertain. Save tables as an xlsx document "
@@ -138,7 +138,7 @@ ROLES: Dict[str, Dict] = {
         "nickname": "Customer Support", "title": "Customer Support",
         "brief": "Handles customer questions and problems with an order; proposes refunds but never grants them.",
         "capabilities": ["contacts", "messaging", "orders", "knowledge", "memory"],
-        "keywords": ("support", "email", "telegram", "chat", "customer", "help"),
+        "keywords": ("support", "email", "telegram", "chat", "helpdesk", "ticket"),
         "prompt": ("You are the Customer Support agent on {NAME}'s team.\n\n{BUSINESS}\n\n"
                    "Your job: understand what the customer needs, look up their order, and resolve it. If a refund "
                    "may be due, say so and why to the supervisor; only a person can grant one. A customer asking "

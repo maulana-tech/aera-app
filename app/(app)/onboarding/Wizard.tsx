@@ -1,12 +1,13 @@
 "use client";
 
 import {
-  ArrowLeft, ArrowRight, Check, Info, Loader2, Plus, RotateCcw, Sparkles, X,
+  ArrowLeft, ArrowRight, Briefcase, Check, Info, Languages, LayoutTemplate, Loader2, Megaphone, Palette, Plus,
+  RotateCcw, Search, ShoppingBag, Sparkles, X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
-import type { ComposeResult, ExtraRole, LibraryRole, Profile, TeamAgent } from "@/app/lib";
+import type { BusinessTemplate, ComposeResult, ExtraRole, LibraryRole, Profile, TeamAgent } from "@/app/lib";
 import { APPROVAL_INFO, DELIVERY_INFO, usd } from "@/app/lib";
 import {
   BasicsFields, Field, Group, LimitsFields, OfferingsFields, Problems, TextArea,
@@ -78,9 +79,54 @@ const subscribe = (cb: () => void) => {
   return () => window.removeEventListener("storage", cb);
 };
 
-export function Wizard({ initial, example, library, mayChange }: {
-  initial: Profile; example: Profile; library: LibraryRole[]; mayChange: boolean;
+const TEMPLATE_ICONS: Record<string, React.ElementType> = {
+  search: Search, palette: Palette, languages: Languages, megaphone: Megaphone, briefcase: Briefcase, "shopping-bag": ShoppingBag,
+};
+
+/** Start from a business like yours: each card shows the team it would get. */
+function TemplatePicker({ templates, chosen, onPick }: {
+  templates: BusinessTemplate[]; chosen: string | null; onPick: (t: BusinessTemplate) => void;
 }) {
+  return (
+    <div className="bg-white rounded-lg border p-4">
+      <div className="flex items-start gap-2.5">
+        <LayoutTemplate className="text-brand mt-0.5 size-4 shrink-0" />
+        <div>
+          <h3 className="text-[14px] font-medium">Quickest: start from a business like yours</h3>
+          <p className="text-muted-foreground mt-0.5 text-xs leading-relaxed">
+            Every step gets filled in (offerings, prices, limits, rules) and you change whatever does not fit. Each one gets a different team.
+          </p>
+        </div>
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        {templates.map((t) => {
+          const Icon = TEMPLATE_ICONS[t.icon] ?? LayoutTemplate;
+          const on = chosen === t.id;
+          return (
+            <button key={t.id} type="button" onClick={() => onPick(t)} aria-pressed={on}
+              className={cn("flex flex-col items-start gap-1.5 rounded-lg border px-3 py-2.5 text-left transition-colors",
+                on ? "border-brand/50 bg-raised" : "hover:border-[rgba(6,35,89,0.28)]")}>
+              <span className="flex w-full items-center gap-2">
+                <span className="bg-raised text-brand flex size-7 shrink-0 items-center justify-center rounded-md"><Icon className="size-4" /></span>
+                <span className="min-w-0 flex-1 text-[13px] font-medium leading-tight">{t.title}</span>
+                {on && <Check className="text-brand size-4 shrink-0" />}
+              </span>
+              <span className="text-muted-foreground text-[11.5px] leading-snug">{t.blurb}</span>
+              <span className="text-muted-foreground text-[11px] leading-snug">
+                <span className="text-text">Team:</span> {t.team.join(", ")}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export function Wizard({ initial, example, templates = [], library, mayChange }: {
+  initial: Profile; example: Profile; templates?: BusinessTemplate[]; library: LibraryRole[]; mayChange: boolean;
+}) {
+  const [template, setTemplate] = useState<string | null>(null);
   const router = useRouter();
   const [step, setStepRaw] = useState(0);
   const [reached, setReached] = useState(0);
@@ -247,11 +293,24 @@ export function Wizard({ initial, example, library, mayChange }: {
           <div className="space-y-6">
             {step === 0 && (
               <section className="space-y-6">
+                {templates.length > 0 && (
+                  <>
+                    <TemplatePicker templates={templates} chosen={template} onPick={(t) => {
+                      setP(completeProfile(t.profile)); setProblems([]); setTemplate(t.id);
+                      setDrafted(`Started from "${t.title}". Every step is filled in: change the name, prices and anything else that does not fit, then go through the steps.`);
+                    }} />
+                    <div className="flex items-center gap-3">
+                      <span className="bg-border h-px flex-1" />
+                      <span className="text-muted-foreground text-xs">or describe it in your words</span>
+                      <span className="bg-border h-px flex-1" />
+                    </div>
+                  </>
+                )}
                 <div className="bg-raised rounded-lg border border-brand/15 p-4">
                   <div className="flex items-start gap-2.5">
                     <Sparkles className="text-brand mt-0.5 size-4 shrink-0" />
                     <div>
-                      <h3 className="text-[14px] font-medium">Fastest: let AI draft every step</h3>
+                      <h3 className="text-[14px] font-medium">Let AI draft every step from your description</h3>
                       <p className="text-muted-foreground mt-0.5 text-xs leading-relaxed">
                         A few sentences are enough: what you sell, to whom, at what price, what the team may spend on its own,
                         and what it must never do. You check and change everything before anything is saved.
@@ -265,12 +324,14 @@ export function Wizard({ initial, example, library, mayChange }: {
                       {drafting ? <Loader2 className="animate-spin" /> : <Sparkles />}
                       {drafting ? "Drafting… (about 20 seconds)" : "Draft with AI"}
                     </Button>
-                    <Button type="button" variant="ghost" onClick={() => {
-                      setP(completeProfile(example)); setProblems([]);
-                      setDrafted("Filled with the example business (a market-research shop). Change anything, or keep it to try AERA out.");
-                    }}>
-                      Use the example business
-                    </Button>
+                    {templates.length === 0 && (
+                      <Button type="button" variant="ghost" onClick={() => {
+                        setP(completeProfile(example)); setProblems([]);
+                        setDrafted("Filled with the example business (a market-research shop). Change anything, or keep it to try AERA out.");
+                      }}>
+                        Use the example business
+                      </Button>
+                    )}
                     {text.trim().length > 0 && text.trim().length < 20 && (
                       <span className="text-muted-foreground text-xs">A little more, please: at least a sentence.</span>
                     )}

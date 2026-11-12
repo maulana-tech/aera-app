@@ -142,7 +142,9 @@ export type Profile = {
   kill_switch: boolean;
 };
 export type ProfileVersion = { version: number; active: number; changed_by: string; note: string | null; at: string };
+export type BusinessTemplate = { id: string; title: string; blurb: string; icon: string; team: string[]; profile: Profile };
 export type BusinessPayload = {
+  templates?: BusinessTemplate[];
   profile: Profile;
   version: number | null;
   problems: string[];

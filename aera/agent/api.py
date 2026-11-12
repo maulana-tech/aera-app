@@ -1221,7 +1221,15 @@ def get_business(_m, _b, h) -> Tuple[int, dict]:
     return 200, {"profile": {k: v for k, v in p.items() if not k.startswith("_")},
                  "version": (stored or {}).get("_version"), "problems": problems,
                  "history": store.profile_history(), "context": business.context_block(p),
-                 "may_change": u.may_manage, "example": business.EXAMPLE}
+                 "may_change": u.may_manage, "example": business.EXAMPLE, "templates": _templates()}
+
+
+def _templates() -> list:
+    from core import templates
+    try:
+        return templates.listing()
+    except Exception:                                                  # noqa: BLE001
+        return []
 
 
 @route("POST", r"/business")

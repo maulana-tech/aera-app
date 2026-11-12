@@ -92,7 +92,7 @@ ditolak, dan percakapannya tercatat di feed aktivitas.
 
 ---
 
-## Fase 4 — Template bisnis di onboarding (1 hari)
+## Fase 4 — Template bisnis di onboarding (1 hari) ✅ selesai 2026-11-12
 
 - 4–6 template: riset pasar, desain logo, terjemahan, konten media sosial, konsultasi, toko produk
   digital. Masing-masing dengan offering, batas, aturan, dan goal yang masuk akal.
