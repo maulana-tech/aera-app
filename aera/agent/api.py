@@ -546,6 +546,31 @@ def list_contacts(_m, _b, h) -> Tuple[int, dict]:
     return 200, {"contacts": store.list_contacts()}
 
 
+#: What a viewer may still POST: signing in and out, and the public pages anyone can use.
+VIEWER_MAY_POST = ("/login", "/setup", "/public/")
+
+
+def viewer_refusal(method: str, path: str, headers) -> Optional[str]:
+    """Why this request is refused for a viewer, or None.
+
+    A viewer looks and does nothing else: no work started, no agent asked, no file added,
+    nothing that spends model credit or changes the record. Held in one place, so a route
+    added later is covered without remembering to check. The demo sign-in on /login is
+    a viewer, and anyone who opens that page can use it."""
+    if method != "POST" or any(path == p or (p.endswith("/") and path.startswith(p)) for p in VIEWER_MAY_POST):
+        return None
+    auth = headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return None                      # the route itself refuses an anonymous caller
+    try:
+        role = identity.from_token(auth[len("Bearer "):]).role
+    except Exception:                                                # noqa: BLE001
+        return None
+    if role == "viewer":
+        return "a viewer can look at everything but not start work, ask the agents or change anything"
+    return None
+
+
 def _settings_user(h) -> User:
     user = _user(h)
     if user.role not in SETTINGS_ROLES:
@@ -1956,6 +1981,9 @@ class Handler(BaseHTTPRequestHandler):
                 continue
             found = pattern.match(path)
             if found:
+                refused = viewer_refusal(method, path, self.headers)
+                if refused:
+                    return self._send(403, {"error": refused})
                 try:
                     res = fn(found, body, self.headers)
                     if hasattr(res, "__iter__") and not isinstance(res, (tuple, list, dict, str, bytes)):
@@ -2057,6 +2085,15 @@ def demo() -> None:
     tok = login(None, {"email": "owner@lumen.example", "password": "pw-for-the-check"}, {})[1]["token"]
     op = login(None, {"email": "op@lumen.example", "password": "pw-for-the-check"}, {})[1]["token"]
     H, O = {"Authorization": f"Bearer {tok}"}, {"Authorization": f"Bearer {op}"}
+    identity.add_user("demo@lumen.example", "Demo", "viewer", "pw-for-the-check")
+    V = {"Authorization": f"Bearer {login(None, {'email': 'demo@lumen.example', 'password': 'pw-for-the-check'}, {})[1]['token']}"}
+    for path in ("/work", "/work/wrk_1/retry", "/agents/writer/ask", "/files", "/business/draft", "/team/compose",
+                 "/actions/act_1/outcome", "/conversations/c1/delete", "/mcp", "/treasury/sync"):
+        assert viewer_refusal("POST", path, V), f"a viewer must not POST {path}"
+        assert viewer_refusal("POST", path, O) is None, f"an operator may still POST {path}"
+    assert viewer_refusal("GET", "/work", V) is None, "a viewer reads everything"
+    assert viewer_refusal("POST", "/public/checkout", V) is None and viewer_refusal("POST", "/login", V) is None
+    print("  a viewer reads everything and POSTs nothing but sign-in and the public pages ✓")
 
     assert first_owner(None, {"email": "x@y.example", "name": "X", "password": "0123456789"}, {})[0] == 409, \
         "the first-owner door closes once an account exists"

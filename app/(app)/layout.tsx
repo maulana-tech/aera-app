@@ -40,6 +40,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               </p>
             </div>
           )}
+          {user?.role === "viewer" && (
+            <div className="bg-raised text-body flex items-start gap-2.5 border-b px-4 py-2.5 text-[12.5px] leading-relaxed md:px-6">
+              <Dot tone="info" className="mt-[7px]" />
+              <p>
+                You are signed in as a <span className="text-fg font-medium">viewer</span>: everything is open to read, but
+                starting work, asking the agents, approving and changing settings need an operator, approver or owner.
+              </p>
+            </div>
+          )}
           {children}
         </div>
       </div>

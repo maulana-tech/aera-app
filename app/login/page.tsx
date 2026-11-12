@@ -99,7 +99,7 @@ export default function Login() {
               Use the demo account
             </Button>
             <p className="text-muted-foreground text-center text-[12px] leading-relaxed">
-              Fills in a read-only account: it can look around and ask the agents, but approves no payment and changes no settings.
+              Fills in a read-only account: every page, run and proof is open to read; it starts no work, approves no payment and changes no settings.
             </p>
           </div>
         )}
