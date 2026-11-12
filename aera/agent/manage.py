@@ -3,6 +3,7 @@
     python3 manage.py check             # every self-check, offline
     python3 manage.py demo              # seed the demo business (Lumen Research), its team and contacts
     python3 manage.py user ana@lumen.example "Ana" owner "<password>"
+    python3 manage.py password ana@lumen.example   # set a new password (asked for, not echoed)
     python3 manage.py secret            # generate AERA_SECRET
     python3 manage.py models [--ping]   # which model each agent runs on (and one tiny real call)
     python3 manage.py ready             # is this install ready? models, TEE, vault, keys
@@ -324,6 +325,22 @@ def main() -> None:
             print(f"{e}\n  roles: {', '.join(identity.ROLE_LIMITS)}")
             sys.exit(2)
         print(f"created: {u.email} · {u.role} · may approve up to ${u.limit_usd:,.2f}")
+    elif cmd == "password":
+        if len(args) != 1:
+            print("usage: python3 manage.py password <email>")
+            sys.exit(2)
+        import getpass
+        first = getpass.getpass("New password (10+ characters): ")
+        if first != getpass.getpass("Again: "):
+            print("the two entries differ; nothing changed")
+            sys.exit(1)
+        try:
+            ok = identity.set_password(args[0], first)
+        except ValueError as e:
+            print(e)
+            sys.exit(2)
+        print(f"password changed for {args[0]}" if ok else f"no active user {args[0]}")
+        sys.exit(0 if ok else 1)
     else:
         print(__doc__)
 

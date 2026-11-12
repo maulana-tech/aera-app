@@ -168,6 +168,16 @@ def deactivate_user(uid: str) -> bool:
         return c.execute("UPDATE users SET active=0 WHERE id=?", (uid,)).rowcount > 0
 
 
+def set_password(email: str, password: str) -> bool:
+    """Replace an active user's password. False when no such user."""
+    if len(password) < 10:
+        raise ValueError("a password needs at least 10 characters")
+    prepare()
+    with connect() as c:
+        return c.execute("UPDATE users SET password=? WHERE email=? AND active=1",
+                         (_hash_password(password), email.lower())).rowcount > 0
+
+
 def log_in(email: str, password: str) -> User:
     prepare()
     with connect() as c:
