@@ -75,3 +75,4 @@ Alerts (SMTP, Slack, Telegram, webhook, Composio Gmail): see `.env.example`; val
 | Variable | |
 |---|---|
 | `AERA_API` | The agent service, e.g. `http://127.0.0.1:8787` |
+| `AERA_DEMO_EMAIL` · `AERA_DEMO_PASSWORD` | Optional. Show **Use the demo account** on `/login`, which fills these in. Point them at a **viewer** account (`manage.py user demo@… "Demo viewer" viewer "…"`): anyone who opens the page can read them. |

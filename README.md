@@ -46,14 +46,15 @@
 
 | | Where | What happens |
 |---|---|---|
-| 1 | **First run** (`/login`) | No account yet → *Set up AERA* creates the owner. Owners add approvers and operators under **Settings → Accounts**. |
+| 1 | **First run** (`/login`) | No account yet → *Set up AERA* creates the owner. Owners add approvers and operators under **Settings → Accounts**. With `AERA_DEMO_EMAIL`/`AERA_DEMO_PASSWORD` set, **Use the demo account** fills in a read-only viewer sign-in (it approves nothing and changes no settings). |
 | 2 | **Onboarding** (`/onboarding`) | Five explained steps: *Describe* (or **Draft with AI** from a paragraph, on a TEE model) → *Offerings* → *Limits & rules* → *Team* → *Review* in plain sentences. Nothing is saved until the end; a refresh keeps the draft. |
-| 3 | **Dashboard** | A *Getting started* checklist (models, vault, approver, first order), money in and out, what waits for you, what the Guardian blocked, TEE proofs. |
+| 3 | **Dashboard & Chat** | A *Getting started* checklist (models, vault, approver, first order), money in and out, what waits for you, what the Guardian blocked, TEE proofs, and the team visibly at work. **Chat** asks the team, or one agent, in plain words; a request becomes a work item. |
 | 4 | **Orders** | Share the checkout link for each offering (`/buy/<id>`). A customer pays USDC from their wallet to the vault; the vault splits revenue on the spot. |
 | 5 | **Work** | Each paid order (or request, or standing goal) is a work item. The run page shows the Supervisor's delegation, every tool call with the origin of its data, the documents produced (download the PDF), the Guardian's rulings rule by rule, and the **Verified** panel of TEE proofs. |
 | 6 | **Approvals** | Anything above the limits waits on the run page and in **Treasury**. Approval limits come from your role: operator $100, approver $1,000, owner more. Over the vault's own cap, an approver signs in their NEAR wallet. |
-| 7 | **Treasury & Ledger** | Vault balance and policy, payments with NearBlocks links, refunds to sign, a warning when the vault's limits differ from the profile. The ledger is public (`/ledger-public`) and carries no customer data. |
-| 8 | **Kill switch** | Approvers and owners can stop everything at once (and freeze the vault); only an owner resumes. |
+| 7 | **Treasury, Books & Ledger** | Vault balance and policy, payments with their transactions, held payments and refunds to sign, a warning when the vault's limits differ from the profile. Books, receipts and the monthly report are computed in code and reconciled against the vault. The ledger is public (`/ledger-public`) and carries no customer data. |
+| 8 | **Trust Center** (`/trust`) | The evidence on one page: TEE proofs per model, what the Guardian stopped, personal data held (counted from the tables), which policy pages exist or are drafts, systems health. |
+| 9 | **Kill switch** | Approvers and owners can stop everything at once (and freeze the vault); only an owner resumes. |
 
 Without a NEAR AI key, work is recorded and **held** (a banner says why; *Run again* once the key is set).
 Without a vault, payments run on the **SIMULATED** rail, labelled on every page. Nothing pretends.
@@ -71,7 +72,12 @@ yields the same team. Agents are named by role.
 | Researcher · Writer · Analyst · Quality Review | from the offerings | Research the open web (as untrusted data), write and review deliverables. |
 | Sales · Customer Support · Marketing | from the channels and goals | Answer and draft messages; the Guardian checks each before it goes. |
 | Fulfilment · Procurement · Designer | from the offerings and limits | Deliver orders to the paying customer; find vendors; design briefs. |
+| **Finance** | when there are offerings | Books, receipts, monthly report and reconciliation: every figure computed in code, the agent adds commentary only. |
+| **Legal & Compliance** | when client material is held | Checks text before it goes out (forbidden promises, other people's data, advice that sounds final), tracks Terms/Privacy/Refund pages, files the record of personal data. Drafts only; "not legal advice". |
+| **Tech Lead (CTO)** | from the role library | Reads runs, fallbacks, failing tools, attestation, AI spend and the vault; recommends changes and where the owner makes them. Changes nothing itself. |
 | *custom* | your words | A draft with basic capabilities until a person activates it. Never money, never veto. |
+
+Any library role can also be added by hand on **Team → Add from the role library**; it stays through a recompose.
 
 Capabilities, not tools, are granted; `treasury`, `guardian` and `supervisor` are locked to their
 owner in code and re-checked on every call.
@@ -80,21 +86,24 @@ owner in code and re-checked on every call.
 
 | Track | What to look at |
 |---|---|
-| **Autonomous Business** | Profile → Composer → team (`core/business.py`, `core/team.py`, `graph.py`); orders in and payments out (`settle.py`, vault `ft_on_transfer` with on-chain revenue split); public checkout `/buy/[offering]`; the team buys its own inputs within limits and quotes cross-chain payouts via NEAR Intents 1Click; public ledger. |
-| **Privacy & Private AI** | Every agent on a NEAR AI Cloud TEE model; `AERA_PRIVATE=1` refuses non-attested ones (`core/llm.py`). Each call's attestation (fresh nonce) and response signature are verified (`core/attest.py`) and shown in the Verified panel, re-checkable live. Prompts kept in memory only; PII redacted by NEAR AI's privacy filter before alerts reach Slack/Telegram (`core/privacy.py`); outward mail never contains another customer's data. |
-| **AI Security & Defense** | Three brakes: tools take ids not addresses; Guardian rules in code before any action (`core/guardian.py`: injection, blocklist, address-change cooldown, caps, privacy); the vault on chain (`aera/contracts/aera-vault`) with an agent that holds only a function-call key. `manage.py attack-demo` runs one injected payout request against every brake → `aera/demo/attack-log.md`. |
+| **Autonomous Business** | Profile → Composer → team (`core/business.py`, `core/team.py`, `graph.py`); orders in and payments out (`settle.py`, vault `ft_on_transfer` with on-chain revenue split); public checkout `/buy/[offering]` where Sales answers visitors; the team buys its own inputs within limits and quotes cross-chain payouts via NEAR Intents 1Click; books and reconciliation in code (`core/finance.py`); public ledger. |
+| **Privacy & Private AI** | Every agent on a NEAR AI Cloud TEE model; `AERA_PRIVATE=1` refuses non-attested ones (`core/llm.py`). Each call's attestation (fresh nonce) and response signature are verified (`core/attest.py`) and shown in the Verified panel, re-checkable live. Prompts kept in memory only; PII redacted by NEAR AI's privacy filter before alerts reach Slack/Telegram (`core/privacy.py`); outward mail never contains another customer's data; Legal & Compliance keeps a record of the personal data held, counted from the tables (`core/compliance.py`). |
+| **AI Security & Defense** | Three brakes: tools take ids not addresses; Guardian rules in code before any action (`core/guardian.py`: injection, blocklist, address-change cooldown, caps, privacy); the vault on chain (`aera/contracts/aera-vault`) with an agent that holds only a function-call key. `manage.py attack-demo` runs one injected payout request against every brake → `aera/demo/attack-log.md`. A run that read outside text (web, news, outside servers) cannot pay, refund or write out without a person; writes to outside MCP servers are allowed per server only. |
 
 ## Run it
 
 ```bash
 cd aera/agent
-PYTHONPATH=. python3 manage.py check                       # 40 offline self-checks
+PYTHONPATH=. python3 manage.py check                       # 51 offline self-checks
 cp .env.example .env && PYTHONPATH=. python3 manage.py secret   # → AERA_SECRET in .env
 PYTHONPATH=. python3 api.py                                # :8787
 
 # repo root, another terminal
 cp .env.example .env.local && npm install && npm run dev   # :3000 → set up the owner in the browser
 ```
+
+Forgot a password? `python3 manage.py password <email>` (hidden prompt), or add `--generate` in a
+shell with no terminal: a random one goes to the clipboard, never to the screen.
 
 Want content straight away? `PYTHONPATH=. python3 manage.py demo` seeds the example business
 (Lumen Research, a market-research shop) and its team before you open the browser.
@@ -111,24 +120,27 @@ Then, to make it real ([`aera/SETUP.md`](aera/SETUP.md)):
 
 ## Try it in five minutes
 
-1. Open the app → create the owner → *Use the example business* → *Next* through the steps → *Save*.
+1. Open the app → create the owner → pick a template (or *Use the example business*) → *Next* through the steps → *Save*.
+   On a prepared install, **Use the demo account** on the sign-in page looks around read-only instead.
 2. **Team**: see who the Composer picked and why; open the Guardian's card — note its locked capabilities.
 3. **Orders → Share checkout links** → open `/buy/brief` in a private window, fill it in, pay
    (or, without a vault, back in Orders: *Mark paid (simulated)*).
 4. **Work**: the order is a work item; open the run (with a model key: watch the team work; without:
    it is held and says why).
-5. `cd aera/agent && PYTHONPATH=. python3 manage.py attack-demo` — then read `aera/demo/attack-log.md`.
+5. **Trust Center**: the proofs, the personal-data record, and systems health in one place.
+6. `cd aera/agent && PYTHONPATH=. python3 manage.py attack-demo` — then read `aera/demo/attack-log.md`.
 
 ## What is verified, and what is not yet
 
 | | Status |
 |---|---|
-| Agent service | 40 offline self-checks (`manage.py check`) |
-| Vault contract | 45 unit tests (`cargo test`); sandbox integration test written, run with `--features sandbox -- --ignored` |
+| Agent service | 51 offline self-checks (`manage.py check`) |
+| Vault contract | 47 unit tests (`cargo test`); sandbox integration test written, run with `--features sandbox -- --ignored` |
 | Web app | `npm run lint`, `npm run build`, `npm test` |
 | Live NEAR AI attestation | Report fetched and checked with a fresh nonce (nonce binding, compose hash, signing key, model verifiable; GPU via NVIDIA NRAS optional) |
 | Live NEAR Intents | Dry 1Click quotes |
-| Not yet run live | the team on a real model (needs a key), the vault on testnet (needs a deploy), wallet signing in a browser |
+| Live on testnet (`vault.lanadev.testnet`) | A customer order paid 15 USDC into the vault ([`Dj6GRKMA…`](https://testnet.nearblocks.io/txns/Dj6GRKMAmCSjGdiwgoREoWKkpzcL7YRu9VdW4c3VytHa)), worked by the team on NEAR AI and delivered. The team bought a $3 dataset on its own, under the cap ([`E7B2f1UB…`](https://testnet.nearblocks.io/txns/E7B2f1UBpSSiArEyLvDZnm8jEa7L7bvs82q4TVEtTFKk)). An $8 purchase went over the cap: approved in AERA, held by the vault, paid only after the owner signed `approve` ([`31BQURup…`](https://testnet.nearblocks.io/txns/31BQURupVH6h8NVuxw5ThpLhi7wQn5t57uVQvX7pwsPg)). The attack demo was stopped by all three brakes on chain. |
+| Not yet run live | wallet signing from the browser (the owner signed with near-cli) |
 
 ## Layout
 
