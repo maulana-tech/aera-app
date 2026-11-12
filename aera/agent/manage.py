@@ -3,7 +3,7 @@
     python3 manage.py check             # every self-check, offline
     python3 manage.py demo              # seed the demo business (Lumen Research), its team and contacts
     python3 manage.py user ana@lumen.example "Ana" owner "<password>"
-    python3 manage.py password ana@lumen.example   # set a new password (asked for, not echoed)
+    python3 manage.py password ana@lumen.example [--generate]   # new password: typed hidden, or random to the clipboard
     python3 manage.py secret            # generate AERA_SECRET
     python3 manage.py models [--ping]   # which model each agent runs on (and one tiny real call)
     python3 manage.py ready             # is this install ready? models, TEE, vault, keys
@@ -326,20 +326,43 @@ def main() -> None:
             sys.exit(2)
         print(f"created: {u.email} · {u.role} · may approve up to ${u.limit_usd:,.2f}")
     elif cmd == "password":
-        if len(args) != 1:
-            print("usage: python3 manage.py password <email>")
+        if len(args) not in (1, 2) or (len(args) == 2 and args[1] != "--generate"):
+            print("usage: python3 manage.py password <email> [--generate]")
             sys.exit(2)
+        email = args[0]
+        if "--generate" in args:
+            # For shells with no terminal (an IDE's run box, an agent's `!` prompt):
+            # a random password goes to the clipboard and a 600 file, never to stdout.
+            import subprocess
+            new = secrets.token_urlsafe(15)
+            if not identity.set_password(email, new):
+                print(f"no active user {email}"); sys.exit(1)
+            where = pathlib.Path(__file__).resolve().parent / ".secrets" / f"password-{email.split('@')[0]}.txt"
+            where.parent.mkdir(mode=0o700, exist_ok=True)
+            where.write_text(f"{email}\n{new}\n")
+            where.chmod(0o600)
+            copied = subprocess.run(["pbcopy"], input=new.encode(), capture_output=True).returncode == 0 \
+                if sys.platform == "darwin" else False
+            print(f"password changed for {email}")
+            print("  copied to the clipboard" if copied else "  (clipboard not available)")
+            print(f"  also saved in {where} (only you can read it; delete it once you have signed in)")
+            sys.exit(0)
         import getpass
-        first = getpass.getpass("New password (10+ characters): ")
-        if first != getpass.getpass("Again: "):
+        try:
+            first = getpass.getpass("New password (10+ characters): ")
+            again = getpass.getpass("Again: ")
+        except EOFError:
+            print("this shell has no terminal to type into; run it in a terminal, or add --generate")
+            sys.exit(2)
+        if first != again:
             print("the two entries differ; nothing changed")
             sys.exit(1)
         try:
-            ok = identity.set_password(args[0], first)
+            ok = identity.set_password(email, first)
         except ValueError as e:
             print(e)
             sys.exit(2)
-        print(f"password changed for {args[0]}" if ok else f"no active user {args[0]}")
+        print(f"password changed for {email}" if ok else f"no active user {email}")
         sys.exit(0 if ok else 1)
     else:
         print(__doc__)
