@@ -1819,6 +1819,15 @@ def public_receipt(m, _b, _h):
     return 200, Download(pdf, f"receipt-{m.group(1)}.pdf", "application/pdf")
 
 
+@route("POST", r"/public/ask")
+def public_ask(_m, b: dict, _h) -> Tuple[int, dict]:
+    """A visitor's question on the checkout page, answered by Sales from the public profile (core/public_chat.py)."""
+    from core import public_chat
+    history = b.get("history") if isinstance(b.get("history"), list) else []
+    return 200, public_chat.ask(str(b.get("session") or "anon")[:64], str(b.get("message") or ""),
+                                history, str(b.get("offering") or "") or None)
+
+
 @route("GET", r"/public/ledger")
 def public_ledger(_m, _b, _h) -> Tuple[int, dict]:
     led = store.ledger(30)

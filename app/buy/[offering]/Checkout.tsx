@@ -85,8 +85,13 @@ function OrderStatus({ id }: { id: string }) {
   );
 }
 
-export function Checkout({ offering, network, open }: { offering: Offering; network: string; open: boolean }) {
-  const [inputs, setInputs] = useState<Record<string, string>>(Object.fromEntries(offering.inputs.map((k) => [k, ""])));
+export function Checkout({ offering, network, open, prefill }: {
+  offering: Offering; network: string; open: boolean;
+  /** inputs Sales gathered in the chat above; the form starts from them */
+  prefill?: Record<string, string>;
+}) {
+  const [inputs, setInputs] = useState<Record<string, string>>(
+    Object.fromEntries(offering.inputs.map((k) => [k, prefill?.[k] ?? ""])));
   const [email, setEmail] = useState("");
   const [account, setAccount] = useState("");
   const [busy, setBusy] = useState(false);

@@ -205,6 +205,19 @@ CREATE TABLE IF NOT EXISTS privacy_events (
 );
 CREATE INDEX IF NOT EXISTS idx_privacy_at ON privacy_events(at);
 
+-- Questions from visitors on the public checkout page and Sales' answers (core/public_chat.py).
+CREATE TABLE IF NOT EXISTS public_chats (
+  id        TEXT PRIMARY KEY,
+  session   TEXT NOT NULL,
+  offering  TEXT,
+  role      TEXT NOT NULL,               -- visitor | sales
+  text      TEXT NOT NULL,
+  cost_usd  REAL NOT NULL DEFAULT 0,
+  note      TEXT,                        -- withheld: why · checkout prefilled · model unavailable
+  at        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_public_chats_at ON public_chats(at);
+
 -- What the business knows that no API does: price lists, briefs, style
 -- guides. Text only; read by the agents through read_business_file.
 CREATE TABLE IF NOT EXISTS files (

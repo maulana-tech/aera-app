@@ -159,6 +159,28 @@ def _guardian(c, limit: int) -> List[dict]:
     return out
 
 
+def _visitors(c, limit: int) -> List[dict]:
+    """Sales answering visitors on the public checkout page (core/public_chat.py)."""
+    out = []
+    try:
+        rows = c.execute("SELECT s.session, s.offering, s.note, s.at, (SELECT v.text FROM public_chats v WHERE v.session=s.session"
+                         " AND v.role='visitor' AND v.at <= s.at ORDER BY v.at DESC LIMIT 1) q FROM public_chats s"
+                         " WHERE s.role='sales' ORDER BY s.at DESC LIMIT ?", (limit,)).fetchall()
+    except Exception:                                                  # noqa: BLE001
+        return out
+    for r in rows:
+        where = f"/buy/{r['offering']}" if r["offering"] else "the checkout"
+        note = r["note"] or ""
+        if note.startswith("withheld"):
+            out.append(_ev(r["at"], "guardian", "bad", "Guardian", f"A reply to a visitor on {where} was withheld", note))
+        elif note.startswith("model unavailable"):
+            out.append(_ev(r["at"], "team", "warn", "Sales", f"Sales could not answer a visitor on {where}", note))
+        else:
+            title = f"Sales answered a visitor on {where}" + (" and filled in the checkout" if "checkout" in note else "")
+            out.append(_ev(r["at"], "team", "ok", "Sales", title, f"Asked: {r['q'] or ''}"))
+    return out
+
+
 def _switch(c) -> List[dict]:
     out, last = [], None
     names = _roster(c)
@@ -177,7 +199,7 @@ def _switch(c) -> List[dict]:
 # -------------------------------------------------------------------- public
 def feed(limit: int = 50, category: Optional[str] = None) -> List[Dict[str, Any]]:
     with store.connect() as c:
-        events = _work(c, limit) + _steps(c, limit) + _money(c, limit) + _guardian(c, limit) + _switch(c)
+        events = _work(c, limit) + _steps(c, limit) + _money(c, limit) + _guardian(c, limit) + _visitors(c, limit) + _switch(c)
     if category in CATEGORIES:
         events = [e for e in events if e["category"] == category]
     events.sort(key=lambda e: e["at"], reverse=True)

@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 
 import { publicApi, usd, type PublicOfferings } from "@/app/lib";
 import { PublicShell } from "@/components/public-shell";
-import { Checkout } from "./Checkout";
+import { BuyArea } from "./AskSales";
 
 export const dynamic = "force-dynamic";
 
@@ -74,12 +74,7 @@ export default async function BuyPage({ params }: { params: Promise<{ offering: 
         </p>
       )}
 
-      <section className="mt-8">
-        <h2 className="text-sm font-medium">Your order</h2>
-        <div className="mt-3">
-          <Checkout offering={o} network={info.network} open={info.open} />
-        </div>
-      </section>
+      <BuyArea offering={o} network={info.network} open={info.open} business={info.business ?? "the business"} />
 
       <section className="mt-10 border-t pt-6">
         <h2 className="text-sm font-medium">What happens after you order</h2>
