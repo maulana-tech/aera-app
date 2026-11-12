@@ -196,6 +196,21 @@ def check_action(kind: str, payload: Dict[str, Any], *, profile: Optional[Dict[s
             reasons.append(_r("privacy", "block", f"mentions other contacts' details ({', '.join(leaked)})"))
         if kind == "message" and payload.get("new_contact") and business.needs_approval("message_to_new_contact", p):
             reasons.append(_r("new_contact", "warn", "first message to a new contact needs a person"))
+    if kind == "publish_sample":
+        # A public page: anyone reads it, so it carries nobody's contact details, and a compliance finding
+        # that is more than a pass puts a person in front of it.
+        contact = re.search(r"[\w.+-]+@[\w-]+\.[\w.]+|\+?\d[\d\s().-]{8,}\d", text)
+        if contact:
+            reasons.append(_r("privacy", "block", f"a public page carries no contact details (found '{contact.group(0)}')"))
+        review = payload.get("compliance") or {}
+        if review.get("verdict") == "block":
+            reasons.append(_r("compliance", "block", "the compliance check blocks it: " + "; ".join(
+                f"{f.get('rule')}: \"{f.get('quote')}\"" for f in review.get("findings", [])[:3])))
+        elif review.get("verdict") == "warn":
+            reasons.append(_r("compliance", "warn", "the compliance check has findings a person should read: " + "; ".join(
+                f"{f.get('rule')}: \"{f.get('quote')}\"" for f in review.get("findings", [])[:3])))
+        elif review.get("verdict") != "pass":
+            reasons.append(_r("compliance", "warn", "no compliance check came with it"))
     if kind == "deliver_order":
         order = store.get_order(str(payload.get("order_id") or ""))
         if not order:

@@ -41,7 +41,7 @@ def execute(action_id: str) -> Dict[str, Any]:
         if a["status"] != "approved":
             return {"ok": a["status"] == "sent", "summary": f"the action is {a['status']}"}
         fn = {"payment": _pay, "refund": _refund, "message": _message,
-              "deliver_order": _deliver, "external_write": _external}.get(a["kind"])
+              "deliver_order": _deliver, "external_write": _external, "publish_sample": _publish}.get(a["kind"])
         if fn is None:
             return {"ok": False, "summary": f"nothing executes a '{a['kind']}'"}
         try:
@@ -116,6 +116,23 @@ def _external(a: Dict[str, Any]) -> Dict[str, Any]:
         return {"ok": False, "summary": f"{p['server']}.{p['tool']} failed: {why}"}
     store.move_action(a["id"], "sent", reference=str(out.get("text") or "done")[:300])
     return {"ok": True, "summary": f"{p['server']}.{p['tool']} done"}
+
+
+def _publish(a: Dict[str, Any]) -> Dict[str, Any]:
+    """Put a free sample on the public samples page: the document as it is now, snapshotted."""
+    import hashlib
+    p = a["payload"]
+    doc = store.get_file(p.get("document_id") or "")
+    if not doc or not doc["name"].startswith("doc:"):
+        store.move_action(a["id"], "failed", reason="the document is gone")
+        return {"ok": False, "summary": "the document is gone"}
+    if hashlib.sha256(doc["text"].encode()).hexdigest() != p.get("text_sha256"):
+        # The check ruled on other words than the ones that would go out.
+        store.move_action(a["id"], "failed", reason="the document changed after it was checked; publish it again")
+        return {"ok": False, "summary": "the document changed after it was checked"}
+    s = store.publish_sample(p["slug"], doc["id"], p["title"], p.get("teaser") or "", p["offering"], doc["text"], a["id"])
+    store.move_action(a["id"], "sent", reference=f"/samples/{s['slug']}")
+    return {"ok": True, "summary": f"published at /samples/{s['slug']}"}
 
 
 def _message(a: Dict[str, Any]) -> Dict[str, Any]:
@@ -302,7 +319,7 @@ def order_paid(order_id: str, *, payer: Any, amount_usd: float, offering: Any, t
 def run_once() -> str:
     done = 0
     for a in store.list_actions(status="approved"):
-        if a["kind"] in ("payment", "message", "deliver_order", "external_write") or (a["kind"] == "refund" and not chain.configured()):
+        if a["kind"] in ("payment", "message", "deliver_order", "external_write", "publish_sample") or (a["kind"] == "refund" and not chain.configured()):
             if execute(a["id"]).get("ok"):
                 done += 1
     moved = reconcile()

@@ -33,6 +33,7 @@ CAPABILITIES: Dict[str, str] = {
     "memory": "Search how past work items were handled and how they turned out.",
     "finance": "Read the books (revenue, costs, margin), reconcile them with the vault, issue receipts, file reports. Never moves money.",
     "compliance": "Check what goes out against the profile's rules and the standard checks, list the policy pages the business needs, keep the register of personal data it holds. Never publishes or decides.",
+    "publishing": "Publish a finished free sample to the business's public samples page, linked to a checkout. Checked in code first; anything flagged waits for a person.",
     "systems": "Read how the machinery is doing: models and attestation, failed runs and tools, AI spend, outside servers, the vault. Changes no setting.",
     "guardian": "LOCKED to the guardian: rule on actions and counterparties against the profile; freeze payments.",
     "treasury": "LOCKED to the treasurer: vault status, pay a known vendor, propose a refund, read the ledger.",
@@ -175,11 +176,15 @@ ROLES: Dict[str, Dict] = {
     "marketing": {
         "nickname": "Marketing", "title": "Marketing",
         "brief": "Plans and writes outreach and sample content that brings in customers, within the profile's rules.",
-        "capabilities": ["research", "documents", "messaging", "knowledge"],
+        "capabilities": ["research", "documents", "messaging", "knowledge", "publishing"],
         "keywords": ("marketing", "promote", "audience", "social", "campaign", "attract", "sample", "newsletter"),
         "prompt": ("You are the Marketing agent on {NAME}'s team.\n\n{BUSINESS}\n\n"
                    "Your job: content and outreach that attract the customers in the profile. Claims must be "
-                   "true and sourced; no spam, no new contacts without approval if the profile requires it.\n\n" + _RULES),
+                   "true and sourced; no spam, no new contacts without approval if the profile requires it.\n\n"
+                   "A free sample reaches customers only when it is published: once the finished sample document "
+                   "exists, call publish_sample with the offering it advertises and a one-line teaser. Never publish a "
+                   "plan or research notes. Use list_published_samples to see what is already out and how often it "
+                   "was read, and do not publish the same topic twice.\n\n" + _RULES),
     },
     "ops": {
         "nickname": "Fulfilment", "title": "Fulfilment",

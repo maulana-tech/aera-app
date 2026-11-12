@@ -103,7 +103,9 @@ export function Checkout({ offering, network, open, prefill }: {
     setBusy(true);
     setError(null);
     try {
-      setResult(await post<CheckoutResult>("public/checkout", { offering: offering.id, inputs, email, account }));
+      // A link from a published sample carries ?src=sample:<slug>, so the order is counted to it.
+      const source = new URLSearchParams(window.location.search).get("src") ?? undefined;
+      setResult(await post<CheckoutResult>("public/checkout", { offering: offering.id, inputs, email, account, source }));
     } catch (err) {
       setError(errorText(err));
     } finally {

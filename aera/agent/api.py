@@ -1849,6 +1849,32 @@ def delete_file(m, _b, h) -> Tuple[int, dict]:
 
 
 # --------------------------------------------------------------------- public
+@route("GET", r"/public/samples")
+def public_samples(_m, _b, _h) -> Tuple[int, dict]:
+    from core import business
+    p = business.current()
+    titles = {o["id"]: o["title"] for o in p.get("offerings", [])}
+    return 200, {"business": p.get("name"), "samples": [
+        {"slug": s["slug"], "title": s["title"], "teaser": s["teaser"], "offering": s["offering"],
+         "offering_title": titles.get(s["offering"]), "published_at": s["published_at"]} for s in store.list_samples()]}
+
+
+@route("GET", r"/public/samples/([a-z0-9-]{1,60})")
+def public_sample(m, _b, _h) -> Tuple[int, dict]:
+    """One published sample. Reading it is counted (a number, nothing about the reader)."""
+    from core import business
+    s = store.get_sample(m.group(1), count_view=True)
+    if not s:
+        return 404, {"error": "no such sample"}
+    p = business.current()
+    o = business.offering(s["offering"], p) or {}
+    return 200, {"business": p.get("name"), "title": s["title"], "text": s["text"], "teaser": s["teaser"],
+                 "published_at": s["published_at"],
+                 "offering": {"id": s["offering"], "title": o.get("title"), "price_usd": o.get("price_usd"),
+                              "description": o.get("description")},
+                 "checkout": f"/buy/{s['offering']}?src=sample:{s['slug']}"}
+
+
 @route("GET", r"/public/offerings")
 def public_offerings(_m, _b, _h) -> Tuple[int, dict]:
     from core import business, chain
@@ -1886,6 +1912,9 @@ def public_checkout(_m, b: dict, _h) -> Tuple[int, dict]:
                                                              near_account=account or None))["id"]
     order_id = "ord_" + _s.token_hex(6)
     order = store.create_order(order_id, o["id"], o["price_usd"], inputs, customer=customer or account or None)
+    source = str(b.get("source") or "")
+    if re.fullmatch(r"sample:[a-z0-9-]{1,60}", source) and store.get_sample(source[len("sample:"):]):
+        store.record_order_source(order_id, source)
     pay: Dict[str, Any] = {"amount_usd": o["price_usd"], "token": chain.token_id()}
     if chain.readable():
         pay["ft_transfer_call"] = {"receiver_id": chain.vault_id(), "amount": chain.to_base(o["price_usd"]),
@@ -2041,7 +2070,7 @@ PUBLIC = {("GET", "/health"), ("POST", "/login"), ("GET", "/setup"), ("POST", "/
 
 _SAMPLES = ((r"([A-Za-z0-9_]+)", "x1"), (r"([A-Za-z]+)", "Thing"), (r"([a-z0-9_]+)", "a_skill"),
             (r"([a-z_]+)", "digest"), (r"([a-z]+)", "impact"), (r"(\d+)", "0"), (r"(pdf|xlsx)", "pdf"),
-            (r"([A-Za-z0-9_\-]+)", "ord_x"), (r"([A-Za-z0-9_]+)\.pdf", "x1.pdf"), (r"([A-Za-z0-9_.:\-/]+)", "z-ai/glm-5.3"))
+            (r"([A-Za-z0-9_\-]+)", "ord_x"), (r"([A-Za-z0-9_]+)\.pdf", "x1.pdf"), (r"([A-Za-z0-9_.:\-/]+)", "z-ai/glm-5.3"), (r"([a-z0-9-]{1,60})", "a-sample"))
 
 
 def _sample_path(pattern) -> str:

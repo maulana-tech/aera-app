@@ -9,6 +9,7 @@ from tools import (  # noqa: F401
     compliance,
     finance,
     money,
+    publishing,
     research,
     skills,
     systems,

@@ -619,3 +619,10 @@ export type EconomicsPayload = {
     overhead: { vendors_usd: number; ai_usd: number; note: string }; net_usd: number;
   };
 };
+
+export type PublicSampleRow = { slug: string; title: string; teaser: string; offering: string; offering_title?: string | null; published_at: string };
+export type PublicSample = {
+  business?: string | null; title: string; text: string; teaser: string; published_at: string;
+  offering: { id: string; title?: string | null; price_usd?: number | null; description?: string | null };
+  checkout: string;
+};

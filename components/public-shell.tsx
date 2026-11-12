@@ -17,6 +17,9 @@ export function PublicShell({ business, simulated, children }: {
         <span className="truncate text-[17px] tracking-[-0.01em]">{business || "aera"}</span>
         <div className="ml-auto flex items-center gap-2">
           {simulated && <CanvasChip tone="warn" className="hidden sm:inline-flex">simulated payments</CanvasChip>}
+          <Link href="/samples" className="rounded-md px-3 py-1.5 text-[13.5px] text-white/90 hover:bg-white/10 hover:text-white">
+            Free samples
+          </Link>
           <Link href="/ledger-public" className="rounded-md px-3 py-1.5 text-[13.5px] text-white/90 hover:bg-white/10 hover:text-white">
             Public ledger
           </Link>

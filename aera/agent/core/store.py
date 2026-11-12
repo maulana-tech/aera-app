@@ -174,6 +174,28 @@ CREATE TABLE IF NOT EXISTS orders (
   updated_at    TEXT NOT NULL
 );
 
+-- Free samples the team published to the public samples page: a snapshot of the document as it was
+-- published (later edits to the document do not change what the public reads). Views are a count only.
+CREATE TABLE IF NOT EXISTS samples (
+  slug            TEXT PRIMARY KEY,
+  file_id         TEXT NOT NULL,
+  title           TEXT NOT NULL,
+  teaser          TEXT NOT NULL DEFAULT '',
+  offering        TEXT NOT NULL,
+  text            TEXT NOT NULL,
+  action_id       TEXT,
+  published_at    TEXT NOT NULL,
+  unpublished_at  TEXT,
+  views           INTEGER NOT NULL DEFAULT 0
+);
+
+-- Where an order came from, when the checkout link carried a source (a published sample).
+CREATE TABLE IF NOT EXISTS order_sources (
+  order_id  TEXT PRIMARY KEY,
+  source    TEXT NOT NULL,
+  at        TEXT NOT NULL
+);
+
 -- Proof that a model call ran inside an attested TEE (core/attest.py).
 CREATE TABLE IF NOT EXISTS tee_proofs (
   id              TEXT PRIMARY KEY,
@@ -922,6 +944,47 @@ def list_files() -> List[Dict[str, Any]]:
         rows = c.execute("SELECT id, name, mime, size, uploaded_by, uploaded_at FROM files"
                          " ORDER BY uploaded_at DESC").fetchall()
     return [dict(r) for r in rows]
+
+
+def publish_sample(slug: str, file_id: str, title: str, teaser: str, offering: str, text: str,
+                   action_id: Optional[str]) -> Dict[str, Any]:
+    with connect() as c:
+        c.execute("INSERT OR REPLACE INTO samples (slug, file_id, title, teaser, offering, text, action_id, published_at,"
+                  " unpublished_at, views) VALUES (?,?,?,?,?,?,?,?,NULL,COALESCE((SELECT views FROM samples WHERE slug=?),0))",
+                  (slug, file_id, title, teaser, offering, text, action_id, _now(), slug))
+        return dict(c.execute("SELECT * FROM samples WHERE slug=?", (slug,)).fetchone())
+
+
+def list_samples(include_unpublished: bool = False) -> List[Dict[str, Any]]:
+    with connect() as c:
+        rows = c.execute("SELECT slug, file_id, title, teaser, offering, action_id, published_at, unpublished_at, views"
+                         " FROM samples" + ("" if include_unpublished else " WHERE unpublished_at IS NULL")
+                         + " ORDER BY published_at DESC").fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_sample(slug: str, count_view: bool = False) -> Optional[Dict[str, Any]]:
+    with connect() as c:
+        if count_view:
+            c.execute("UPDATE samples SET views = views + 1 WHERE slug=? AND unpublished_at IS NULL", (slug,))
+        r = c.execute("SELECT * FROM samples WHERE slug=? AND unpublished_at IS NULL", (slug,)).fetchone()
+    return dict(r) if r else None
+
+
+def unpublish_sample(slug: str) -> bool:
+    with connect() as c:
+        return c.execute("UPDATE samples SET unpublished_at=? WHERE slug=? AND unpublished_at IS NULL",
+                         (_now(), slug)).rowcount > 0
+
+
+def record_order_source(order_id: str, source: str) -> None:
+    with connect() as c:
+        c.execute("INSERT OR IGNORE INTO order_sources (order_id, source, at) VALUES (?,?,?)", (order_id, source, _now()))
+
+
+def order_sources() -> Dict[str, str]:
+    with connect() as c:
+        return {r["order_id"]: r["source"] for r in c.execute("SELECT order_id, source FROM order_sources")}
 
 
 def get_file(fid_or_name: str) -> Optional[Dict[str, Any]]:

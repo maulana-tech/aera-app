@@ -185,8 +185,28 @@ def unit_economics(days: int = 30, target_margin: Optional[float] = None) -> Dic
     }
 
 
+def growth(days: int = 30) -> Dict[str, Any]:
+    """Each published sample: how often it was read, the orders it started, the orders paid."""
+    since = _since(days)
+    sources = store.order_sources()
+    with store.connect() as c:
+        orders = {r["id"]: dict(r) for r in c.execute("SELECT id, status, amount_usd FROM orders WHERE created_at >= ?", (since,))}
+    rows = []
+    for s in store.list_samples(include_unpublished=True):
+        mine = [orders[o] for o, src in sources.items() if src == f"sample:{s['slug']}" and o in orders]
+        paid = [o for o in mine if o["status"] != "awaiting_payment"]
+        rows.append({"slug": s["slug"], "title": s["title"], "offering": s["offering"], "views": s["views"],
+                     "published_at": s["published_at"], "live": s["unpublished_at"] is None,
+                     "checkouts": len(mine), "paid": len(paid), "revenue_usd": round(sum(o["amount_usd"] for o in paid), 2)})
+    views = sum(r["views"] for r in rows)
+    paid = sum(r["paid"] for r in rows)
+    return {"samples": rows, "views": views, "checkouts": sum(r["checkouts"] for r in rows), "paid": paid,
+            "revenue_usd": round(sum(r["revenue_usd"] for r in rows), 2),
+            "paid_per_100_views": round(100 * paid / views, 1) if views else None}
+
+
 def overview(days: int = 30) -> Dict[str, Any]:
-    return {"autonomy": autonomy(days), "economics": unit_economics(days)}
+    return {"autonomy": autonomy(days), "economics": unit_economics(days), "growth": growth(days)}
 
 
 def _usd(x: Optional[float], places: int = 2) -> str:
@@ -218,6 +238,10 @@ def markdown(o: Dict[str, Any], commentary: str = "", name: str = "") -> str:
     for f in e["offerings"]:
         lines.append(f"| {f['offering']} | {_usd(f['price_usd'])} | {f['orders']} | {_usd(f['ai_per_order_usd'], 3)} | "
                      f"{_usd(f['floor_price_usd'])} | {'below target' if f['below_target'] else ''} |")
+    g = o.get("growth") or {"samples": []}
+    if g["samples"]:
+        lines += ["", "## Customers the samples brought", "", "| Sample | Read | Checkouts | Paid | Revenue |", "|---|---|---|---|---|"]
+        lines += [f"| {r['title']} | {r['views']} | {r['checkouts']} | {r['paid']} | {_usd(r['revenue_usd'])} |" for r in g["samples"]]
     oh = e["overhead"]
     lines += ["", f"Overhead: vendors {_usd(oh['vendors_usd'])}, AI outside orders {_usd(oh['ai_usd'], 3)}. "
               f"Revenue {_usd(e['revenue_usd'])} → net {_usd(e['net_usd'])}."]
@@ -264,7 +288,15 @@ def demo() -> None:
     brief = next(f for f in e["offerings"] if f["offering"] == "brief")
     assert brief["floor_price_usd"] == 0.75 and not brief["below_target"], brief
     assert e["overhead"]["ai_usd"] >= 0.15, "the request's AI is overhead, not an order's"
+    store.publish_sample("vn-coffee", "fil_x", "VN coffee", "", "brief", "text", None)
+    store.get_sample("vn-coffee", count_view=True)
+    store.create_order("ord_g1", "brief", 15.0, {}, customer="b.testnet", status="paid")
+    store.record_order_source("ord_g1", "sample:vn-coffee")
+    g = growth(30)
+    vn = next(r for r in g["samples"] if r["slug"] == "vn-coffee")
+    assert vn["views"] == 1 and vn["checkouts"] == 1 and vn["paid"] == 1 and vn["revenue_usd"] == 15.0, vn
     md = markdown(overview(30), "Steady.")
+    assert "Customers the samples brought" in md
     assert "ord_e1" in md and "approved a payment: " in md and "## Commentary" in md
     print(f"economics ok: autonomy {a['autonomy_pct']}% · touches named ✓ · margin and floor price in code ✓")
 
