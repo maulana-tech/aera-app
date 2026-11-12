@@ -126,6 +126,48 @@ CATALOGUE: List[Skill] = [
         ],
         external=False,
     ),
+    Skill(
+        name="check_before_it_goes_out",
+        title="Compliance check before it goes out",
+        description="Check a deliverable, message or page against the profile's rules and the standard checks before anyone outside sees it.",
+        agents=["compliance", "qa"],
+        tools=["read_document", "review_for_compliance"],
+        steps=[
+            "Read the document and note who it is for (the customer's e-mail, if any).",
+            "Run review_for_compliance with that recipient; every finding quotes the words that break the rule.",
+            "A block goes back for rewriting with the quoted words; it is never delivered as it is.",
+            "A warning is reported with what would make it true or safe (a condition, a source, a not-advice line).",
+        ],
+        external=False,
+    ),
+    Skill(
+        name="data_register",
+        title="Keep the data and policy register",
+        description="Count the personal data the business holds, list the policy pages it needs, and file the register.",
+        agents=["compliance"],
+        tools=["privacy_register", "legal_pages_status", "save_compliance_register"],
+        steps=[
+            "Read the register; quote the counts, never estimate them.",
+            "Read which policy pages exist; for each missing one say why the business needs it.",
+            "Name what a person must decide: how long each kind of data is kept, which page to draft first.",
+            "File the register with save_compliance_register and hand back its document id.",
+        ],
+        external=False,
+    ),
+    Skill(
+        name="systems_review",
+        title="Review the systems",
+        description="Read how models, tools, runs, outside servers and the vault did, and recommend concrete changes to the owner.",
+        agents=["tech"],
+        tools=["systems_status", "recent_incidents", "save_tech_review"],
+        steps=[
+            "Read systems_status for the period; quote the figures behind every issue.",
+            "Read the incidents and group them by cause (model timeout, tool error, limit reached, held for a person).",
+            "For each cause give one change and where the owner makes it (Models, MCP servers, profile limits); change nothing yourself.",
+            "File the review with save_tech_review and hand back its document id.",
+        ],
+        external=False,
+    ),
     # --- Adapted from open-source agent skills (rewritten as AERA procedures; the profile replaces "ask the user").
     # fact_check_deliverable: seb1n/awesome-ai-agent-skills "fact-checking", MIT, (c) seb1n.
     Skill(
@@ -177,7 +219,7 @@ CATALOGUE: List[Skill] = [
         name="draft_legal_page",
         title="Draft a privacy policy or terms page",
         description="Draft the business's privacy policy, terms of service or refund policy from its profile, for a person to approve.",
-        agents=["writer"],
+        agents=["writer", "compliance"],
         tools=["get_business_profile", "list_business_files", "write_document"],
         steps=[
             "From the profile, list what data the business collects, from whom, why, and where its customers are.",
@@ -297,6 +339,7 @@ def demo() -> None:
     from core import business, registry, store, team
     import tools  # noqa: F401  (registers every tool)
     from agents import roster
+    from agents import roles as R
 
     store.save_profile(business.EXAMPLE, by="check")
     team.apply(team.compose(), by="check")
@@ -307,7 +350,9 @@ def demo() -> None:
         missing = [t for t in s.tools if t not in known]
         assert not missing, f"{s.name} names tools that do not exist: {missing}"
         for code in s.agents:
-            reachable = {t.name for t in registry.owned_by(ALL[code].capabilities)}
+            # A role the example team does not have is checked against its library capabilities.
+            caps = ALL[code].capabilities if code in ALL else R.allowed_capabilities(code, R.ROLES[code]["capabilities"])
+            reachable = {t.name for t in registry.owned_by(caps)}
             unreachable = [t for t in s.tools if t not in reachable]
             assert not unreachable, f"{s.name} is restricted to {code}, who cannot reach {unreachable}"
     names = [s.name for s in CATALOGUE]

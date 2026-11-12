@@ -494,8 +494,22 @@ export type TrustCheck = {
   id: string; run_id: string | null; kind: string; subject: string; verdict: string; at: string;
   rules: { rule: string; verdict: string; detail: string }[];
 };
+export type RegisterRow = { category: string; where: string; what: string; records: number; oldest_days: number | null; purpose: string; shared_with: string };
+export type CompliancePayload = {
+  register: { rows: RegisterRow[]; sensitive: string[]; private_mode: boolean; notes: string[]; summary: string };
+  pages: { pages: { page: string; title: string; needed: boolean; why: string; status: "present" | "draft" | "missing" | "not needed"; file: { id: string; name: string } | null }[]; missing: string[]; drafts?: string[]; summary: string };
+};
+export type SystemsPayload = {
+  days: number; fallbacks: number; agent_stops: number;
+  ai_spend: { today_usd: number; cap_usd: number };
+  runs: { total: number; by_status: Record<string, number>; avg_minutes: number | null; slowest_minutes: number | null };
+  tools: { calls: number; failing: { tool: string; calls: number; errors: number; last_error: string | null }[] };
+  servers: { name: string; tools: number; writers_allowed: string[]; last_error: string | null }[];
+  issues: { tone: "ok" | "warn" | "bad" | "info"; text: string }[]; summary: string;
+};
 export type TrustPayload = {
   days: number; generated_at: string;
+  compliance?: CompliancePayload; systems?: SystemsPayload;
   privacy: {
     private_mode: boolean; attested_models: number; raw_prompts_stored: boolean;
     proofs: { total: number; by_verdict: Record<string, number>; chat_calls: number; by_model: TrustProofModel[]; recent: TrustProof[] };
@@ -584,6 +598,6 @@ export type FinanceReport = {
 };
 export type Reconciliation = {
   status: "balanced" | "differences" | "in flight" | "not applicable" | "unknown";
-  summary: string; differences: string[]; balance_usd?: number; expected_usd?: number; orders_on_chain?: number;
+  summary: string; differences: string[]; notes?: string[]; balance_usd?: number; expected_usd?: number; orders_on_chain?: number;
 };
 export type FinancePayload = { report: FinanceReport; reconcile: Reconciliation; filed: { id: string; name: string; uploaded_at: string }[] };

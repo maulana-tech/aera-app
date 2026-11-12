@@ -48,7 +48,7 @@ harus bertanya lewat chat.
 
 ---
 
-## Fase 2 — Tim membeli sendiri (½–1 hari)
+## Fase 2 — Tim membeli sendiri (½–1 hari) — langkah terakhir menunggu tanda tangan owner
 
 **Tujuan:** membuktikan sisi uang keluar secara otomatis, on-chain.
 
@@ -61,6 +61,13 @@ harus bertanya lewat chat.
 **Selesai bila:** saldo USDC vendor bertambah, event `payment_sent` ada di chain, dan pembayaran
 kedua hanya berjalan setelah ditandatangani owner.
 
+Status 2026-11-12:
+- ✅ $3 di bawah batas: dibayar otomatis oleh vault (tx `E7B2f1UB…`).
+- ✅ $8 di atas batas: Procurement → Guardian (`autonomous_cap`: warn) → Treasurer mengajukan → aksi
+  `act_16e239c4eda1` **pending**; tidak ada uang bergerak.
+- ⏳ Owner menyetujui di Treasury → vault menahan (di atas batas kontrak $5) → owner menandatangani
+  `approve` dari wallet.
+
 ---
 
 ## Fase 2b — Finance: buku keuangan yang dihitung kode ✅ selesai 2026-11-11
@@ -72,7 +79,22 @@ kedua hanya berjalan setelah ditandatangani owner.
 - Receipt di halaman Orders dan di halaman status checkout pelanggan; bagian **Books** di Ledger.
 - Terbukti pada data nyata: rekonsiliasi *balanced* (vault $12.00 = $15 − $3), November: bersih $11.42,
   margin 76.1%. Finance menolak menutup bulan yang belum selesai dan menandai pemasukan vault tanpa tx hash.
-- Berikutnya: Legal & Compliance, lalu CTO / Tech lead (lihat diskusi peran).
+- Tx hash order vault kini dicari sendiri (NearBlocks mempersempit, RPC memastikan event `order_paid`
+  untuk order itu) dan dicatat di receipt serta buku; order lama `ord_bc4a23b81467` sudah terisi.
+
+## Fase 2c — Legal & Compliance dan Tech Lead (CTO) ✅ selesai 2026-11-12
+
+- **Compliance** (`core/compliance.py`, capability `compliance`): `review_for_compliance` (setiap temuan
+  mengutip kata yang melanggar), `legal_pages_status` (terms / privacy / refund: ada, draf, atau hilang),
+  `privacy_register` (data pribadi yang disimpan, dihitung dari tabel), `save_compliance_register`.
+  Masuk tim otomatis bila bisnis menyimpan materi klien; Quality Review juga menjalankan cek ini.
+- **Tech Lead** (`core/systems.py`, capability `systems`): `systems_status` (model & attestation, fallback,
+  tool yang gagal, run, server luar, vault, batas yang berlaku), `recent_incidents` (dengan alasan dan
+  apakah sudah diselesaikan run berikutnya), `save_tech_review`. Tidak mengubah setting apa pun.
+- Halaman Team: **Add from the role library** (ditulis ke profil, tetap ada saat recompose).
+- Trust Center: *Personal data we hold*, *Policy pages*, *Systems health*.
+- Terbukti live: Compliance mengisi register (20 record, 2 halaman hilang, 1 draf); Tech Lead membedakan
+  kegagalan lama dari masalah terbuka dan menunjuk goal yang masih tertahan.
 
 ## Fase 3 — Agen untuk pelanggan (2–3 hari) ✅ selesai 2026-11-12
 

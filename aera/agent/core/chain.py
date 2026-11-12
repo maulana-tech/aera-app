@@ -160,6 +160,55 @@ def account_age_days(account_id: str) -> Optional[float]:
         return None
 
 
+def _nearblocks(path: str) -> Any:
+    import json
+    import urllib.request
+    base = "https://api-testnet.nearblocks.io" if network() == "testnet" else "https://api.nearblocks.io"
+    req = urllib.request.Request(f"{base}{path}", headers={"User-Agent": "aera-agent", "Accept": "application/json"})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.loads(r.read().decode())
+
+
+def paid_order_in(events: Any, order_id: str) -> bool:
+    """True when the vault's `order_paid` event for this order is among these NEP-297 events."""
+    for e in events or []:
+        if e.get("standard") != "aera-vault" or e.get("event") != "order_paid":
+            continue
+        data = e.get("data")
+        for d in data if isinstance(data, list) else [data]:
+            if isinstance(d, dict) and d.get("order_id") == order_id:
+                return True
+    return False
+
+
+def order_tx(order_id: str, payer: str, amount_usd: float) -> Optional[str]:
+    """The transaction that paid this order into the vault, or None when it cannot be confirmed.
+
+    The vault's list_orders does not carry a transaction hash, so it is looked up: NearBlocks lists the
+    USDC transfers into the vault, which narrows the candidates to transfers from this payer of this
+    amount, and the NEAR RPC then confirms one of them, by the vault's own `order_paid` event for this
+    order id. A hash is only returned once the chain itself says so; NearBlocks is never taken at its word."""
+    if not readable() or not valid_account(payer or ""):
+        return None
+    try:
+        rows = (_nearblocks(f"/v3/accounts/{vault_id()}/ft-txns?per_page=50") or {}).get("data") or []
+    except Exception:                                                  # noqa: BLE001
+        return None
+    want = to_base(amount_usd)
+    near = _near()
+    for r in rows:
+        if r.get("contract_account_id") != token_id() or r.get("involved_account_id") != payer \
+                or str(r.get("delta_amount")) != want or not r.get("transaction_hash"):
+            continue
+        try:
+            got = near.outcome(near.tx_status(r["transaction_hash"], payer))
+        except Exception:                                              # noqa: BLE001
+            continue
+        if paid_order_in(got.get("events"), order_id):
+            return r["transaction_hash"]
+    return None
+
+
 # ---------------------------------------------------------------- calls
 def _signer():
     if not configured():
@@ -218,6 +267,9 @@ def demo() -> None:
     assert payment_failed(failed, "payment:ab") and not payment_failed(failed, "payment:cd")
     assert not payment_failed({"events": [{"event": "payment_sent", "data": [{"request_id": "payment:ab"}]}]},
                               "payment:ab")
+    paid = [{"standard": "aera-vault", "event": "order_paid", "data": [{"order_id": "ord_1", "amount": "15000000"}]}]
+    assert paid_order_in(paid, "ord_1") and not paid_order_in(paid, "ord_2")
+    assert not paid_order_in([{"standard": "other", "event": "order_paid", "data": [{"order_id": "ord_1"}]}], "ord_1")
     for ok in ("vendor.testnet", "a1.b-c_d.near", "17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1"):
         assert valid_account(ok), ok
     for bad in ("", "A.near", "x", "a..b", "-a.near", "a" * 65, "bad account"):

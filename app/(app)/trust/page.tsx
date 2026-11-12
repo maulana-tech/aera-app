@@ -77,7 +77,7 @@ export default async function TrustPage({ searchParams }: { searchParams: Promis
       </main>
     );
   }
-  const { privacy: p, security: s } = res.data;
+  const { privacy: p, security: s, compliance: co, systems: sy } = res.data;
   const pr = p.proofs;
   const attested = pr.by_verdict.attested ?? 0;
   const partial = pr.by_verdict.partial ?? 0;
@@ -206,6 +206,45 @@ export default async function TrustPage({ searchParams }: { searchParams: Promis
               <Empty what="No data leak attempted in this period." why="Nothing the team tried to send carried another customer's data or a forbidden claim." />
             )}
           </Section>
+          {co && (
+            <Section title="Personal data we hold" note={`Counted from AERA's own tables, not estimated. ${co.register.summary} Who else sees it is stated per kind; the register can be filed as a PDF by the Compliance agent (skill data_register).`}>
+              <ul className="divide-y rounded-lg border">
+                {co.register.rows.map((r) => (
+                  <li key={r.category} className="px-4 py-3">
+                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                      <span className="text-[13px] font-medium">{r.category}</span>
+                      <span className="font-mono text-[11px]">{r.records} record{r.records === 1 ? "" : "s"}</span>
+                      {r.oldest_days !== null && <span className="text-muted-foreground font-mono text-[10px]">oldest {r.oldest_days === 0 ? "today" : `${r.oldest_days} days`}</span>}
+                    </div>
+                    <p className="text-muted-foreground mt-0.5 text-xs leading-relaxed break-words">{r.what}</p>
+                    <p className="text-muted-foreground mt-0.5 text-[11px] leading-relaxed">Why: {r.purpose} · Seen by: {r.shared_with}</p>
+                  </li>
+                ))}
+              </ul>
+              {co.register.notes.length > 0 && (
+                <ul className="mt-2 space-y-1">{co.register.notes.map((n) => (
+                  <li key={n} className="flex items-start gap-2 text-xs leading-relaxed"><Dot tone="warn" className="mt-[6px]" />{n}</li>
+                ))}</ul>
+              )}
+            </Section>
+          )}
+
+          {co && (
+            <Section title="Policy pages" note={co.pages.summary}>
+              <ul className="divide-y rounded-lg border">
+                {co.pages.pages.map((x) => (
+                  <li key={x.page} className="flex items-start gap-2.5 px-4 py-2.5">
+                    <Dot tone={x.status === "present" ? "ok" : x.status === "missing" ? "warn" : x.status === "draft" ? "info" : "neutral"} className="mt-[7px]" />
+                    <div className="min-w-0">
+                      <p className="text-[13px]">{x.title} <span className="text-muted-foreground text-xs">· {x.status}</span></p>
+                      {x.file ? <Link href="/documents" className="text-muted-foreground text-[11px] underline underline-offset-2">{x.file.name}</Link>
+                        : x.why && <p className="text-muted-foreground text-[11px] leading-relaxed">Needed because {x.why}.</p>}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
         </div>
 
         {/* ----------------------------------------------------------- security */}
@@ -246,6 +285,31 @@ export default async function TrustPage({ searchParams }: { searchParams: Promis
               <Empty what="The agent's keys could not be read." why={v.agent ? "The RPC did not answer." : "No agent account is configured."} />
             )}
           </Section>
+
+          {sy && (
+            <Section title="Systems health" note={`Read by the Tech Lead from the record over the last ${sy.days} days: models, fallbacks, failed tools, runs, outside servers. It recommends; the owner changes settings.`}>
+              <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border sm:grid-cols-4">
+                {[
+                  ["Runs", `${sy.runs.total}`],
+                  ["Average run", sy.runs.avg_minutes !== null ? `${sy.runs.avg_minutes} min` : "—"],
+                  ["Fallback used", `${sy.fallbacks}×`],
+                  ["AI today", `$${sy.ai_spend.today_usd.toFixed(2)} / $${sy.ai_spend.cap_usd.toFixed(2)}`],
+                ].map(([k, val]) => (
+                  <div key={k} className="bg-white px-3 py-2.5">
+                    <dt className="text-muted-foreground text-[11px]">{k}</dt>
+                    <dd className="mt-0.5 font-mono text-[13px]">{val}</dd>
+                  </div>
+                ))}
+              </dl>
+              {sy.issues.length ? (
+                <ul className="mt-3 space-y-1.5">{sy.issues.map((i) => (
+                  <li key={i.text} className="flex items-start gap-2 text-xs leading-relaxed break-words">
+                    <Dot tone={i.tone === "info" ? "neutral" : i.tone} className="mt-[6px]" /><span className="min-w-0">{i.text}</span>
+                  </li>
+                ))}</ul>
+              ) : <p className="text-muted-foreground mt-3 text-xs">Nothing needs attention.</p>}
+            </Section>
+          )}
 
           <Section title="The guardian's decisions" note="Rules in code, run before any action leaves the business. A block is final; a warning waits for a person.">
             {s.guardian.by_rule.length ? (

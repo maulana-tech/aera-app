@@ -203,6 +203,52 @@ function NewRole({ caps }: { caps: Capability[] }) {
   );
 }
 
+/** Library roles the Composer did not pick for this profile (Tech Lead, Legal & Compliance, ...), one click to add. */
+function FromLibrary({ data }: { data: TeamPayload }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const on = new Set(data.agents.filter((a) => a.status === "active").map((a) => a.code));
+  const missing = data.library.filter((r) => !on.has(r.key));
+  if (!missing.length) return null;
+
+  async function add(key: string) {
+    setBusy(key);
+    setError(null);
+    try {
+      await post("team/include", { role: key });
+      router.refresh();
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="bg-white space-y-3 rounded-lg border p-4 lg:col-span-2">
+      <div>
+        <h3 className="text-sm font-medium">Add from the role library</h3>
+        <p className="text-muted-foreground text-xs">Roles the Composer did not pick for this profile. Adding one writes it into the profile, so it stays when the team is recomposed.</p>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        {missing.map((r) => (
+          <div key={r.key} className="bg-raised flex items-start gap-3 rounded-md p-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-[13px] font-medium">{r.title}</p>
+              <p className="text-muted-foreground mt-0.5 text-xs leading-relaxed">{r.brief}</p>
+            </div>
+            <Button size="xs" variant="outline" onClick={() => add(r.key)} disabled={!!busy} aria-label={`Add ${r.title}`}>
+              {busy === r.key ? <Loader2 className="animate-spin" /> : <Plus />}Add
+            </Button>
+          </div>
+        ))}
+      </div>
+      {error && <p className="text-sm text-bad">{error}</p>}
+    </div>
+  );
+}
+
 function Recompose() {
   const router = useRouter();
   const [proposal, setProposal] = useState<ComposeResult | null>(null);
@@ -276,6 +322,7 @@ export function TeamBoard({ data }: { data: TeamPayload }) {
         <section className="mt-8 grid items-start gap-4 lg:grid-cols-2">
           <Recompose />
           <NewRole caps={data.capabilities} />
+          <FromLibrary data={data} />
         </section>
       )}
       <section className="mt-8">

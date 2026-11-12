@@ -1364,6 +1364,27 @@ def apply_team(_m, b: dict, h) -> Tuple[int, dict]:
     return 200, {"agents": [_agent_row(a) for a in store.list_agents(include_inactive=True)]}
 
 
+@route("POST", r"/team/include")
+@_refusable
+def include_role(_m, b: dict, h) -> Tuple[int, dict]:
+    """Add a library role the Composer did not pick. It is written into the profile (team.include), so it stays
+    on the next recompose, and the change is a new profile version like any other."""
+    from agents import roles
+    from core import business, team
+    u = _manager(h)
+    key = str(b.get("role") or "")
+    if key not in roles.ROLES:
+        return 400, {"error": f"no library role {key or '(empty)'}"}
+    p = business.current()
+    t = dict(p.get("team") or {})
+    t["include"] = sorted(set(t.get("include") or []) | {key})
+    t["exclude"] = [x for x in t.get("exclude") or [] if x != key]
+    p = {**p, "team": t}
+    store.save_profile(p, by=u.email, note=f"added {roles.ROLES[key]['nickname']} to the team")
+    team.apply(team.compose(p), by=u.email)
+    return 200, {"agents": [_agent_row(a) for a in store.list_agents(include_inactive=True)]}
+
+
 @route("POST", r"/team/new")
 @_refusable
 def new_agent(_m, b: dict, h) -> Tuple[int, dict]:
@@ -1688,10 +1709,11 @@ def activity_feed(_m, b: dict, h) -> Tuple[int, dict]:
 @route("GET", r"/trust")
 def trust_center(_m, b: dict, h) -> Tuple[int, dict]:
     """The evidence for privacy and security in one place (core/trust.py)."""
-    from core import trust
+    from core import compliance, systems, trust
     _user(h)
     days = int(b.get("days") or 30) if str(b.get("days") or "30").isdigit() else 30
-    return 200, trust.summary(max(1, min(days, 365)))
+    days = max(1, min(days, 365))
+    return 200, {**trust.summary(days), "compliance": compliance.overview(), "systems": systems.status(min(days, 90))}
 
 
 @route("GET", r"/attestation/([A-Za-z0-9_.:\-/]+)")

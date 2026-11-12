@@ -222,11 +222,39 @@ def ingest_orders() -> List[str]:
         return []
     raised = []
     for o in rows:
-        raised += order_paid(o["order_id"], payer=o.get("payer"), amount_usd=chain.from_base(o.get("amount", 0)),
-                             offering=o.get("offering"), tx=None, rail="vault")
+        amount = chain.from_base(o.get("amount", 0))
+        raised += order_paid(o["order_id"], payer=o.get("payer"), amount_usd=amount, offering=o.get("offering"),
+                             tx=chain.order_tx(o["order_id"], o.get("payer") or "", amount), rail="vault")
     if rows:
         store.set_setting("vault.orders_seen", str(start + len(rows)), by="settle")
     return raised
+
+
+#: A vault order whose transaction is not found yet is looked up again on later passes (the explorer
+#: indexes a little after the chain), at most this many times.
+TX_LOOKUPS = 6
+
+
+def fill_order_txs(lookup=None) -> int:
+    """Vault orders recorded without their transaction get it, once the chain confirms which one it was.
+
+    Finance reads the payment's transaction for the receipt and the books; an order paid to the vault
+    comes in without one (list_orders does not carry it). Returns how many were filled."""
+    lookup = lookup or chain.order_tx
+    filled = 0
+    for pay in store.list_payments(status="sent"):
+        d = pay.get("detail") or {}
+        if pay["direction"] != "in" or pay["rail"] != "vault" or pay.get("tx_hash") or not d.get("order_id") \
+                or int(d.get("tx_lookups") or 0) >= TX_LOOKUPS:
+            continue
+        tx = lookup(d["order_id"], pay["counterparty"], pay["amount_usd"])
+        if tx:
+            store.update_payment(pay["id"], "sent", tx_hash=tx, detail={"tx_confirmed_by": "order_paid event"})
+            store.update_order(d["order_id"], paid_tx=tx)
+            filled += 1
+        else:
+            store.update_payment(pay["id"], "sent", detail={"tx_lookups": int(d.get("tx_lookups") or 0) + 1})
+    return filled
 
 
 def order_paid(order_id: str, *, payer: Any, amount_usd: float, offering: Any, tx: Any, rail: str) -> List[str]:
@@ -254,7 +282,8 @@ def run_once() -> str:
                 done += 1
     moved = reconcile()
     raised = ingest_orders()
-    return f"{done} executed · {moved} reconciled · {len(raised)} order(s) in"
+    filled = fill_order_txs() if chain.readable() else 0
+    return f"{done} executed · {moved} reconciled · {len(raised)} order(s) in" + (f" · {filled} tx found" if filled else "")
 
 
 def check() -> None:
@@ -278,7 +307,20 @@ def check() -> None:
     assert w and order_paid("ord_1", payer="x", amount_usd=15, offering="brief", tx="tx9", rail="simulated") == []
     assert store.get_order("ord_1")["status"] == "paid"
     assert store.get_work_item(w[0])["payload"]["inputs"] == {"industry": "coffee"}
-    print("settle ok: simulated rail labelled ✓ · never sent twice ✓ · a paid order raises one work item ✓")
+
+    # a vault order recorded without its transaction gets it once the chain confirms it, and stops asking after a few tries
+    store.create_order("ord_v", "brief", 15.0, {}, customer="bob.testnet")
+    order_paid("ord_v", payer="bob.testnet", amount_usd=15.0, offering="brief", tx=None, rail="vault")
+    asked = []
+    assert fill_order_txs(lambda *a: asked.append(a)) == 0 and asked == [("ord_v", "bob.testnet", 15.0)]
+    assert fill_order_txs(lambda *a: "TxV") == 1
+    assert store.get_order("ord_v")["paid_tx"] == "TxV" and fill_order_txs(lambda *a: "again") == 0
+    store.create_order("ord_w", "brief", 5.0, {}, customer="eve.testnet")
+    order_paid("ord_w", payer="eve.testnet", amount_usd=5.0, offering="brief", tx=None, rail="vault")
+    for _ in range(TX_LOOKUPS + 2):
+        fill_order_txs(lambda *a: asked.append(a))
+    assert sum(1 for a in asked if a[0] == "ord_w") == TX_LOOKUPS, "gives up after a few lookups"
+    print("settle ok: simulated rail labelled ✓ · never sent twice ✓ · a paid order raises one work item ✓ · vault order tx filled once confirmed ✓")
 
 
 if __name__ == "__main__":

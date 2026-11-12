@@ -19,7 +19,13 @@ PAGE_CHARS = 8000
           {"query": {"type": "string"}, "days": {"type": "integer", "description": "1-30, default 7"}},
           ["query", "days"])
 def search_news(query: str, days: int = 7) -> Result:
-    return web_data.search_news(query, days)
+    r = web_data.search_news(query, days)
+    # Headlines and snippets are written by outsiders, like a page: a run that saw any is a run that read
+    # outside text, so a payment or an outside write after it waits for a person (guardian: untrusted_input).
+    if r.value:
+        from core import registry
+        registry.mark_untrusted()
+    return r
 
 
 @register("get_exchange_rate", "research",
@@ -88,7 +94,19 @@ def demo() -> None:
     assert read_web_page("file:///etc/passwd").origin is Origin.MISSING
     assert read_web_page("http://127.0.0.1/admin").origin is Origin.MISSING
     assert read_web_page("http://169.254.169.254/latest/meta-data").origin is Origin.MISSING
-    print("research ok: page text stripped ✓ · local/metadata hosts refused ✓")
+    # news results taint the run; an empty search does not
+    from core import registry
+    from core.provenance import Result as R_
+    real = web_data.search_news
+    try:
+        for rid, value, tainted in (("run_news_empty", [], False), ("run_news_hits", [{"title": "x"}], True)):
+            web_data.search_news = lambda q, d, v=value: R_(v, Origin.LIVE, "news")
+            with registry.bind_run(rid):
+                search_news("coffee")
+                assert registry.run_read_untrusted() is tainted, rid
+    finally:
+        web_data.search_news = real
+    print("research ok: page text stripped ✓ · local/metadata hosts refused ✓ · news results taint the run ✓")
 
 
 if __name__ == "__main__":

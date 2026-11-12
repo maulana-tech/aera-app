@@ -6,9 +6,11 @@ CAPABILITY (agents/roles.py), and agents are granted capabilities.
 """
 from tools import (  # noqa: F401
     commerce,
+    compliance,
     finance,
     money,
     research,
     skills,
+    systems,
     workspace,
 )

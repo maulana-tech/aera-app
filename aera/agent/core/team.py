@@ -77,6 +77,11 @@ def pick_roles(p: Dict[str, Any]) -> List[str]:
         # A business that takes money keeps books: receipts, the monthly report, the reconciliation.
         if offers and "finance" not in picked:
             picked.append("finance")
+        # A business that keeps clients' own material (briefs, documents, plans), beyond a name and an e-mail,
+        # needs somebody who knows what it holds and what it may say.
+        held = [x for x in (p.get("privacy") or {}).get("sensitive") or [] if "contact" not in x.lower()]
+        if offers and held and "compliance" not in picked:
+            picked.append("compliance")
         # Money the team may spend on its own is money somebody has to source.
         if (p.get("constraints", {}).get("autonomous_spend_usd", {}).get("per_payment") or 0) > 0 \
                 and "procurement" not in picked:

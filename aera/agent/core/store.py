@@ -769,7 +769,7 @@ def update_payment(pid: str, status: str, tx_hash: Optional[str] = None,
             return None
         merged = {**_load(old["detail"], {}), **(detail or {})}
         c.execute("UPDATE payments SET status=?, tx_hash=COALESCE(?, tx_hash), detail=?,"
-                  " settled_at=CASE WHEN ? THEN ? ELSE settled_at END WHERE id=?",
+                  " settled_at=CASE WHEN ? THEN COALESCE(settled_at, ?) ELSE settled_at END WHERE id=?",
                   (status, tx_hash, _j(merged), int(settled), _now(), pid))
         return _payment(c.execute("SELECT * FROM payments WHERE id=?", (pid,)).fetchone())
 

@@ -189,7 +189,7 @@ def reconcile() -> Dict[str, Any]:
         return {"status": "not applicable", "summary": "No vault: payments are simulated, so there is nothing on chain to reconcile.",
                 "differences": []}
     with store.connect() as c:
-        rows = [dict(r) for r in c.execute("SELECT direction, amount_usd, status, detail FROM payments WHERE rail='vault'")]
+        rows = [dict(r) for r in c.execute("SELECT direction, amount_usd, status, tx_hash, detail FROM payments WHERE rail='vault'")]
         local_orders = {r["id"] for r in c.execute("SELECT id FROM orders WHERE paid_tx IS NOT NULL OR status != 'awaiting_payment'")}
     vin = sum(r["amount_usd"] for r in rows if r["direction"] == "in" and r["status"] == "sent")
     vout = sum(r["amount_usd"] for r in rows if r["direction"] in ("out", "refund", "split") and r["status"] == "sent")
@@ -214,9 +214,13 @@ def reconcile() -> Dict[str, Any]:
     pending = [r for r in rows if r["status"] in ("submitted", "pending_onchain")]
     if pending:
         diffs.append(f"{len(pending)} vault payment(s) still in flight; they settle or fail on the next pass.")
+    # Not a difference in money, but a gap in the evidence: the receipt and the books cite the transaction.
+    untraced = [r for r in rows if r["direction"] == "in" and r["status"] == "sent" and not r["tx_hash"]]
+    notes = ([f"{len(untraced)} payment(s) into the vault have no confirmed transaction yet; the settlement worker "
+              "looks them up on the chain on its next passes."] if untraced else [])
     status = "balanced" if not diffs else ("in flight" if diffs and all("in flight" in d for d in diffs) else "differences")
     return {"status": status, "balance_usd": balance, "expected_usd": expected,
-            "orders_on_chain": len(chain_orders), "differences": diffs,
+            "orders_on_chain": len(chain_orders), "differences": diffs, "notes": notes,
             "summary": (f"The vault holds {_usd(balance)}, exactly what AERA's record says it should." if not diffs
                         else f"The vault holds {_usd(balance)}; AERA's record expects {_usd(expected)}.")}
 

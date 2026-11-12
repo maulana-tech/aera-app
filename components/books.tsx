@@ -80,6 +80,9 @@ export function Books({ data, mayAsk }: { data: FinancePayload; mayAsk: boolean 
             {rec.differences.length > 0 && (
               <ul className="mt-2 space-y-1">{rec.differences.map((d) => <li key={d} className="text-xs text-bad">· {d}</li>)}</ul>
             )}
+            {(rec.notes ?? []).length > 0 && (
+              <ul className="mt-2 space-y-1">{rec.notes!.map((d) => <li key={d} className="text-xs text-warn">· {d}</li>)}</ul>
+            )}
           </div>
           <div className="flex flex-col gap-2">
             <Button asChild variant="outline" size="sm"><a href={`/api/aera/finance/report.pdf?month=${r.month}`} download><Download /> Report PDF</a></Button>
