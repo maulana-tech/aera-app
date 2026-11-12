@@ -31,7 +31,9 @@ specific level wins over a broader one:
   AERA_MODEL_SPECIALISTS   the ten specialists that neither lead nor hold the veto
   AERA_MODEL               the deciders (Supervisor, Guardian), and everyone else not set above
   AERA_MODEL_FALLBACK      tried once when an agent's own model fails, then kept
-                            for the rest of that handling
+                            for the rest of that handling. A model that answers but
+                            crawls (over AERA_MODEL_SLOW_S seconds at under
+                            AERA_MODEL_MIN_TPS tokens a second) counts as failed too
 
 The translation is the whole of the difference, and it is deliberately dull:
 `input_schema` ↔ `parameters`, `tool_use` ↔ `tool_calls`, `tool_result` ↔ a
@@ -1059,8 +1061,10 @@ class Router:
     person reading the record should be able to see."""
 
     def __init__(self, cfg=None, make_backend: Callable[[Spec, Any], Any] = _make_backend,
-                 ready_fn: Callable[..., Tuple[bool, str]] = ready):
+                 ready_fn: Callable[..., Tuple[bool, str]] = ready,
+                 clock: Callable[[], float] = time.monotonic):
         self.messages = self
+        self._clock = clock
         self._cfg = cfg or _config.CFG
         self._make = make_backend
         self._ready = ready_fn
@@ -1084,15 +1088,38 @@ class Router:
         fb = req.pop("fallback", None)
         fb = parse(fb) if isinstance(fb, str) and fb else (fb or None)
         if fb is None or fb == primary or primary not in self._down:
+            began = self._clock()
             try:
-                return self._backend(primary).create(req)
+                reply = self._backend(primary).create(req)
             except Exception as e:                                   # noqa: BLE001
                 if fb is None or fb == primary:
                     raise
                 self._down[primary] = f"{type(e).__name__}: {e}"[:300]
+            else:
+                if fb is not None and fb != primary:
+                    why = _crawling(self._clock() - began, getattr(reply.usage, "output_tokens", 0))
+                    if why:
+                        # This answer is kept; the next ones go to the fallback. A model that takes
+                        # minutes over a few hundred tokens spent 11 of a run's 20 minutes on
+                        # 12 Nov 2026 without ever failing, so the fallback was never reached.
+                        self._down[primary] = why
+                return reply
         reply = self._backend(fb).create(req)
         reply.fell_back_from = (str(primary), self._down[primary])
         return reply
+
+
+def _crawling(seconds: float, output_tokens: int) -> Optional[str]:
+    """Why an answer that did arrive was too slow to keep asking this model, or None.
+
+    Slow alone is not enough: a writer's five-page brief rightly takes minutes. It is
+    slow AND thin, few tokens a second, that marks a model as struggling."""
+    slow = float(os.environ.get("AERA_MODEL_SLOW_S") or 60)
+    min_tps = float(os.environ.get("AERA_MODEL_MIN_TPS") or 10)
+    tps = output_tokens / seconds if seconds > 0 else float("inf")
+    if seconds > slow and tps < min_tps:
+        return f"too slow: {seconds:.0f}s for {output_tokens} tokens ({tps:.1f}/s)"
+    return None
 
 
 def ping(spec: Spec, cfg=None) -> Tuple[bool, str, float]:
@@ -1376,6 +1403,25 @@ def demo() -> None:
     except ModelCallFailed:
         pass
 
+    # A model that answers, but crawls, hands the rest of the handling to the fallback.
+    now = [0.0]
+
+    class Slow(Fake):
+        def create(self, req):
+            calls.append(str(self.spec))
+            now[0] += 200 if self.spec.model == "crawl" else 1
+            return Reply([TextBlock("ok")], "end_turn", Usage(self.spec, 10, 300), self.spec)
+
+    calls.clear()
+    slow_router = Router(Cfg(), make_backend=Slow, ready_fn=region_only, clock=lambda: now[0])
+    s1 = slow_router.create(model="bedrock:crawl", fallback="bedrock:quick", **base)
+    s2 = slow_router.create(model="bedrock:crawl", fallback="bedrock:quick", **base)
+    assert s1.fell_back_from is None and s1.usage.spec.model == "crawl", "the slow answer itself is kept"
+    assert s2.usage.spec.model == "quick" and "too slow" in s2.fell_back_from[1], s2.fell_back_from
+    assert calls == ["bedrock:crawl", "bedrock:quick"]
+    assert _crawling(240, 6000) is None, "a long document written at 25 tokens/s is not crawling"
+    assert _crawling(30, 10) is None, "short waits never count"
+
     class NoRegion:
         aws_region = ""
     try:
@@ -1384,6 +1430,7 @@ def demo() -> None:
         raise AssertionError("a model that cannot be reached must say why, not be attempted")
     except ModelUnavailable as e:
         assert "AWS_REGION" in str(e)
+    print("  routing: a crawling model hands over to the fallback ✓")
     print("  routing: fallback answers ✓ · a failed model stays failed for the handling ✓ "
           "· no fallback means the error surfaces ✓ · an unreachable model says why ✓")
     print("llm ok")

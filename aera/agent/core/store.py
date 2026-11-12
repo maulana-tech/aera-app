@@ -889,6 +889,34 @@ def save_file(name: str, mime: str, text: str, by: str) -> Dict[str, Any]:
     return {"id": fid, "name": name, "mime": mime, "size": len(text)}
 
 
+def run_documents(run_ids: List[str]) -> List[Dict[str, Any]]:
+    """The team's documents written in these runs (write_document records its run in the meta)."""
+    out: List[Dict[str, Any]] = []
+    if not run_ids:
+        return out
+    with connect() as c:
+        rows = c.execute("SELECT id, name, mime, uploaded_by, uploaded_at FROM files WHERE name LIKE 'doc:%'"
+                         " ORDER BY uploaded_at").fetchall()
+    for r in rows:
+        try:
+            meta = json.loads(r["mime"].split(";", 1)[1]) if ";" in r["mime"] else {}
+        except ValueError:
+            meta = {}
+        if meta.get("run_id") in run_ids:
+            out.append({"id": r["id"], "title": r["name"][4:], "by": r["uploaded_by"],
+                        "run_id": meta.get("run_id"), "format": meta.get("format")})
+    return out
+
+
+def earlier_runs(work_item_id: str, before: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Earlier runs of one work item, oldest first (excluding `before`, the run starting now)."""
+    with connect() as c:
+        rows = c.execute("SELECT id, status, started_at, decision FROM runs WHERE work_item_id=?"
+                         " ORDER BY started_at", (work_item_id,)).fetchall()
+    return [{"id": r["id"], "status": r["status"], "started_at": r["started_at"],
+             "reason": (_load(r["decision"], {}) or {}).get("reason")} for r in rows if r["id"] != before]
+
+
 def list_files() -> List[Dict[str, Any]]:
     with connect() as c:
         rows = c.execute("SELECT id, name, mime, size, uploaded_by, uploaded_at FROM files"
