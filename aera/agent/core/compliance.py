@@ -120,7 +120,7 @@ def legal_pages(profile: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     candidates = []
     for f in files:
         meta = _doc_meta(f["mime"])
-        if meta.get("kind") in ("compliance_register", "finance_report", "systems_review"):
+        if meta.get("kind") in ("compliance_register", "finance_report", "systems_review", "autonomy_report"):
             continue
         name = f["name"].removeprefix("doc:")
         draft = meta.get("format") == "draft" or bool(re.search(r"\bdraft\b", name, re.I))

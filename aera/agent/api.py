@@ -1731,6 +1731,15 @@ def activity_feed(_m, b: dict, h) -> Tuple[int, dict]:
     return 200, activity.summary(max(1, min(limit, 200)), b.get("category") or None, b.get("since") or None)
 
 
+@route("GET", r"/economics")
+def economics_overview(_m, b: dict, h) -> Tuple[int, dict]:
+    """How autonomous the business was and whether each order paid for itself (core/economics.py)."""
+    from core import economics
+    _user(h)
+    days = int(b.get("days") or 30) if str(b.get("days") or "30").isdigit() else 30
+    return 200, economics.overview(max(1, min(days, 365)))
+
+
 @route("GET", r"/trust")
 def trust_center(_m, b: dict, h) -> Tuple[int, dict]:
     """The evidence for privacy and security in one place (core/trust.py)."""

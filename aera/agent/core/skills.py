@@ -127,6 +127,21 @@ CATALOGUE: List[Skill] = [
         external=False,
     ),
     Skill(
+        name="autonomy_review",
+        title="Review how autonomous the business is",
+        description="Count what the team did alone and where people stepped in, check each offering pays for itself, and file the report.",
+        agents=["finance"],
+        tools=["autonomy_and_unit_economics", "save_autonomy_report"],
+        steps=[
+            "Read the figures; quote them exactly, never recompute.",
+            "For every time a person stepped in, say what rule or gap made it necessary (a new vendor, a cap, a stopped run) "
+            "and whether it was the right call; a person approving a new vendor is the design working, not a failure.",
+            "Name any offering whose price is below its floor price, with the floor; the owner decides prices.",
+            "Say what would let the team do more alone without loosening a safety rule, then file with save_autonomy_report.",
+        ],
+        external=False,
+    ),
+    Skill(
         name="check_before_it_goes_out",
         title="Compliance check before it goes out",
         description="Check a deliverable, message or page against the profile's rules and the standard checks before anyone outside sees it.",

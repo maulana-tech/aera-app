@@ -601,3 +601,21 @@ export type Reconciliation = {
   summary: string; differences: string[]; notes?: string[]; balance_usd?: number; expected_usd?: number; orders_on_chain?: number;
 };
 export type FinancePayload = { report: FinanceReport; reconcile: Reconciliation; filed: { id: string; name: string; uploaded_at: string }[] };
+
+export type EconomicsPayload = {
+  autonomy: {
+    days: number; work_items: number; finished: number; done_alone: number; autonomy_pct: number | null;
+    people_touches: number; touches: { what: string; count: number }[];
+    actions_carried_out: number; actions_carried_out_alone: number; stopped_by_guardian: number;
+    waiting: { id: string; title: string; status: string }[];
+  };
+  economics: {
+    days: number; target_margin_pct: number;
+    orders: { order: string; offering: string; revenue_usd: number; ai_usd: number; margin_pct: number | null;
+              people_touches: number; hours_to_deliver: number | null }[];
+    offerings: { offering: string; price_usd: number | null; orders: number; ai_per_order_usd: number | null;
+                 floor_price_usd: number | null; below_target: boolean }[];
+    revenue_usd: number; direct_ai_usd: number; gross_margin_pct: number | null;
+    overhead: { vendors_usd: number; ai_usd: number; note: string }; net_usd: number;
+  };
+};

@@ -4,9 +4,10 @@ import { redirect } from "next/navigation";
 
 import {
   api, apiResult, mayManage, mayStop, me, noBusiness, usd, when,
-  type Action, type ActivityPayload, type BusinessPayload, type Health, type Ledger, type RunRow,
+  type Action, type ActivityPayload, type BusinessPayload, type EconomicsPayload, type Health, type Ledger, type RunRow,
 } from "@/app/lib";
 import { AutoRefresh } from "@/components/auto-refresh";
+import { Autonomy } from "@/components/autonomy";
 import { Bars, Figure, type Datum } from "@/components/charts";
 import { GettingStarted } from "@/components/getting-started";
 import { TeamLive } from "@/components/team-live";
@@ -33,7 +34,7 @@ export default async function Dashboard() {
   }
   if (noBusiness(biz.data)) redirect("/onboarding");
 
-  const [led, pending, runs, health, user, accounts, orders, activity] = await Promise.all([
+  const [led, pending, runs, health, user, accounts, orders, activity, econ] = await Promise.all([
     api<Ledger>("ledger?days=30"),
     api<{ actions: Action[] }>("actions?status=pending"),
     api<{ runs: RunRow[] }>("runs"),
@@ -42,6 +43,7 @@ export default async function Dashboard() {
     api<{ users: { role: string }[] }>("users"),
     api<{ orders: { status: string }[] }>("orders"),
     api<ActivityPayload>("activity?limit=20"),
+    api<EconomicsPayload>("economics?days=30"),
   ]);
   const p = biz.data.profile;
   const money = led?.money ?? [];
@@ -138,6 +140,7 @@ export default async function Dashboard() {
           </Section>
         </div>
         <aside className="space-y-6">
+          {econ && <Autonomy data={econ} />}
           <Figure title="Who decided (30 days)" blurb="Actions the team took on its own authority against those a person decided.">
             <Bars data={who} />
           </Figure>
