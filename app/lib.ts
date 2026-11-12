@@ -620,6 +620,8 @@ export type EconomicsPayload = {
     revenue_usd: number; direct_ai_usd: number; gross_margin_pct: number | null;
     overhead: { vendors_usd: number; ai_usd: number; note: string }; net_usd: number;
   };
+  growth?: { views: number; checkouts: number; paid: number; revenue_usd: number; paid_per_100_views: number | null;
+             samples: { slug: string; title: string; views: number; checkouts: number; paid: number }[] };
 };
 
 export type PublicSampleRow = { slug: string; title: string; teaser: string; offering: string; offering_title?: string | null; published_at: string };
@@ -627,4 +629,9 @@ export type PublicSample = {
   business?: string | null; title: string; text: string; teaser: string; published_at: string;
   offering: { id: string; title?: string | null; price_usd?: number | null; description?: string | null };
   checkout: string;
+};
+
+export type Purchase = {
+  order_id: string; contact_id: string; seller: string; url: string; offering: string; amount_usd: number;
+  action_id?: string | null; status: string; file_id?: string | null; created_at: string; updated_at: string;
 };

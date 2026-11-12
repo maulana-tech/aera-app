@@ -2,7 +2,7 @@ import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 
 import {
-  apiResult, explorer, fromBase, mayManage, mayStop, me, toBase, usd, when, type Payment, type Treasury,
+  api, apiResult, explorer, fromBase, mayManage, mayStop, me, toBase, usd, when, type Payment, type Purchase, type Treasury,
 } from "@/app/lib";
 import { ActionCard } from "@/components/action-card";
 import { KillSwitch } from "@/components/kill-switch";
@@ -38,7 +38,8 @@ function PaymentRow({ p, network }: { p: Payment; network: string }) {
 }
 
 export default async function TreasuryPage() {
-  const [res, user] = await Promise.all([apiResult<Treasury>("treasury"), me()]);
+  const [res, user, bought] = await Promise.all([apiResult<Treasury>("treasury"), me(), api<{ purchases: Purchase[] }>("purchases")]);
+  const purchases = bought?.purchases ?? [];
   if (!res.data) {
     return (
       <main className="w-full px-4 py-4 md:px-6 md:py-8">
@@ -193,6 +194,22 @@ export default async function TreasuryPage() {
               </div>
             )}
           </Section>
+          {purchases.length > 0 && (
+            <Section title={`Bought from other AERA businesses (${purchases.length})`}
+              note="Ordered at the seller's own checkout and paid from the vault to the payout account on record. What comes back is filed as outside text.">
+              <ul className="divide-y rounded-lg border">
+                {purchases.map((p) => (
+                  <li key={p.order_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-sm">
+                    <StatusBadge status={p.status === "delivered" ? "done" : p.status === "failed" ? "failed" : "pending"}>{p.status}</StatusBadge>
+                    <span className="font-medium">{p.seller}</span>
+                    <span className="text-muted-foreground font-mono text-xs">{p.offering} · {p.order_id}</span>
+                    <span className="ml-auto font-mono tabular-nums">{usd(p.amount_usd)}</span>
+                    {p.file_id && <Link href={`/documents/${p.file_id}`} className="text-xs underline-offset-2 hover:underline">deliverable</Link>}
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
         </div>
 
         <aside className="space-y-4">

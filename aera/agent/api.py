@@ -1747,6 +1747,15 @@ def activity_feed(_m, b: dict, h) -> Tuple[int, dict]:
     return 200, activity.summary(max(1, min(limit, 200)), b.get("category") or None, b.get("since") or None)
 
 
+@route("GET", r"/purchases")
+def list_purchases(_m, _b, h) -> Tuple[int, dict]:
+    """What the team ordered from other AERA businesses (core/peers.py)."""
+    from core import peers
+    _user(h)
+    names = {c["id"]: c["name"] for c in store.list_contacts()}
+    return 200, {"purchases": [{**p, "seller": names.get(p["contact_id"], p["contact_id"])} for p in peers.purchases()]}
+
+
 @route("GET", r"/economics")
 def economics_overview(_m, b: dict, h) -> Tuple[int, dict]:
     """How autonomous the business was and whether each order paid for itself (core/economics.py)."""

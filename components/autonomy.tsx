@@ -29,6 +29,17 @@ export function Autonomy({ data }: { data: EconomicsPayload }) {
           </ul>
         </div>
       )}
+      {data.growth && data.growth.samples.length > 0 && (
+        <div className="mt-4 border-t pt-3">
+          <p className="text-muted-foreground text-xs">Free samples published</p>
+          <p className="mt-1 text-xs">
+            <span className="font-mono tabular-nums">{data.growth.views}</span> reads · <span className="font-mono tabular-nums">{data.growth.checkouts}</span> checkouts ·{" "}
+            <span className="font-mono tabular-nums">{data.growth.paid}</span> paid
+            {data.growth.revenue_usd > 0 && <> · {usd(data.growth.revenue_usd)}</>}
+          </p>
+          <Link href="/samples" className="text-muted-foreground text-xs hover:underline">public samples page →</Link>
+        </div>
+      )}
       <div className="mt-4 border-t pt-3">
         <p className="text-muted-foreground text-xs">Per offering · target margin {e.target_margin_pct}% after AI</p>
         <ul className="mt-1.5 space-y-1.5 text-xs">
