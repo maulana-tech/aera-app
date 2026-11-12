@@ -48,7 +48,7 @@ harus bertanya lewat chat.
 
 ---
 
-## Fase 2 — Tim membeli sendiri (½–1 hari) — langkah terakhir menunggu tanda tangan owner
+## Fase 2 — Tim membeli sendiri ✅ selesai 2026-11-12
 
 **Tujuan:** membuktikan sisi uang keluar secara otomatis, on-chain.
 
@@ -65,8 +65,13 @@ Status 2026-11-12:
 - ✅ $3 di bawah batas: dibayar otomatis oleh vault (tx `E7B2f1UB…`).
 - ✅ $8 di atas batas: Procurement → Guardian (`autonomous_cap`: warn) → Treasurer mengajukan → aksi
   `act_16e239c4eda1` **pending**; tidak ada uang bergerak.
-- ⏳ Owner menyetujui di Treasury → vault menahan (di atas batas kontrak $5) → owner menandatangani
-  `approve` dari wallet.
+- ✅ Owner menyetujui di Treasury → vault menahan request `payment:5c6db9a80152149b` (di atas batas
+  kontrak $5) → owner `lanadev.testnet` menandatangani `approve` dari wallet (tx `31BQURup…`):
+  event `payment_approved` + `ft_transfer` 8 USDC ke vendor. Saldo vault $12 → $4, vendor $3 → $11.
+- Ditemukan saat verifikasi: pembayaran yang ditahan vault tercatat dengan tx `request_payment` agen
+  (yang hanya memarkir), bukan tx approve yang memindahkan uang. Sekarang `fill_approval_txs` mencari
+  tx approve (NearBlocks → dikonfirmasi event `payment_approved` di RPC); tx request disimpan sebagai
+  `request_tx`.
 
 ---
 

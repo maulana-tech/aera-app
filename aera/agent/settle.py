@@ -257,6 +257,31 @@ def fill_order_txs(lookup=None) -> int:
     return filled
 
 
+def fill_approval_txs(lookup=None) -> int:
+    """A payment the vault held gets the transaction that actually paid it: the approver's approve call.
+
+    Until then it carries the agent's request_payment hash, which only parked the payment. That hash is
+    kept as detail.request_tx. Gives up after TX_LOOKUPS tries, like fill_order_txs."""
+    lookup = lookup or chain.approval_tx
+    filled = 0
+    for pay in store.list_payments(status="sent"):
+        d = pay.get("detail") or {}
+        v = d.get("vault") or {}
+        if pay["direction"] != "out" or pay["rail"] != "vault" or not v.get("decided_by") \
+                or d.get("request_tx") or int(d.get("tx_lookups") or 0) >= TX_LOOKUPS:
+            continue
+        tx = lookup(pay["request_id"], pay["counterparty"], pay["amount_usd"], v["decided_by"])
+        if tx:
+            store.update_payment(pay["id"], "sent", tx_hash=tx,
+                                 detail={"request_tx": pay.get("tx_hash"), "tx_confirmed_by": "payment_approved event"})
+            if pay["action_id"]:
+                store.move_action(pay["action_id"], "sent", reference=tx)
+            filled += 1
+        else:
+            store.update_payment(pay["id"], "sent", detail={"tx_lookups": int(d.get("tx_lookups") or 0) + 1})
+    return filled
+
+
 def order_paid(order_id: str, *, payer: Any, amount_usd: float, offering: Any, tx: Any, rail: str) -> List[str]:
     """Mark an order paid and raise its work item (once)."""
     order = store.get_order(order_id) or store.create_order(order_id, offering or "unknown", amount_usd, {},
@@ -282,7 +307,7 @@ def run_once() -> str:
                 done += 1
     moved = reconcile()
     raised = ingest_orders()
-    filled = fill_order_txs() if chain.readable() else 0
+    filled = (fill_order_txs() + fill_approval_txs()) if chain.readable() else 0
     return f"{done} executed · {moved} reconciled · {len(raised)} order(s) in" + (f" · {filled} tx found" if filled else "")
 
 
@@ -320,7 +345,17 @@ def check() -> None:
     for _ in range(TX_LOOKUPS + 2):
         fill_order_txs(lambda *a: asked.append(a))
     assert sum(1 for a in asked if a[0] == "ord_w") == TX_LOOKUPS, "gives up after a few lookups"
-    print("settle ok: simulated rail labelled ✓ · never sent twice ✓ · a paid order raises one work item ✓ · vault order tx filled once confirmed ✓")
+    # a payment the vault held shows the approver's transaction, not the request that parked it
+    held = store.record_payment("out", "vault", "dataco.testnet", 8.0, "usdc", "pending_onchain",
+                                request_id="payment:h1", tx_hash="TxRequest")
+    store.update_payment(held["id"], "sent", detail={"vault": {"status": "approved", "decided_by": "owner.testnet"}})
+    asked = []
+    assert fill_approval_txs(lambda *a: asked.append(a)) == 0 and asked == [("payment:h1", "dataco.testnet", 8.0, "owner.testnet")]
+    assert fill_approval_txs(lambda *a: "TxApprove") == 1
+    got = next(p for p in store.list_payments() if p["id"] == held["id"])
+    assert got["tx_hash"] == "TxApprove" and got["detail"]["request_tx"] == "TxRequest", got
+    assert fill_approval_txs(lambda *a: "again") == 0, "filled once"
+    print("settle ok: simulated rail labelled ✓ · never sent twice ✓ · a paid order raises one work item ✓ · vault order tx filled once confirmed ✓ · held payment shows the approval tx ✓")
 
 
 if __name__ == "__main__":

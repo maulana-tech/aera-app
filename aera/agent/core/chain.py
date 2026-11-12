@@ -169,16 +169,46 @@ def _nearblocks(path: str) -> Any:
         return json.loads(r.read().decode())
 
 
-def paid_order_in(events: Any, order_id: str) -> bool:
-    """True when the vault's `order_paid` event for this order is among these NEP-297 events."""
+def vault_event_in(events: Any, event: str, key: str, value: str) -> bool:
+    """True when one of these NEP-297 events is the vault's `event` with data[key] == value."""
     for e in events or []:
-        if e.get("standard") != "aera-vault" or e.get("event") != "order_paid":
+        if e.get("standard") != "aera-vault" or e.get("event") != event:
             continue
         data = e.get("data")
         for d in data if isinstance(data, list) else [data]:
-            if isinstance(d, dict) and d.get("order_id") == order_id:
+            if isinstance(d, dict) and d.get(key) == value:
                 return True
     return False
+
+
+def paid_order_in(events: Any, order_id: str) -> bool:
+    """True when the vault's `order_paid` event for this order is among these NEP-297 events."""
+    return vault_event_in(events, "order_paid", "order_id", order_id)
+
+
+def _vault_transfer_tx(counterparty: str, delta: str, signer: str, event: str, key: str, value: str) -> Optional[str]:
+    """A USDC transfer in or out of the vault, confirmed on the RPC by the vault's own event.
+
+    NearBlocks only narrows the candidates (counterparty and signed amount); the hash is returned once
+    the transaction's outcome, read from the NEAR RPC, carries `event` with data[key] == value."""
+    if not readable() or not valid_account(counterparty or "") or not valid_account(signer or ""):
+        return None
+    try:
+        rows = (_nearblocks(f"/v3/accounts/{vault_id()}/ft-txns?per_page=50") or {}).get("data") or []
+    except Exception:                                                  # noqa: BLE001
+        return None
+    near = _near()
+    for r in rows:
+        if r.get("contract_account_id") != token_id() or r.get("involved_account_id") != counterparty \
+                or str(r.get("delta_amount")) != delta or not r.get("transaction_hash"):
+            continue
+        try:
+            got = near.outcome(near.tx_status(r["transaction_hash"], signer))
+        except Exception:                                              # noqa: BLE001
+            continue
+        if vault_event_in(got.get("events"), event, key, value):
+            return r["transaction_hash"]
+    return None
 
 
 def order_tx(order_id: str, payer: str, amount_usd: float) -> Optional[str]:
@@ -188,25 +218,15 @@ def order_tx(order_id: str, payer: str, amount_usd: float) -> Optional[str]:
     USDC transfers into the vault, which narrows the candidates to transfers from this payer of this
     amount, and the NEAR RPC then confirms one of them, by the vault's own `order_paid` event for this
     order id. A hash is only returned once the chain itself says so; NearBlocks is never taken at its word."""
-    if not readable() or not valid_account(payer or ""):
-        return None
-    try:
-        rows = (_nearblocks(f"/v3/accounts/{vault_id()}/ft-txns?per_page=50") or {}).get("data") or []
-    except Exception:                                                  # noqa: BLE001
-        return None
-    want = to_base(amount_usd)
-    near = _near()
-    for r in rows:
-        if r.get("contract_account_id") != token_id() or r.get("involved_account_id") != payer \
-                or str(r.get("delta_amount")) != want or not r.get("transaction_hash"):
-            continue
-        try:
-            got = near.outcome(near.tx_status(r["transaction_hash"], payer))
-        except Exception:                                              # noqa: BLE001
-            continue
-        if paid_order_in(got.get("events"), order_id):
-            return r["transaction_hash"]
-    return None
+    return _vault_transfer_tx(payer, to_base(amount_usd), payer, "order_paid", "order_id", order_id)
+
+
+def approval_tx(request_id: str, receiver: str, amount_usd: float, approver: str) -> Optional[str]:
+    """The transaction that moved a held payment: the approver's approve(request_id), not the agent's request.
+
+    A payment over the vault's caps has two transactions. The agent's request_payment only parks it;
+    the money leaves in the approver's approve call, so that is the hash the receipt and the books show."""
+    return _vault_transfer_tx(receiver, "-" + to_base(amount_usd), approver, "payment_approved", "request_id", request_id)
 
 
 # ---------------------------------------------------------------- calls
@@ -270,6 +290,9 @@ def demo() -> None:
     paid = [{"standard": "aera-vault", "event": "order_paid", "data": [{"order_id": "ord_1", "amount": "15000000"}]}]
     assert paid_order_in(paid, "ord_1") and not paid_order_in(paid, "ord_2")
     assert not paid_order_in([{"standard": "other", "event": "order_paid", "data": [{"order_id": "ord_1"}]}], "ord_1")
+    ok = [{"standard": "aera-vault", "event": "payment_approved", "data": [{"request_id": "payment:1"}]}]
+    assert vault_event_in(ok, "payment_approved", "request_id", "payment:1")
+    assert not vault_event_in(ok, "payment_approved", "request_id", "payment:2")
     for ok in ("vendor.testnet", "a1.b-c_d.near", "17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1"):
         assert valid_account(ok), ok
     for bad in ("", "A.near", "x", "a..b", "-a.near", "a" * 65, "bad account"):
