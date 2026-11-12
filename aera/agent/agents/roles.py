@@ -33,6 +33,7 @@ CAPABILITIES: Dict[str, str] = {
     "memory": "Search how past work items were handled and how they turned out.",
     "finance": "Read the books (revenue, costs, margin), reconcile them with the vault, issue receipts, file reports. Never moves money.",
     "compliance": "Check what goes out against the profile's rules and the standard checks, list the policy pages the business needs, keep the register of personal data it holds. Never publishes or decides.",
+    "marketplace": "Read what vendors on record that run their own AERA business sell, and at what price.",
     "publishing": "Publish a finished free sample to the business's public samples page, linked to a checkout. Checked in code first; anything flagged waits for a person.",
     "systems": "Read how the machinery is doing: models and attestation, failed runs and tools, AI spend, outside servers, the vault. Changes no setting.",
     "guardian": "LOCKED to the guardian: rule on actions and counterparties against the profile; freeze payments.",
@@ -199,12 +200,14 @@ ROLES: Dict[str, Dict] = {
     "procurement": {
         "nickname": "Procurement", "title": "Procurement",
         "brief": "Finds vendors, APIs and other agents to buy from, compares price and quality, and recommends one.",
-        "capabilities": ["research", "contacts", "knowledge"],
+        "capabilities": ["research", "contacts", "knowledge", "marketplace"],
         "keywords": ("buy", "vendor", "supplier", "procure", "freelance", "api", "data provider", "outsource"),
         "prompt": ("You are the Procurement agent on {NAME}'s team.\n\n{BUSINESS}\n\n"
                    "Your job: find who to buy from and at what price. Recommend a vendor that is already a "
                    "contact when one fits; a new vendor needs a person's approval. You do not pay; the treasurer "
-                   "does, and only to a payout address a person put on record.\n\n" + _RULES),
+                   "does, and only to a payout address a person put on record. When a vendor on record runs its own "
+                   "AERA business, read its catalogue (aera_vendor_catalogue) and hand the treasurer the offering id "
+                   "and the inputs it needs, so it can order and pay in one step (order_from_aera).\n\n" + _RULES),
     },
     "designer": {
         "nickname": "Designer", "title": "Designer",

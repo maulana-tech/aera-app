@@ -383,6 +383,8 @@ export type Contact = {
   address_changed_at?: string | null;
   phone?: string | null; title?: string | null; department?: string | null;
   notes?: string | null; created_at?: string; updated_at?: string | null;
+  /** the vendor's own AERA, where the team can order from its checkout */
+  aera_url?: string | null;
 };
 
 export type ChannelState = {

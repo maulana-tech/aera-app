@@ -98,6 +98,38 @@ def pay_vendor(contact_id: str, amount_usd: float, purpose: str, reference: str 
                                      "purpose": payload["purpose"], "reference": payload["reference"]})
 
 
+@register("order_from_aera", "treasury",
+          "Buy an offering from a vendor ON RECORD that runs its own AERA business: places the order at its checkout "
+          "and pays it from the vault, through the same checks as pay_vendor. The seller must ask to be paid at the "
+          "payout account on record, or nothing is paid. `inputs` is a JSON object of the offering's inputs (see "
+          "aera_vendor_catalogue). The deliverable is fetched by itself once the seller delivers.",
+          {"contact_id": {"type": "string"}, "offering_id": {"type": "string"},
+           "inputs": {"type": "string", "description": "JSON object, e.g. {\"country\": \"Vietnam\"}"}},
+          ["contact_id", "offering_id", "inputs"], writes=True)
+def order_from_aera(contact_id: str, offering_id: str, inputs: str = "{}") -> Result:
+    import json as _json
+    from core import peers
+    contact = store.get_contact(contact_id)
+    if not contact:
+        return Result(None, Origin.MISSING, "contacts", note=f"no contact {contact_id}")
+    try:
+        args = _json.loads(inputs or "{}")
+        if not isinstance(args, dict):
+            raise ValueError
+    except ValueError:
+        return Result(None, Origin.MISSING, "inputs", note="inputs must be a JSON object")
+    try:
+        placed = peers.place_order(contact, offering_id, {k: str(v)[:500] for k, v in args.items()})
+    except (LookupError, PermissionError, ValueError, OSError) as e:
+        return Result(None, Origin.MISSING, contact["name"], note=f"not ordered: {e}")
+    paid = pay_vendor(contact_id, placed["amount_usd"], placed["purpose"], placed["order_id"])
+    a = paid.value or {}
+    if a.get("id"):
+        peers.link_payment(placed["order_id"], a["id"], "paid" if a.get("status") == "sent" else "ordered")
+    return Result({"seller_order": placed["order_id"], "amount_usd": placed["amount_usd"], "payment": a},
+                  paid.origin, "vault", note=paid.note)
+
+
 #: USDC on each chain, as NEAR Intents names it (1Click /v0/tokens, read 2026-11-10).
 USDC_ON = {
     "near": "nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1",

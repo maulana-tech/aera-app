@@ -189,6 +189,28 @@ CREATE TABLE IF NOT EXISTS samples (
   views           INTEGER NOT NULL DEFAULT 0
 );
 
+-- Other businesses that run on AERA: the address of a vendor's AERA, set by a person on its contact.
+CREATE TABLE IF NOT EXISTS peers (
+  contact_id  TEXT PRIMARY KEY,
+  url         TEXT NOT NULL,
+  set_by      TEXT NOT NULL,
+  at          TEXT NOT NULL
+);
+
+-- What this business ordered from another AERA business, and what came back (core/peers.py).
+CREATE TABLE IF NOT EXISTS purchases (
+  order_id    TEXT PRIMARY KEY,         -- the seller's order id
+  contact_id  TEXT NOT NULL,
+  url         TEXT NOT NULL,
+  offering    TEXT NOT NULL,
+  amount_usd  REAL NOT NULL,
+  action_id   TEXT,                     -- the payment action on this side
+  status      TEXT NOT NULL,            -- ordered | paid | delivered | failed
+  file_id     TEXT,                     -- the deliverable, filed as outside text
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+
 -- Where an order came from, when the checkout link carried a source (a published sample).
 CREATE TABLE IF NOT EXISTS order_sources (
   order_id  TEXT PRIMARY KEY,

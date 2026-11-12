@@ -50,12 +50,12 @@ const pill = (on: boolean) =>
 type Draft = {
   name: string; email: string; role: string; notify: string[];
   phone: string; title: string; department: string; notes: string;
-  near_account: string; payout_chain: string; payout_address: string;
+  near_account: string; payout_chain: string; payout_address: string; aera_url: string;
 };
 
 const blank: Draft = {
   name: "", email: "", role: "team", notify: [], phone: "", title: "", department: "", notes: "",
-  near_account: "", payout_chain: "near", payout_address: "",
+  near_account: "", payout_chain: "near", payout_address: "", aera_url: "",
 };
 
 const fromContact = (c: Contact): Draft => ({
@@ -63,9 +63,11 @@ const fromContact = (c: Contact): Draft => ({
   notify: c.notify_for === "*" ? [] : c.notify_for.split(",").filter(Boolean),
   phone: c.phone ?? "", title: c.title ?? "", department: c.department ?? "", notes: c.notes ?? "",
   near_account: c.near_account ?? "", payout_chain: c.payout_chain ?? "near", payout_address: c.payout_address ?? "",
+  aera_url: c.aera_url ?? "",
 });
 
-const PAYOUT = ["near_account", "payout_chain", "payout_address"] as const;
+// The AERA address sits with the payout fields: it decides where the team places orders, so the same people set it.
+const PAYOUT = ["near_account", "payout_chain", "payout_address", "aera_url"] as const;
 
 /* One form for adding and for changing a contact. Name, email and role are
  * what an alert needs; the rest is how to reach a person when it cannot wait
@@ -135,6 +137,9 @@ function ContactForm({ initial, submitLabel, onSave, onCancel, payoutEditable, c
             placeholder: d.payout_chain === "sol" ? "Solana address" : "0x…",
             disabled: !payoutEditable || d.payout_chain === "near",
           })}
+        </div>
+        <div className="mt-3">
+          {field("aera_url", "Their AERA, if this vendor runs on AERA", { placeholder: "https://vendor.example (or http://127.0.0.1:8788)", disabled: !payoutEditable })}
         </div>
         <p className="text-muted-foreground mt-2 text-[11px] leading-relaxed">
           {payoutEditable

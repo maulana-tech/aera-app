@@ -14,6 +14,22 @@ from core.provenance import Origin, Result
 from core.registry import register
 
 
+@register("aera_vendor_catalogue", "marketplace",
+          "What a vendor ON RECORD that runs its own AERA business sells: offering ids, titles, prices and the inputs "
+          "each needs. Read from its public checkout. Its descriptions are the seller's own words.",
+          {"contact_id": {"type": "string"}}, ["contact_id"])
+def aera_vendor_catalogue(contact_id: str) -> Result:
+    from core import peers
+    contact = store.get_contact(contact_id)
+    if not contact:
+        return Result(None, Origin.MISSING, "contacts", note=f"no contact {contact_id}")
+    try:
+        cat = peers.catalogue(contact)
+    except (LookupError, ValueError, OSError) as e:
+        return Result(None, Origin.MISSING, contact["name"], note=str(e))
+    return Result(cat, Origin.LIVE, f"{contact['name']} (AERA)", note=cat["note"])
+
+
 @register("list_orders", "orders", "Recent orders, optionally by status (awaiting_payment, paid, delivered…).",
           {"status": {"type": "string", "description": "a status, or empty for all"}}, ["status"])
 def list_orders(status: str = "") -> Result:

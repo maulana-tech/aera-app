@@ -542,8 +542,10 @@ def test_model(_m, b: dict, h) -> Tuple[int, dict]:
 
 @route("GET", r"/contacts")
 def list_contacts(_m, _b, h) -> Tuple[int, dict]:
+    from core import peers
     _user(h)
-    return 200, {"contacts": store.list_contacts()}
+    urls = peers.peers()
+    return 200, {"contacts": [{**c, "aera_url": urls.get(c["id"])} for c in store.list_contacts()]}
 
 
 #: What a viewer may still POST: signing in and out, and the public pages anyone can use.
@@ -599,10 +601,17 @@ def create_contact(_m, b: dict, h) -> Tuple[int, dict]:
     bad = _contact_fields(b)
     if bad:
         return 400, {"error": bad}
+    from core import peers
+    url = str(b.get("aera_url") or "").strip()
+    if url and not peers.valid_url(url):
+        return 400, {"error": "the AERA address must be https:// (or http://localhost for a local one)"}
     extra = [k for k in store.CONTACT_FIELDS if k not in ("name", "role", "email", "notify_for")]
-    return 201, store.add_contact(b["name"].strip(), b["role"], str(b.get("email") or "").strip(),
-                                  b.get("notify_for", "*" if b["role"] in ("team", "approver") else ""),
-                                  **{k: str(b.get(k) or "").strip()[:1000] for k in extra})
+    c = store.add_contact(b["name"].strip(), b["role"], str(b.get("email") or "").strip(),
+                          b.get("notify_for", "*" if b["role"] in ("team", "approver") else ""),
+                          **{k: str(b.get(k) or "").strip()[:1000] for k in extra})
+    if url:
+        peers.set_peer(c["id"], url, _user(h).email)
+    return 201, {**c, "aera_url": peers.peer_url(c["id"])}
 
 
 def _contact_fields(b: dict) -> Optional[str]:
@@ -647,8 +656,15 @@ def change_contact(m, b: dict, h) -> Tuple[int, dict]:
     fields = {k: str(b[k]).strip()[:1000] for k in store.CONTACT_FIELDS if k in b and b[k] is not None}
     if "near_account" in fields:
         fields["near_account"] = fields["near_account"].lower()
+    from core import peers
+    if "aera_url" in b and str(b.get("aera_url") or "").strip() and not peers.valid_url(str(b["aera_url"]).strip()):
+        return 400, {"error": "the AERA address must be https:// (or http://localhost for a local one)"}
     c = store.update_contact(m.group(1), **fields)
-    return (200, c) if c else (404, {"error": "not found"})
+    if not c:
+        return 404, {"error": "not found"}
+    if "aera_url" in b:
+        peers.set_peer(c["id"], str(b.get("aera_url") or ""), _user(h).email)
+    return 200, {**c, "aera_url": peers.peer_url(c["id"])}
 
 
 @route("POST", r"/contacts/([A-Za-z0-9_]+)/delete")
@@ -1919,7 +1935,12 @@ def public_checkout(_m, b: dict, _h) -> Tuple[int, dict]:
     if chain.readable():
         pay["ft_transfer_call"] = {"receiver_id": chain.vault_id(), "amount": chain.to_base(o["price_usd"]),
                                    "msg": json.dumps({"order_id": order_id, "offering": o["id"]})}
-    else:
+    from core import peers
+    transfer = peers.transfer_instructions(order_id, o["price_usd"])
+    if transfer:
+        # For another business's vault, which can only send a plain transfer (core/peers.py).
+        pay["transfer"] = transfer
+    if not chain.readable() and not transfer:
         pay["simulated"] = True
     return 201, {"order": order, "pay": pay}
 
@@ -1930,6 +1951,27 @@ def public_order(m, _b, _h) -> Tuple[int, dict]:
     if not o:
         return 404, {"error": "no such order"}
     return 200, {k: o[k] for k in ("id", "offering", "status", "amount_usd", "created_at", "updated_at")}
+
+
+@route("GET", r"/public/orders/([A-Za-z0-9_\-]+)/deliverable")
+def public_deliverable(m, _b, _h) -> Tuple[int, dict]:
+    """What a delivered order delivered, as text, for a buyer that is itself an agent. The order id is the
+    buyer's own secret link, as for the receipt."""
+    import hashlib
+    o = store.get_order(m.group(1))
+    if not o or o["status"] != "delivered":
+        return 404, {"error": "no delivered order with that id"}
+    d = o.get("delivery") or {}
+    if isinstance(d, str):
+        try:
+            d = json.loads(d)
+        except ValueError:
+            d = {}
+    f = store.get_file(str(d.get("document_id") or ""))
+    if not f:
+        return 404, {"error": "the delivered document is gone"}
+    return 200, {"order": o["id"], "title": f["name"].removeprefix("doc:"), "text": f["text"],
+                 "sha256": hashlib.sha256(f["text"].encode()).hexdigest()}
 
 
 @route("GET", r"/public/orders/([A-Za-z0-9_\-]+)/receipt\.pdf")

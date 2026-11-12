@@ -323,9 +323,13 @@ def run_once() -> str:
             if execute(a["id"]).get("ok"):
                 done += 1
     moved = reconcile()
+    from core import peers
+    raised_by_peers = peers.ingest_transfers()
+    collected = peers.collect()
     raised = ingest_orders()
     filled = (fill_order_txs() + fill_approval_txs()) if chain.readable() else 0
-    return f"{done} executed · {moved} reconciled · {len(raised)} order(s) in" + (f" · {filled} tx found" if filled else "")
+    return (f"{done} executed · {moved} reconciled · {len(raised) + len(raised_by_peers)} order(s) in"
+            + (f" · {filled} tx found" if filled else "") + (f" · {collected} purchase(s) delivered" if collected else ""))
 
 
 def check() -> None:
