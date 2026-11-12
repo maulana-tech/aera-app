@@ -20,12 +20,19 @@ export default function Login() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [needsOwner, setNeedsOwner] = useState(false);
+  const [demo, setDemo] = useState<{ email: string; password: string } | null>(null);
 
   useEffect(() => {
     fetch("/api/setup", { cache: "no-store" })
       .then((r) => r.json())
       .then((d: { needs_owner?: boolean }) => setNeedsOwner(!!d.needs_owner))
       .catch(() => setNeedsOwner(false));
+    fetch("/api/demo", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d: { enabled?: boolean; email?: string; password?: string }) => {
+        if (d.enabled && d.email && d.password) setDemo({ email: d.email, password: d.password });
+      })
+      .catch(() => setDemo(null));
   }, []);
 
   async function send(path: string, body: Record<string, string>, next: string) {
@@ -85,6 +92,17 @@ export default function Login() {
         <Button type="submit" size="lg" className="w-full" disabled={busy}>
           {busy ? (setup ? "Creating…" : "Signing in…") : setup ? "Create owner and continue" : "Sign in"}
         </Button>
+        {!setup && demo && (
+          <div className="space-y-2">
+            <Button type="button" variant="outline" size="lg" className="w-full" disabled={busy}
+                    onClick={() => { setEmail(demo.email); setPassword(demo.password); setError(""); }}>
+              Use the demo account
+            </Button>
+            <p className="text-muted-foreground text-center text-[12px] leading-relaxed">
+              Fills in a read-only account: it can look around and ask the agents, but approves no payment and changes no settings.
+            </p>
+          </div>
+        )}
         {!setup && (
           <p className="text-muted-foreground text-center text-[12.5px]">
             No account? Ask the business owner to add you under Settings → Accounts.
