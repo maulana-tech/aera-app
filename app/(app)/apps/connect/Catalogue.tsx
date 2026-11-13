@@ -17,6 +17,8 @@ import { cn } from "@/lib/utils";
 type Hit = ToolkitHit & { connected?: boolean; added?: boolean };
 type Page = { toolkits: Hit[]; next_cursor: string | null; total: number | null; error?: string };
 
+/** How many categories show as chips; the rest are in a list. */
+const MAIN_CATEGORIES = 10;
 const pretty = (slug: string) => slug.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
 function Logo({ src, size = 40 }: { src: string | null; size?: number }) {
@@ -145,14 +147,26 @@ export function Catalogue({ mayChange, ready, added: addedAtLoad }: { mayChange:
         <Button type="submit" disabled={loading}>Search</Button>
       </form>
 
-      <div className="mt-4 flex flex-wrap gap-1.5">
-        {[{ id: "", name: "Most used" }, ...cats].map((c) => (
+      {/* Composio has hundreds of fine-grained categories: the main ones as chips, every one in the list */}
+      <div className="mt-4 flex flex-wrap items-center gap-1.5">
+        {[{ id: "", name: "Most used" }, ...cats.slice(0, MAIN_CATEGORIES)].map((c) => (
           <button key={c.id || "all"} type="button" onClick={() => pick(c.id)}
             className={cn("h-8 rounded-full border px-3 text-[12.5px] transition-colors",
               category === c.id ? "border-brand bg-brand text-white" : "text-text hover:bg-raised")}>
             {c.name}
           </button>
         ))}
+        {cats.length > MAIN_CATEGORIES && (
+          <select aria-label="More categories" value={cats.slice(0, MAIN_CATEGORIES).some((c) => c.id === category) ? "" : category}
+            onChange={(e) => pick(e.target.value)}
+            className={cn("h-8 rounded-full border bg-white px-3 text-[12.5px]",
+              category && !cats.slice(0, MAIN_CATEGORIES).some((c) => c.id === category) ? "border-brand text-brand" : "text-text")}>
+            <option value="">More categories…</option>
+            {[...cats.slice(MAIN_CATEGORIES)].sort((x, y) => x.name.localeCompare(y.name)).map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       <p className="text-muted-foreground mt-5 text-[12px]">
