@@ -1889,6 +1889,37 @@ def search_apps(_m, b: dict, h) -> Tuple[int, dict]:
         return 502, {"error": str(e)}
 
 
+@route("GET", r"/apps/catalogue")
+def apps_catalogue(_m, b: dict, h) -> Tuple[int, dict]:
+    """A page of Composio's catalogue, each app marked connected (in Composio) and added (to AERA)."""
+    from clients import composio
+    _user(h)
+    if not composio.configured():
+        return 409, {"error": "COMPOSIO_API_KEY is not set (.secrets/notify.env)"}
+    try:
+        page = composio.catalogue(str(b.get("q") or ""), str(b.get("category") or ""), str(b.get("cursor") or ""))
+        connected = {c["toolkit"] for c in composio.connections()}
+    except (composio.NotConnected, composio.Failed) as e:
+        return 502, {"error": str(e)}
+    added = {a["toolkit"] for a in store.list_apps()}
+    for t in page["toolkits"]:
+        t["connected"] = t["slug"] in connected or t["no_auth"]
+        t["added"] = t["slug"] in added
+    return 200, page
+
+
+@route("GET", r"/apps/categories")
+def apps_categories(_m, _b, h) -> Tuple[int, dict]:
+    from clients import composio
+    _user(h)
+    if not composio.configured():
+        return 200, {"categories": []}
+    try:
+        return 200, {"categories": composio.categories()}
+    except (composio.NotConnected, composio.Failed) as e:
+        return 502, {"error": str(e), "categories": []}
+
+
 @route("POST", r"/apps/connect")
 def connect_app(_m, b: dict, h) -> Tuple[int, dict]:
     """A Composio sign-in page for one app, for the person who asked (or `connected` when there already is one)."""
@@ -1903,7 +1934,7 @@ def connect_app(_m, b: dict, h) -> Tuple[int, dict]:
     try:
         if composio.connections(toolkit):
             return 200, {"connected": True}
-        return 200, composio.connect_link(toolkit, f"{CFG.web_url}/apps?connected={toolkit}")
+        return 200, composio.connect_link(toolkit, f"{CFG.web_url}/apps/connect?connected={toolkit}")
     except composio.NotConnected as e:
         return 409, {"error": str(e)}
     except composio.Failed as e:

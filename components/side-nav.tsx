@@ -3,7 +3,7 @@
 import {
   Activity, BookUser, Briefcase, CalendarClock, ChevronDown, ChevronsUpDown, Cpu, FileText, Inbox, KeyRound,
   Landmark, LayoutDashboard, LogIn, LogOut, Menu, MessagesSquare, PanelLeftClose, PanelLeftOpen, Plug,
-  ReceiptText, ScrollText, Settings2, ShieldCheck, ShoppingBag, Sparkles, Users, Target, Blocks } from "lucide-react";
+  ReceiptText, ScrollText, Settings2, ShieldCheck, ShoppingBag, Sparkles, Users, Target, Blocks, PlugZap } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -30,7 +30,10 @@ type User = { name: string; role: string; email: string; limit_usd?: number };
 type Item = { title: string; href: string; icon: React.ElementType; badge?: number };
 
 
-const isActive = (pathname: string, href: string) => pathname === href || pathname.startsWith(href + "/");
+const under = (pathname: string, href: string) => pathname === href || pathname.startsWith(href + "/");
+/** On, unless a more specific item also matches (Apps is not lit on Connect tools, /apps/connect). */
+const isActive = (pathname: string, href: string) =>
+  under(pathname, href) && !SETTINGS.some((s) => s.href !== href && s.href.startsWith(href + "/") && under(pathname, s.href));
 
 function groups(pending: number): { label: string; items: Item[] }[] {
   return [
@@ -71,6 +74,7 @@ function groups(pending: number): { label: string; items: Item[] }[] {
 const SETTINGS: Item[] = [
   { title: "Models", href: "/models", icon: Cpu },
   { title: "Apps", href: "/apps", icon: Blocks },
+  { title: "Connect tools", href: "/apps/connect", icon: PlugZap },
   { title: "MCP", href: "/mcp", icon: Plug },
   { title: "Skills", href: "/skills", icon: Sparkles },
   { title: "Schedule", href: "/schedule", icon: CalendarClock },

@@ -250,14 +250,44 @@ def search_toolkits(query: str = "", limit: int = 24) -> List[Dict[str, Any]]:
     q: Dict[str, Any] = {"limit": max(1, min(limit, 50))}
     if query.strip():
         q["search"] = query.strip()[:80]
-    out = []
-    for t in _call("GET", "/toolkits", query=q).get("items") or []:
-        m = t.get("meta") or {}
-        out.append({"slug": t.get("slug"), "name": t.get("name"), "description": (m.get("description") or "")[:300],
-                    "logo": m.get("logo"), "categories": [c.get("name") if isinstance(c, dict) else c for c in m.get("categories") or []][:3],
-                    "tools_count": m.get("tools_count"), "no_auth": bool(t.get("no_auth")),
-                    "managed": bool(t.get("composio_managed_auth_schemes"))})
-    return out
+    return [_hit(t) for t in _call("GET", "/toolkits", query=q).get("items") or []]
+
+
+def _hit(t: dict) -> Dict[str, Any]:
+    m = t.get("meta") or {}
+    return {"slug": t.get("slug"), "name": t.get("name"), "description": (m.get("description") or "")[:300],
+            "logo": m.get("logo"), "categories": [c.get("name") if isinstance(c, dict) else c for c in m.get("categories") or []][:3],
+            "tools_count": m.get("tools_count"), "no_auth": bool(t.get("no_auth")),
+            "managed": bool(t.get("composio_managed_auth_schemes"))}
+
+
+def catalogue(query: str = "", category: str = "", cursor: str = "", limit: int = 24) -> Dict[str, Any]:
+    """One page of the apps Composio can connect: most used first, or matching a search, or in one category."""
+    q: Dict[str, Any] = {"limit": max(1, min(limit, 50))}
+    if query.strip():
+        q["search"] = query.strip()[:80]
+    else:
+        q["sort_by"] = "usage"
+    if category.strip():
+        q["category"] = category.strip()[:80]
+    if cursor:
+        q["cursor"] = cursor[:300]
+    r = _call("GET", "/toolkits", query=q)
+    return {"toolkits": [_hit(t) for t in r.get("items") or [] if not t.get("is_local_toolkit")],
+            "next_cursor": r.get("next_cursor") or None, "total": r.get("total_items")}
+
+
+def categories() -> List[Dict[str, str]]:
+    """The catalogue's categories, each once."""
+    def look() -> List[Dict[str, str]]:
+        seen: Dict[str, str] = {}
+        for c in _call("GET", "/toolkits/categories").get("items") or []:
+            cid = str(c.get("id") or c.get("slug") or "").strip()
+            if cid and cid not in seen and cid != "popular":
+                name = str(c.get("name") or cid)
+                seen[cid] = name[:1].upper() + name[1:]
+        return [{"id": k, "name": v} for k, v in seen.items()]
+    return _cached("categories", look)
 
 
 def toolkit_tools(toolkit: str, limit: int = 300) -> List[Dict[str, Any]]:

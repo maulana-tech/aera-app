@@ -2,11 +2,12 @@
 
 /* eslint-disable @next/next/no-img-element -- app logos come from Composio's CDN, any size */
 
-import { Blocks, ExternalLink, Loader2, RefreshCw, Search, Trash2 } from "lucide-react";
+import { Blocks, Loader2, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
-import type { AppTool, AppsPayload, ConnectedApp, ToolkitHit } from "@/app/lib";
+import type { AppTool, AppsPayload, ConnectedApp } from "@/app/lib";
 import { Chip } from "@/components/dort";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -145,104 +146,8 @@ function AppCard({ app, agents, connected, mayChange }: { app: ConnectedApp; age
   );
 }
 
-/* ------------------------------------------------------------- the catalogue */
-function AddApp({ added, connected, mayChange }: { added: Set<string>; connected: Set<string>; mayChange: boolean }) {
-  const router = useRouter();
-  const [q, setQ] = useState("");
-  const [hits, setHits] = useState<ToolkitHit[] | null>(null);
-  const [busy, setBusy] = useState("");
-  const [said, setSaid] = useState<Record<string, string>>({});
-  const [opened, setOpened] = useState<Set<string>>(new Set());
-
-  const search = async (e?: React.FormEvent) => {
-    e?.preventDefault();
-    setBusy("search");
-    try {
-      const r = await fetch(`/api/aera/apps/search?q=${encodeURIComponent(q)}`).then((x) => x.json());
-      if (r.error) throw new Error(r.error);
-      setHits(r.toolkits);
-    } catch (err) {
-      setSaid({ _: errorText(err) });
-    } finally { setBusy(""); }
-  };
-  const connect = async (t: ToolkitHit) => {
-    setBusy(t.slug);
-    setSaid((s) => ({ ...s, [t.slug]: "" }));
-    try {
-      const r = await post<{ connected?: boolean; url?: string }>("apps/connect", { toolkit: t.slug });
-      if (r.url) {
-        window.open(r.url, "_blank", "noopener,noreferrer");
-        setOpened((o) => new Set(o).add(t.slug));
-        setSaid((s) => ({ ...s, [t.slug]: "Sign in on the Composio page that opened, then come back and press Add to AERA." }));
-      } else {
-        await add(t);
-      }
-    } catch (err) {
-      setSaid((s) => ({ ...s, [t.slug]: errorText(err) }));
-    } finally { setBusy(""); }
-  };
-  const add = async (t: ToolkitHit) => {
-    setBusy(t.slug);
-    try {
-      await post("apps/add", { toolkit: t.slug });
-      setSaid((s) => ({ ...s, [t.slug]: "Added. Open it above to give agents its tools." }));
-      router.refresh();
-    } catch (err) {
-      setSaid((s) => ({ ...s, [t.slug]: errorText(err) }));
-    } finally { setBusy(""); }
-  };
-
-  return (
-    <section className="mt-10">
-      <h2 className="text-fg text-[16px] font-medium">Connect an app</h2>
-      <form onSubmit={search} className="mt-3 flex max-w-xl gap-2">
-        <div className="relative flex-1">
-          <Search className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Slack, Google Sheets, Notion, HubSpot…" className="pl-9" />
-        </div>
-        <Button type="submit" disabled={busy === "search"}>{busy === "search" ? <Loader2 className="animate-spin" /> : "Search"}</Button>
-      </form>
-      {said._ && <p className="text-bad mt-2 text-[12.5px]">{said._}</p>}
-      {hits && (
-        <ul className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {hits.length === 0 && <li className="text-muted-foreground text-sm">Nothing matches.</li>}
-          {hits.map((t) => {
-            const isAdded = added.has(t.slug);
-            const isConnected = connected.has(t.slug) || t.no_auth;
-            return (
-              <li key={t.slug} className="bg-card-grad flex flex-col rounded-xl border p-4">
-                <div className="flex items-start gap-3">
-                  <Logo src={t.logo} size={36} />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-fg text-[14px]">{t.name}</p>
-                    <p className="text-muted-foreground text-[11.5px]">{t.tools_count ?? "?"} tools{t.categories.length ? ` · ${t.categories.join(", ")}` : ""}</p>
-                  </div>
-                  {isAdded ? <Chip tone="ok">added</Chip> : isConnected ? <Chip tone="info">connected</Chip> : null}
-                </div>
-                <p className="text-body mt-2 line-clamp-3 flex-1 text-[12.5px] leading-relaxed">{t.description}</p>
-                {mayChange && !isAdded && (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {!isConnected && (
-                      <Button size="sm" variant="outline" disabled={busy === t.slug} onClick={() => void connect(t)}>
-                        {busy === t.slug ? <Loader2 className="animate-spin" /> : <ExternalLink className="size-3.5" />} Connect
-                      </Button>
-                    )}
-                    <Button size="sm" disabled={busy === t.slug || (!isConnected && !opened.has(t.slug))} onClick={() => void add(t)}>Add to AERA</Button>
-                  </div>
-                )}
-                {said[t.slug] && <p className="text-muted-foreground mt-2 text-[11.5px] leading-relaxed">{said[t.slug]}</p>}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </section>
-  );
-}
-
 export function AppsManager({ data, agents }: { data: AppsPayload; agents: AgentRef[] }) {
   const connected = new Set(data.connections.map((c) => c.toolkit));
-  const added = new Set(data.apps.map((a) => a.toolkit));
   return (
     <>
       <div className="text-muted-foreground mt-6 flex flex-wrap items-center gap-2 text-[12.5px]">
@@ -251,16 +156,21 @@ export function AppsManager({ data, agents }: { data: AppsPayload; agents: Agent
         {data.error && <span className="text-bad">· {data.error}</span>}
       </div>
       <section className="mt-6">
-        <h2 className="text-fg text-[16px] font-medium">Your apps</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-fg text-[16px] font-medium">Your apps</h2>
+          <Button asChild size="sm"><Link href="/apps/connect"><Plus className="size-3.5" /> Connect a tool</Link></Button>
+        </div>
         {data.apps.length === 0 ? (
-          <p className="text-muted-foreground mt-2 text-sm">No app added yet. Search below, connect one, then add it.</p>
+          <div className="bg-raised mt-3 flex flex-wrap items-center gap-3 rounded-xl border px-4 py-4">
+            <p className="text-body flex-1 text-[13.5px]">No tool added yet. Pick one from the catalogue (1,700+ apps through Composio) and connect it.</p>
+            <Button asChild size="sm" variant="outline"><Link href="/apps/connect">Browse tools</Link></Button>
+          </div>
         ) : (
           <ul className="mt-3 space-y-3">
             {data.apps.map((a) => <AppCard key={a.toolkit} app={a} agents={agents} connected={connected.has(a.toolkit) || !a.account_id} mayChange={data.may_change} />)}
           </ul>
         )}
       </section>
-      <AddApp added={added} connected={connected} mayChange={data.may_change} />
     </>
   );
 }
