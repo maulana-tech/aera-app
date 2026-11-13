@@ -66,7 +66,7 @@ export default function Login() {
         onSubmit={(e) => {
           e.preventDefault();
           if (setup) void send("/api/setup", { email, password, name }, "/onboarding");
-          else void send("/api/login", { email, password }, "/");
+          else void send("/api/login", { email, password }, "/dashboard");
         }}
       >
         <div>
