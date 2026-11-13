@@ -75,6 +75,13 @@ def demo() -> None:
     s = store.get_sample("coffee-in-vietnam-sample", count_view=True)
     assert s and s["views"] == 1 and s["offering"] == offering and "Robusta" in s["text"]
     assert bad.value["status"] == "blocked" and "contact details" in bad.value["reason"], bad.value
+    from core import guardian as g
+    ids_only = g.check_action("publish_sample", {"document_id": "fil_d80251592584", "text": "Prices rose 12% in 2025.",
+                                                 "teaser": "", "compliance": {"verdict": "pass"}}, record=False)
+    assert ids_only["verdict"] != "block", "a document id is not a phone number"
+    phone = g.check_action("publish_sample", {"text": "Call +62 812 3456 7890 for the data.", "teaser": "",
+                                              "compliance": {"verdict": "pass"}}, record=False)
+    assert phone["verdict"] == "block"
     assert none.value is None and offering in none.note
     # the words checked are the words published: a document edited after the check is not published
     with registry.bind_run(rid):

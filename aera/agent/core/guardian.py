@@ -104,6 +104,11 @@ def check_counterparty(contact: Optional[Dict[str, Any]], *, record: bool = True
                    if p["counterparty"] == account and p["direction"] == "out" and p["status"] in ("sent", "approved")]
     if not paid_before:
         reasons.append(_r("history", "warn", "no previous payment to this account", "derived"))
+    else:
+        # Said in code, so a model reading the record does not conclude from old notes that nothing was ever paid.
+        last = max(p["created_at"] for p in paid_before)[:10]
+        reasons.append(_r("history", "allow", f"paid before: {len(paid_before)} payment(s) sent, "
+                          f"${sum(p['amount_usd'] for p in paid_before):.2f} in all, last on {last}", "derived"))
 
     if chain.readable():
         try:
@@ -199,7 +204,9 @@ def check_action(kind: str, payload: Dict[str, Any], *, profile: Optional[Dict[s
     if kind == "publish_sample":
         # A public page: anyone reads it, so it carries nobody's contact details, and a compliance finding
         # that is more than a pass puts a person in front of it.
-        contact = re.search(r"[\w.+-]+@[\w-]+\.[\w.]+|\+?\d[\d\s().-]{8,}\d", text)
+        # Only the words that go out are read: ids and hashes in the payload are not phone numbers.
+        public = f"{payload.get('text') or ''}\n{payload.get('teaser') or ''}"
+        contact = re.search(r"[\w.+-]+@[\w-]+\.[\w.]+|(?<![\w.])\+?\d[\d\s().-]{8,}\d(?![\w.])", public)
         if contact:
             reasons.append(_r("privacy", "block", f"a public page carries no contact details (found '{contact.group(0)}')"))
         review = payload.get("compliance") or {}
