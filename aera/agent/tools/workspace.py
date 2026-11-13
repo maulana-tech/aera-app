@@ -116,7 +116,8 @@ def save_contact(name: str, email: str, role: str, notes: str = "") -> Result:
 
 # ---------------------------------------------------------------- memory
 @register("search_past_work", "memory",
-          "How earlier work items like this were handled: title, outcome, cost.",
+          "How earlier work items like this were handled: title, outcome, cost, and the CURRENT status of every action "
+          "each run raised (an outcome is what was written then; `actions_now` is the record now).",
           {"query": {"type": "string"}}, ["query"])
 def search_past_work(query: str) -> Result:
     words = [w.lower() for w in query.split() if len(w) > 2]
@@ -126,9 +127,12 @@ def search_past_work(query: str) -> Result:
         if words and not any(w in title for w in words):
             continue
         d = r.get("decision") or {}
+        with store.connect() as c:
+            now = [dict(a) for a in c.execute("SELECT id, kind, status, value_usd, reference FROM actions WHERE run_id=?",
+                                               (r["id"],))]
         out.append({"run_id": r["id"], "title": r["title"], "kind": r["kind"], "status": r["status"],
-                    "outcome": (d.get("recommendation") or "")[:400], "cost_usd": r.get("cost_usd"),
-                    "at": r["started_at"]})
+                    "outcome_written_then": (d.get("recommendation") or "")[:400], "actions_now": now,
+                    "cost_usd": r.get("cost_usd"), "at": r["started_at"]})
         if len(out) >= 8:
             break
     return Result(out, Origin.CACHED, "run record",

@@ -551,6 +551,16 @@ def get_work_item(wid: str) -> Optional[Dict[str, Any]]:
     return dict(r) | {"payload": _load(r["payload"], {})} if r else None
 
 
+def note_run_again(wid: str, by: str) -> Dict[str, Any]:
+    """Record on the work item who ran it again, so the team can tell a person's retry from an attack."""
+    item = get_work_item(wid)
+    payload = dict(item.get("payload") or {})
+    payload["runs_again"] = [*payload.get("runs_again", []), {"by": by, "at": _now()}][-10:]
+    with connect() as c:
+        c.execute("UPDATE work_items SET payload=? WHERE id=?", (_j(payload), wid))
+    return get_work_item(wid)
+
+
 def set_work_status(wid: str, status: str) -> None:
     with connect() as c:
         c.execute("UPDATE work_items SET status=? WHERE id=?", (status, wid))

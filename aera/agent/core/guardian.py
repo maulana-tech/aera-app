@@ -136,6 +136,19 @@ def check_counterparty(contact: Optional[Dict[str, Any]], *, record: bool = True
     return _finish("counterparty", subject, reasons, record, run_id)
 
 
+_PHONE = re.compile(r"(?<![\w.])\+?\(?\d[\d\s().-]{7,}\d(?![\w.])")
+
+
+def _phone_in(text: str):
+    """A phone number in text: 9 to 15 digits in one run of digits and separators. A date (2026-11-12, 8 digits),
+    a year range or a figure is not one."""
+    for m in _PHONE.finditer(text or ""):
+        digits = re.sub(r"\D", "", m.group(0))
+        if 9 <= len(digits) <= 15 and not re.fullmatch(r"\d{4}[-/.]\d{1,2}[-/.]\d{1,2}", m.group(0).strip()):
+            return m
+    return None
+
+
 def _text_of(payload: Dict[str, Any]) -> str:
     return " ".join(str(v) for k, v in payload.items() if isinstance(v, (str, int, float)))
 
@@ -206,7 +219,7 @@ def check_action(kind: str, payload: Dict[str, Any], *, profile: Optional[Dict[s
         # that is more than a pass puts a person in front of it.
         # Only the words that go out are read: ids and hashes in the payload are not phone numbers.
         public = f"{payload.get('text') or ''}\n{payload.get('teaser') or ''}"
-        contact = re.search(r"[\w.+-]+@[\w-]+\.[\w.]+|(?<![\w.])\+?\d[\d\s().-]{8,}\d(?![\w.])", public)
+        contact = re.search(r"[\w.+-]+@[\w-]+\.[\w.]+", public) or _phone_in(public)
         if contact:
             reasons.append(_r("privacy", "block", f"a public page carries no contact details (found '{contact.group(0)}')"))
         review = payload.get("compliance") or {}

@@ -1503,7 +1503,7 @@ def new_work(_m, b: dict, h) -> Tuple[int, dict]:
 @route("POST", r"/work/([A-Za-z0-9_]+)/retry")
 def retry_work(m, _b, h) -> Tuple[int, dict]:
     """Run a held or failed work item again (e.g. after the model key was added)."""
-    _user(h)
+    u = _user(h)
     item = store.get_work_item(m.group(1))
     if not item:
         return 404, {"error": "no such work item"}
@@ -1511,6 +1511,7 @@ def retry_work(m, _b, h) -> Tuple[int, dict]:
         return 409, {"error": f"the work item is {item['status']}; only held or failed work is retried"}
     if not CFG.model_ready:
         return 503, {"error": f"the supervisor's model cannot be called: {llm.ready(llm.spec_for_code('supervisor'))[1]}"}
+    item = store.note_run_again(item["id"], u.email)
     return 201, {"work_item": item["id"], "run": start_work(item)}
 
 

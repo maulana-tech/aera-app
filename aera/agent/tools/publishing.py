@@ -79,6 +79,9 @@ def demo() -> None:
     ids_only = g.check_action("publish_sample", {"document_id": "fil_d80251592584", "text": "Prices rose 12% in 2025.",
                                                  "teaser": "", "compliance": {"verdict": "pass"}}, record=False)
     assert ids_only["verdict"] != "block", "a document id is not a phone number"
+    dated = g.check_action("publish_sample", {"text": "Week of 2026-11-12; prices 2025-2026 rose 12.5%.", "teaser": "",
+                                              "compliance": {"verdict": "pass"}}, record=False)
+    assert all(r["rule"] != "privacy" for r in dated["reasons"]), "a date is not a phone number"
     phone = g.check_action("publish_sample", {"text": "Call +62 812 3456 7890 for the data.", "teaser": "",
                                               "compliance": {"verdict": "pass"}}, record=False)
     assert phone["verdict"] == "block"
