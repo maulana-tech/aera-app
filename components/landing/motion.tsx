@@ -53,27 +53,36 @@ export function Reveal({ children, className, delay = 0 }: { children: React.Rea
   return <div ref={ref} style={{ transitionDelay: `${delay}ms` }} className={cn("reveal", className)}>{children}</div>;
 }
 
-/** A figure that counts up from zero when it scrolls into view. */
-export function CountUp({ value, format }: { value: number | null; format: "usd" | "int" }) {
-  const [ref, seen] = useInView<HTMLSpanElement>();
-  const reduced = useReducedMotion();
-  const [shown, setShown] = useState(0);
-  useEffect(() => {
-    if (value == null || !seen || reduced) return;
-    const start = performance.now();
-    const ms = 1100;
-    let raf = 0;
-    const tick = (t: number) => {
-      const k = Math.min(1, (t - start) / ms);
-      setShown(value * (1 - Math.pow(1 - k, 3)));
-      if (k < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [value, seen, reduced]);
-  const n = reduced && value != null ? value : shown;
-  const text = value == null ? "-"
-    : format === "usd" ? `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+/** A figure that counts up from zero when it scrolls into view.
+ *  The server renders the real figure, so a crawler, a slow script or a reader with reduced motion sees it as is;
+ *  only a figure below the fold when the page loads is set to zero and counted up once it is scrolled to. */
+function fmt(n: number, format: "usd" | "int"): string {
+  return format === "usd" ? `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
     : Math.round(n).toLocaleString("en-US");
-  return <span ref={ref}>{text}</span>;
+}
+
+export function CountUp({ value, format }: { value: number | null; format: "usd" | "int" }) {
+  const ref = useRef<HTMLSpanElement | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || value == null || typeof IntersectionObserver === "undefined") return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (el.getBoundingClientRect().top < window.innerHeight) return;      // already on screen: no flash to zero
+    el.textContent = fmt(0, format);
+    let raf = 0;
+    const io = new IntersectionObserver(([e]) => {
+      if (!e?.isIntersecting) return;
+      io.disconnect();
+      const start = performance.now();
+      const tick = (t: number) => {
+        const k = Math.min(1, (t - start) / 1100);
+        el.textContent = fmt(value * (1 - Math.pow(1 - k, 3)), format);
+        if (k < 1) raf = requestAnimationFrame(tick);
+      };
+      raf = requestAnimationFrame(tick);
+    });
+    io.observe(el);
+    return () => { io.disconnect(); cancelAnimationFrame(raf); el.textContent = fmt(value, format); };
+  }, [value, format]);
+  return <span ref={ref}>{value == null ? "-" : fmt(value, format)}</span>;
 }

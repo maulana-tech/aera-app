@@ -29,7 +29,7 @@ export function LiveRun() {
 
   useEffect(() => {
     if (reduced || paused) return;
-    const t = setTimeout(() => setStep((n) => (n >= STEPS.length ? 2 : n + 1)), done ? HOLD_MS : STEP_MS);
+    const t = setTimeout(() => setStep((n) => (n >= STEPS.length ? 3 : n + 1)), done ? HOLD_MS : STEP_MS);
     return () => clearTimeout(t);
   }, [step, paused, reduced, done]);
 
