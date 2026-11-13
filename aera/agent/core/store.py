@@ -649,6 +649,12 @@ def start_run(work_item_id: str, team_version: Optional[dict] = None,
     return rid
 
 
+def work_item_for_run(run_id: str) -> Optional[dict]:
+    with connect() as c:
+        r = c.execute("SELECT work_item_id FROM runs WHERE id=?", (run_id,)).fetchone()
+    return get_work_item(r["work_item_id"]) if r else None
+
+
 def close_run(run_id: str, status: str, decision: Optional[dict] = None,
               error: Optional[str] = None, cost_usd: float = 0.0) -> None:
     with connect() as c:

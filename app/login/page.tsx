@@ -21,6 +21,8 @@ export default function Login() {
   const [busy, setBusy] = useState(false);
   const [needsOwner, setNeedsOwner] = useState(false);
   const [demo, setDemo] = useState<{ email: string; password: string } | null>(null);
+  const [signup, setSignup] = useState<{ work_per_day: number; asks_per_day: number } | null>(null);
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
 
   useEffect(() => {
     fetch("/api/setup", { cache: "no-store" })
@@ -33,6 +35,14 @@ export default function Login() {
         if (d.enabled && d.email && d.password) setDemo({ email: d.email, password: d.password });
       })
       .catch(() => setDemo(null));
+    fetch("/api/signup", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d: { enabled?: boolean; work_per_day?: number; asks_per_day?: number }) => {
+        if (!d.enabled) return;
+        setSignup({ work_per_day: d.work_per_day ?? 5, asks_per_day: d.asks_per_day ?? 20 });
+        if (new URLSearchParams(window.location.search).get("mode") === "signup") setMode("signup");
+      })
+      .catch(() => setSignup(null));
   }, []);
 
   async function send(path: string, body: Record<string, string>, next: string) {
@@ -55,6 +65,7 @@ export default function Login() {
   }
 
   const setup = needsOwner;
+  const joining = !setup && mode === "signup" && !!signup;
   return (
     <main className="flex min-h-svh flex-col items-center justify-center gap-8 px-4 py-10">
       <div className="flex items-center gap-2.5 text-white">
@@ -66,33 +77,36 @@ export default function Login() {
         onSubmit={(e) => {
           e.preventDefault();
           if (setup) void send("/api/setup", { email, password, name }, "/onboarding");
+          else if (joining) void send("/api/signup", { email, password, name }, "/dashboard");
           else void send("/api/login", { email, password }, "/dashboard");
         }}
       >
         <div>
-          <h1 className="text-[22px]">{setup ? "Set up AERA" : "Sign in"}</h1>
+          <h1 className="text-[22px]">{setup ? "Set up AERA" : joining ? "Create an account" : "Sign in"}</h1>
           <p className="text-muted-foreground mt-1.5 text-[13px] leading-relaxed">
             {setup
               ? "No account exists yet. Create the owner: the person who describes the business, sets its limits and approves the team."
-              : "A team of agents runs the business; you set the limits and approve what goes past them."}
+              : joining
+                ? `A tester account: give the team work (${signup?.work_per_day} a day) and talk to any agent (${signup?.asks_per_day} questions a day). It approves nothing and changes no settings; anything the work would pay or send waits for the business owner.`
+                : "A team of agents runs the business; you set the limits and approve what goes past them."}
           </p>
         </div>
-        {setup && (
+        {(setup || joining) && (
           <Field label="Your name"><Input value={name} autoComplete="name" onChange={(e) => setName(e.target.value)} required /></Field>
         )}
         <Field label="Email"><Input type="email" value={email} autoComplete="email" onChange={(e) => setEmail(e.target.value)} required /></Field>
-        <Field label="Password" hint={setup ? "At least 10 characters. You sign in with it from now on." : undefined}>
-          <Input type="password" value={password} minLength={setup ? 10 : undefined}
-                 autoComplete={setup ? "new-password" : "current-password"}
+        <Field label="Password" hint={setup || joining ? "At least 10 characters. You sign in with it from now on." : undefined}>
+          <Input type="password" value={password} minLength={setup || joining ? 10 : undefined}
+                 autoComplete={setup || joining ? "new-password" : "current-password"}
                  onChange={(e) => setPassword(e.target.value)} required />
         </Field>
         {error && (
           <p className="text-bad flex items-center gap-2 text-[13px]"><Dot tone="bad" />{error}</p>
         )}
         <Button type="submit" size="lg" className="w-full" disabled={busy}>
-          {busy ? (setup ? "Creating…" : "Signing in…") : setup ? "Create owner and continue" : "Sign in"}
+          {busy ? (setup || joining ? "Creating…" : "Signing in…") : setup ? "Create owner and continue" : joining ? "Create account" : "Sign in"}
         </Button>
-        {!setup && demo && (
+        {!setup && !joining && demo && (
           <div className="space-y-2">
             <Button type="button" variant="outline" size="lg" className="w-full" disabled={busy}
                     onClick={() => { setEmail(demo.email); setPassword(demo.password); setError(""); }}>
@@ -103,7 +117,16 @@ export default function Login() {
             </p>
           </div>
         )}
-        {!setup && (
+        {!setup && signup && (
+          <p className="text-muted-foreground text-center text-[12.5px]">
+            {joining ? "Have an account? " : "No account? "}
+            <button type="button" className="text-brand underline-offset-2 hover:underline"
+                    onClick={() => { setMode(joining ? "signin" : "signup"); setError(""); }}>
+              {joining ? "Sign in" : "Create one"}
+            </button>
+          </p>
+        )}
+        {!setup && !signup && (
           <p className="text-muted-foreground text-center text-[12.5px]">
             No account? Ask the business owner to add you under Settings → Accounts.
           </p>

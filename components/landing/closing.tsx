@@ -152,6 +152,9 @@ export function Finale({ cta }: { cta: { href: string; label: string } }) {
           </p>
           <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
             <Link href={cta.href} className="text-brand rounded-full bg-white px-5 py-2.5 text-[14px] font-medium hover:bg-white/90">{cta.label}</Link>
+            {cta.href === "/login" && (
+              <Link href="/login?mode=signup" className="rounded-full border border-white/[.28] bg-white/[.12] px-5 py-2.5 text-[14px] text-white hover:bg-white/20">Create an account</Link>
+            )}
             <a href={REPO} className="inline-flex items-center gap-2 rounded-full border border-white/[.28] bg-white/[.12] px-5 py-2.5 text-[14px] text-white hover:bg-white/20">
               <GitHubMark className="size-4" /> View on GitHub
             </a>

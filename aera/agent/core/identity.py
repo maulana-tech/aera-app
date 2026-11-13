@@ -40,6 +40,9 @@ CREATE TABLE IF NOT EXISTS users (
 # limit needs someone with a higher one; a viewer approves nothing.
 ROLE_LIMITS = {
     "viewer": 0,
+    # a self-signed-up account (POST /signup): gives the team work and talks to the agents, approves nothing,
+    # changes nothing; whatever its work would pay or send waits for a person (core/actions.py)
+    "tester": 0,
     "operator": 100,
     "approver": 1_000,
     "owner": 100_000,

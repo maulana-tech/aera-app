@@ -549,7 +549,32 @@ def list_contacts(_m, _b, h) -> Tuple[int, dict]:
 
 
 #: What a viewer may still POST: signing in and out, and the public pages anyone can use.
-VIEWER_MAY_POST = ("/login", "/setup", "/public/")
+VIEWER_MAY_POST = ("/login", "/setup", "/signup", "/public/")
+#: What a tester (an account that signed itself up) may POST besides: give the team work and talk to the agents.
+TESTER_MAY_POST = (re.compile(r"^/work$"), re.compile(r"^/agents/[a-z_]+/ask$"),
+                   re.compile(r"^/conversations/[A-Za-z0-9_]+/delete$"))
+#: A tester's daily allowance, so open sign-up cannot run up the model bill.
+TESTER_QUOTA = {"work": int(os.environ.get("AERA_TESTER_WORK_PER_DAY", "5") or 5),
+                "ask": int(os.environ.get("AERA_TESTER_ASKS_PER_DAY", "20") or 20)}
+SIGNUPS_PER_DAY = int(os.environ.get("AERA_SIGNUPS_PER_DAY", "50") or 50)
+
+
+def signup_open() -> bool:
+    return os.environ.get("AERA_SIGNUP", "1").strip() != "0"
+
+
+def tester_quota(user: User, kind: str) -> Optional[str]:
+    """None and one more counted, or why a tester has used today's allowance of `kind`."""
+    if user.role != "tester":
+        return None
+    from datetime import datetime, timezone
+    key = f"quota:{kind}:{user.email}:{datetime.now(timezone.utc).date().isoformat()}"
+    used = int(store.get_setting(key) or 0)
+    if used >= TESTER_QUOTA[kind]:
+        what = "work items" if kind == "work" else "questions to the agents"
+        return f"a tester account has {TESTER_QUOTA[kind]} {what} a day; today's are used. Try again tomorrow"
+    store.set_setting(key, str(used + 1), by="quota")
+    return None
 
 
 def viewer_refusal(method: str, path: str, headers) -> Optional[str]:
@@ -570,6 +595,9 @@ def viewer_refusal(method: str, path: str, headers) -> Optional[str]:
         return None
     if role == "viewer":
         return "a viewer can look at everything but not start work, ask the agents or change anything"
+    if role == "tester" and not any(p.match(path) for p in TESTER_MAY_POST):
+        return ("a tester can give the team work and talk to the agents; approvals, settings and accounts "
+                "stay with the business's own people")
     return None
 
 
@@ -934,6 +962,9 @@ def ask_agent(m, b: dict, h):
 
     if not question and not attachments:
         return 400, {"error": "'question' or an attachment is required"}
+    over = tester_quota(user, "ask")
+    if over:
+        return 429, {"error": over}
 
     from agents import roster
     ALL = roster.load()
@@ -1203,6 +1234,41 @@ def login(_m, b: dict, _h) -> Tuple[int, dict]:
 def setup_status(_m, _b, _h) -> Tuple[int, dict]:
     """Public: whether this install still needs its first owner."""
     return 200, {"needs_owner": identity.user_count() == 0}
+
+
+@route("GET", r"/signup")
+def signup_status(_m, _b, _h) -> Tuple[int, dict]:
+    """Public: whether anyone may create an account here, and what it may do."""
+    return 200, {"enabled": signup_open() and identity.user_count() > 0, "role": "tester",
+                 "work_per_day": TESTER_QUOTA["work"], "asks_per_day": TESTER_QUOTA["ask"]}
+
+
+@route("POST", r"/signup")
+def signup(_m, b: dict, _h) -> Tuple[int, dict]:
+    """Anyone creates a tester account: they give the team work and talk to the agents, within a daily
+    allowance; they approve nothing and change nothing, and what their work would pay or send waits for
+    a person. The owner can raise the role on Settings → Accounts. AERA_SIGNUP=0 closes it."""
+    from datetime import datetime, timezone
+    if not signup_open():
+        return 403, {"error": "sign-up is closed on this install; ask the owner for an account"}
+    if identity.user_count() == 0:
+        return 409, {"error": "this install has no owner yet: set it up first"}
+    email, name, pw = (str(b.get(k) or "").strip() for k in ("email", "name", "password"))
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email) or not name:
+        return 400, {"error": "a name and a valid email are required"}
+    if len(pw) < 10:
+        return 400, {"error": "the password needs at least 10 characters"}
+    day = f"signups:{datetime.now(timezone.utc).date().isoformat()}"
+    count = int(store.get_setting(day) or 0)
+    if count >= SIGNUPS_PER_DAY:
+        return 429, {"error": "today's sign-ups are full; try again tomorrow"}
+    try:
+        u = identity.add_user(email, name[:80], "tester", pw)
+    except Exception:                                                # noqa: BLE001  (UNIQUE email)
+        return 409, {"error": "an account with this email exists; sign in instead"}
+    store.set_setting(day, str(count + 1), by="signup")
+    return 201, {"token": identity.issue_token(u),
+                 "user": {"name": u.name, "email": u.email, "role": u.role, "limit_usd": u.limit_usd}}
 
 
 @route("POST", r"/setup")
@@ -1493,6 +1559,13 @@ def new_work(_m, b: dict, h) -> Tuple[int, dict]:
     if not title:
         return 400, {"error": "a title is required"}
     payload = b.get("payload") if isinstance(b.get("payload"), dict) else {"text": str(b.get("text") or "")}
+    if u.role == "tester":
+        if kind != "request":
+            return 403, {"error": "a tester account raises requests; goals, payables and orders come from the business"}
+        over = tester_quota(u, "work")
+        if over:
+            return 429, {"error": over}
+        payload = {**payload, "raised_by_role": "tester"}
     wid = store.record_work_item(kind, title[:200], "api", {**payload, "raised_by": u.email})
     item = store.get_work_item(wid)
     store.set_work_status(wid, "running")
@@ -2211,7 +2284,7 @@ class Handler(BaseHTTPRequestHandler):
 
 #: Routes that may be reached without a session token.
 PUBLIC_PREFIX = "/public/"
-PUBLIC = {("GET", "/health"), ("POST", "/login"), ("GET", "/setup"), ("POST", "/setup")}
+PUBLIC = {("GET", "/health"), ("POST", "/login"), ("GET", "/setup"), ("POST", "/setup"), ("GET", "/signup"), ("POST", "/signup")}
 
 _SAMPLES = ((r"([A-Za-z0-9_]+)", "x1"), (r"([A-Za-z]+)", "Thing"), (r"([a-z0-9_]+)", "a_skill"),
             (r"([a-z_]+)", "digest"), (r"([a-z]+)", "impact"), (r"(\d+)", "0"), (r"(pdf|xlsx)", "pdf"),
@@ -2352,6 +2425,27 @@ def demo() -> None:
     assert inbound_by_hand(None, {"from": "x@y.example", "text": "hi"}, V)[0] == 403
     assert store.opted_out("rina@prospect-check.example")
     os.environ.pop("AERA_INBOUND_SECRET", None)
+    # Sign-up: anyone gets a tester account, which gives the team work and talks to agents but changes nothing.
+    code, su = signup(None, {"email": "judge@example.org", "name": "Judge", "password": "pw-for-the-check"}, {})
+    assert code == 201 and su["user"]["role"] == "tester", su
+    assert signup(None, {"email": "judge@example.org", "name": "J", "password": "pw-for-the-check"}, {})[0] == 409
+    assert signup(None, {"email": "bad", "name": "J", "password": "pw-for-the-check"}, {})[0] == 400
+    T = {"Authorization": f"Bearer {su['token']}"}
+    assert viewer_refusal("POST", "/work", T) is None and viewer_refusal("POST", "/agents/sales/ask", T) is None
+    for path in ("/actions/act_x/decision", "/business", "/business/kill-switch", "/users", "/contacts", "/leads/lead_x", "/work/w/retry"):
+        assert viewer_refusal("POST", path, T) is not None, f"a tester must not POST {path}"
+    tu = identity.from_token(su["token"])
+    assert not tu.may_manage and not tu.may_approve(1)
+    for _ in range(TESTER_QUOTA["work"]):
+        assert tester_quota(tu, "work") is None
+    assert tester_quota(tu, "work") and "a day" in tester_quota(tu, "work")
+    assert new_work(None, {"title": "x"}, T)[0] == 429, "over the allowance"
+    assert new_work(None, {"title": "x", "kind": "goal"}, T)[0] == 403
+    os.environ["AERA_SIGNUP"] = "0"
+    assert signup(None, {"email": "late@example.org", "name": "L", "password": "pw-for-the-check"}, {})[0] == 403
+    assert signup_status(None, {}, {})[1]["enabled"] is False
+    os.environ.pop("AERA_SIGNUP", None)
+    print("  sign-up: a tester account ✓ · works and asks, nothing else ✓ · daily allowance ✓ · can be closed ✓")
     print("  prospecting: inbound needs the secret ✓ · a reply moves the lead ✓ · a viewer changes nothing ✓ · opt-out is final ✓")
     print(f"  {len(ROUTES)} routes · {len(guarded)} refuse an anonymous caller ✓")
     print("api ok")

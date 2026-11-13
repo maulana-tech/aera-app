@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { api, me, noBusiness, type Action, type BusinessPayload, type Health } from "@/app/lib";
@@ -46,6 +47,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <p>
                 You are signed in as a <span className="text-fg font-medium">viewer</span>: everything is open to read, but
                 starting work, asking the agents, approving and changing settings need an operator, approver or owner.
+              </p>
+            </div>
+          )}
+          {user?.role === "tester" && (
+            <div className="bg-raised text-body flex items-start gap-2.5 border-b px-4 py-2.5 text-[12.5px] leading-relaxed md:px-6">
+              <Dot tone="info" className="mt-[7px]" />
+              <p>
+                You are signed in as a <span className="text-fg font-medium">tester</span>: give the team work under{" "}
+                <Link href="/work" className="text-brand underline underline-offset-2">Work</Link> and talk to any agent under{" "}
+                <Link href="/agents" className="text-brand underline underline-offset-2">Team</Link>. Anything your work would pay or
+                send waits for the business owner; approving and settings stay with the business&apos;s people.
               </p>
             </div>
           )}

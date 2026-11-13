@@ -90,7 +90,7 @@ export async function publicApi<T>(path: string): Promise<T | null> {
 
 /* ------------------------------------------------------------------ people */
 
-export type Role = "viewer" | "operator" | "approver" | "owner" | "admin";
+export type Role = "viewer" | "tester" | "operator" | "approver" | "owner" | "admin";
 export type Me = { name: string; email: string; role: Role; limit_usd: number };
 
 export async function me(): Promise<Me | null> {

@@ -48,7 +48,7 @@
 
 | | Where | What happens |
 |---|---|---|
-| 1 | **First run** (`/login`) | No account yet → *Set up AERA* creates the owner. Owners add approvers and operators under **Settings → Accounts**. With `AERA_DEMO_EMAIL`/`AERA_DEMO_PASSWORD` set, **Use the demo account** fills in a read-only viewer sign-in (it approves nothing and changes no settings). |
+| 1 | **First run** (`/login`) | No account yet → *Set up AERA* creates the owner. Owners add approvers and operators under **Settings → Accounts**. With `AERA_DEMO_EMAIL`/`AERA_DEMO_PASSWORD` set, **Use the demo account** fills in a read-only viewer sign-in (it approves nothing and changes no settings). Anyone can also **create an account** (a *tester*): give the team work and talk to any agent within a daily allowance; it approves nothing, and anything its work would pay or send waits for the owner (`AERA_SIGNUP=0` closes it). |
 | 2 | **Onboarding** (`/onboarding`) | Five explained steps: *Describe* (or **Draft with AI** from a paragraph, on a TEE model) → *Offerings* → *Limits & rules* → *Team* → *Review* in plain sentences. Nothing is saved until the end; a refresh keeps the draft. |
 | 3 | **Dashboard & Chat** | A *Getting started* checklist (models, vault, approver, first order), money in and out, what waits for you, what the Guardian blocked, TEE proofs, and the team visibly at work. **Chat** asks the team, or one agent, in plain words; a request becomes a work item. |
 | 4 | **Orders** | Share the checkout link for each offering (`/buy/<id>`). A customer pays USDC from their wallet to the vault; the vault splits revenue on the spot. |

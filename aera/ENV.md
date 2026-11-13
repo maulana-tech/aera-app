@@ -67,6 +67,9 @@ The profile adds its own: autonomous per payment/day, inference per day, min pri
 | `AERA_WEB_URL` | `http://localhost:3000` | Links in alerts |
 | `AERA_EXTERNAL_REDIRECT` | — | Outside prod, messages to customers/vendors go here, or nowhere |
 | `AERA_EXTERNAL_DOMAINS` | — | In prod, the only domains outward mail may go to |
+| `AERA_SIGNUP` | `1` | `0` closes self sign-up. Open, anyone creates a **tester** account: gives the team work and talks to the agents, approves nothing, changes nothing; whatever its work would pay or send waits for a person |
+| `AERA_TESTER_WORK_PER_DAY` / `AERA_TESTER_ASKS_PER_DAY` | `5` / `20` | A tester's daily allowance of work items and questions to the agents |
+| `AERA_SIGNUPS_PER_DAY` | `50` | New accounts a day, all together |
 
 Alerts (SMTP, Slack, Telegram, webhook, Composio Gmail): see `.env.example`; values in `.secrets/notify.env`.
 

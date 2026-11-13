@@ -12,6 +12,7 @@ import { errorText, post } from "@/lib/post";
 /** What each role is for, in the words an owner picks one by. */
 export const ROLE_HELP: Record<string, string> = {
   viewer: "Reads everything, decides nothing.",
+  tester: "Signed up on their own: gives the team work and talks to the agents, within a daily allowance. Approves nothing; what their work would pay or send waits for a person.",
   operator: "Day-to-day: approves small actions and runs work.",
   approver: "Signs off payments and refunds above the team's own limits.",
   owner: "Runs the business: profile, team, payout details, accounts.",

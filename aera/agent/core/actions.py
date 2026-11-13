@@ -44,6 +44,12 @@ def raise_action(kind: str, payload: Dict[str, Any], verdict: Dict[str, Any], *,
     key = idempotency_key(kind, **(key_details or payload))
     v = verdict.get("verdict", "block")
     why = "; ".join(r["detail"] for r in verdict.get("reasons", []) if r["verdict"] == v) or v
+    item = store.work_item_for_run(run_id)
+    if v != "block" and ((item or {}).get("payload") or {}).get("raised_by_role") == "tester":
+        # work a tester account started runs in full, but nothing it would pay or send goes on its say-so
+        force_approval = True
+        why = ("started by a tester account: a person approves anything it would pay or send"
+               + ("" if v == "allow" else f"; {why}"))
     if v == "block":
         status, autonomous = "blocked", False
     elif v == "warn" or force_approval:
@@ -91,6 +97,16 @@ def demo() -> None:
         assert c.value["status"] == "approved" and c.value["autonomous"]
         r = raise_action("refund", {"order_id": "o1"}, ok, force_approval=True, execute=False)
         assert r.value["status"] == "pending"
+    # work a tester account started: even an allowed action waits for a person; a block stays a block
+    twid = store.record_work_item("request", "tester asks", "api", {"text": "x", "raised_by_role": "tester"})
+    trid = store.start_run(twid)
+    with registry.bind_run(trid):
+        held = raise_action("payment", {"receiver": "t.testnet", "amount_usd": 1.0}, {"verdict": "allow", "reasons": []},
+                            value_usd=1.0, execute=False).value
+        still = raise_action("payment", {"receiver": "u.testnet", "amount_usd": 1.0}, {"verdict": "block", "reasons": []},
+                             value_usd=1.0, execute=False).value
+    assert held["status"] == "pending" and "tester" in held["reason"], held
+    assert still["status"] == "blocked"
     print("actions ok: no run no row ✓ · idempotent ✓ · block final ✓ · warn waits ✓ · refunds always wait ✓")
 
 
