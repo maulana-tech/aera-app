@@ -33,11 +33,10 @@ def all_jobs(start_work: StartWork) -> List[Job]:
         p = business.current()
         if p.get("kill_switch"):
             return "kill switch on: no new work started"
-        spent = sum(r.get("cost_usd") or 0 for r in store.list_runs(200)
-                    if (r.get("started_at") or "")[:10] == datetime.now(timezone.utc).date().isoformat())
-        cap = p["constraints"]["inference_max_usd_per_day"]
-        if cap and spent >= cap:
-            return f"model spend today ${spent:.2f} reached the ${cap:.2f} daily cap: waiting until tomorrow"
+        from core import budget
+        over = budget.refusal()
+        if over:
+            return over
         item = store.next_new_work_item()
         if not item:
             return "nothing new"

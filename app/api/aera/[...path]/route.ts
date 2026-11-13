@@ -1,10 +1,12 @@
 import { cookies } from "next/headers";
 
+import { publicBase, sessionBase } from "@/lib/tenant";
 import { upstream } from "@/lib/upstream";
 
 // Bridge to the agent service. The browser never calls it directly, and the
-// session token is attached here, never from the page side.
-const UPSTREAM = process.env.AERA_API ?? "http://127.0.0.1:8787";
+// session token is attached here, never from the page side. Which service:
+// the signed-in person's business, or for /public/* the business named by
+// ?b=<slug> (lib/tenant.ts); the flagship when neither says otherwise.
 
 async function forward(req: Request, path: string[], method: "GET" | "POST") {
   const token = (await cookies()).get("aera_session")?.value;
@@ -20,7 +22,16 @@ async function forward(req: Request, path: string[], method: "GET" | "POST") {
   if (token && path[0] !== "public") headers.Authorization = `Bearer ${token}`;
   // The query string is part of the request, not decoration: filters such as
   // ?status=pending and ?days=30 ride there.
-  const { search } = new URL(req.url);
+  const u = new URL(req.url);
+  const pub = path[0] === "public";
+  // a public page opened with ?b=<slug> makes its own calls without it: the page's address says which business
+  let b = u.searchParams.get("b");
+  if (pub && !b) {
+    try { b = new URL(req.headers.get("referer") ?? "").searchParams.get("b"); } catch { b = null; }
+  }
+  if (pub && b) u.searchParams.delete("b");
+  const search = u.searchParams.toString() ? `?${u.searchParams.toString()}` : "";
+  const UPSTREAM = pub ? await publicBase(b) : await sessionBase();
 
   try {
     const url = `${UPSTREAM}/${path.join("/")}${search}`;
@@ -58,7 +69,7 @@ async function forward(req: Request, path: string[], method: "GET" | "POST") {
     });
   } catch {
     return Response.json(
-      { error: `the agent service is not responding at ${UPSTREAM}. Run: cd aera/agent && python3 api.py` },
+      { error: "the agent service is not responding. Run: cd aera/agent && python3 api.py" },
       { status: 503 },
     );
   }

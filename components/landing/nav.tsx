@@ -62,7 +62,7 @@ export function Nav({ cta }: { cta: { href: string; label: string } }) {
         </ul>
         <div className="flex items-center gap-2">
           {cta.href === "/login" && (
-            <Link href="/login?mode=signup" className="hidden h-9 items-center rounded-full px-3.5 text-[13.5px] text-white/90 hover:bg-white/10 sm:inline-flex">Sign up</Link>
+            <Link href="/login?mode=business" className="hidden h-9 items-center rounded-full px-3.5 text-[13.5px] text-white/90 hover:bg-white/10 sm:inline-flex">Create your business</Link>
           )}
           <Link href={cta.href} className="ln-nav-cta group hidden h-9 items-center gap-2 rounded-full pr-3 pl-2 text-[13.5px] sm:inline-flex">
             <span className="bg-brand grid size-[18px] place-items-center rounded-[5px] text-white transition-transform duration-500 group-hover:scale-110">
@@ -87,7 +87,7 @@ export function Nav({ cta }: { cta: { href: string; label: string } }) {
           ))}
           <a href={REPO} className="text-fg hover:bg-raised block rounded-xl px-4 py-3 text-[15px]">GitHub</a>
           <Link href={cta.href} className="bg-brand mt-1 flex h-11 items-center justify-center rounded-xl text-[15px] text-white">{cta.label}</Link>
-          {cta.href === "/login" && <Link href="/login?mode=signup" className="text-brand mt-1 flex h-11 items-center justify-center rounded-xl text-[15px]">Create an account</Link>}
+          {cta.href === "/login" && <Link href="/login?mode=business" className="text-brand mt-1 flex h-11 items-center justify-center rounded-xl text-[15px]">Create your business</Link>}
         </div>
       )}
     </nav>

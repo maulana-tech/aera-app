@@ -2,8 +2,7 @@ import Link from "next/link";
 
 import {
   api, apiResult, documentPdf, explorer, mayManage, me, orderDelivery, usd, when,
-  type BusinessPayload, type DocumentRow, type Health, type Order, type WorkItem,
-} from "@/app/lib";
+  type BusinessPayload, type DocumentRow, type Health, type Order, type WorkItem, withB, workspace } from "@/app/lib";
 import { DeliveryReceipt } from "@/components/documents";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { CheckoutLinks } from "@/components/checkout-links";
@@ -17,6 +16,7 @@ const FILTERS = ["", "awaiting_payment", "paid", "working", "delivered", "refund
 
 export default async function OrdersPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const { status } = await searchParams;
+  const ws = await workspace();
   const [orders, health, user, biz, work, docs] = await Promise.all([
     apiResult<{ orders: Order[] }>(`orders${status ? `?status=${encodeURIComponent(status)}` : ""}`),
     api<Health>("health"),
@@ -48,7 +48,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
       <details className="mt-6 rounded-lg border px-4 py-3" open={list.length === 0}>
         <summary className="cursor-pointer text-sm font-medium">Share checkout links</summary>
         <div className="mt-3">
-          <CheckoutLinks offerings={biz?.profile.offerings ?? []} open={!biz?.profile.kill_switch} />
+          <CheckoutLinks offerings={biz?.profile.offerings ?? []} open={!biz?.profile.kill_switch} business={ws} />
         </div>
       </details>
 
@@ -69,7 +69,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
           <Empty what={status ? `No ${status.replace(/_/g, " ")} orders.` : "No orders yet."}
             why={status ? "Nothing is in this state right now." : "Share a checkout link (above) with a customer. Each offering has its own page at /buy/<id>; a paid order becomes work for the team on its own."}
             action={status ? <Link href="/orders" className="text-xs underline underline-offset-2">Show all orders</Link>
-              : biz?.profile.offerings[0] ? <a href={`/buy/${biz.profile.offerings[0].id}`} target="_blank" rel="noopener noreferrer" className="text-xs underline underline-offset-2">Open a checkout page</a> : undefined} />
+              : biz?.profile.offerings[0] ? <a href={withB(`/buy/${biz.profile.offerings[0].id}`, ws)} target="_blank" rel="noopener noreferrer" className="text-xs underline underline-offset-2">Open a checkout page</a> : undefined} />
         </div>
       ) : (
         <div className="mt-6 overflow-x-auto rounded-lg border">

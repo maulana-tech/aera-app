@@ -28,6 +28,7 @@ export async function POST(req: Request) {
   }
   const data = await r.json();
   if (!r.ok) return Response.json(data, { status: r.status });
+  (await cookies()).delete("aera_ws");            // the flagship: no business cookie
   (await cookies()).set("aera_session", data.token, {
     httpOnly: true,
     sameSite: "lax",

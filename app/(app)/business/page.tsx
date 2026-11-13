@@ -2,8 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import {
-  api, apiResult, mayManage, mayStop, me, noBusiness, usd, when, type BusinessFile, type BusinessPayload,
-} from "@/app/lib";
+  api, apiResult, mayManage, mayStop, me, noBusiness, usd, when, type BusinessFile, type BusinessPayload, withB, workspace } from "@/app/lib";
 import { KillSwitch } from "@/components/kill-switch";
 import { Problems } from "@/components/profile-editor";
 import { Empty, Fact, PageHeader, Rail, Section } from "@/components/shell";
@@ -23,6 +22,7 @@ function Chips({ items, empty = "none" }: { items: string[]; empty?: string }) {
 }
 
 export default async function BusinessPage() {
+  const ws = await workspace();
   const [biz, user, files] = await Promise.all([
     apiResult<BusinessPayload>("business"), me(), api<{ files: BusinessFile[] }>("files"),
   ]);
@@ -73,7 +73,7 @@ export default async function BusinessPage() {
                       </p>
                     </div>
                     <span className="font-mono text-sm font-medium tabular-nums">{usd(o.price_usd)}</span>
-                    <Link href={`/buy/${o.id}`} className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2">checkout page</Link>
+                    <Link href={withB(`/buy/${o.id}`, ws)} className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2">checkout page</Link>
                   </li>
                 ))}
               </ul>

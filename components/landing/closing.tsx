@@ -148,12 +148,12 @@ export function Finale({ cta }: { cta: { href: string; label: string } }) {
           <AeraMark className="lp-breathe mx-auto mb-8 size-14 text-white" />
           <h2 className="text-[clamp(38px,5.8vw,76px)] leading-[1.02] font-light tracking-[-0.035em] text-white">Open the demo business.</h2>
           <p className="text-on-canvas-dim mx-auto mt-5 max-w-[480px] text-[16px] leading-relaxed">
-            Every run, ruling, proof and payment on this page comes from it. Then describe your own.
+            Every run, ruling, proof and payment on this page comes from it. Then create your own: its own team, its own record, on your NEAR AI key or ours.
           </p>
           <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
             <Link href={cta.href} className="text-brand rounded-full bg-white px-5 py-2.5 text-[14px] font-medium hover:bg-white/90">{cta.label}</Link>
             {cta.href === "/login" && (
-              <Link href="/login?mode=signup" className="rounded-full border border-white/[.28] bg-white/[.12] px-5 py-2.5 text-[14px] text-white hover:bg-white/20">Create an account</Link>
+              <Link href="/login?mode=business" className="rounded-full border border-white/[.28] bg-white/[.12] px-5 py-2.5 text-[14px] text-white hover:bg-white/20">Create your business</Link>
             )}
             <a href={REPO} className="inline-flex items-center gap-2 rounded-full border border-white/[.28] bg-white/[.12] px-5 py-2.5 text-[14px] text-white hover:bg-white/20">
               <GitHubMark className="size-4" /> View on GitHub

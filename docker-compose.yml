@@ -12,6 +12,8 @@ services:
       - PORT=8787
       - AERA_ENV=${AERA_ENV:-dev}
       - AERA_DB=/app/data/aera.db
+      # the hub's API (create a business, find where one listens); only the web server holds this
+      - AERA_HUB_SECRET=${AERA_HUB_SECRET:-}
     env_file:
       - ./aera/agent/.env
     volumes:
@@ -35,6 +37,8 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - AERA_API=http://agents:8787
+      - AERA_HUB=http://agents:8786
+      - AERA_HUB_SECRET=${AERA_HUB_SECRET:-}
       # Optional: the "Use the demo account" button on /login (a read-only viewer). From the root .env.
       - AERA_DEMO_EMAIL=${AERA_DEMO_EMAIL:-}
       - AERA_DEMO_PASSWORD=${AERA_DEMO_PASSWORD:-}

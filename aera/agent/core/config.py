@@ -35,7 +35,12 @@ _ENV_FILES = (".env", ".secrets/bedrock.env", ".secrets/notify.env", ".secrets/n
 
 
 def _load_env() -> None:
-    """Read .env when present. Convenient in dev; production uses real env vars."""
+    """Read .env when present. Convenient in dev; production uses real env vars.
+
+    AERA_NO_ENV_FILES=1 reads none: a business the hub runs for someone else (hub.py) gets only the
+    environment the hub hands it, never this install's own .env or .secrets (its vault key, its mail)."""
+    if os.environ.get("AERA_NO_ENV_FILES") == "1":
+        return
     root = pathlib.Path(__file__).resolve().parent.parent
     for name in _ENV_FILES:
         f = root / name

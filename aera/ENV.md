@@ -71,6 +71,17 @@ The profile adds its own: autonomous per payment/day, inference per day, min pri
 | `AERA_TESTER_WORK_PER_DAY` / `AERA_TESTER_ASKS_PER_DAY` | `5` / `20` | A tester's daily allowance of work items and questions to the agents |
 | `AERA_SIGNUPS_PER_DAY` | `50` | New accounts a day, all together |
 
+### One install, many businesses (`hub.py`)
+
+| Variable | Default | |
+|---|---|---|
+| `AERA_HUB_SECRET` | — | Root `.env`, shared by the agent and web containers. Set: anyone may create their own business. Empty: one business, as before |
+| `AERA_HUB_SHARED_DAILY_USD` | `0.5` | A created business on the install's NEAR AI key may spend this much on models a day; its owner cannot raise it. Their own key lifts it |
+| `AERA_HUB_NEW_PER_DAY` / `AERA_HUB_MAX_TENANTS` | `20` / `100` | New businesses a day, and in all |
+| `AERA_HUB_PORT` / `AERA_HUB_BASE_PORT` | `8786` / `9001` | The hub's API, and the first port a created business listens on (inside the container network) |
+| `AERA_NO_ENV_FILES` | — | Set to `1` by the hub on a created business: it reads no `.env` or `.secrets` file, only what the hub hands it |
+| `AERA_DAILY_MODEL_CAP_USD` | — | A model budget per day the business's owner cannot raise (set by the hub on the shared key) |
+
 Alerts (SMTP, Slack, Telegram, webhook, Composio Gmail): see `.env.example`; values in `.secrets/notify.env`.
 
 ### Finding customers (prospecting)

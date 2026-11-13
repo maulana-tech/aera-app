@@ -4,10 +4,10 @@ import { Check, Copy, ExternalLink } from "lucide-react";
 import { useState } from "react";
 
 import type { Offering } from "@/app/lib";
-import { usd } from "@/app/lib";
+import { usd, withB } from "@/app/lib";
 
 /* The public checkout for each offering: what a customer is sent. */
-export function CheckoutLinks({ offerings, open }: { offerings: Offering[]; open: boolean }) {
+export function CheckoutLinks({ offerings, open, business }: { offerings: Offering[]; open: boolean; business?: string | null }) {
   const [copied, setCopied] = useState("");
   if (!offerings.length) return <p className="text-muted-foreground text-sm">No offerings yet.</p>;
   return (
@@ -26,10 +26,10 @@ export function CheckoutLinks({ offerings, open }: { offerings: Offering[]; open
             </div>
             <div className="flex items-center gap-1">
               <button type="button" className="hover:bg-muted rounded p-1.5" title="Copy link" aria-label={`Copy the checkout link for ${o.title}`}
-                onClick={() => { void navigator.clipboard.writeText(`${window.location.origin}/buy/${o.id}`); setCopied(o.id); setTimeout(() => setCopied(""), 1500); }}>
+                onClick={() => { void navigator.clipboard.writeText(`${window.location.origin}${withB(`/buy/${o.id}`, business)}`); setCopied(o.id); setTimeout(() => setCopied(""), 1500); }}>
                 {copied === o.id ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
               </button>
-              <a href={`/buy/${o.id}`} target="_blank" rel="noopener noreferrer" className="hover:bg-muted rounded p-1.5" title="Open" aria-label={`Open the checkout page for ${o.title}`}>
+              <a href={withB(`/buy/${o.id}`, business)} target="_blank" rel="noopener noreferrer" className="hover:bg-muted rounded p-1.5" title="Open" aria-label={`Open the checkout page for ${o.title}`}>
                 <ExternalLink className="size-3.5" />
               </a>
             </div>

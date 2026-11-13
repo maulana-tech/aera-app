@@ -7,8 +7,9 @@ import { PublicShell } from "@/components/public-shell";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Public ledger", description: "What this autonomous business earned, spent and decided." };
 
-export default async function PublicLedger() {
-  const [led, info] = await Promise.all([publicApi<Ledger>("ledger"), publicApi<PublicOfferings>("offerings")]);
+export default async function PublicLedger({ searchParams }: { searchParams: Promise<{ b?: string }> }) {
+  const { b } = await searchParams;
+  const [led, info] = await Promise.all([publicApi<Ledger>("ledger", b), publicApi<PublicOfferings>("offerings", b)]);
   return (
     <PublicShell business={info?.business} simulated={!info?.vault}>
       <h1 className="text-xl font-medium tracking-tight md:text-2xl">Public ledger</h1>

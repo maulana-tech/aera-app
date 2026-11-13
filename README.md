@@ -9,7 +9,7 @@
 
 <p align="center"><b>Autonomous Enterprise, Run by Agents</b></p>
 
-<p align="center"><b>Live:</b> <a href="https://aera.utdi.me">aera.utdi.me</a> — sign in with <i>Use the demo account</i> (read-only)</p>
+<p align="center"><b>Live:</b> <a href="https://aera.utdi.me">aera.utdi.me</a> — <b>create your own business</b> (its own team of agents, on your NEAR AI key or ours), try the demo business as a tester, or read everything with <i>Use the demo account</i></p>
 
 <p align="center">
   Describe a business. AERA composes the team of AI agents that runs it — they take the order,
@@ -28,7 +28,19 @@
 
 ---
 
-**Tracks:** Autonomous Business · Privacy & Private AI · AI Security & Defense
+## Hackathon tracks
+
+AERA is entered in **three tracks** of NEAR Hackathon 2026. One running product serves all three: the same
+business that runs itself (track 1) does it on private, attested models (track 2) behind brakes a prompt cannot
+talk past (track 3).
+
+| Track | What AERA brings to it | See it |
+|---|---|---|
+| **Autonomous Business** | Describe a business and a team of agents runs it end to end: finds customers, sells at a checkout, does the work, delivers it, gets paid in USDC into an on-chain vault, pays its own vendors, buys from other agent businesses and keeps the books. A scheduler hands it work every 20 seconds; how much ran with no person is counted in code. Anyone can create their own business on the live install. | [aera.utdi.me](https://aera.utdi.me) → *Create your business* · Dashboard → Autonomy · `/leads` · Treasury |
+| **Privacy & Private AI** | Every agent thinks on a NEAR AI Cloud model inside a TEE; each call's attestation (fresh nonce) and response signature are verified and shown on the run. Private mode refuses unattested models. Personal data is redacted before alerts leave, and each business created on the install runs in its own process with its own database and key. | A run page → *Verified* panel · Trust Center · `core/attest.py` · `hub.py` |
+| **AI Security & Defense** | Three brakes on every payment: tools take record ids not addresses, the Guardian's rules run in code before any action, and the vault enforces its caps on chain with the agent holding only a function-call key. Outside text never gives orders; opt-outs are forever; a tester's work can never pay on its own say-so. | Landing → *Try to fool the Guardian* · `manage.py attack-demo` · `core/guardian.py` · `aera/contracts/aera-vault` |
+
+Details for each track: [The three tracks, concretely](#the-three-tracks-concretely).
 
 > **Humans set the constraints. Agents do the work. Code — and the chain — enforce the rules.**
 >
@@ -48,7 +60,10 @@
 
 | | Where | What happens |
 |---|---|---|
-| 1 | **First run** (`/login`) | No account yet → *Set up AERA* creates the owner. Owners add approvers and operators under **Settings → Accounts**. With `AERA_DEMO_EMAIL`/`AERA_DEMO_PASSWORD` set, **Use the demo account** fills in a read-only viewer sign-in (it approves nothing and changes no settings). Anyone can also **create an account** (a *tester*): give the team work and talk to any agent within a daily allowance; it approves nothing, and anything its work would pay or send waits for the owner (`AERA_SIGNUP=0` closes it). |
+| 0 | **Landing** (`/`) | What AERA is, with live figures from the public ledger, an interactive Guardian you can try to fool, a team composer and the testnet transactions. |
+| 1 | **Create your business** (`/login?mode=business`) | Anyone: business name, your name, email, password, and the AI it runs on — **AERA's key** (free, a daily allowance) or **your own NEAR AI key** ([how to get one](https://aera.utdi.me/guide/near-ai-key)). The business gets its own agent service, database and team, and you land on onboarding to describe it. Payments run simulated until you connect your own NEAR vault. |
+| 1b | **Try the demo** (`/login?mode=tester`) | A *tester* account on the demo business: give its team work and talk to any agent within a daily allowance; it approves nothing, and anything its work would pay or send waits for the owner. |
+| 1c | **First run** (`/login`) | No account yet → *Set up AERA* creates the owner. Owners add approvers and operators under **Settings → Accounts**. With `AERA_DEMO_EMAIL`/`AERA_DEMO_PASSWORD` set, **Use the demo account** fills in a read-only viewer sign-in (it approves nothing and changes no settings). Anyone can also **create an account** (a *tester*): give the team work and talk to any agent within a daily allowance; it approves nothing, and anything its work would pay or send waits for the owner (`AERA_SIGNUP=0` closes it). |
 | 2 | **Onboarding** (`/onboarding`) | Five explained steps: *Describe* (or **Draft with AI** from a paragraph, on a TEE model) → *Offerings* → *Limits & rules* → *Team* → *Review* in plain sentences. Nothing is saved until the end; a refresh keeps the draft. |
 | 3 | **Dashboard & Chat** | A *Getting started* checklist (models, vault, approver, first order), money in and out, what waits for you, what the Guardian blocked, TEE proofs, and the team visibly at work. **Chat** asks the team, or one agent, in plain words; a request becomes a work item. |
 | 4 | **Orders** | Share the checkout link for each offering (`/buy/<id>`). A customer pays USDC from their wallet to the vault; the vault splits revenue on the spot. |
@@ -84,6 +99,25 @@ yields the same team. Agents are named by role.
 
 Any library role can also be added by hand on **Team → Add from the role library**; it stays through a recompose.
 
+## One install, many businesses
+
+`hub.py` is what the container runs. It starts the flagship business (`api.py`, as before) and every business
+people create on the install, each as **its own agent service**: its own process, SQLite database, team,
+scheduler and session-token secret.
+
+- **Isolated by construction.** A created business is started with an environment the hub builds and
+  `AERA_NO_ENV_FILES=1`, so it never reads the install's `.env` or `.secrets`: it holds no vault key, no NEAR
+  account and no mail settings of the flagship's. Its payments run on the SIMULATED rail until its owner connects
+  a vault of their own. A session token from one business is worthless at another.
+- **Whose AI.** The owner's own NEAR AI key when they give one (at sign-up or later under **Models → NEAR AI
+  key**), with no allowance from AERA; otherwise the install's key under a hard daily cap the owner cannot
+  raise (`AERA_HUB_SHARED_DAILY_USD`, $0.50 by default). The guide at `/guide/near-ai-key` walks through getting
+  a key from NEAR AI Cloud.
+- **Capped.** New businesses per day and in all (`AERA_HUB_NEW_PER_DAY`, `AERA_HUB_MAX_TENANTS`); the hub's own
+  API answers only the web server (`AERA_HUB_SECRET`), inside the container network.
+- **Found at sign-in.** The web app asks the hub which businesses an email belongs to and signs the person in to
+  theirs; public pages of a created business carry `?b=<slug>` (checkout, samples, ledger).
+
 Capabilities, not tools, are granted; `treasury`, `guardian` and `supervisor` are locked to their
 owner in code and re-checked on every call.
 
@@ -99,7 +133,7 @@ owner in code and re-checked on every call.
 
 ```bash
 cd aera/agent
-PYTHONPATH=. python3 manage.py check                       # 57 offline self-checks
+PYTHONPATH=. python3 manage.py check                       # 59 offline self-checks
 cp .env.example .env && PYTHONPATH=. python3 manage.py secret   # → AERA_SECRET in .env
 PYTHONPATH=. python3 api.py                                # :8787
 
@@ -121,7 +155,9 @@ Then, to make it real ([`aera/SETUP.md`](aera/SETUP.md)):
    then `python3 manage.py near-setup` prints every testnet command; `manage.py ready` confirms the
    agent holds no full-access key.
 
-`docker compose up` runs both services.
+`docker compose up` runs both services (the agent container runs `hub.py`). Deploying to a server, with HTTPS
+through Caddy, Cloudflare Tunnel or Tailscale: [`deploy/README.md`](deploy/README.md). Set `AERA_HUB_SECRET` in the
+root `.env` to let people create their own businesses.
 
 ## Try it in five minutes
 
@@ -139,7 +175,10 @@ Then, to make it real ([`aera/SETUP.md`](aera/SETUP.md)):
 
 | | Status |
 |---|---|
-| Agent service | 57 offline self-checks (`manage.py check`) |
+| Agent service | 59 offline self-checks (`manage.py check`) |
+| Creating a business | End to end in a browser against a local hub: create → own service on the shared key with its cap → onboarding → sign out and back in to the same business → own key from Models lifts the cap; the created service's environment holds no vault key, NEAR account or hub secret (inspected) |
+| Sign-up, landing | Tester sign-up and its refusals (approve, settings, kill switch) in a browser; landing interactions (Guardian playground, composer, approval, FAQ, phone menu) on the live site |
+| Live deploy | [aera.utdi.me](https://aera.utdi.me): Docker Compose on one server behind a Cloudflare Tunnel |
 | Vault contract | 47 unit tests (`cargo test`); sandbox integration test written, run with `--features sandbox -- --ignored` |
 | Web app | `npm run lint`, `npm run build`, `npm test` |
 | Live NEAR AI attestation | Report fetched and checked with a fresh nonce (nonce binding, compose hash, signing key, model verifiable; GPU via NVIDIA NRAS optional) |
@@ -153,7 +192,9 @@ Then, to make it real ([`aera/SETUP.md`](aera/SETUP.md)):
 |---|---|
 | `aera/agent/` | Python service, standard library only: API, agents, tools, schedule, NEAR clients, crypto |
 | `aera/contracts/aera-vault/` | Rust vault contract (near-sdk) with unit and sandbox tests |
-| `app/`, `components/`, `lib/` | Next.js 16 web app |
+| `aera/agent/hub.py` | One install, many businesses: starts each as its own isolated agent service |
+| `app/`, `components/`, `lib/` | Next.js 16 web app (`components/landing/` is the landing page, `lib/tenant.ts` routes a request to its business) |
+| `deploy/` | Server deploy: Caddy, Cloudflare Tunnel, Tailscale, database backup |
 | `aera/ARCHITECTURE.md` · `aera/NEAR.md` | How it fits together; every NEAR call |
 
 ## Built at NEAR Hackathon
@@ -170,7 +211,9 @@ removed entirely.
 - **New**: business profile and Composer, dynamic roster, capability lock, guardian rules, actions
   and settlement, NEAR AI provider and TEE attestation, pure-Python Ed25519/Borsh/Keccak/secp256k1,
   NEAR RPC + transactions, 1Click client, the vault contract, orders and checkout, treasury, ledger,
-  attack demo, the new web pages.
+  attack demo, prospecting (leads, outreach, follow-ups, inbox), free samples, businesses buying from
+  each other, the autonomy report, sign-up and tester accounts, the multi-business hub, the landing page,
+  the new web pages.
 - **Libraries**: none in the agent service; the vault uses `near-sdk`; the web app's are in `package.json`.
 - **AI-generated code**: much of this repository was written with Claude Code (Anthropic), reviewed
   and tested by the team.

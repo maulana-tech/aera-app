@@ -1649,6 +1649,16 @@ def list_conversations(user_id: str, agent: Optional[str] = None,
     return [dict(r) for r in rows]
 
 
+def model_spend_today() -> float:
+    """What the models cost today (UTC), across work runs and direct conversations with agents."""
+    day = datetime.now(timezone.utc).date().isoformat()
+    with connect() as c:
+        runs = c.execute("SELECT COALESCE(SUM(cost_usd), 0) FROM runs WHERE substr(started_at, 1, 10)=?", (day,)).fetchone()[0]
+        talk = c.execute("SELECT COALESCE(SUM(json_extract(body, '$.cost_usd')), 0) FROM messages"
+                         " WHERE role='agent' AND substr(at, 1, 10)=?", (day,)).fetchone()[0]
+    return float(runs or 0) + float(talk or 0)
+
+
 def conversation_usage_summary(user_id: str) -> Dict[str, Any]:
     """Aggregate token and cost usage across all conversations for a user, plus run costs."""
     with connect() as c:

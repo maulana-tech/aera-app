@@ -51,9 +51,11 @@ export async function apiResult<T>(path: string): Promise<
   { data: T; error: null } | { data: null; error: string }
 > {
   const { cookies } = await import("next/headers");
+  const { sessionBase } = await import("@/lib/tenant");
   const token = (await cookies()).get("aera_session")?.value;
+  const base = await sessionBase();
   try {
-    const r = await upstream(`${UPSTREAM}/${path}`, {
+    const r = await upstream(`${base}/${path}`, {
       cache: "no-store",
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
@@ -70,7 +72,7 @@ export async function apiResult<T>(path: string): Promise<
     }
     return { data: JSON.parse(body) as T, error: null };
   } catch {
-    return { data: null, error: `The agent service is not responding at ${UPSTREAM}` };
+    return { data: null, error: "The agent service is not responding" };
   }
 }
 
@@ -78,10 +80,22 @@ export async function api<T>(path: string): Promise<T | null> {
   return (await apiResult<T>(path)).data;
 }
 
-/** The customer-facing routes (/public/*): no session, never a token. */
-export async function publicApi<T>(path: string): Promise<T | null> {
+/** The signed-in person's business when it was created on this install (hub), else null (the flagship). */
+export async function workspace(): Promise<string | null> {
+  const { cookies } = await import("next/headers");
+  return (await cookies()).get("aera_ws")?.value ?? null;
+}
+
+/** A public path for one business: `/buy/brief` → `/buy/brief?b=kopi-a1b2` when it is not the flagship. */
+export const withB = (path: string, b?: string | null) => (b ? `${path}${path.includes("?") ? "&" : "?"}b=${encodeURIComponent(b)}` : path);
+
+/** The customer-facing routes (/public/*): no session, never a token. `business` is a slug from ?b= for a
+ *  business created on this install; without it, the flagship. */
+export async function publicApi<T>(path: string, business?: string | null): Promise<T | null> {
   try {
-    const r = await upstream(`${UPSTREAM}/public/${path}`, { cache: "no-store" });
+    const { publicBase } = await import("@/lib/tenant");
+    const base = await publicBase(business);
+    const r = await upstream(`${base}/public/${path}`, { cache: "no-store" });
     return r.ok ? ((await r.json()) as T) : null;
   } catch {
     return null;
@@ -105,6 +119,8 @@ export const mayStop = (u: Me | null | undefined) => u?.role === "approver" || u
 export type Health = {
   env: string; model_ready: boolean; model: string; private_mode: boolean; aux_model: string;
   vault: string | null; network: string; rail: "vault" | "simulated";
+  /** set when this business was created on a shared install (hub.py) */
+  workspace?: string | null; key_mode?: "own" | "shared" | null; daily_model_cap_usd?: number | null;
 };
 
 /* ---------------------------------------------------------------- business */

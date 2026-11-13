@@ -1,11 +1,12 @@
-import { apiResult, type ModelsPayload } from "@/app/lib";
+import { api, apiResult, mayManage, me, type Health, type ModelsPayload } from "@/app/lib";
 import { ModelChoice } from "./Choose";
+import { NearKey } from "./NearKey";
 import { PageHeader } from "@/components/shell";
 
 export const dynamic = "force-dynamic";
 
 export default async function ModelsPage() {
-  const { data, error } = await apiResult<ModelsPayload>("models");
+  const [{ data, error }, health, user] = await Promise.all([apiResult<ModelsPayload>("models"), api<Health>("health"), me()]);
 
   return (
     <main className="w-full px-4 py-4 md:px-6 md:py-8">
@@ -16,6 +17,10 @@ export default async function ModelsPage() {
           cannot make an action allowed. A change applies to the next model call, including the
           remaining rounds of a run already going.
         </>} />
+
+      {health?.workspace && (
+        <NearKey mode={health.key_mode ?? "shared"} cap={health.daily_model_cap_usd ?? null} owner={mayManage(user)} />
+      )}
 
       {data ? (
         <ModelChoice data={data} />

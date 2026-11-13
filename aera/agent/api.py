@@ -54,6 +54,7 @@ from urllib.parse import parse_qs, urlparse
 import tools  # noqa: F401  (registers every tool)
 from core import identity, llm, registry, store
 from core.config import CFG, bind_target
+from core import budget
 from core.identity import NotAuthorised, User
 
 HOST, PORT = bind_target(os.environ)
@@ -176,6 +177,10 @@ def health(_m, _b, _h) -> Tuple[int, dict]:
         "vault": chain.vault_id() or None,
         "network": chain.network(),
         "rail": "vault" if chain.configured() else "simulated",
+        # set by hub.py when this is a business it runs for someone: whose AI key, and the hard daily cap
+        "workspace": os.environ.get("AERA_TENANT") or None,
+        "key_mode": os.environ.get("AERA_KEY_MODE") or None,
+        "daily_model_cap_usd": budget.hard_cap() or None,
     }
 
 
@@ -962,7 +967,7 @@ def ask_agent(m, b: dict, h):
 
     if not question and not attachments:
         return 400, {"error": "'question' or an attachment is required"}
-    over = tester_quota(user, "ask")
+    over = budget.refusal() or tester_quota(user, "ask")
     if over:
         return 429, {"error": over}
 
@@ -1562,18 +1567,14 @@ def new_work(_m, b: dict, h) -> Tuple[int, dict]:
     if u.role == "tester":
         if kind != "request":
             return 403, {"error": "a tester account raises requests; goals, payables and orders come from the business"}
-        from datetime import datetime, timezone
-        from core import business
-        cap = business.current()["constraints"]["inference_max_usd_per_day"]
-        today = datetime.now(timezone.utc).date().isoformat()
-        spent = sum(r.get("cost_usd") or 0 for r in store.list_runs(200) if (r.get("started_at") or "")[:10] == today)
-        if cap and spent >= cap:
-            # the profile's daily model budget holds for work a tester starts, as it does for the scheduler
-            return 429, {"error": f"today's model budget (${cap:.2f}) is used; try again tomorrow"}
         over = tester_quota(u, "work")
         if over:
             return 429, {"error": over}
         payload = {**payload, "raised_by_role": "tester"}
+    spent = budget.refusal()
+    if spent:
+        # the daily budget holds for work a person starts, as it does for the scheduler
+        return 429, {"error": spent}
     wid = store.record_work_item(kind, title[:200], "api", {**payload, "raised_by": u.email})
     item = store.get_work_item(wid)
     store.set_work_status(wid, "running")
@@ -1592,6 +1593,9 @@ def retry_work(m, _b, h) -> Tuple[int, dict]:
         return 409, {"error": f"the work item is {item['status']}; only held or failed work is retried"}
     if not CFG.model_ready:
         return 503, {"error": f"the supervisor's model cannot be called: {llm.ready(llm.spec_for_code('supervisor'))[1]}"}
+    spent = budget.refusal()
+    if spent:
+        return 429, {"error": spent}
     item = store.note_run_again(item["id"], u.email)
     return 201, {"work_item": item["id"], "run": start_work(item)}
 
