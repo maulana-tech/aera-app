@@ -92,7 +92,7 @@ export function Opening({ stats }: { stats: [OpeningStat, OpeningStat, OpeningSt
               <span key={p.s.label} className="lo-pill" style={{ left: `${p.b!.xf * 100}%`, top: `${p.b!.yf * 100}%` }}>
                 <span className={`lo-dot ${p.s.bad ? "lo-dot-bad" : ""}`} />
                 <span className="font-mono text-[13px]">{p.s.value}</span>
-                <span className="text-[12.5px] opacity-55">{p.s.label}</span>
+                <span className="text-muted-foreground text-[12.5px]">{p.s.label}</span>
               </span>
             ))}
           </div>

@@ -150,7 +150,7 @@ export function GuardianPlayground() {
             return (
               <li key={`${s.id}-${r.rule}`}
                 className={cn("bg-inner-grad flex items-start gap-2.5 rounded-md border px-3 py-2 text-[13px] transition-[opacity,transform] duration-300",
-                  on ? "translate-x-0 opacity-100" : "translate-x-1 opacity-40")}>
+                  on ? "translate-x-0 opacity-100" : "translate-x-1 opacity-70")}>
                 <Dot tone={on ? TONE[r.verdict] : "neutral"} className="mt-[7px]" />
                 <span className="text-text w-[7.5rem] shrink-0 font-mono text-[11.5px] leading-6">{r.rule}</span>
                 <span className="text-body leading-6">{on ? r.detail : "checking…"}</span>

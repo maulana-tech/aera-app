@@ -63,18 +63,19 @@ export function LiveRun() {
           {STEPS.map((s, i) => {
             const on = i < shown;
             const current = i === shown - 1 && !done;
+            // a step still to come is shown waiting, not hidden: every row is always readable
             return (
-              <li key={s.who}
-                className={cn("flex items-start gap-3 border-t py-2.5 transition-[opacity,transform] duration-500 first:border-t-0",
-                  on ? "translate-y-0 opacity-100" : "pointer-events-none -translate-y-1 opacity-0")}>
-                <Dot tone={s.tone} className={cn("mt-[7px]", current && "ring-info/25 ring-4")} />
-                <p className="text-fg min-w-0 flex-1 text-[13.5px]"><span className="text-text">{s.who}</span> · {s.what}</p>
-                <span className="text-muted-foreground shrink-0 font-mono text-[11px] tabular-nums">{s.at}</span>
+              <li key={s.who} className="flex items-start gap-3 border-t py-2.5 transition-colors duration-500 first:border-t-0">
+                <Dot tone={on ? s.tone : "neutral"} className={cn("mt-[7px]", current && "ring-info/25 ring-4")} />
+                <p className={cn("min-w-0 flex-1 text-[13.5px] transition-colors duration-500", on ? "text-fg" : "text-muted-foreground")}>
+                  <span className={on ? "text-text" : ""}>{s.who}</span> · {on ? s.what : "waiting"}
+                </p>
+                <span className="text-muted-foreground shrink-0 font-mono text-[11px] tabular-nums">{on ? s.at : "--:--"}</span>
               </li>
             );
           })}
         </ol>
-        <div className={cn("bg-inner-grad mt-3 rounded-lg border px-3.5 py-3 transition-opacity duration-500", done ? "opacity-100" : "opacity-60")}>
+        <div className="bg-inner-grad mt-3 rounded-lg border px-3.5 py-3">
           <div className="flex items-center gap-2 text-[12.5px]">
             <BadgeCheck className="text-brand size-4 shrink-0" />
             <span className="text-text">Every model call ran in a TEE: attestation and signature verified</span>

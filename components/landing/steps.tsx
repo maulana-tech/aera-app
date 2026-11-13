@@ -80,11 +80,27 @@ export function Steps() {
   const [on, setOn] = useState(0);
   const refs = useRef<(HTMLDivElement | null)[]>([]);
   useEffect(() => {
-    const io = new IntersectionObserver((entries) => {
-      for (const e of entries) if (e.isIntersecting) setOn(Number((e.target as HTMLElement).dataset.i));
-    }, { rootMargin: "-45% 0px -45% 0px" });
-    for (const el of refs.current) if (el) io.observe(el);
-    return () => io.disconnect();
+    // the step whose middle is nearest a line a little above the centre of the screen is the open one;
+    // a thin trigger band missed the last, shorter step entirely
+    let raf = 0;
+    const pick = () => {
+      raf = 0;
+      const line = window.innerHeight * 0.45;
+      let best = 0;
+      let bestD = Infinity;
+      refs.current.forEach((el, i) => {
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        const d = Math.abs((r.top + r.bottom) / 2 - line);
+        if (d < bestD) { bestD = d; best = i; }
+      });
+      setOn(best);
+    };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(pick); };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => { window.removeEventListener("scroll", onScroll); window.removeEventListener("resize", onScroll); cancelAnimationFrame(raf); };
   }, []);
 
   return (
@@ -100,7 +116,8 @@ export function Steps() {
             const I = s.icon;
             return (
               <div key={s.title} ref={(el) => { refs.current[i] = el; }} data-i={i} data-on={on === i}
-                className="lw-step flex min-h-[46vh] flex-col justify-center border-t border-white/10 py-10 first:border-t-0 lg:min-h-[62vh]">
+                className="lw-step relative flex min-h-[46vh] flex-col justify-center border-t border-white/10 py-10 first:border-t-0 lg:min-h-[62vh] lg:pl-6">
+                <span aria-hidden="true" className={cn("absolute top-1/2 left-0 hidden h-16 w-[2px] -translate-y-1/2 rounded-full transition-colors lg:block", on === i ? "bg-white" : "bg-white/15")} />
                 <div className="flex items-center gap-3">
                   <span className="grid size-9 place-items-center rounded-full border border-white/20 bg-white/10 text-white"><I className="size-4" /></span>
                   <span className="text-on-canvas-dim font-mono text-[12px]">{String(i + 1).padStart(2, "0")} / 04</span>
