@@ -40,8 +40,10 @@ export function CapChip({ name }: { name: string }) {
 }
 
 /** A compact row per agent, for previews and diffs. */
-export function TeamRows({ agents, action }: {
+export function TeamRows({ agents, action, reasons }: {
   agents: TeamAgent[]; action?: (a: TeamAgent) => React.ReactNode;
+  /** why the Composer picked each role, from the profile */
+  reasons?: Record<string, string>;
 }) {
   return (
     <ul className="divide-y rounded-lg border">
@@ -56,6 +58,7 @@ export function TeamRows({ agents, action }: {
               {a.status !== "active" && <StatusBadge status={a.status} />}
             </div>
             <p className="text-muted-foreground mt-1 text-xs leading-relaxed">{a.brief}</p>
+            {reasons?.[a.code] && <p className="text-brand mt-1 text-[11.5px]">Why: {reasons[a.code]}</p>}
             <div className="mt-1.5 flex flex-wrap gap-1">
               {a.capabilities.map((c) => <CapChip key={c} name={c} />)}
             </div>

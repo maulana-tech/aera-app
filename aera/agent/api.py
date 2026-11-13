@@ -1449,7 +1449,10 @@ def get_team(_m, _b, h) -> Tuple[int, dict]:
     from core import team
     u = _user(h)
     team.ensure_team(by=u.email)
+    from core import business
     return 200, {"agents": [_agent_row(a) for a in store.list_agents(include_inactive=True)],
+                 # why each library role is on this business's team, from its profile (core/team.py)
+                 "reasons": team.reasons(business.current()),
                  "capabilities": [{"name": n, "description": d, "locked_to": roles.LOCKED.get(n),
                                    "tools": registry.tools_of(n)} for n, d in roles.CAPABILITIES.items()],
                  "library": [{"key": k, **{x: r[x] for x in ("nickname", "title", "brief", "capabilities")}}
@@ -1463,7 +1466,7 @@ def compose_team(_m, b: dict, h) -> Tuple[int, dict]:
     _user(h)
     p = business.normalise(b["profile"])[0] if isinstance(b.get("profile"), dict) else business.current()
     proposal = team.compose(p)
-    return 200, {"team": proposal, "diff": team.diff(proposal)}
+    return 200, {"team": proposal, "diff": team.diff(proposal), "reasons": team.reasons(p)}
 
 
 @route("POST", r"/team/apply")

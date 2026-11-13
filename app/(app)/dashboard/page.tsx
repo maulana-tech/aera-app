@@ -5,12 +5,14 @@ import { redirect } from "next/navigation";
 import {
   api, apiResult, mayManage, mayStop, me, noBusiness, usd, when,
   type Action, type ActivityPayload, type BusinessPayload, type EconomicsPayload, type Health, type Ledger, type RunRow,
+  type TeamPayload,
 } from "@/app/lib";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { Autonomy } from "@/components/autonomy";
 import { Bars, Figure, type Datum } from "@/components/charts";
 import { GettingStarted } from "@/components/getting-started";
 import { TeamLive } from "@/components/team-live";
+import { YourTeam } from "@/components/your-team";
 import { KillSwitch } from "@/components/kill-switch";
 import { Empty, Metric, PageHeader, Section } from "@/components/shell";
 import { StatusBadge } from "@/components/status-badge";
@@ -34,7 +36,7 @@ export default async function Dashboard() {
   }
   if (noBusiness(biz.data)) redirect("/onboarding");
 
-  const [led, pending, runs, health, user, accounts, orders, activity, econ] = await Promise.all([
+  const [led, pending, runs, health, user, accounts, orders, activity, econ, team] = await Promise.all([
     api<Ledger>("ledger?days=30"),
     api<{ actions: Action[] }>("actions?status=pending"),
     api<{ runs: RunRow[] }>("runs"),
@@ -44,6 +46,7 @@ export default async function Dashboard() {
     api<{ orders: { status: string }[] }>("orders"),
     api<ActivityPayload>("activity?limit=20"),
     api<EconomicsPayload>("economics?days=30"),
+    api<TeamPayload>("team"),
   ]);
   const p = biz.data.profile;
   const money = led?.money ?? [];
@@ -87,7 +90,9 @@ export default async function Dashboard() {
           detail: "Put NEARAI_API_KEY in aera/agent/.secrets/near.env and restart the agent service. Until then work is held.",
           href: "/models", cta: "Models" },
         { done: health?.rail === "vault", title: "Connect the vault (NEAR)",
-          detail: "Deploy aera-vault and give the agent a function-call key: python3 manage.py near-setup prints every command. Until then payments are simulated.",
+          detail: health?.workspace
+            ? "Your business runs on simulated payments: orders and payouts are recorded, no money moves. A vault of your own is deployed from your NEAR wallet (aera/SETUP.md)."
+            : "Deploy aera-vault and give the agent a function-call key: python3 manage.py near-setup prints every command. Until then payments are simulated.",
           href: "/treasury", cta: "Treasury" },
         { done: (accounts?.users ?? []).some((u) => u.role === "approver"), title: "Add an approver",
           detail: "Someone other than the owner who approves payments above the team's limit.", href: "/users", cta: "Accounts" },
@@ -97,6 +102,10 @@ export default async function Dashboard() {
 
       {p.kill_switch && (
         <div className="mt-6"><KillSwitch on mayStop={mayStop(user)} mayResume={mayManage(user)} /></div>
+      )}
+
+      {team && team.agents.length > 0 && (
+        <YourTeam agents={team.agents} reasons={team.reasons ?? {}} business={p.name} fresh={recent.length === 0} />
       )}
 
       <div className="mt-6 grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-5">

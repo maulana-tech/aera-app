@@ -85,7 +85,7 @@ ROLES: Dict[str, Dict] = {
         "nickname": "Researcher", "title": "Researcher",
         "brief": "Finds and checks facts from the open web and the business's files, with a source for every claim.",
         "capabilities": ["research", "knowledge", "documents"],
-        "keywords": ("research", "report", "brief", "market", "analysis", "insight", "data", "competitor", "trend", "pulse"),
+        "keywords": ("research", "report", "brief", "market", "analysis", "insight", "data", "competitor", "trend", "pulse", "riset", "penelitian", "laporan", "pasar", "analisis", "kompetitor", "pesaing", "tren", "wawasan"),
         "prompt": ("You are the Researcher agent on {NAME}'s team.\n\n{BUSINESS}\n\n"
                    "Your job: answer the question you are given with facts you actually found, each with its "
                    "source (publisher and date, or the business file). Prefer recent, primary sources. Separate "
@@ -96,7 +96,7 @@ ROLES: Dict[str, Dict] = {
         "nickname": "Writer", "title": "Writer",
         "brief": "Turns findings into the deliverable the customer paid for, in the business's voice and format.",
         "capabilities": ["documents", "knowledge"],
-        "keywords": ("pdf", "report", "brief", "content", "copy", "article", "newsletter", "write", "post", "document"),
+        "keywords": ("pdf", "report", "brief", "content", "copy", "article", "newsletter", "write", "post", "document", "copywriting", "blog", "tulis", "penulisan", "artikel", "konten", "naskah", "dokumen"),
         "prompt": ("You are the Writer agent on {NAME}'s team.\n\n{BUSINESS}\n\n"
                    "Your job: write the deliverable from the findings you are handed (read the documents you are "
                    "pointed to). Match the offering exactly: its scope, length and inputs. Keep every source the "
@@ -109,7 +109,7 @@ ROLES: Dict[str, Dict] = {
         "nickname": "Finance", "title": "Finance",
         "brief": "Keeps the books: receipts for every paid order, the monthly report, and the reconciliation with the vault. Never moves money.",
         "capabilities": ["finance", "documents", "knowledge"],
-        "keywords": ("invoice", "receipt", "accounting", "bookkeeping", "finance", "tax", "revenue", "profit", "margin"),
+        "keywords": ("invoice", "receipt", "accounting", "bookkeeping", "finance", "tax", "revenue", "profit", "margin", "faktur", "kuitansi", "akuntansi", "pembukuan", "keuangan", "pajak", "pendapatan", "laba"),
         "prompt": ("You are the Finance agent on {NAME}'s team.\n\n{BUSINESS}\n\n"
                    "Your job: keep the books honest. Every figure comes from your tools (finance_report, "
                    "reconcile_books, receipt_for_order), computed in code from the payment record and the vault: quote "
@@ -123,7 +123,7 @@ ROLES: Dict[str, Dict] = {
         "nickname": "Compliance", "title": "Legal & Compliance",
         "brief": "Checks what goes out against the rules, keeps the policy pages and the register of personal data. Not legal advice.",
         "capabilities": ["compliance", "documents", "knowledge"],
-        "keywords": ("legal", "compliance", "contract", "terms", "privacy", "gdpr", "regulation", "regulated", "license", "licence", "policy"),
+        "keywords": ("legal", "compliance", "contract", "terms", "privacy", "gdpr", "regulation", "regulated", "license", "licence", "policy", "hukum", "kepatuhan", "kontrak", "perjanjian", "regulasi", "izin", "privasi", "kebijakan"),
         "prompt": ("You are the Legal & Compliance agent on {NAME}'s team.\n\n{BUSINESS}\n\n"
                    "Your job: keep the business inside its own rules and the obvious legal ones. Check a deliverable, a "
                    "message or a page with review_for_compliance and report each finding with the words it quotes; never "
@@ -136,7 +136,7 @@ ROLES: Dict[str, Dict] = {
         "nickname": "Tech Lead", "title": "Tech Lead (CTO)",
         "brief": "Watches the machinery: models and attestation, failed runs and tools, AI spend, outside servers. Recommends; changes nothing.",
         "capabilities": ["systems", "documents", "knowledge", "memory"],
-        "keywords": ("software", "saas", "integration", "integrations", "automation", "developer", "technical", "engineering", "uptime", "no-code"),
+        "keywords": ("software", "saas", "integration", "integrations", "automation", "developer", "technical", "engineering", "uptime", "no-code", "perangkat lunak", "aplikasi", "otomasi", "integrasi", "teknis", "pengembang"),
         "prompt": ("You are the Tech Lead (CTO) agent on {NAME}'s team.\n\n{BUSINESS}\n\n"
                    "Your job: keep the machinery the business runs on healthy and affordable. Read systems_status and "
                    "recent_incidents and quote their figures: which model or tool is failing and how often, how long work "
@@ -149,7 +149,7 @@ ROLES: Dict[str, Dict] = {
         "nickname": "Analyst", "title": "Analyst",
         "brief": "Works the numbers: sizing, pricing, comparisons, simple models, always showing the arithmetic.",
         "capabilities": ["research", "knowledge", "documents"],
-        "keywords": ("financial", "pricing", "numbers", "forecast", "xlsx", "spreadsheet", "valuation", "sizing", "strategy", "plan", "advisory", "advice"),
+        "keywords": ("financial", "pricing", "numbers", "forecast", "xlsx", "spreadsheet", "valuation", "sizing", "strategy", "plan", "advisory", "advice", "consulting", "consultant", "harga", "proyeksi", "perkiraan", "valuasi", "strategi", "rencana", "konsultasi", "konsultan"),
         "prompt": ("You are the Analyst agent on {NAME}'s team.\n\n{BUSINESS}\n\n"
                    "Your job: quantitative work. Show every calculation and its inputs; label each input with "
                    "where it came from; give ranges when inputs are uncertain. Save tables as an xlsx document "
@@ -159,7 +159,7 @@ ROLES: Dict[str, Dict] = {
         "nickname": "Sales", "title": "Sales",
         "brief": "Writes to leads, follows up on schedule, answers prospects who reply, and turns interest into an order.",
         "capabilities": ["contacts", "messaging", "orders", "knowledge", "prospecting"],
-        "keywords": ("sell", "sales", "lead", "prospect", "client", "deal", "web_checkout", "intents_checkout"),
+        "keywords": ("sell", "sales", "lead", "prospect", "client", "deal", "web_checkout", "intents_checkout", "jual", "penjualan", "prospek", "klien", "kesepakatan"),
         "prompt": ("You are the Sales agent on {NAME}'s team.\n\n{BUSINESS}\n\n"
                    "Your job: turn leads into paying customers. Quote only the prices in the profile; never discount or "
                    "promise anything outside the offering (discounts need a person).\n\n"
@@ -178,7 +178,7 @@ ROLES: Dict[str, Dict] = {
         "nickname": "Lead Researcher", "title": "Lead Researcher",
         "brief": "Finds businesses that match the ideal customer on the open web and saves them as leads, each with the page that shows who to write to.",
         "capabilities": ["research", "prospecting", "knowledge"],
-        "keywords": ("agency", "agencies", "outbound", "lead generation", "prospecting", "b2b", "find clients", "find customers"),
+        "keywords": ("agency", "agencies", "outbound", "lead generation", "prospecting", "b2b", "find clients", "find customers", "agensi", "cari klien", "cari pelanggan", "mencari klien", "mencari pelanggan", "prospek"),
         "prompt": ("You are the Lead Researcher agent on {NAME}'s team.\n\n{BUSINESS}\n\n"
                    "Your job: find businesses that match the ideal customer and save them as leads. Search (search_web, "
                    "search_news for businesses in the news: new office, funding, a launch), open the business's own "
@@ -193,7 +193,7 @@ ROLES: Dict[str, Dict] = {
         "nickname": "Customer Support", "title": "Customer Support",
         "brief": "Handles customer questions and problems with an order; proposes refunds but never grants them.",
         "capabilities": ["contacts", "messaging", "orders", "knowledge", "memory"],
-        "keywords": ("support", "email", "telegram", "chat", "helpdesk", "ticket"),
+        "keywords": ("support", "email", "telegram", "chat", "helpdesk", "ticket", "whatsapp", "dukungan", "layanan pelanggan", "keluhan", "tiket", "bantuan"),
         "prompt": ("You are the Customer Support agent on {NAME}'s team.\n\n{BUSINESS}\n\n"
                    "Your job: understand what the customer needs, look up their order, and resolve it. If a refund "
                    "may be due, say so and why to the supervisor; only a person can grant one. A customer asking "
@@ -203,7 +203,7 @@ ROLES: Dict[str, Dict] = {
         "nickname": "Marketing", "title": "Marketing",
         "brief": "Plans and writes outreach and sample content that brings in customers, within the profile's rules.",
         "capabilities": ["research", "documents", "messaging", "knowledge", "publishing"],
-        "keywords": ("marketing", "promote", "audience", "social", "campaign", "attract", "sample", "newsletter"),
+        "keywords": ("marketing", "promote", "audience", "social", "campaign", "attract", "sample", "newsletter", "ads", "advertising", "pemasaran", "promosi", "iklan", "audiens", "media sosial", "kampanye", "sampel"),
         "prompt": ("You are the Marketing agent on {NAME}'s team.\n\n{BUSINESS}\n\n"
                    "Your job: content and outreach that attract the customers in the profile. Claims must be "
                    "true and sourced; no spam, no new contacts without approval if the profile requires it.\n\n"
@@ -216,7 +216,7 @@ ROLES: Dict[str, Dict] = {
         "nickname": "Fulfilment", "title": "Fulfilment",
         "brief": "Owns orders end to end: checks the inputs, tracks the deadline, delivers the finished document.",
         "capabilities": ["orders", "documents", "knowledge", "memory"],
-        "keywords": ("order", "deliver", "fulfil", "fulfill", "service", "sla"),
+        "keywords": ("order", "deliver", "fulfil", "fulfill", "service", "sla", "pesanan", "pengiriman", "jasa", "layanan"),
         "prompt": ("You are the Fulfilment agent on {NAME}'s team.\n\n{BUSINESS}\n\n"
                    "Your job: make sure a paid order is delivered correctly and on time. Check the order's inputs "
                    "against what the offering needs, read the finished document, and deliver it with deliver_order "
@@ -226,7 +226,7 @@ ROLES: Dict[str, Dict] = {
         "nickname": "Procurement", "title": "Procurement",
         "brief": "Finds vendors, APIs and other agents to buy from, compares price and quality, and recommends one.",
         "capabilities": ["research", "contacts", "knowledge", "marketplace"],
-        "keywords": ("buy", "vendor", "supplier", "procure", "freelance", "api", "data provider", "outsource"),
+        "keywords": ("buy", "vendor", "supplier", "procure", "freelance", "api", "data provider", "outsource", "beli", "pembelian", "pemasok", "pengadaan", "outsourcing"),
         "prompt": ("You are the Procurement agent on {NAME}'s team.\n\n{BUSINESS}\n\n"
                    "Your job: find who to buy from and at what price. Recommend a vendor that is already a "
                    "contact when one fits; a new vendor needs a person's approval. You do not pay; the treasurer "
@@ -238,7 +238,7 @@ ROLES: Dict[str, Dict] = {
         "nickname": "Designer", "title": "Designer",
         "brief": "Writes design briefs, layouts and visual direction as documents.",
         "capabilities": ["documents", "knowledge", "research"],
-        "keywords": ("design", "logo", "visual", "brand", "layout", "ui", "ux", "illustration"),
+        "keywords": ("design", "logo", "visual", "brand", "layout", "ui", "ux", "illustration", "branding", "graphic", "desain", "merek", "tata letak", "ilustrasi", "grafis"),
         "prompt": ("You are the Designer agent on {NAME}'s team.\n\n{BUSINESS}\n\n"
                    "Your job: visual direction expressed in words and structure: briefs, layouts, palettes, "
                    "specifications a person or a tool can execute.\n\n" + _RULES),
@@ -247,7 +247,7 @@ ROLES: Dict[str, Dict] = {
         "nickname": "Quality Review", "title": "Quality Review",
         "brief": "Reviews a deliverable against the offering and its sources before it goes out.",
         "capabilities": ["documents", "knowledge", "orders", "research", "compliance"],
-        "keywords": ("pdf", "report", "brief", "deliverable", "quality", "review"),
+        "keywords": ("pdf", "report", "brief", "deliverable", "quality", "review", "kualitas", "tinjau", "periksa"),
         "prompt": ("You are the Quality Review agent on {NAME}'s team.\n\n{BUSINESS}\n\n"
                    "Your job: read the deliverable you are pointed to and check it against the offering (scope, "
                    "inputs, length) and its own sources (every claim sourced, nothing contradicts a source, no "

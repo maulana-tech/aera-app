@@ -188,9 +188,11 @@ export type Capability = { name: string; description: string; locked_to: string 
 export type LibraryRole = { key: string; nickname: string; title: string; brief: string; capabilities: string[] };
 export type TeamPayload = {
   agents: TeamAgent[]; capabilities: Capability[]; library: LibraryRole[]; may_change: boolean;
+  /** why each library role is on this team, from the profile */
+  reasons?: Record<string, string>;
 };
 export type TeamDiff = { add: TeamAgent[]; remove: TeamAgent[]; change: { code: string; fields: string[] }[] };
-export type ComposeResult = { team: TeamAgent[]; diff: TeamDiff };
+export type ComposeResult = { team: TeamAgent[]; diff: TeamDiff; reasons?: Record<string, string> };
 
 /** GET /agents: the roster as the chat and per-agent pages read it. */
 export type Tool = { name: string; installed: boolean; description: string | null };

@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { api, apiResult, mayManage, me, usd, when, type LeadDetail, type LeadsPayload } from "@/app/lib";
 import { Empty, Fact, Metric, PageHeader, Rail, Section } from "@/components/shell";
+import { Dot } from "@/components/dort";
 import { StatusBadge } from "@/components/status-badge";
 import { LeadActions, PasteReply } from "./LeadActions";
 
@@ -14,28 +15,37 @@ const STAGE_LABEL: Record<string, string> = {
   lost: "lost", no_reply: "no answer", opted_out: "asked to stop",
 };
 
+/** An environment variable, set apart from the prose around it. */
+function Env({ children }: { children: React.ReactNode }) {
+  return <code className="bg-inset text-text rounded px-1 py-px font-mono text-[10.5px]">{children}</code>;
+}
+
+/** What prospecting needs from the install, one row each: on or off, and what turns it on. */
 function Setup({ s }: { s: LeadsPayload["setup"] }) {
-  const rows: [string, boolean, string][] = [
-    ["Web search", s.search !== "duckduckgo", s.search === "duckduckgo"
-      ? "keyless DuckDuckGo, best effort: set AERA_BRAVE_API_KEY or AERA_TAVILY_API_KEY (free tiers)"
-      : `${s.search}`],
-    ["E-mail out", s.email_out, s.email_out ? "SMTP or Gmail connected" : "set AERA_SMTP_HOST and AERA_MAIL_FROM, or connect Gmail"],
-    ["Outside this install", s.outward_redirect, s.outward_redirect
-      ? "production, or redirected to a test address"
-      : "not production and no AERA_EXTERNAL_REDIRECT: approved messages are recorded, not sent"],
-    ["Inbox", s.inbox || s.inbound_webhook, s.inbox ? "IMAP read every 2 minutes"
-      : s.inbound_webhook ? "forwarded to /public/inbound/email" : `paste replies here, or set ${s.inbox_missing.join(", ")}`],
+  const rows: { k: string; ok: boolean; detail: React.ReactNode }[] = [
+    { k: "Web search", ok: s.search !== "duckduckgo", detail: s.search === "duckduckgo"
+      ? <>Keyless DuckDuckGo, best effort. Set <Env>AERA_BRAVE_API_KEY</Env> or <Env>AERA_TAVILY_API_KEY</Env> (free tiers).</>
+      : <>Searching with {s.search}.</> },
+    { k: "E-mail out", ok: s.email_out, detail: s.email_out ? <>SMTP or Gmail connected.</>
+      : <>Set <Env>AERA_SMTP_HOST</Env> and <Env>AERA_MAIL_FROM</Env>, or connect Gmail.</> },
+    { k: "Outside this install", ok: s.outward_redirect, detail: s.outward_redirect ? <>Production, or redirected to a test address.</>
+      : <>Not production and no <Env>AERA_EXTERNAL_REDIRECT</Env>: approved messages are recorded, not sent.</> },
+    { k: "Inbox", ok: s.inbox || s.inbound_webhook, detail: s.inbox ? <>IMAP, read every 2 minutes.</>
+      : s.inbound_webhook ? <>Forwarded to <Env>/public/inbound/email</Env>.</>
+      : <>Paste replies on this page, or set {s.inbox_missing.map((m, i) => <span key={m}>{i ? ", " : ""}<Env>{m}</Env></span>)}.</> },
   ];
   return (
-    <ul className="space-y-2 text-xs">
-      {rows.map(([k, ok, v]) => (
-        <li key={k}>
-          <div className="flex items-center gap-2"><StatusBadge status={ok ? "ok" : "off"}>{ok ? "on" : "off"}</StatusBadge>
-            <span className="font-medium">{k}</span></div>
-          <p className="text-muted-foreground mt-0.5 leading-relaxed">{v}</p>
-        </li>
+    <>
+      {rows.map((r) => (
+        <div key={r.k} className="px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-fg text-[13px]">{r.k}</span>
+            <StatusBadge status={r.ok ? "ok" : "off"}>{r.ok ? "on" : "off"}</StatusBadge>
+          </div>
+          <p className="text-muted-foreground mt-1 text-[12px] leading-relaxed break-words">{r.detail}</p>
+        </div>
       ))}
-    </ul>
+    </>
   );
 }
 
@@ -182,21 +192,28 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
           </Rail>
           {manage && (
             <Rail title="A reply came in">
-              <p className="text-muted-foreground mb-3 text-xs leading-relaxed">
-                No inbox connected? Paste it here. A reply from a lead goes to the team as work; a request to stop opts the address out at once.
-              </p>
-              <PasteReply />
+              <div className="px-4 py-3">
+                <p className="text-muted-foreground mb-3 text-[12px] leading-relaxed">
+                  No inbox connected? Paste it here. A reply from a lead goes to the team as work; a request to stop opts the address out at once.
+                </p>
+                <PasteReply />
+              </div>
             </Rail>
           )}
           <Rail title="Rules held in code">
-            <ul className="text-muted-foreground list-disc space-y-1.5 pl-4 text-xs leading-relaxed">
-              <li>An address is saved only when the page it was found on shows it.</li>
-              <li>The first message to a lead waits for a person; one message per lead waits at a time.</li>
-              <li>At most {d.settings.per_day} cold messages a day; {d.settings.follow_ups} follow-up(s), never early.</li>
-              <li>Every message says who it is from and how to stop it.</li>
-              <li>{f.opted_out_total} address(es) asked to stop: the Guardian blocks any message to them, forever.</li>
-              <li>A lead is won by a paid order from its address, not by an agent saying so.</li>
-            </ul>
+            {[
+              "An address is saved only when the page it was found on shows it.",
+              "The first message to a lead waits for a person; one message per lead waits at a time.",
+              `At most ${d.settings.per_day} cold messages a day; ${d.settings.follow_ups} follow-up(s), never early.`,
+              "Every message says who it is from and how to stop it.",
+              `${f.opted_out_total} address(es) asked to stop: the Guardian blocks any message to them, forever.`,
+              "A lead is won by a paid order from its address, not by an agent saying so.",
+            ].map((rule) => (
+              <div key={rule} className="flex gap-2.5 px-4 py-2.5">
+                <Dot tone="ok" className="mt-[6px]" />
+                <p className="text-body text-[12.5px] leading-relaxed">{rule}</p>
+              </div>
+            ))}
           </Rail>
         </aside>
       </div>

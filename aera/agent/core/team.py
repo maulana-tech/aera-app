@@ -43,61 +43,79 @@ def _core_prompt(code: str) -> str:
 
 
 def _haystack(p: Dict[str, Any]) -> str:
-    parts = [p.get("mission", ""), p.get("customers", ""), " ".join(p.get("goals", [])),
-             " ".join(p.get("channels", []))]
+    parts = [p.get("name", ""), p.get("mission", ""), p.get("customers", ""), " ".join(p.get("goals", [])),
+             " ".join(p.get("channels", [])), (p.get("prospecting") or {}).get("ideal_customer", "")]
     for o in p.get("offerings", []):
         parts += [o.get("title", ""), o.get("description", ""), o.get("delivery", ""), " ".join(o.get("inputs", []))]
     return " ".join(parts).lower()
 
 
-def pick_roles(p: Dict[str, Any]) -> List[str]:
-    """Library role keys for this profile, in a stable order."""
+def reasons(p: Dict[str, Any]) -> Dict[str, str]:
+    """Library role key -> why the Composer put it on this business's team, in the role library's order.
+
+    Said in plain words so a person can see the team follows what they described: the word in the
+    description that called for a role, or the rule (sells documents, takes money, finds customers...)."""
     team = p.get("team") or {}
     preset = str(team.get("preset") or "auto").strip().lower()
+    why: Dict[str, str] = {}
+    generic = set()     # roles picked only because the checkout takes orders: a specific rule says it better
+
+    def add(k: str, reason: str) -> None:
+        if k in R.ROLES and (k not in why or k in generic):
+            why[k] = reason
+            generic.discard(k)
+
     if preset and preset != "auto":
-        picked = [_slug(x) for x in re.split(r"[,\s]+", preset) if _slug(x) in R.ROLES]
+        for x in re.split(r"[,\s]+", preset):
+            add(_slug(x), "named in your team preset")
     else:
         text = _haystack(p)
         # Whole words (a short suffix allowed: "designs", "designer"): "ui" must not match "guide".
-        picked = [k for k, r in R.ROLES.items()
-                  if any(re.search(r"(?<![a-z0-9])" + re.escape(kw) + r"[a-z]{0,3}(?![a-z0-9])", text) for kw in r["keywords"])]
+        for k, r in R.ROLES.items():
+            hit = next((kw for kw in r["keywords"]
+                        if re.search(r"(?<![a-z0-9])" + re.escape(kw) + r"[a-z]{0,3}(?![a-z0-9])", text)), None)
+            if hit:
+                add(k, "your checkout takes orders" if hit in ("web_checkout", "intents_checkout")
+                    else f"your business mentions \u201c{hit}\u201d")
+                if hit in ("web_checkout", "intents_checkout"):
+                    generic.add(k)
         offers = p.get("offerings", [])
         documents = [o for o in offers if o.get("delivery") in ("pdf", "xlsx", "file")]
         # A business that sells something must be able to deliver it...
-        if offers and "ops" not in picked:
-            picked.append("ops")
+        if offers:
+            add("ops", "you sell something, so somebody delivers it")
         # ...and a document someone pays for is written and reviewed before it goes.
         if documents:
-            for k in ("writer", "qa"):
-                if k not in picked:
-                    picked.append(k)
+            add("writer", "you sell documents, so somebody writes them")
+            add("qa", "you sell documents, so somebody checks them before they go")
         # Talking to customers needs somebody whose job it is.
-        if set(p.get("channels", [])) & {"email", "telegram", "chat"} and "support" not in picked:
-            picked.append("support")
+        if set(p.get("channels", [])) & {"email", "telegram", "chat"}:
+            add("support", "you talk to customers by " + ", ".join(sorted(set(p.get("channels", [])) & {"email", "telegram", "chat"})))
         # A business that takes money keeps books: receipts, the monthly report, the reconciliation.
-        if offers and "finance" not in picked:
-            picked.append("finance")
-        # A business that keeps clients' own material (briefs, documents, plans), beyond a name and an e-mail,
-        # needs somebody who knows what it holds and what it may say.
+        if offers:
+            add("finance", "you take payments, so somebody keeps the books")
+        # A business that keeps clients' own material, beyond a name and an e-mail, needs somebody who knows what it holds.
         held = [x for x in (p.get("privacy") or {}).get("sensitive") or [] if "contact" not in x.lower()]
-        if offers and held and "compliance" not in picked:
-            picked.append("compliance")
+        if offers and held:
+            add("compliance", f"you hold clients' material ({held[0]})")
         # Money the team may spend on its own is money somebody has to source.
-        if (p.get("constraints", {}).get("autonomous_spend_usd", {}).get("per_payment") or 0) > 0 \
-                and "procurement" not in picked:
-            picked.append("procurement")
+        if (p.get("constraints", {}).get("autonomous_spend_usd", {}).get("per_payment") or 0) > 0:
+            add("procurement", "the team may spend on its own, so somebody sources what it buys")
         # A business that goes looking for customers needs somebody to find them and somebody to write to them.
         if (p.get("prospecting") or {}).get("ideal_customer"):
-            for k in ("prospector", "sales"):
-                if k not in picked:
-                    picked.append(k)
+            add("prospector", "you asked the team to find customers")
+            add("sales", "you asked the team to find customers, so somebody writes to them")
     for k in team.get("include") or []:
-        if k in R.ROLES and k not in picked:
-            picked.append(k)
-    excluded = set(team.get("exclude") or [])
-    picked = [k for k in picked if k not in excluded]
+        add(k, "you added it")
+    for k in set(team.get("exclude") or []):
+        why.pop(k, None)
     order = list(R.ROLES)
-    return sorted(set(picked), key=order.index)
+    return dict(sorted(why.items(), key=lambda kv: order.index(kv[0])))
+
+
+def pick_roles(p: Dict[str, Any]) -> List[str]:
+    """Library role keys for this profile, in a stable order."""
+    return list(reasons(p))
 
 
 def _fill(template: str, **kw: str) -> str:
@@ -244,6 +262,26 @@ def demo() -> None:
     for a in t3:
         for cap, owner in R.LOCKED.items():
             assert (cap in a["capabilities"]) == (a["code"] == owner), (a["code"], cap)
+    # a description in Indonesian composes the team it describes, and every pick says why
+    agensi = {**business.EXAMPLE, "name": "Studio Nusa", "language": "id",
+              "mission": "Agensi pemasaran digital: desain logo, konten media sosial dan iklan untuk UMKM di Jakarta.",
+              "customers": "UMKM dan brand lokal", "channels": ["web_checkout", "email"],
+              "offerings": [{"id": "paket", "title": "Paket desain logo", "price_usd": 30, "delivery": "file",
+                             "description": "Tiga konsep logo dan panduan merek", "inputs": ["nama brand"]}],
+              "prospecting": {"ideal_customer": "Kafe dan toko online baru di Jakarta"}}
+    why = reasons(agensi)
+    for k in ("marketing", "designer", "prospector", "sales", "writer", "qa", "ops", "finance", "support"):
+        assert k in why, (k, why)
+    assert "\u201cdesain" in why["designer"] or "\u201clogo" in why["designer"], why["designer"]
+    assert why["prospector"] == "your business mentions \u201cagensi\u201d" or "find customers" in why["prospector"], why["prospector"]
+    assert all(v for v in why.values()), "every role on the team has a reason"
+    assert "find customers" in why["sales"], "a specific rule names the reason, not the checkout"
+    # the person's own choices win: a role left out stays out, a role added is there and says so
+    mine = {**agensi, "team": {"preset": "auto", "include": ["analyst"], "exclude": ["designer"], "extra_roles": []}}
+    why = reasons(mine)
+    assert "designer" not in why and why["analyst"] == "you added it", why
+    assert pick_roles(mine) == list(why)
+    print("  an Indonesian description composes its team ✓ · every role says why ✓ · added and left-out roles respected ✓")
     print("  preset respected ✓ · locked capabilities only on their owners ✓")
 
     # Apply / diff against a scratch record.

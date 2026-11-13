@@ -10,7 +10,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import type { BusinessTemplate, ComposeResult, ExtraRole, LibraryRole, Profile, TeamAgent } from "@/app/lib";
 import { APPROVAL_INFO, DELIVERY_INFO, usd } from "@/app/lib";
 import {
-  BasicsFields, Field, Group, LimitsFields, OfferingsFields, Problems, TextArea,
+  BasicsFields, Field, Group, LimitsFields, OfferingsFields, Problems, ProspectingFields, TextArea,
 } from "@/components/profile-editor";
 import { completeProfile } from "@/lib/profile";
 import { TeamRows } from "@/components/team-list";
@@ -349,6 +349,10 @@ export function Wizard({ initial, example, templates = [], library, mayChange }:
                   <span className="bg-border h-px flex-1" />
                 </div>
                 <BasicsFields p={p} set={setP} />
+                <Group title="Should the team find customers for you?"
+                  note="Optional. Say who to look for and the team gets a Lead Researcher to find them and Sales to write to them; the first message to anyone waits for you.">
+                  <ProspectingFields p={p} set={setP} />
+                </Group>
               </section>
             )}
             {step === 1 && <OfferingsFields p={p} set={setP} />}
@@ -480,6 +484,7 @@ function TeamStep({ p, set, library, onTeam }: {
   p: Profile; set: (p: Profile) => void; library: LibraryRole[]; onTeam: (t: TeamAgent[]) => void;
 }) {
   const [team, setTeam] = useState<TeamAgent[] | null>(null);
+  const [why, setWhy] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [extra, setExtra] = useState("");
 
@@ -487,7 +492,7 @@ function TeamStep({ p, set, library, onTeam }: {
   useEffect(() => {
     let live = true;
     post<ComposeResult>("team/compose", { profile: JSON.parse(key) as Profile })
-      .then((r) => { if (live) { setTeam(r.team); onTeam(r.team); setError(null); } })
+      .then((r) => { if (live) { setTeam(r.team); setWhy(r.reasons ?? {}); onTeam(r.team); setError(null); } })
       .catch((e) => live && setError(errorText(e)));
     return () => { live = false; };
   }, [key, onTeam]);
@@ -523,7 +528,7 @@ function TeamStep({ p, set, library, onTeam }: {
       ) : (
         <Group title={`Specialists picked for your business (${team.filter((a) => !a.core).length})`}
           note="Chosen from your offerings, channels and limits. Leave out any you do not need; you can change the team later on the Team page.">
-          <TeamRows agents={team.filter((a) => !a.core)} action={(a) =>
+          <TeamRows agents={team.filter((a) => !a.core)} reasons={why} action={(a) =>
             a.role === "custom" ? (
                 <Button size="xs" variant="ghost" onClick={() => dropExtra(a.title)}><X /> Drop</Button>
               ) : (
