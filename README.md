@@ -9,6 +9,8 @@
 
 <p align="center"><b>Autonomous Enterprise, Run by Agents</b></p>
 
+<p align="center"><b>Live:</b> <a href="https://aera.utdi.me">aera.utdi.me</a> — sign in with <i>Use the demo account</i> (read-only)</p>
+
 <p align="center">
   Describe a business. AERA composes the team of AI agents that runs it — they take the order,
   do the work, get paid and pay their own costs — thinking inside attested TEEs on NEAR AI, and
