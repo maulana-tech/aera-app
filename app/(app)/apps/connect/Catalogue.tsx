@@ -121,18 +121,32 @@ export function Catalogue({ mayChange, ready, added: addedAtLoad }: { mayChange:
   const [note, setNote] = useState<Record<string, string>>({});
   const [added, setAdded] = useState<Set<string>>(new Set(addedAtLoad));
   const [banner, setBanner] = useState<{ ok: boolean; text: string; slug?: string } | null>(null);
+  const [fallback, setFallback] = useState("");
   const first = useRef(true);
 
-  const load = useCallback(async (opts: { q: string; category: string; cursor?: string | null; append?: boolean }) => {
+  const load = useCallback(async (opts: { q: string; category: string; cursor?: string | null; append?: boolean; label?: string }) => {
     setLoading(true);
     setError("");
+    if (!opts.append) setFallback("");
     try {
-      const params = new URLSearchParams();
-      if (opts.q) params.set("q", opts.q);
-      if (opts.category) params.set("category", opts.category);
-      if (opts.cursor) params.set("cursor", opts.cursor);
-      const page: Page = await fetch(`/api/aera/apps/catalogue?${params.toString()}`).then((r) => r.json());
+      const get = async (q: string, category: string, cursor?: string | null): Promise<Page> => {
+        const params = new URLSearchParams();
+        if (q) params.set("q", q);
+        if (category) params.set("category", category);
+        if (cursor) params.set("cursor", cursor);
+        return fetch(`/api/aera/apps/catalogue?${params.toString()}`).then((r) => r.json());
+      };
+      let page = await get(opts.q, opts.category, opts.cursor);
       if (page.error) throw new Error(page.error);
+      // Many of Composio's small categories have nothing filed under them: search by the category's name instead
+      // of showing an empty page, and say so.
+      if (!opts.append && opts.category && !opts.q && page.toolkits.length === 0 && opts.label) {
+        const byName = await get(opts.label, "");
+        if (!byName.error && byName.toolkits.length) {
+          page = byName;
+          setFallback(opts.label);
+        }
+      }
       setItems((xs) => (opts.append ? [...xs, ...page.toolkits] : page.toolkits));
       setCursor(page.next_cursor);
       setTotal(page.total);
@@ -193,7 +207,7 @@ export function Catalogue({ mayChange, ready, added: addedAtLoad }: { mayChange:
   const pick = (id: string) => {
     setCategory(id);
     setQ("");
-    void load({ q: "", category: id });
+    void load({ q: "", category: id, label: cats.find((c) => c.id === id)?.name });
   };
 
   return (
@@ -244,8 +258,12 @@ export function Catalogue({ mayChange, ready, added: addedAtLoad }: { mayChange:
 
       <p className="text-muted-foreground mt-5 text-[12px]">
         {loading && items.length === 0 ? "Loading…" : `${items.length}${total ? ` of ${total.toLocaleString()}` : ""} tools`}
-        {q && ` matching “${q}”`}{category && ` in ${cats.find((c) => c.id === category)?.name ?? category}`}
+        {q && ` matching “${q}”`}{category && !fallback && ` in ${cats.find((c) => c.id === category)?.name ?? category}`}
+        {fallback && ` matching “${fallback}”`}
       </p>
+      {fallback && (
+        <p className="text-muted-foreground mt-1 text-[12px]">Nothing is filed under {fallback} in Composio&apos;s catalogue; these are the tools that match its name.</p>
+      )}
       {error && <p className="text-bad mt-2 text-[13px]">{error}</p>}
 
       <ul className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -288,7 +306,7 @@ export function Catalogue({ mayChange, ready, added: addedAtLoad }: { mayChange:
 
       {cursor && (
         <div className="mt-6 flex justify-center">
-          <Button variant="outline" disabled={loading} onClick={() => void load({ q, category, cursor, append: true })}>
+          <Button variant="outline" disabled={loading} onClick={() => void load({ q: fallback || q, category: fallback ? "" : category, cursor, append: true })}>
             {loading ? <Loader2 className="animate-spin" /> : null} Load more
           </Button>
         </div>
