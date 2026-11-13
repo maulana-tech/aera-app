@@ -147,17 +147,14 @@
 }
 
 /* the canvas: brand blue with a faint 22px dot grid */
+/* The canvas: plain brand blue. (It carried a dot grid until 2026-11-13; removed at the owner's request.) */
 @utility dot-grid {
   background-color: var(--canvas);
-  background-image: radial-gradient(circle, var(--dot) 1px, transparent 1.4px);
-  background-size: 22px 22px;
 }
 
-/* the same grid inside a white panel */
+/* the same surface inside a white panel */
 @utility dot-grid-soft {
   background-color: var(--inset);
-  background-image: radial-gradient(circle, rgb(6 35 89 / 0.16) 1px, transparent 1.4px);
-  background-size: 22px 22px;
 }
 
 /* outer card and the nested inner card */
