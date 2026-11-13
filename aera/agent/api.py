@@ -1562,6 +1562,14 @@ def new_work(_m, b: dict, h) -> Tuple[int, dict]:
     if u.role == "tester":
         if kind != "request":
             return 403, {"error": "a tester account raises requests; goals, payables and orders come from the business"}
+        from datetime import datetime, timezone
+        from core import business
+        cap = business.current()["constraints"]["inference_max_usd_per_day"]
+        today = datetime.now(timezone.utc).date().isoformat()
+        spent = sum(r.get("cost_usd") or 0 for r in store.list_runs(200) if (r.get("started_at") or "")[:10] == today)
+        if cap and spent >= cap:
+            # the profile's daily model budget holds for work a tester starts, as it does for the scheduler
+            return 429, {"error": f"today's model budget (${cap:.2f}) is used; try again tomorrow"}
         over = tester_quota(u, "work")
         if over:
             return 429, {"error": over}
