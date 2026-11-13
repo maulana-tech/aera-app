@@ -86,6 +86,19 @@ docker compose exec agents python -c "import urllib.request;print(urllib.request
 
 Sertifikat diambil Caddy otomatis saat permintaan pertama (DNS harus sudah mengarah ke VPS).
 
+### Tanpa domain publik: lewat Tailscale
+
+Di mesin yang sudah memakai port 80/3000 (atau di balik NAT), lewati Caddy: set `AERA_WEB_PORT=3100` di `.env`,
+jalankan `docker compose up -d --build` (tanpa profil), lalu buka lewat HTTPS tailnet di port lain agar layanan
+yang sudah ada di `/` tidak tersentuh:
+
+```bash
+tailscale serve --bg --https=8443 http://127.0.0.1:3100     # https://<mesin>.<tailnet>.ts.net:8443
+```
+
+`AERA_WEB_URL` di `aera/agent/.env` = alamat itu. Hanya perangkat di tailnet yang bisa membukanya;
+`tailscale funnel` membukanya ke internet (keputusan owner).
+
 ## 6. Sehari-hari
 
 | Apa | Perintah |

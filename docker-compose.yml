@@ -29,7 +29,8 @@ services:
     container_name: aera-web
     restart: always
     ports:
-      - "127.0.0.1:3000:3000"
+      # AERA_WEB_PORT (root .env) when 3000 is taken on the host; only this machine reaches it.
+      - "127.0.0.1:${AERA_WEB_PORT:-3000}:3000"
     environment:
       - NODE_ENV=production
       - PORT=3000
