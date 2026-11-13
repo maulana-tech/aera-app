@@ -65,6 +65,21 @@ services:
     depends_on:
       - aera
 
+  # A public address on your own domain without opening a port: Cloudflare Tunnel (outbound only).
+  # Only with: docker compose --profile tunnel up -d. The tunnel's public hostname points to http://aera:3000.
+  cloudflared:
+    image: cloudflare/cloudflared:2024.12.2
+    profiles: ["tunnel"]
+    container_name: aera-tunnel
+    restart: always
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
+    networks:
+      - aera_network
+    depends_on:
+      - aera
+
 volumes:
   agent_data:
     driver: local

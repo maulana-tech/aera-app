@@ -86,6 +86,17 @@ docker compose exec agents python -c "import urllib.request;print(urllib.request
 
 Sertifikat diambil Caddy otomatis saat permintaan pertama (DNS harus sudah mengarah ke VPS).
 
+### Domain sendiri tanpa membuka port: Cloudflare Tunnel
+
+Untuk mesin di balik NAT atau yang port 80/443-nya sudah dipakai. Domain harus dikelola di Cloudflare.
+
+1. Cloudflare dashboard → **Zero Trust → Networks → Tunnels → Create a tunnel** → *Cloudflared* → nama `aera`.
+2. Salin token dari perintah yang ditampilkan (string panjang setelah `--token`), lalu di server:
+   `nano ~/aera-app/.env` → `CLOUDFLARE_TUNNEL_TOKEN=<token>` (jangan kirim token lewat chat).
+3. Tab **Public Hostname**: subdomain `aera`, domainmu, service **HTTP** → `aera:3000`.
+4. `AERA_WEB_URL=https://aera.domainmu.com` di `aera/agent/.env`, lalu:
+   `docker compose --profile tunnel up -d && docker compose up -d --force-recreate agents`
+
 ### Tanpa domain publik: lewat Tailscale
 
 Di mesin yang sudah memakai port 80/3000 (atau di balik NAT), lewati Caddy: set `AERA_WEB_PORT=3100` di `.env`,
