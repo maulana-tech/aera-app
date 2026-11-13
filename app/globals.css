@@ -249,3 +249,16 @@ html {
   --viz-track: color-mix(in oklab, var(--viz-series) 12%, transparent);
   --viz-rule: var(--border);
 }
+
+/* Landing reveal (components/landing/motion.tsx): only set by script, so without it everything is visible. */
+.reveal {
+  transition: opacity 700ms ease-out, transform 700ms ease-out;
+}
+.reveal[data-reveal="hidden"] {
+  opacity: 0;
+  transform: translateY(16px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal { transition: none; }
+  .reveal[data-reveal="hidden"] { opacity: 1; transform: none; }
+}
