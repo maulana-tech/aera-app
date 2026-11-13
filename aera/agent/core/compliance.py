@@ -156,6 +156,58 @@ def _age_days(iso: Optional[str]) -> Optional[int]:
     return max(0, (datetime.now(timezone.utc) - t).days)
 
 
+def processors() -> List[Dict[str, Any]]:
+    """Everyone outside AERA that business data can reach, and on what terms: the models, the mail, the alert channels,
+    every app connected through Composio and every outside MCP server. Read from the configuration and the record."""
+    import os
+    from core import llm
+    out: List[Dict[str, Any]] = [{
+        "name": "NEAR AI Cloud", "kind": "models",
+        "gets": "prompts: the work, order inputs, documents, what agents read",
+        "terms": ("inside attested TEEs; each call's attestation and signature verified" if llm.private_mode()
+                  else "private mode is off: models outside a TEE may be used"),
+        "private": llm.private_mode()}]
+    try:
+        from clients import channels, composio
+        via = channels.email_via()
+        if via == "composio" and composio.configured():
+            out.append({"name": "Gmail through Composio", "kind": "mail",
+                        "gets": "messages to customers and prospects, deliveries, alerts to the team",
+                        "terms": "only what a person approved or the record produced; outside production, outward mail goes "
+                                 "only to a test address", "private": False})
+        elif not channels.missing("email"):
+            out.append({"name": "SMTP mail server", "kind": "mail", "gets": "messages, deliveries, alerts",
+                        "terms": "only what a person approved or the record produced", "private": False})
+        for ch in channels.team_channels():
+            out.append({"name": ch.capitalize(), "kind": "alerts", "gets": "alerts to the team",
+                        "terms": "personal data is replaced before it leaves (NEAR AI privacy filter)", "private": True})
+    except Exception:                                                  # noqa: BLE001
+        pass
+    for a in store.list_apps():
+        if not a.get("enabled"):
+            continue
+        on = [t for t in a.get("tools") or [] if t.get("enabled")]
+        writes = [t for t in on if not t.get("read_only") and t.get("write_allowed")]
+        out.append({"name": f"{a['name']} (through Composio)", "kind": "app",
+                    "gets": (f"{len(writes)} write tool(s) allowed: what an agent proposes to write, after a person approves it"
+                             if writes else "nothing is written there; agents only read from it"),
+                    "terms": f"given to {', '.join(a.get('agents') or []) or 'no agent'}; {len(on)} tool(s) in use; reads are "
+                             "outside text; every write waits for a person and the Guardian flags personal data in it",
+                    "private": not writes})
+    for srv in store.mcp_servers():
+        if not srv.get("enabled"):
+            continue
+        writes = [t for t in srv.get("tools") or [] if t.get("write_allowed")]
+        out.append({"name": f"{srv['name']} (MCP server)", "kind": "app",
+                    "gets": f"{len(writes)} write tool(s) allowed" if writes else "nothing is written there",
+                    "terms": "every write waits for a person", "private": not writes})
+    if os.environ.get("AERA_TENANT"):
+        out.append({"name": "This install's hub", "kind": "isolation",
+                    "gets": "nothing: this business runs as its own service with its own database and keys",
+                    "terms": "no other business on the install can read its record", "private": True})
+    return out
+
+
 def register(profile: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """What personal data AERA holds, counted from its own tables."""
     from core import llm
@@ -174,6 +226,9 @@ def register(profile: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         chats = one("SELECT COUNT(*), MIN(at) FROM messages")
         files = one("SELECT COUNT(*), MIN(uploaded_at) FROM files")
         redactions = one("SELECT COUNT(*), SUM(outcome='redacted') FROM privacy_events")
+        leads = one("SELECT COUNT(*), MIN(created_at) FROM leads")
+        inbound = one("SELECT COUNT(*), MIN(received_at) FROM inbound")
+        optouts = one("SELECT COUNT(*), MIN(at) FROM optouts")
     inputs = sorted({i for o in p.get("offerings") or [] for i in o.get("inputs") or []})
     rows = [
         {"category": "Contacts", "where": "contacts",
@@ -197,6 +252,20 @@ def register(profile: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
          "what": "uploaded files and the documents the team wrote, including deliverables",
          "records": files[0] or 0, "oldest_days": _age_days(files[1]),
          "purpose": "the business's own material and its deliveries", "shared_with": model_line},
+        {"category": "Prospects (leads)", "where": "leads",
+         "what": "names, business e-mail addresses and the public page each was found on; never an address the page "
+                 "did not show",
+         "records": leads[0] or 0, "oldest_days": _age_days(leads[1]),
+         "purpose": "to offer the business's services; the first message waits for a person, every message says how to stop",
+         "shared_with": model_line + "; the e-mail provider when a message is sent"},
+        {"category": "E-mail received", "where": "inbound",
+         "what": "replies from leads and customers: sender, subject, text",
+         "records": inbound[0] or 0, "oldest_days": _age_days(inbound[1]),
+         "purpose": "to answer them; read as outside text", "shared_with": model_line},
+        {"category": "Opt-outs", "where": "optouts",
+         "what": "addresses that asked not to be written to, and when",
+         "records": optouts[0] or 0, "oldest_days": _age_days(optouts[1]),
+         "purpose": "kept so they are never written to again (the Guardian blocks it)", "shared_with": "nobody"},
     ]
     sensitive = (p.get("privacy") or {}).get("sensitive") or []
     notes = []
@@ -206,7 +275,7 @@ def register(profile: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     if not private:
         notes.append("Private mode is off: prompts go to models outside a TEE.")
     notes.append("No retention period is set yet: records are kept until someone deletes them.")
-    return {"rows": rows, "sensitive": sensitive, "tee_only": bool((p.get("privacy") or {}).get("tee_only")),
+    return {"rows": rows, "processors": processors(), "sensitive": sensitive, "tee_only": bool((p.get("privacy") or {}).get("tee_only")),
             "private_mode": private, "redaction": {"events": redactions[0] or 0, "redacted": redactions[1] or 0},
             "raw_prompts_stored": False, "notes": notes,
             "summary": f"{sum(r['records'] for r in rows)} records across {sum(1 for r in rows if r['records'])} kinds of data."}

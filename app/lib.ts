@@ -536,6 +536,8 @@ export type TrustPayload = {
     proofs: { total: number; by_verdict: Record<string, number>; chat_calls: number; by_model: TrustProofModel[]; recent: TrustProof[] };
     redaction: { redacted: number; not_redacted: number; recent: { id: string; channel: string; outcome: string; detail: string | null; at: string }[] };
     guardian_privacy_stops: TrustCheck[];
+    /** everyone outside AERA that business data can reach, and on what terms */
+    processors?: { name: string; kind: string; gets: string; terms: string; private: boolean }[];
   };
   security: {
     vault: {

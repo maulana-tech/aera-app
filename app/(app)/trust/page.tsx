@@ -182,6 +182,28 @@ export default async function TrustPage({ searchParams }: { searchParams: Promis
             )}
           </Section>
 
+          <Section title="Where your data can go" note="Everyone outside AERA that business data can reach, read from the configuration and the record: the models, the mail, the alert channels, and every app connected through Composio or MCP. An app agents only read from receives nothing; a write to one always waits for a person, who is told when it carries personal data.">
+            {(p.processors ?? []).length === 0 ? (
+              <p className="text-muted-foreground text-sm">Nothing configured beyond AERA itself.</p>
+            ) : (
+              <ul className="divide-y rounded-lg border">
+                {(p.processors ?? []).map((x) => (
+                  <li key={x.name} className="flex flex-wrap items-start gap-3 px-4 py-3">
+                    <Dot tone={x.private ? "ok" : "warn"} className="mt-[7px]" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-fg text-[13.5px]">{x.name}</span>
+                        <span className="text-muted-foreground font-mono text-[10.5px]">{x.kind}</span>
+                      </div>
+                      <p className="text-body mt-0.5 text-[12.5px] leading-relaxed">Receives: {x.gets}</p>
+                      <p className="text-muted-foreground mt-0.5 text-[12px] leading-relaxed">{x.terms}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Section>
+
           <Section title="Personal data leaving for other channels" note="Alerts to Slack, Telegram or a webhook go through NEAR AI's privacy filter (in a TEE) first: names, emails, phone numbers and addresses become placeholders. If the filter cannot be reached the alert still goes, and is recorded here as unredacted.">
             {p.redaction.recent.length ? (
               <ul className="divide-y rounded-lg border">

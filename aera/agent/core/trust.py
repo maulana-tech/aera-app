@@ -106,7 +106,17 @@ def privacy(days: int = 30) -> Dict[str, Any]:
         "proofs": _proofs(days),
         "redaction": {"redacted": redacted, "not_redacted": len(events) - redacted, "recent": events[:8]},
         "raw_prompts_stored": False,
+        # everyone outside AERA that business data can reach, and on what terms (core/compliance.py)
+        "processors": _processors(),
     }
+
+
+def _processors() -> list:
+    try:
+        from core import compliance
+        return compliance.processors()
+    except Exception:                                                  # noqa: BLE001
+        return []
 
 
 # ----------------------------------------------------------------- security
