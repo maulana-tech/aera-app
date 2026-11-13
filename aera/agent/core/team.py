@@ -86,6 +86,11 @@ def pick_roles(p: Dict[str, Any]) -> List[str]:
         if (p.get("constraints", {}).get("autonomous_spend_usd", {}).get("per_payment") or 0) > 0 \
                 and "procurement" not in picked:
             picked.append("procurement")
+        # A business that goes looking for customers needs somebody to find them and somebody to write to them.
+        if (p.get("prospecting") or {}).get("ideal_customer"):
+            for k in ("prospector", "sales"):
+                if k not in picked:
+                    picked.append(k)
     for k in team.get("include") or []:
         if k in R.ROLES and k not in picked:
             picked.append(k)

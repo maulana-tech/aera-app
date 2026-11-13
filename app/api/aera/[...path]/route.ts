@@ -11,6 +11,9 @@ async function forward(req: Request, path: string[], method: "GET" | "POST") {
   const headers: Record<string, string> = { "content-type": "application/json" };
   const accept = req.headers.get("accept");
   if (accept) headers.accept = accept;
+  // Mail forwarded by an e-mail host carries the shared secret the agent checks.
+  const inbound = req.headers.get("x-aera-inbound-secret");
+  if (inbound && path.join("/") === "public/inbound/email") headers["x-aera-inbound-secret"] = inbound;
   // /public/* is the customer-facing surface (offerings, checkout, order
   // status, ledger): it needs no session, and a visitor's request never
   // carries an operator's token even when one happens to be signed in.

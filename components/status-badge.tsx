@@ -9,15 +9,16 @@ const TONES: Record<string, Tone> = {
   done: "ok", sent: "ok", ok: "ok", approved: "ok", delivered: "ok", attested: "ok", paid: "ok",
   active: "ok", vault: "ok",
   // moving
-  running: "info", working: "info", submitted: "info", new: "info",
+  running: "info", working: "info", submitted: "info", new: "info", contacted: "info", replied: "info",
+  interested: "ok", won: "ok",
   // waiting on a person or on money
   held: "warn", pending: "warn", late: "warn", short: "warn", partial: "warn", awaiting_payment: "warn",
   pending_onchain: "warn", draft: "warn", simulated: "warn",
   // refused or broken
-  failed: "bad", rejected: "bad", blocked: "bad",
+  failed: "bad", rejected: "bad", blocked: "bad", opted_out: "bad",
   // neutral
   guided: "neutral", skipped: "neutral", off: "neutral", cancelled: "neutral", refunded: "neutral",
-  disabled: "neutral",
+  disabled: "neutral", lost: "neutral", no_reply: "neutral",
 };
 
 export function toneOf(status: string): Tone {

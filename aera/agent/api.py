@@ -617,8 +617,8 @@ def create_contact(_m, b: dict, h) -> Tuple[int, dict]:
 def _contact_fields(b: dict) -> Optional[str]:
     """What is wrong with a contact as given, or None."""
     from core import chain
-    if b.get("role") is not None and b["role"] not in ("customer", "vendor", "contributor", "team", "approver"):
-        return "role is one of customer, vendor, contributor, team, approver"
+    if b.get("role") is not None and b["role"] not in ("customer", "vendor", "contributor", "team", "approver", "prospect"):
+        return "role is one of customer, vendor, contributor, team, approver, prospect"
     acct = str(b.get("near_account") or "").strip()
     if acct and not chain.valid_account(acct.lower()):
         return f"'{acct}' is not a valid NEAR account id"
@@ -1766,6 +1766,99 @@ def economics_overview(_m, b: dict, h) -> Tuple[int, dict]:
     return 200, economics.overview(max(1, min(days, 365)))
 
 
+@route("GET", r"/leads")
+def list_leads(_m, b: dict, h) -> Tuple[int, dict]:
+    """The prospecting pipeline: leads by stage, the funnel, and whether search and the inbox are set up."""
+    from clients import channels, inbox, web_data
+    from core import business, prospects
+    _user(h)
+    stage = b.get("stage") or None
+    if stage and stage not in store.LEAD_STAGES:
+        return 400, {"error": f"stage is one of {', '.join(store.LEAD_STAGES)}"}
+    p = business.current()
+    return 200, {"counts": store.lead_counts(), "leads": store.list_leads(stage, limit=300),
+                 "funnel": prospects.funnel(30), "settings": prospects.settings(p),
+                 "setup": {"search": web_data.web_provider(), "inbox": inbox.configured(),
+                           "inbox_missing": inbox.missing(), "email_out": not channels.missing("email"),
+                           "inbound_webhook": bool(os.environ.get("AERA_INBOUND_SECRET")),
+                           "outward_redirect": os.environ.get("AERA_EXTERNAL_REDIRECT", "") != "" or CFG.production},
+                 "today": len(store.outreach_today())}
+
+
+@route("GET", r"/leads/([A-Za-z0-9_]+)")
+def get_lead(m, _b, h) -> Tuple[int, dict]:
+    _user(h)
+    lead = store.get_lead(m.group(1))
+    if not lead:
+        return 404, {"error": "no such lead"}
+    actions = [a for a in store.list_actions(kind="message", limit=500) if (a["payload"] or {}).get("lead_id") == lead["id"]]
+    sent = {n["action_id"]: n for n in store.notifications_to(lead["email"]) if n.get("action_id")}
+    return 200, {"lead": lead, "optout": store.opted_out(lead["email"]),
+                 "messages": [{"action_id": a["id"], "run_id": a["run_id"], "status": a["status"], "reason": a.get("reason"),
+                               "subject": a["payload"].get("subject"), "body": a["payload"].get("body"),
+                               "kind": a["payload"].get("outreach"), "created_at": a["created_at"],
+                               "delivery": (sent.get(a["id"]) or {}).get("status"),
+                               "delivery_error": (sent.get(a["id"]) or {}).get("error")} for a in actions],
+                 "received": store.list_inbound(lead_id=lead["id"])}
+
+
+@route("POST", r"/leads/([A-Za-z0-9_]+)")
+def change_lead(m, b: dict, h) -> Tuple[int, dict]:
+    """A person closes a lead, marks it interested, or opts it out (for good)."""
+    try:
+        who = _settings_user(h)
+    except _Refused as e:
+        return 403, {"error": str(e)}
+    lead = store.get_lead(m.group(1))
+    if not lead:
+        return 404, {"error": "no such lead"}
+    stage = str(b.get("stage") or "")
+    if stage not in ("interested", "lost", "opted_out"):
+        return 400, {"error": "stage is interested, lost or opted_out (won comes from a paid order)"}
+    if lead["stage"] == "opted_out":
+        return 409, {"error": "this person asked not to be contacted; that is not undone here"}
+    note = str(b.get("note") or "")[:300]
+    if stage == "opted_out":
+        store.opt_out(lead["email"], f"recorded by {who.email}" + (f": {note}" if note else ""), "person")
+    return 200, {"lead": store.update_lead(lead["id"], stage=stage, next_follow_up_at=None,
+                                           note=f"{who.email}: {note or stage}")}
+
+
+@route("POST", r"/inbound")
+def inbound_by_hand(_m, b: dict, h) -> Tuple[int, dict]:
+    """A person pastes an e-mail that came in (no inbox connected, or one that was missed)."""
+    from core import prospects
+    try:
+        who = _settings_user(h)
+    except _Refused as e:
+        return 403, {"error": str(e)}
+    if not b.get("from") or not (b.get("text") or b.get("subject")):
+        return 400, {"error": "'from' and the text are required"}
+    out = prospects.receive(str(b.get("message_id") or ""), str(b["from"]), str(b.get("subject") or ""),
+                            str(b.get("text") or ""), "manual")
+    return (201 if out.get("stored") else 200), {**out, "by": who.email}
+
+
+@route("POST", r"/public/inbound/email")
+def inbound_webhook(_m, b: dict, h) -> Tuple[int, dict]:
+    """Mail forwarded by an e-mail host (Postmark, Mailgun, Cloudflare Email Workers...), signed with a shared secret."""
+    import hmac
+    from core import prospects
+    secret = os.environ.get("AERA_INBOUND_SECRET", "")
+    given = h.get("X-AERA-Inbound-Secret", "") or h.get("x-aera-inbound-secret", "")
+    if not secret or not hmac.compare_digest(secret.encode(), str(given).encode()):
+        return 403, {"error": "not accepted"}
+    sender = b.get("from") or b.get("From") or b.get("sender") or ""
+    text = b.get("text") or b.get("TextBody") or b.get("body-plain") or b.get("plain") or ""
+    subject = b.get("subject") or b.get("Subject") or ""
+    mid = b.get("message_id") or b.get("MessageID") or b.get("Message-Id") or ""
+    headers = b.get("headers") if isinstance(b.get("headers"), dict) else {}
+    if not sender:
+        return 400, {"error": "no sender"}
+    out = prospects.receive(str(mid), str(sender), str(subject), str(text)[:20000], "webhook", headers)
+    return 200, {"stored": out.get("stored", False), "kind": out.get("kind")}
+
+
 @route("GET", r"/trust")
 def trust_center(_m, b: dict, h) -> Tuple[int, dict]:
     """The evidence for privacy and security in one place (core/trust.py)."""
@@ -2237,6 +2330,29 @@ def demo() -> None:
     assert public_checkout(None, {"offering": "brief", "inputs": {"industry": "x", "country": "y"}}, {})[0] == 409
     assert kill_switch(None, {"on": False}, H)[0] == 200
     print("  kill switch: approvers and owners stop, only an owner resumes ✓ · contacts validated ✓")
+
+    # Prospecting: mail comes in only with the shared secret; a person closes or opts out a lead, never a viewer.
+    os.environ["AERA_INBOUND_SECRET"] = "s3cret-for-the-check"
+    pc = store.add_contact("Rina", "prospect", "rina@prospect-check.example")
+    lead = store.add_lead(pc["id"], company="Prospect Co", website=None, domain="prospect-check.example",
+                          source_url="https://prospect-check.example/team", why_fit="fits", fit_score=70, created_by="check")
+    mail = {"from": "Rina <rina@prospect-check.example>", "subject": "Re: briefs", "text": "How much is it?",
+            "message_id": "<api-check-1@x>"}
+    assert inbound_webhook(None, mail, {})[0] == 403, "no secret, no mail"
+    assert inbound_webhook(None, mail, {"X-AERA-Inbound-Secret": "wrong"})[0] == 403
+    code, got = inbound_webhook(None, mail, {"X-AERA-Inbound-Secret": "s3cret-for-the-check"})
+    assert code == 200 and got == {"stored": True, "kind": "reply"}, got
+    code, ls = list_leads(None, {}, V)
+    assert code == 200 and ls["counts"]["replied"] == 1 and "setup" in ls, ls
+    assert get_lead(re.match(r"(.*)", lead["id"]), {}, V)[1]["received"][0]["subject"] == "Re: briefs"
+    assert viewer_refusal("POST", f"/leads/{lead['id']}", V) is not None, "a viewer changes no lead"
+    assert change_lead(re.match(r"(.*)", lead["id"]), {"stage": "won"}, H)[0] == 400, "won comes from an order"
+    assert change_lead(re.match(r"(.*)", lead["id"]), {"stage": "opted_out", "note": "asked by phone"}, H)[0] == 200
+    assert change_lead(re.match(r"(.*)", lead["id"]), {"stage": "interested"}, H)[0] == 409, "an opt-out is not undone"
+    assert inbound_by_hand(None, {"from": "x@y.example", "text": "hi"}, V)[0] == 403
+    assert store.opted_out("rina@prospect-check.example")
+    os.environ.pop("AERA_INBOUND_SECRET", None)
+    print("  prospecting: inbound needs the secret ✓ · a reply moves the lead ✓ · a viewer changes nothing ✓ · opt-out is final ✓")
     print(f"  {len(ROUTES)} routes · {len(guarded)} refuse an anonymous caller ✓")
     print("api ok")
 

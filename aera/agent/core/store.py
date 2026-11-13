@@ -218,6 +218,56 @@ CREATE TABLE IF NOT EXISTS order_sources (
   at        TEXT NOT NULL
 );
 
+-- Prospects the team found and is talking to (core/prospects.py). The person is a contact (role prospect);
+-- this row is where they stand: found, written to, answered, won, lost, or asked not to be written to.
+CREATE TABLE IF NOT EXISTS leads (
+  id                TEXT PRIMARY KEY,
+  contact_id        TEXT NOT NULL REFERENCES contacts(id),
+  company           TEXT NOT NULL DEFAULT '',
+  website           TEXT,
+  domain            TEXT,
+  source_url        TEXT NOT NULL,       -- the public page the lead was found on
+  why_fit           TEXT NOT NULL DEFAULT '',
+  fit_score         INTEGER NOT NULL DEFAULT 0,
+  stage             TEXT NOT NULL,       -- new | contacted | replied | interested | won | lost | no_reply | opted_out
+  step              INTEGER NOT NULL DEFAULT 0,   -- messages delivered so far
+  first_contact_at  TEXT,
+  last_contact_at   TEXT,
+  next_follow_up_at TEXT,
+  last_reply_at     TEXT,
+  note              TEXT,
+  order_id          TEXT,
+  created_by        TEXT NOT NULL,
+  created_at        TEXT NOT NULL,
+  updated_at        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_leads_stage ON leads(stage, next_follow_up_at);
+
+-- Email that came in (an inbox, a forwarding webhook, or a person pasting it). Somebody else's words:
+-- read by a tool that marks the run as having read outside text.
+CREATE TABLE IF NOT EXISTS inbound (
+  id            TEXT PRIMARY KEY,
+  message_id    TEXT NOT NULL UNIQUE,
+  from_addr     TEXT NOT NULL,
+  from_name     TEXT NOT NULL DEFAULT '',
+  subject       TEXT NOT NULL DEFAULT '',
+  body          TEXT NOT NULL DEFAULT '',
+  via           TEXT NOT NULL,           -- imap | webhook | manual
+  contact_id    TEXT,
+  lead_id       TEXT,
+  kind          TEXT NOT NULL,           -- reply | unsubscribe | auto_reply | unknown_sender
+  work_item_id  TEXT,
+  received_at   TEXT NOT NULL
+);
+
+-- People who asked not to be written to. Checked by the guardian on every message, to anyone, forever.
+CREATE TABLE IF NOT EXISTS optouts (
+  email   TEXT PRIMARY KEY,
+  reason  TEXT NOT NULL,
+  source  TEXT NOT NULL,
+  at      TEXT NOT NULL
+);
+
 -- Proof that a model call ran inside an attested TEE (core/attest.py).
 CREATE TABLE IF NOT EXISTS tee_proofs (
   id              TEXT PRIMARY KEY,
@@ -280,7 +330,7 @@ CREATE TABLE IF NOT EXISTS files (
 CREATE TABLE IF NOT EXISTS contacts (
   id          TEXT PRIMARY KEY,
   name        TEXT NOT NULL,
-  role        TEXT NOT NULL,             -- customer | vendor | contributor | team | approver
+  role        TEXT NOT NULL,             -- customer | vendor | contributor | team | approver | prospect
   email       TEXT NOT NULL DEFAULT '',
   notify_for  TEXT NOT NULL DEFAULT '',  -- work kinds, comma separated; * = all
   near_account TEXT,
@@ -1017,6 +1067,156 @@ def record_order_source(order_id: str, source: str) -> None:
 def order_sources() -> Dict[str, str]:
     with connect() as c:
         return {r["order_id"]: r["source"] for r in c.execute("SELECT order_id, source FROM order_sources")}
+
+
+# ---------------------------------------------------------------- prospects
+LEAD_STAGES = ("new", "contacted", "replied", "interested", "won", "lost", "no_reply", "opted_out")
+#: Stages where nobody writes to the lead again.
+LEAD_CLOSED = ("won", "lost", "no_reply", "opted_out")
+LEAD_FIELDS = ("company", "website", "domain", "source_url", "why_fit", "fit_score", "stage", "step",
+               "first_contact_at", "last_contact_at", "next_follow_up_at", "last_reply_at", "note", "order_id")
+
+
+def _lead(r: sqlite3.Row) -> Dict[str, Any]:
+    d = dict(r)
+    for k in ("name", "email"):
+        if k in d and d[k] is None:
+            d[k] = ""
+    return d
+
+
+_LEAD_SELECT = ("SELECT l.*, c.name AS name, c.email AS email, c.title AS title FROM leads l"
+                " JOIN contacts c ON c.id = l.contact_id")
+
+
+def add_lead(contact_id: str, *, company: str, website: Optional[str], domain: Optional[str], source_url: str,
+             why_fit: str, fit_score: int, created_by: str) -> Dict[str, Any]:
+    lid, now = new_id("lead"), _now()
+    with connect() as c:
+        c.execute("INSERT INTO leads (id, contact_id, company, website, domain, source_url, why_fit, fit_score, stage,"
+                  " step, created_by, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,'new',0,?,?,?)",
+                  (lid, contact_id, company, website, domain, source_url, why_fit, int(fit_score), created_by, now, now))
+    return get_lead(lid)
+
+
+def get_lead(lid: str) -> Optional[Dict[str, Any]]:
+    with connect() as c:
+        r = c.execute(_LEAD_SELECT + " WHERE l.id=?", (lid,)).fetchone()
+    return _lead(r) if r else None
+
+
+def lead_for_contact(contact_id: str) -> Optional[Dict[str, Any]]:
+    with connect() as c:
+        r = c.execute(_LEAD_SELECT + " WHERE l.contact_id=? ORDER BY l.created_at DESC LIMIT 1", (contact_id,)).fetchone()
+    return _lead(r) if r else None
+
+
+def lead_by_email(email: str) -> Optional[Dict[str, Any]]:
+    with connect() as c:
+        r = c.execute(_LEAD_SELECT + " WHERE lower(c.email)=? ORDER BY l.created_at DESC LIMIT 1",
+                      ((email or "").strip().lower(),)).fetchone()
+    return _lead(r) if r else None
+
+
+def leads_at_domain(domain: str) -> List[Dict[str, Any]]:
+    with connect() as c:
+        rows = c.execute(_LEAD_SELECT + " WHERE l.domain=? ORDER BY l.created_at", ((domain or "").lower(),)).fetchall()
+    return [_lead(r) for r in rows]
+
+
+def list_leads(stage: Optional[str] = None, limit: int = 200) -> List[Dict[str, Any]]:
+    sql, args = _LEAD_SELECT, []
+    if stage:
+        sql += " WHERE l.stage=?"
+        args.append(stage)
+    with connect() as c:
+        rows = c.execute(sql + " ORDER BY l.updated_at DESC LIMIT ?", (*args, limit)).fetchall()
+    return [_lead(r) for r in rows]
+
+
+def lead_counts() -> Dict[str, int]:
+    with connect() as c:
+        got = {r["stage"]: r["n"] for r in c.execute("SELECT stage, COUNT(*) AS n FROM leads GROUP BY stage")}
+    return {s: got.get(s, 0) for s in LEAD_STAGES}
+
+
+def update_lead(lid: str, **fields: Any) -> Optional[Dict[str, Any]]:
+    sets = {k: v for k, v in fields.items() if k in LEAD_FIELDS}
+    if sets.get("stage") and sets["stage"] not in LEAD_STAGES:
+        raise ValueError(f"no lead stage {sets['stage']}")
+    if sets:
+        with connect() as c:
+            c.execute("UPDATE leads SET " + ", ".join(f"{k}=?" for k in sets) + ", updated_at=? WHERE id=?",
+                      (*sets.values(), _now(), lid))
+    return get_lead(lid)
+
+
+def leads_due_follow_up(now: Optional[str] = None) -> List[Dict[str, Any]]:
+    with connect() as c:
+        rows = c.execute(_LEAD_SELECT + " WHERE l.stage='contacted' AND l.next_follow_up_at IS NOT NULL"
+                         " AND l.next_follow_up_at <= ? ORDER BY l.next_follow_up_at", (now or _now(),)).fetchall()
+    return [_lead(r) for r in rows]
+
+
+def outreach_today() -> List[Dict[str, Any]]:
+    """Cold messages to prospects (a first message or a follow-up nobody answered yet) raised today that went
+    out or may still go out (pending or approved). Answers to someone who wrote back are not counted."""
+    day = datetime.now(timezone.utc).date().isoformat()
+    return [a for a in list_actions(kind="message", limit=500)
+            if (a["created_at"] or "")[:10] == day and (a["payload"] or {}).get("cold")
+            and a["status"] in ("pending", "approved", "sent")]
+
+
+def record_inbound(message_id: str, from_addr: str, from_name: str, subject: str, body: str, via: str,
+                   kind: str, contact_id: Optional[str] = None, lead_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Store one email; None when this message id was stored before."""
+    iid = new_id("inb")
+    with connect() as c:
+        cur = c.execute("INSERT OR IGNORE INTO inbound (id, message_id, from_addr, from_name, subject, body, via, contact_id,"
+                        " lead_id, kind, received_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                        (iid, message_id[:300], from_addr.lower()[:200], from_name[:200], subject[:300], body[:20000],
+                         via, contact_id, lead_id, kind, _now()))
+        if not cur.rowcount:
+            return None
+    return get_inbound(iid)
+
+
+def get_inbound(iid: str) -> Optional[Dict[str, Any]]:
+    with connect() as c:
+        r = c.execute("SELECT * FROM inbound WHERE id=?", (iid,)).fetchone()
+    return dict(r) if r else None
+
+
+def list_inbound(lead_id: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
+    sql, args = "SELECT * FROM inbound", []
+    if lead_id:
+        sql += " WHERE lead_id=?"
+        args.append(lead_id)
+    with connect() as c:
+        rows = c.execute(sql + " ORDER BY received_at DESC LIMIT ?", (*args, limit)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def set_inbound_work(iid: str, work_item_id: Optional[str]) -> None:
+    with connect() as c:
+        c.execute("UPDATE inbound SET work_item_id=? WHERE id=?", (work_item_id, iid))
+
+
+def opt_out(email: str, reason: str, source: str) -> bool:
+    with connect() as c:
+        return c.execute("INSERT OR IGNORE INTO optouts (email, reason, source, at) VALUES (?,?,?,?)",
+                         ((email or "").strip().lower(), reason[:300], source[:60], _now())).rowcount > 0
+
+
+def opted_out(email: str) -> Optional[Dict[str, Any]]:
+    with connect() as c:
+        r = c.execute("SELECT * FROM optouts WHERE email=?", ((email or "").strip().lower(),)).fetchone()
+    return dict(r) if r else None
+
+
+def list_optouts(limit: int = 200) -> List[Dict[str, Any]]:
+    with connect() as c:
+        return [dict(r) for r in c.execute("SELECT * FROM optouts ORDER BY at DESC LIMIT ?", (limit,))]
 
 
 def get_file(fid_or_name: str) -> Optional[Dict[str, Any]]:

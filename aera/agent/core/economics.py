@@ -206,7 +206,9 @@ def growth(days: int = 30) -> Dict[str, Any]:
 
 
 def overview(days: int = 30) -> Dict[str, Any]:
-    return {"autonomy": autonomy(days), "economics": unit_economics(days), "growth": growth(days)}
+    from core import prospects
+    return {"autonomy": autonomy(days), "economics": unit_economics(days), "growth": growth(days),
+            "pipeline": prospects.funnel(days)}
 
 
 def _usd(x: Optional[float], places: int = 2) -> str:
@@ -242,6 +244,15 @@ def markdown(o: Dict[str, Any], commentary: str = "", name: str = "") -> str:
     if g["samples"]:
         lines += ["", "## Customers the samples brought", "", "| Sample | Read | Checkouts | Paid | Revenue |", "|---|---|---|---|---|"]
         lines += [f"| {r['title']} | {r['views']} | {r['checkouts']} | {r['paid']} | {_usd(r['revenue_usd'])} |" for r in g["samples"]]
+    pl = o.get("pipeline") or {}
+    if pl.get("leads"):
+        rate = lambda x: "—" if x is None else f"{x * 100:.0f}%"                    # noqa: E731
+        lines += ["", "## Customers the team went looking for", "",
+                  f"- Leads found: **{pl['leads']}** · written to: **{pl['contacted']}** · answered: **{pl['replied']}** "
+                  f"({rate(pl['reply_rate'])}) · won: **{pl['won']}** ({rate(pl['win_rate'])}) · asked to stop: {pl['opted_out']}",
+                  f"- Revenue from won leads: {_usd(pl['revenue_usd'])} · model work on prospecting: "
+                  f"{_usd(pl['model_spend_usd'], 3)} ({_usd(pl['cost_per_lead_usd'], 3)} a lead"
+                  + (f", {_usd(pl['cost_per_win_usd'], 3)} a win)" if pl.get("cost_per_win_usd") is not None else ")")]
     oh = e["overhead"]
     lines += ["", f"Overhead: vendors {_usd(oh['vendors_usd'])}, AI outside orders {_usd(oh['ai_usd'], 3)}. "
               f"Revenue {_usd(e['revenue_usd'])} → net {_usd(e['net_usd'])}."]

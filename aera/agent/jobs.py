@@ -7,10 +7,15 @@
   attest    2 min   Settle TEE proofs whose verification never finished (a
                     restart drops the in-memory bytes; the proof says so).
   goals     daily   The profile's standing goals become work items.
+  inbox     2 min   Read new e-mail (IMAP): a stop opts out at once, a reply from
+                    a contact becomes a work item.
+  follow_ups hourly Follow-ups that are due become work items; leads whose last
+                    follow-up went unanswered are closed.
   digest    07:30   The morning summary.
 
-`work` and `goals` start handlings that spend model credit; AERA_WATCH=0 turns
-those two off (somewhere that should not act on its own) and leaves the rest.
+`work`, `goals`, `inbox` and `follow_ups` start handlings that spend model credit
+or read the outside world; AERA_WATCH=0 turns them off (somewhere that should
+not act on its own) and leaves the rest.
 """
 from __future__ import annotations
 
@@ -69,6 +74,15 @@ def all_jobs(start_work: StartWork) -> List[Job]:
                                          dedup_key=f"goal:{day}:{g[:80]}") for g in p.get("goals", [])]
         return f"{len([r for r in raised if r])} goal(s) raised"
 
+    def inbox() -> str:
+        from clients import inbox as box
+        return box.poll()
+
+    def follow_ups() -> str:
+        from core import prospects
+        r = prospects.due_follow_ups()
+        return f"{r['raised']} follow-up(s) raised · {r['closed']} lead(s) closed without an answer"
+
     def digest() -> str:
         import notify
         n = notify.queue_digest()
@@ -80,6 +94,8 @@ def all_jobs(start_work: StartWork) -> List[Job]:
         Job("notify", "Deliver queued alerts, messages and deliveries", deliver, every=30),
         Job("attest", "Settle TEE proofs that never finished verifying", attest, every=120),
         Job("goals", "Turn the profile's standing goals into work items", goals, every=24 * 3600, signal=True),
+        Job("inbox", "Read new e-mail: stops opt out, replies become work", inbox, every=120, signal=True),
+        Job("follow_ups", "Raise follow-ups that are due; close leads nobody answered", follow_ups, every=3600, signal=True),
         Job("digest", "The morning digest", digest, at="07:30"),
     ]
 
@@ -94,7 +110,7 @@ def demo() -> None:
     started: List[str] = []
     s = scheduler(lambda item: started.append(item["id"]) or "run_x")
     names = [j["name"] for j in s.describe()]
-    assert names == ["work", "settle", "notify", "attest", "goals", "digest"], names
+    assert names == ["work", "settle", "notify", "attest", "goals", "inbox", "follow_ups", "digest"], names
     store.record_work_item("request", "hello", "api", {})
     assert s.run_now("work") and s.run_now("settle") and s.run_now("goals")
     s.wait_idle()
@@ -102,8 +118,8 @@ def demo() -> None:
     assert st["work"]["last_status"] == "ok" and started, st["work"]
     assert "1 goal(s) raised" in st["goals"]["last_detail"], st["goals"]
     off = {j["name"]: j["off"] for j in Scheduler(all_jobs(lambda i: ""), watch=False).describe()}
-    assert off["work"] == off["goals"] == "AERA_WATCH=0" and off["settle"] is None
-    print("jobs ok: six jobs ✓ · work claims one item ✓ · goals raise work ✓ · AERA_WATCH=0 stops the autonomous two ✓")
+    assert off["work"] == off["goals"] == off["inbox"] == off["follow_ups"] == "AERA_WATCH=0" and off["settle"] is None
+    print("jobs ok: eight jobs ✓ · work claims one item ✓ · goals raise work ✓ · AERA_WATCH=0 stops the autonomous two ✓")
 
 
 if __name__ == "__main__":

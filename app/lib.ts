@@ -139,6 +139,7 @@ export type Profile = {
   };
   revenue_split: { account: string; bps: number; label?: string }[];
   privacy: { sensitive: string[]; tee_only: boolean };
+  prospecting?: { ideal_customer: string; per_day: number; follow_ups: number; follow_up_days: number[] };
   kill_switch: boolean;
 };
 export type ProfileVersion = { version: number; active: number; changed_by: string; note: string | null; at: string };
@@ -375,8 +376,8 @@ export type McpPayload = {
 
 export type Column = { k: string; l: string; n?: boolean; usd?: boolean };
 
-export type ContactRole = "customer" | "vendor" | "contributor" | "team" | "approver";
-export const CONTACT_ROLES: ContactRole[] = ["customer", "vendor", "contributor", "team", "approver"];
+export type ContactRole = "customer" | "vendor" | "contributor" | "team" | "approver" | "prospect";
+export const CONTACT_ROLES: ContactRole[] = ["customer", "vendor", "contributor", "team", "approver", "prospect"];
 export type Contact = {
   id: string; name: string; role: ContactRole | string; email: string; notify_for: string;
   near_account?: string | null; payout_chain?: string | null; payout_address?: string | null;
@@ -635,3 +636,42 @@ export type Purchase = {
   order_id: string; contact_id: string; seller: string; url: string; offering: string; amount_usd: number;
   action_id?: string | null; status: string; file_id?: string | null; created_at: string; updated_at: string;
 };
+
+// ---------------------------------------------------------------- prospecting
+export type LeadStage = "new" | "contacted" | "replied" | "interested" | "won" | "lost" | "no_reply" | "opted_out";
+export const LEAD_STAGES: LeadStage[] = ["new", "contacted", "replied", "interested", "won", "lost", "no_reply", "opted_out"];
+
+export interface Lead {
+  id: string; contact_id: string; name: string; email: string; title: string | null; company: string;
+  website: string | null; domain: string | null; source_url: string; why_fit: string; fit_score: number;
+  stage: LeadStage; step: number; first_contact_at: string | null; last_contact_at: string | null;
+  next_follow_up_at: string | null; last_reply_at: string | null; note: string | null; order_id: string | null;
+  created_by: string; created_at: string; updated_at: string;
+}
+
+export interface Funnel {
+  days: number; leads: number; stages: Record<LeadStage, number>; contacted: number; replied: number; won: number;
+  opted_out: number; reply_rate: number | null; win_rate: number | null; revenue_usd: number; model_spend_usd: number;
+  cost_per_lead_usd: number | null; cost_per_win_usd: number | null; opted_out_total: number;
+}
+
+export interface LeadsPayload {
+  counts: Record<LeadStage, number>; leads: Lead[]; funnel: Funnel; today: number;
+  settings: { ideal_customer: string; per_day: number; follow_ups: number; follow_up_days: number[] };
+  setup: { search: string; inbox: boolean; inbox_missing: string[]; email_out: boolean; inbound_webhook: boolean;
+           outward_redirect: boolean };
+}
+
+export interface LeadMessage {
+  action_id: string; run_id: string; status: string; reason: string | null; subject: string; body: string;
+  kind: "first" | "follow_up" | "conversation"; created_at: string; delivery: string | null; delivery_error: string | null;
+}
+
+export interface Inbound {
+  id: string; from_addr: string; from_name: string; subject: string; body: string; via: string;
+  kind: "reply" | "unsubscribe" | "auto_reply" | "unknown_sender"; work_item_id: string | null; received_at: string;
+}
+
+export interface LeadDetail {
+  lead: Lead; optout: { email: string; reason: string; at: string } | null; messages: LeadMessage[]; received: Inbound[];
+}

@@ -328,6 +328,40 @@ export function LimitsFields({ p, set }: Edit) {
   );
 }
 
+const PROSPECTING_DEFAULT = { ideal_customer: "", per_day: 20, follow_ups: 2, follow_up_days: [3, 7] };
+
+/** Who the team goes looking for, and how hard it may write. Empty: the business only sells to who comes to it. */
+export function ProspectingFields({ p, set }: Edit) {
+  const pr = p.prospecting ?? PROSPECTING_DEFAULT;
+  const put = (v: Partial<typeof pr>) => set({ ...p, prospecting: { ...pr, ...v } });
+  return (
+    <div className="space-y-4">
+      <Field label="Ideal customer to look for" optional
+        hint="One or two sentences: who, where, what size, what tells you they need you. Filled in, the team gets a Lead Researcher and Sales.">
+        <TextArea rows={2} value={pr.ideal_customer} maxLength={600}
+          placeholder="Independent coffee roasters in Indonesia with an online shop and 5-50 staff"
+          onChange={(e) => put({ ideal_customer: e.target.value })} />
+      </Field>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Field label="Cold messages a day" hint="first messages and unanswered follow-ups; at most 50">
+          <Num value={pr.per_day} min={0} step="1" onChange={(v) => put({ per_day: Math.min(50, Math.round(v)) })} />
+        </Field>
+        <Field label="Follow-ups without an answer" hint="0 to 3">
+          <Num value={pr.follow_ups} min={0} step="1" onChange={(v) => put({ follow_ups: Math.max(0, Math.min(3, Math.round(v))) })} />
+        </Field>
+        <Field label="Follow-up on day" hint="after the first message, comma separated">
+          <Input value={pr.follow_up_days.join(", ")}
+            onChange={(e) => put({ follow_up_days: e.target.value.split(/[ ,]+/).map(Number).filter((n) => n >= 1 && n <= 60) })} />
+        </Field>
+      </div>
+      <p className="text-muted-foreground text-xs leading-relaxed">
+        Always, whatever is set here: the first message to anyone waits for a person, every message says how to stop it,
+        and an address that asked to stop is never written to again.
+      </p>
+    </div>
+  );
+}
+
 /** What the service had to change or could not accept. */
 export function Problems({ problems }: { problems: string[] }) {
   if (!problems.length) return null;

@@ -166,6 +166,21 @@ catatan request di vault pengirim (memo transfer → `get_request`); hasil kerja
 - Bisnis kedua (DataCo) berjalan lokal di :8788 dengan database dan tim sendiri, menerima di
   `vendor.lanadev.testnet`. Katalognya terbaca oleh Procurement Lumen.
 
+**Tim mencari pelanggannya sendiri** (`core/prospects.py`, `tools/prospecting.py`, `clients/inbox.py`, halaman
+`/leads`) — profil punya bagian *Finding customers* (pelanggan ideal, batas pesan dingin per hari, follow-up);
+bila diisi, Composer menambah **Lead Researcher** dan Sales mendapat kemampuan `prospecting`.
+- Lead hanya tersimpan bersama halaman publik yang menampilkan alamatnya (alamat tebakan ditolak kode).
+- Pesan pertama ke setiap lead menunggu persetujuan orang; satu pesan menunggu per lead; follow-up hanya saat
+  jatuh tempo dan sebatas jumlah di profil; batas pesan dingin per hari (maks 50); footer berhenti ditulis kode.
+- Lead jadi `contacted` saat email benar-benar terkirim, `won` saat ada order dibayar dari alamatnya.
+- Balasan masuk lewat IMAP (job tiap 2 menit), webhook bertanda tangan, atau ditempel manual: permintaan
+  berhenti langsung opt-out tanpa model, auto-reply diabaikan, bounce menutup lead, balasan jadi work item
+  `reply` yang hanya membawa id (kata-katanya dibaca `read_reply`, yang menandai run sebagai membaca teks luar).
+- Funnel (ditemukan → dihubungi → membalas → menang) dan biaya AI per lead masuk laporan otonomi.
+- Pencarian web: Brave atau Tavily dengan key (tier gratis); tanpa key DuckDuckGo hanya upaya terbaik
+  (saat diuji, ia meminta pemeriksaan manusia, dan AERA melaporkannya apa adanya).
+- ⏳ Uji live end-to-end: perlu key pencarian, SMTP + `AERA_EXTERNAL_REDIRECT` ke alamat sendiri, dan inbox.
+
 **Temuan saat uji live, sudah diperbaiki**
 - Guardian membekukan vault dan menyalakan kill switch karena pembelian yang sama saya jalankan ulang
   berkali-kali untuk tes ("repeated attempts"), dengan alasan yang memuat fakta usang (aksi $8 "masih

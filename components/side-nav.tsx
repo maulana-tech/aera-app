@@ -3,8 +3,7 @@
 import {
   Activity, BookUser, Briefcase, CalendarClock, ChevronDown, ChevronsUpDown, Cpu, FileText, Inbox, KeyRound,
   Landmark, LayoutDashboard, LogIn, LogOut, Menu, MessagesSquare, PanelLeftClose, PanelLeftOpen, Plug,
-  ReceiptText, ScrollText, Settings2, ShieldCheck, ShoppingBag, Sparkles, Users,
-} from "lucide-react";
+  ReceiptText, ScrollText, Settings2, ShieldCheck, ShoppingBag, Sparkles, Users, Target } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -49,6 +48,7 @@ function groups(pending: number): { label: string; items: Item[] }[] {
       items: [
         { title: "Work", href: "/work", icon: Inbox },
         { title: "Orders", href: "/orders", icon: ShoppingBag },
+        { title: "Leads", href: "/leads", icon: Target },
         { title: "Documents", href: "/documents", icon: FileText },
         { title: "Team", href: "/agents", icon: Users },
         { title: "Business", href: "/business", icon: Briefcase },

@@ -7,7 +7,7 @@ import { useState } from "react";
 
 import type { Profile, TeamDiff } from "@/app/lib";
 import {
-  BasicsFields, Field, LimitsFields, OfferingsFields, Problems,
+  BasicsFields, Field, LimitsFields, OfferingsFields, Problems, ProspectingFields,
 } from "@/components/profile-editor";
 import { DiffView } from "@/components/team-list";
 import { Button } from "@/components/ui/button";
@@ -73,6 +73,10 @@ export function Editor({ profile }: { profile: Profile }) {
       <section>
         <h3 className="mb-4 text-sm font-medium">Offerings</h3>
         <OfferingsFields p={p} set={setP} />
+      </section>
+      <section>
+        <h3 className="mb-4 text-sm font-medium">Finding customers</h3>
+        <ProspectingFields p={p} set={setP} />
       </section>
       <section>
         <h3 className="mb-4 text-sm font-medium">Limits and rules</h3>

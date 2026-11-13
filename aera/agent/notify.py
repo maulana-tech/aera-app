@@ -173,6 +173,16 @@ def _external_target(n: dict):
     return redirect, f"redirected from {n['address']} (not production)"
 
 
+def _not_delivered(n: dict, why: str) -> None:
+    """A message to a lead that never left: the lead says so, and stays where it was."""
+    if n["kind"] != "outreach" or not n.get("action_id"):
+        return
+    a = store.get_action(n["action_id"])
+    lead_id = (a.get("payload") or {}).get("lead_id") if a else None
+    if lead_id:
+        store.update_lead(lead_id, note=f"a message was approved but not delivered: {why}"[:500])
+
+
 def deliver(limit: int = 50) -> Dict[str, int]:
     """Send what is queued. A channel that is not set up marks its messages
     skipped, with what it lacks, rather than holding them."""
@@ -182,6 +192,7 @@ def deliver(limit: int = 50) -> Dict[str, int]:
         if address is None:
             store.mark_notification(n["id"], "skipped", why)
             counts["skipped"] += 1
+            _not_delivered(n, why)
             continue
         if why:
             n = {**n, "address": address, "body": f"[{why}]\n\n{n['body']}"}
@@ -201,9 +212,15 @@ def deliver(limit: int = 50) -> Dict[str, int]:
                                 files=files)
             store.mark_notification(n["id"], "sent", reference=ref)
             counts["sent"] += 1
+            if n["kind"] == "outreach" and n.get("action_id"):
+                from core import prospects
+                a = store.get_action(n["action_id"])
+                if a and (a.get("payload") or {}).get("lead_id"):
+                    prospects.on_delivered(a)
         except channels.NotConfigured as e:
             store.mark_notification(n["id"], "skipped", str(e))
             counts["skipped"] += 1
+            _not_delivered(n, str(e))
         except LookupError as e:
             store.mark_notification(n["id"], "failed", str(e))
             counts["failed"] += 1

@@ -10,6 +10,9 @@
     python3 manage.py near-setup        # print the near-cli-rs commands that create the vault and keys
     python3 manage.py attack-demo       # run the prompt-injection attack against all three brakes
     python3 manage.py docs              # regenerate ../AGENT-REFERENCE.md from the registry
+    python3 manage.py inbound <from> "<subject>" "<text>"   # an e-mail that came in, by hand (no inbox connected)
+    python3 manage.py inbox             # read the IMAP inbox once
+    python3 manage.py leads             # the prospecting pipeline
 """
 from __future__ import annotations
 
@@ -27,12 +30,12 @@ CHECKS = [
     "core/config.py", "core/provenance.py", "core/registry.py", "core/identity.py", "core/store.py",
     "core/business.py", "core/team.py", "core/guardian.py", "core/actions.py", "core/chain.py",
     "core/crypto.py --check", "core/attest.py --check", "core/admission.py", "core/aux.py", "core/skills.py",
-    "core/llm.py", "core/topology.py", "core/schedule.py", "core/privacy.py", "core/trust.py", "core/activity.py", "core/finance.py", "tools/finance.py", "core/economics.py", "tools/publishing.py", "core/peers.py", "core/public_chat.py", "core/templates.py", "core/external.py",
+    "core/llm.py", "core/topology.py", "core/schedule.py", "core/privacy.py", "core/trust.py", "core/activity.py", "core/finance.py", "tools/finance.py", "core/economics.py", "tools/publishing.py", "core/peers.py", "core/prospects.py", "tools/prospecting.py", "core/public_chat.py", "core/templates.py", "core/external.py",
     "core/compliance.py", "tools/compliance.py", "core/systems.py", "tools/systems.py",
     "agents/roles.py", "agents/roster.py",
     "tools/research.py", "tools/workspace.py", "tools/commerce.py", "tools/money.py", "tools/skills.py",
     "clients/near.py --check", "clients/intents.py --check", "clients/feeds.py", "clients/web_data.py",
-    "clients/mcp_client.py", "clients/composio.py", "clients/channels.py",
+    "clients/mcp_client.py", "clients/composio.py", "clients/channels.py", "clients/inbox.py",
     "engine/export.py", "graph.py", "mcp.py", "settle.py --check", "notify.py --check", "jobs.py",
     "api.py --check",
 ]
@@ -364,6 +367,24 @@ def main() -> None:
             sys.exit(2)
         print(f"password changed for {email}" if ok else f"no active user {email}")
         sys.exit(0 if ok else 1)
+    elif cmd == "inbound":
+        if len(args) != 3:
+            print('usage: python3 manage.py inbound <from> "<subject>" "<text>"')
+            sys.exit(2)
+        from core import prospects
+        print(prospects.receive("", args[0], args[1], args[2], "manual"))
+    elif cmd == "inbox":
+        from clients import inbox
+        print(inbox.poll())
+    elif cmd == "leads":
+        from core import prospects, store
+        print(" · ".join(f"{k} {v}" for k, v in store.lead_counts().items()))
+        for x in store.list_leads(limit=50):
+            print(f"  {x['id']}  {x['stage']:<10} step {x['step']}  {x['name']} <{x['email']}>  {x['company']}"
+                  + (f"  next {x['next_follow_up_at'][:16]}" if x.get("next_follow_up_at") else ""))
+        f = prospects.funnel(30)
+        print(f"30 days: {f['leads']} found · {f['contacted']} written to · {f['replied']} answered · {f['won']} won "
+              f"· model spend ${f['model_spend_usd']:.2f}")
     else:
         print(__doc__)
 

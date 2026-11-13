@@ -70,8 +70,15 @@ DEFAULTS: Dict[str, Any] = {
     },
     "revenue_split": [],
     "privacy": {"sensitive": [], "tee_only": True},
+    "prospecting": {"ideal_customer": "", "per_day": 20, "follow_ups": 2, "follow_up_days": [3, 7]},
+    "limits": {},
     "kill_switch": False,
 }
+
+#: The most first messages and follow-ups the team may send to prospects in a day, whatever a profile says.
+PROSPECTING_MAX_PER_DAY = 50
+#: The most follow-ups after a first message that got no answer.
+PROSPECTING_MAX_FOLLOW_UPS = 3
 
 CHANNELS = ("web_checkout", "intents_checkout", "email", "telegram", "chat", "mcp")
 DELIVERIES = ("pdf", "xlsx", "message", "file", "service")
@@ -180,6 +187,18 @@ def normalise(raw: Optional[Dict[str, Any]]) -> Tuple[Dict[str, Any], List[str]]
     priv = raw.get("privacy") or {}
     p["privacy"] = {"sensitive": _strs(priv.get("sensitive")),
                     "tee_only": bool(priv.get("tee_only", True))}
+    pr = raw.get("prospecting") or {}
+    days = [int(_num(d)) for d in (pr.get("follow_up_days") or DEFAULTS["prospecting"]["follow_up_days"])
+            if 1 <= _num(d) <= 60][:PROSPECTING_MAX_FOLLOW_UPS]
+    p["prospecting"] = {
+        "ideal_customer": str(pr.get("ideal_customer") or "").strip()[:600],
+        "per_day": int(min(_num(pr.get("per_day"), 20), PROSPECTING_MAX_PER_DAY)),
+        "follow_ups": int(min(_num(pr.get("follow_ups"), 2), PROSPECTING_MAX_FOLLOW_UPS, len(days))),
+        "follow_up_days": sorted(days) or [3, 7],
+    }
+    lim = raw.get("limits") or {}
+    pct = lim.get("target_margin_pct") if isinstance(lim, dict) else None
+    p["limits"] = {"target_margin_pct": float(pct)} if isinstance(pct, (int, float)) and 0 < pct < 100 else {}
     p["kill_switch"] = bool(raw.get("kill_switch", False))
     return p, errors
 
@@ -257,6 +276,12 @@ def context_block(profile: Optional[Dict[str, Any]] = None) -> str:
     if p["privacy"]["sensitive"]:
         lines.append("Sensitive data (never send outside the business, never to another customer): "
                      + ", ".join(p["privacy"]["sensitive"]) + ".")
+    pr = p.get("prospecting") or {}
+    if pr.get("ideal_customer"):
+        lines.append(f"Ideal customer to look for: {pr['ideal_customer']}. Outreach: at most {pr['per_day']} message(s) "
+                     f"to prospects a day; {pr['follow_ups']} follow-up(s), {', '.join(map(str, pr['follow_up_days']))} "
+                     "day(s) after the first message; the first message to anyone waits for a person; "
+                     "anyone who asks not to hear from us again is never written to again.")
     if p.get("kill_switch"):
         lines.append("KILL SWITCH IS ON: do not raise any payment, refund or outward message.")
     return "\n".join(lines)
@@ -270,7 +295,8 @@ DRAFT_SYSTEM = (
     "web_checkout, intents_checkout, email, telegram, chat, mcp), goals (list), constraints "
     "({autonomous_spend_usd: {per_payment, per_day}, inference_max_usd_per_day, min_price_usd, "
     "forbidden: list, approval_required: subset of refund,new_vendor,discount,message_to_new_contact,"
-    "payment,message,deliver_order}), privacy ({sensitive: list, tee_only: true}), team ({preset: 'auto', "
+    "payment,message,deliver_order}), privacy ({sensitive: list, tee_only: true}), prospecting ({ideal_customer: one sentence on who the business should find and "
+    "contact, empty if it only sells to people who come to it}), team ({preset: 'auto', "
     "extra_roles: list of short role titles the description clearly needs beyond research, writing, "
     "analysis, sales, support, marketing, operations, procurement, design and review}). Be conservative "
     "with money: small autonomous caps. Do not invent facts the description does not support; leave "

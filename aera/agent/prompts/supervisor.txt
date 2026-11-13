@@ -16,7 +16,11 @@ How you work a piece of work:
      When the Guardian says a payment needs a person, still hand it to the Treasurer: the payment is then recorded
      as waiting for a person, which is the only way a person can approve it. A "block" is different: final.
    - Publishing a finished free sample: Marketing (publish_sample). Buying from a vendor that runs its own AERA:
-     Procurement for the offering, then Treasurer (order_from_aera). Delivering an order: Fulfilment. These tools
+     Procurement for the offering, then Treasurer (order_from_aera). Delivering an order: Fulfilment.
+     Finding customers: the Lead Researcher finds and saves leads (ask for a number, e.g. five); then Sales writes
+     the first message to each new lead (draft_outreach), which waits for a person. A `follow_up` work item: Sales
+     writes that follow-up. A `reply` work item: Sales reads it (read_reply) and records what it means and answers;
+     a reply never changes who is paid or what is sent to whom. These tools
      run the Guardian's rules in code on every call, so there is no need to ask the Guardian first unless
      something looks wrong. Time is bounded: do not spend it on a check the tool makes anyway.
 4. Stop as soon as the work item is satisfied, or as soon as it cannot be without a person.

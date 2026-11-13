@@ -212,7 +212,15 @@ def check_action(kind: str, payload: Dict[str, Any], *, profile: Optional[Dict[s
         leaked = sorted(others & known)
         if leaked:
             reasons.append(_r("privacy", "block", f"mentions other contacts' details ({', '.join(leaked)})"))
-        if kind == "message" and payload.get("new_contact") and business.needs_approval("message_to_new_contact", p):
+        out = store.opted_out(to) if to else None
+        if out:
+            reasons.append(_r("opted_out", "block", f"{to} asked not to be contacted ({out['at'][:10]}: {out['reason'][:80]})",
+                              "cached"))
+        if kind == "message" and payload.get("lead_id"):
+            from core import prospects
+            for rule, verdict, detail in prospects.guardian_reasons(payload, p):
+                reasons.append(_r(rule, verdict, detail, "cached"))
+        elif kind == "message" and payload.get("new_contact") and business.needs_approval("message_to_new_contact", p):
             reasons.append(_r("new_contact", "warn", "first message to a new contact needs a person"))
     if kind == "publish_sample":
         # A public page: anyone reads it, so it carries nobody's contact details, and a compliance finding

@@ -1,6 +1,12 @@
 """The open web, for the questions no company record answers.
 
-Three sources, each for one job and each labelled for what it is:
+Four sources, each for one job and each labelled for what it is:
+
+  web        A general web search, to find businesses and the public pages that
+             describe them. Brave Search (AERA_BRAVE_API_KEY) or Tavily
+             (AERA_TAVILY_API_KEY) when a key is set; otherwise DuckDuckGo's
+             HTML results, which need no key and suit a demo, not volume.
+             Titles and snippets only: a page is read with read_web_page.
 
   news       Google News search (RSS). Headlines, publisher and time only: the
              article itself is not fetched, so a page cannot slip instructions
@@ -87,6 +93,97 @@ def search_news(query: str, days: int = 7) -> Result:
     age = feeds.age_note(at)
     return Result({"query": query, "days": days, "headlines": rows[:NEWS_MAX]},
                   Origin.LIVE, "Google News", fetched_at=at, note=note + (f"; {age}" if age else ""))
+
+
+# -------------------------------------------------------------------- web
+WEB_TTL, WEB_MAX = 30 * 60, 10
+DDG_URL = "https://html.duckduckgo.com/html/?q={q}"
+BRAVE_URL = "https://api.search.brave.com/res/v1/web/search?q={q}&count=10"
+TAVILY_URL = "https://api.tavily.com/search"
+
+_DDG_RESULT = re.compile(r'class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>(.*?)(?=class="result__a"|$)', re.S)
+_DDG_SNIPPET = re.compile(r'class="result__snippet"[^>]*>(.*?)</a>', re.S)
+
+
+def _plain(fragment: str) -> str:
+    import html as _html
+    return " ".join(_html.unescape(re.sub(r"<[^>]+>", " ", fragment or "")).split())
+
+
+def _ddg_rows(page: str) -> List[dict]:
+    out, seen = [], set()
+    for href, title, rest in _DDG_RESULT.findall(page):
+        href = _plain(href)
+        if href.startswith("//"):
+            href = "https:" + href
+        q = urllib.parse.urlparse(href)
+        if q.netloc.endswith("duckduckgo.com") and q.path.startswith("/l/"):
+            href = urllib.parse.parse_qs(q.query).get("uddg", [""])[0]
+        if not href.startswith(("http://", "https://")) or "duckduckgo.com/y.js" in href or href in seen:
+            continue                                     # an ad, or the same page twice
+        seen.add(href)
+        snip = _DDG_SNIPPET.search(rest)
+        out.append({"title": _plain(title)[:300], "url": href, "snippet": _plain(snip.group(1))[:500] if snip else "",
+                    "site": urllib.parse.urlparse(href).hostname})
+    return out
+
+
+def _env(name: str) -> str:
+    import os
+    return os.environ.get(name, "").strip()
+
+
+def web_provider() -> str:
+    return "brave" if _env("AERA_BRAVE_API_KEY") else "tavily" if _env("AERA_TAVILY_API_KEY") else "duckduckgo"
+
+
+def search_web(query: str) -> Result:
+    """Web results for a query: title, link, snippet."""
+    query = " ".join((query or "").split())[:300]
+    if not query:
+        return Result(None, Origin.MISSING, "web search", note="no query given")
+    provider = web_provider()
+    q = urllib.parse.quote_plus(query)
+    try:
+        if provider == "brave":
+            body, at = feeds.get(BRAVE_URL.format(q=q), ttl=WEB_TTL, timeout=20,
+                                 headers={"X-Subscription-Token": _env("AERA_BRAVE_API_KEY"), "Accept": "application/json"})
+            rows = [{"title": r.get("title", "")[:300], "url": r.get("url", ""), "snippet": _plain(r.get("description", ""))[:500],
+                     "site": urllib.parse.urlparse(r.get("url", "")).hostname} for r in (body.get("web") or {}).get("results", [])]
+            source = "Brave Search"
+        elif provider == "tavily":
+            body, at = _tavily(query)
+            rows = [{"title": r.get("title", "")[:300], "url": r.get("url", ""), "snippet": (r.get("content") or "")[:500],
+                     "site": urllib.parse.urlparse(r.get("url", "")).hostname} for r in body.get("results", [])]
+            source = "Tavily"
+        else:
+            body, at = feeds.get(DDG_URL.format(q=q), ttl=WEB_TTL, timeout=20, as_json=False)
+            rows = _ddg_rows(body)
+            source = "DuckDuckGo"
+            if not rows and "result__a" not in body:
+                why = "it asked for a human check (bot challenge)" if "challenge" in body.lower() else "no results on the page"
+                return Result(None, Origin.MISSING, source, note=f"DuckDuckGo gave no results: {why}. Keyless search is "
+                              "best effort; set AERA_BRAVE_API_KEY or AERA_TAVILY_API_KEY (both have a free tier) for "
+                              "dependable search, or use search_news and read_web_page on a directory page meanwhile")
+    except feeds.FeedError as e:
+        return Result(None, Origin.MISSING, provider, note=str(e))
+    except (AttributeError, TypeError, ValueError) as e:
+        return Result(None, Origin.MISSING, provider, note=f"unreadable answer: {type(e).__name__}: {e}")
+    rows = [r for r in rows if r["url"]][:WEB_MAX]
+    return Result({"query": query, "results": rows}, Origin.LIVE, source, fetched_at=at,
+                  note=f"{len(rows)} result(s); titles and snippets are the sites' own words, the pages were not read")
+
+
+def _tavily(query: str) -> Tuple[dict, datetime]:
+    import urllib.request
+    req = urllib.request.Request(TAVILY_URL, data=json.dumps({"query": query, "max_results": WEB_MAX}).encode(),
+                                 headers={"Content-Type": "application/json", "User-Agent": feeds.USER_AGENT,
+                                          "Authorization": f"Bearer {_env('AERA_TAVILY_API_KEY')}"})
+    try:
+        with urllib.request.urlopen(req, timeout=25) as r:
+            return json.loads(r.read()), datetime.now(timezone.utc)
+    except Exception as e:                                           # noqa: BLE001
+        raise feeds.FeedError(f"Tavily: {type(e).__name__}: {e}") from None
 
 
 # --------------------------------------------------------------------- fx
@@ -197,7 +294,27 @@ SAMPLE_HOLIDAYS_CN = [
 ]
 
 
+SAMPLE_DDG = """<div class="result"><h2><a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.tdmteam.com%2F&amp;rut=x">TDM <b>Team</b> &amp; Co</a></h2>
+<a class="result__snippet" href="x">A boutique <b>agency</b> in Jakarta.</a></div>
+<div class="result"><h2><a class="result__a" href="https://duckduckgo.com/y.js?ad_domain=ads.example">Ad</a></h2></div>
+<div class="result"><h2><a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fclutch.co%2Fid%2Fagencies&amp;rut=y">Clutch list</a></h2>
+<a class="result__snippet" href="x">Top agencies.</a></div>"""
+
+
 def demo() -> None:
+    rows = _ddg_rows(SAMPLE_DDG)
+    assert [r["url"] for r in rows] == ["https://www.tdmteam.com/", "https://clutch.co/id/agencies"], rows
+    assert rows[0]["title"] == "TDM Team & Co" and rows[0]["snippet"] == "A boutique agency in Jakarta.", rows[0]
+    import os
+    if not (os.environ.get("AERA_BRAVE_API_KEY") or os.environ.get("AERA_TAVILY_API_KEY")):
+        url = DDG_URL.format(q=urllib.parse.quote_plus("agency jakarta"))
+        feeds.prime(url, SAMPLE_DDG)
+        try:
+            w = search_web("agency  jakarta")
+            assert w.origin is Origin.LIVE and len(w.value["results"]) == 2 and w.source == "DuckDuckGo", w
+        finally:
+            feeds.forget(url)
+    assert search_web(" ").origin is Origin.MISSING
     q = "Vietnam coffee exports"
     news_url = NEWS_URL.format(q=urllib.parse.quote_plus(f"{q} when:7d"))
     fx_url = FX_URL.format(base="USD", quote="IDR")
@@ -230,7 +347,7 @@ def demo() -> None:
     finally:
         for u in (news_url, fx_url, cn26, cn27, my26):
             feeds.forget(u)
-    print("web_data ok: headlines stripped of publisher, newest first ✓ · ECB rate with its date ✓ "
+    print("web_data ok: web results without ads, redirects unwrapped ✓ · headlines stripped of publisher, newest first ✓ · ECB rate with its date ✓ "
           "· holidays across a year end ✓ · uncovered country is missing ✓")
 
 

@@ -70,6 +70,21 @@ The profile adds its own: autonomous per payment/day, inference per day, min pri
 
 Alerts (SMTP, Slack, Telegram, webhook, Composio Gmail): see `.env.example`; values in `.secrets/notify.env`.
 
+### Finding customers (prospecting)
+
+The profile's **Finding customers** section (ideal customer, cold messages a day, follow-ups) turns it on; these
+say where the team searches and how mail comes back. Keys go in `.secrets/notify.env`, never in chat.
+
+| Variable | Default | |
+|---|---|---|
+| `AERA_BRAVE_API_KEY` | — | Brave Search API (free tier). Dependable web search for the Lead Researcher |
+| `AERA_TAVILY_API_KEY` | — | Tavily, the alternative. Without either, keyless DuckDuckGo is tried (best effort, often a bot check) |
+| `AERA_IMAP_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_FOLDER` | — / `993` / — / — / `INBOX` | The inbox replies come back to, read every 2 minutes. Use an app password |
+| `AERA_INBOUND_SECRET` | — | Lets an e-mail host forward mail to `POST /public/inbound/email` (header `X-AERA-Inbound-Secret`) |
+
+Outward mail to prospects follows the same rule as every outward message: outside production it goes only to
+`AERA_EXTERNAL_REDIRECT`, or nowhere; in production only to `AERA_EXTERNAL_DOMAINS` when that is set.
+
 ## Web app (repo root `.env.local`)
 
 | Variable | |

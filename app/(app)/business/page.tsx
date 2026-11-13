@@ -113,6 +113,15 @@ export default async function BusinessPage() {
             <Fact label="Minimum price" value={usd(c.min_price_usd)} />
             <Fact label="TEE-only models" value={p.privacy.tee_only ? "yes" : "no"} tone={p.privacy.tee_only ? "plain" : "warn"} />
           </Rail>
+          <Rail title="Finding customers">
+            {p.prospecting?.ideal_customer ? (
+              <>
+                <Fact label="Looks for" value={p.prospecting.ideal_customer} />
+                <Fact label="Cold messages a day" value={String(p.prospecting.per_day)} />
+                <Fact label="Follow-ups" value={`${p.prospecting.follow_ups} · day ${p.prospecting.follow_up_days.slice(0, p.prospecting.follow_ups).join(", ") || "-"}`} />
+              </>
+            ) : <Fact label="Prospecting" value="off: sells to who comes" tone="quiet" />}
+          </Rail>
           <Rail title="Revenue split">
             {p.revenue_split.length === 0
               ? <Fact label="Split" value="none" tone="quiet" />

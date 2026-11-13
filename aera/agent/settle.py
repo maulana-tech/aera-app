@@ -138,8 +138,13 @@ def _publish(a: Dict[str, Any]) -> Dict[str, Any]:
 def _message(a: Dict[str, Any]) -> Dict[str, Any]:
     p = a["payload"]
     key = f"msg:{a['id']}"
+    body = p.get("body") or ""
+    if p.get("lead_id"):
+        # Every message to a prospect says who it is from and how to stop it; written here, not by a model.
+        from core import prospects
+        body += prospects.footer()
     ok = store.enqueue_notification(key, "outreach", "email", p["to"], p.get("subject") or "(no subject)",
-                                    p.get("body") or "", action_id=a["id"])
+                                    body, action_id=a["id"])
     store.move_action(a["id"], "sent", reference=key)
     return {"ok": True, "summary": f"queued to {p['to']}" + ("" if ok else " (already queued)")}
 
@@ -313,6 +318,8 @@ def order_paid(order_id: str, *, payer: Any, amount_usd: float, offering: Any, t
                                  dedup_key=f"order:{order_id}")
     store.update_order(order_id, status="paid", paid_tx=tx, work_item_id=wid,
                        customer=order.get("customer") or payer)
+    from core import prospects
+    prospects.won_from_order(store.get_order(order_id) or order)
     return [wid] if wid else []
 
 
