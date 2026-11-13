@@ -1,0 +1,194 @@
+/*
+ * The landing (app/page.tsx), staged after the Dort landing (github.com/maulana-tech/dort-app):
+ * a floating nav with a centred pill group, a light-weight display face, two-tone headings, an
+ * isometric opening, white slides that stack as you scroll, a sticky step stage, a compare table
+ * whose AERA column stands up as one blue card, a filterable FAQ and a city horizon closing scene.
+ * Everything renders visible without script; motion only adds movement, and stops under
+ * prefers-reduced-motion.
+ */
+
+/* ------------------------------------------------------------------ nav */
+.ln-nav-menu {
+  background: #fff;
+  border: 1px solid var(--border);
+  box-shadow: 0 6px 18px -8px rgb(3 28 78 / 0.35);
+}
+.ln-nav-link {
+  color: #4b5e7f;
+  transition: color 0.15s, background 0.15s;
+}
+.ln-nav-link:hover {
+  color: var(--fg);
+}
+.ln-nav-link[aria-current="true"] {
+  background: var(--brand);
+  color: #fff;
+}
+.ln-nav-cta {
+  background: #fff;
+  color: var(--brand);
+  box-shadow: inset 0 0 0 1px rgb(3 28 78 / 0.12), 0 8px 20px -10px rgb(3 28 78 / 0.5);
+}
+.ln-rule {
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.1), transparent);
+}
+
+/* ------------------------------------------------------------- opening */
+.lo-model svg {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 24%, #000 100%);
+  mask-image: linear-gradient(to bottom, transparent, #000 24%, #000 100%);
+}
+.lo-model {
+  position: relative;
+  width: min(1240px, 126%);
+  aspect-ratio: 860 / 600;
+  margin-left: 50%;
+  margin-top: clamp(-150px, -7vw, -40px);
+  translate: -50% 0;
+}
+.lo-pill {
+  position: absolute;
+  translate: -50% -50%;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 11px 0 9px;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--fg);
+  white-space: nowrap;
+  box-shadow: 0 8px 22px rgba(1, 12, 32, 0.28);
+}
+.lo-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--green);
+}
+.lo-dot-bad {
+  background: var(--red);
+}
+@media (max-width: 767px) {
+  .lo-model {
+    width: 148%;
+    margin-top: -16px;
+  }
+  .lo-pill:not(:nth-of-type(2)) {
+    display: none;
+  }
+}
+@keyframes lo-rise {
+  from { opacity: 0; transform: translateY(16px); }
+}
+@keyframes lo-settle {
+  from { opacity: 0; transform: translateY(42px) scale(0.985); }
+}
+@keyframes lo-pill-in {
+  from { opacity: 0; transform: translateY(10px); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .lo-head { animation: lo-rise 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
+  .lo-model { animation: lo-settle 1.4s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
+  .lo-pill { animation: lo-pill-in 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
+  .lo-pill:nth-of-type(1) { animation-delay: 0.9s; }
+  .lo-pill:nth-of-type(2) { animation-delay: 1.02s; }
+  .lo-pill:nth-of-type(3) { animation-delay: 1.14s; }
+  .lo-pill:nth-of-type(4) { animation-delay: 1.26s; }
+}
+
+/* -------------------------------------------------------- shared pieces */
+/* a card that sits on the blue: a lighter blue, a hairline, no shadow */
+.lp-blue-card {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0.05));
+  border: 1px solid rgb(255 255 255 / 0.14);
+}
+.lp-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.18);
+  background: rgb(255 255 255 / 0.1);
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--on-canvas-dim);
+}
+
+/* ------------------------------------------------------- stacked slides */
+/* each slide sticks a little lower than the one before, so they pile up like cards */
+.ls-slide {
+  position: sticky;
+}
+@media (max-width: 767px), (prefers-reduced-motion: reduce) {
+  .ls-slide { position: relative; top: auto !important; }
+}
+
+/* ---------------------------------------------------------- step stage */
+.lw-step {
+  transition: opacity 0.4s ease;
+}
+@media (min-width: 1024px) {
+  .lw-step:not([data-on="true"]) { opacity: 0.35; }
+}
+.lw-view {
+  transition: opacity 0.35s ease, translate 0.45s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* -------------------------------------------------------------- compare */
+.lc-col {
+  background: linear-gradient(180deg, #0a5fe0, #0647b3);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.18), 0 24px 60px -20px rgb(0 10 40 / 0.6), 0 0 80px -10px rgb(255 255 255 / 0.18);
+}
+
+/* ------------------------------------------------------------------ faq */
+.lp-faq {
+  interpolate-size: allow-keywords;
+}
+.lp-faq details::details-content {
+  block-size: 0;
+  overflow: hidden;
+  transition: block-size 0.4s cubic-bezier(0.2, 0.7, 0.2, 1), content-visibility 0.4s allow-discrete;
+}
+.lp-faq details[open]::details-content {
+  block-size: auto;
+}
+.lp-faq details > p {
+  transition: opacity 0.35s ease, translate 0.4s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.lp-faq details:not([open]) > p {
+  opacity: 0;
+  translate: 0 -8px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lp-faq details::details-content,
+  .lp-faq details > p { transition: none; }
+}
+.lp-faq:has(input[value="setup"]:checked) details:not([data-cat="setup"]),
+.lp-faq:has(input[value="money"]:checked) details:not([data-cat="money"]),
+.lp-faq:has(input[value="safety"]:checked) details:not([data-cat="safety"]),
+.lp-faq:has(input[value="privacy"]:checked) details:not([data-cat="privacy"]) {
+  display: none;
+}
+
+/* --------------------------------------------------------------- finale */
+@keyframes lp-breathe {
+  50% { transform: scale(1.08); opacity: 0.85; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .lp-breathe { animation: lp-breathe 4.5s ease-in-out infinite; }
+}
+
+/* ------------------------------------------------------------ marquee */
+@keyframes lm-drift {
+  to { transform: translateX(-50%); }
+}
+.lm-track {
+  display: flex;
+  width: max-content;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .lm-track { animation: lm-drift 48s linear infinite; }
+  .lm-track.lm-rev { animation-direction: reverse; animation-duration: 56s; }
+}
