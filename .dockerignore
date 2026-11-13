@@ -6,6 +6,11 @@ aera
 ops
 data
 .env*.local
+# Never into an image: the compose variables (demo password, domain) and any other env file.
+.env
+.env.*
+!.env.example
+deploy/backups
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

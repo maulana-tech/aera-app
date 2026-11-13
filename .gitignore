@@ -81,3 +81,6 @@ aera/references/rule-pack.json
 # Nothing in the app reads the file — the UI fetches traces from GET /runs/{id}/trace —
 # so it is a run artifact, not a fixture.
 app/aera/trace.json
+
+# Database backups made on a server (deploy/backup.sh)
+deploy/backups/

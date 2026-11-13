@@ -34,13 +34,42 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - AERA_API=http://agents:8787
+      # Optional: the "Use the demo account" button on /login (a read-only viewer). From the root .env.
+      - AERA_DEMO_EMAIL=${AERA_DEMO_EMAIL:-}
+      - AERA_DEMO_PASSWORD=${AERA_DEMO_PASSWORD:-}
     networks:
       - aera_network
     depends_on:
       - agents
 
+  # HTTPS in front of the web app (Let's Encrypt, renewed by Caddy). Only with: docker compose --profile https up -d
+  # The login cookie is Secure in production, so a public install needs this (or another TLS proxy).
+  caddy:
+    image: caddy:2.8.4-alpine
+    profiles: ["https"]
+    container_name: aera-caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      - AERA_DOMAIN=${AERA_DOMAIN:-localhost}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - aera_network
+    depends_on:
+      - aera
+
 volumes:
   agent_data:
+    driver: local
+  caddy_data:
+    driver: local
+  caddy_config:
     driver: local
 
 networks:
