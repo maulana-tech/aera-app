@@ -111,9 +111,11 @@ export function Catalogue({ mayChange, ready, added: addedAtLoad }: { mayChange:
     }
   };
 
+  // a search looks across every tool; a category browses one, from the top
   const pick = (id: string) => {
     setCategory(id);
-    void load({ q, category: id });
+    setQ("");
+    void load({ q: "", category: id });
   };
 
   return (
@@ -139,7 +141,7 @@ export function Catalogue({ mayChange, ready, added: addedAtLoad }: { mayChange:
         </section>
       )}
 
-      <form className="flex max-w-2xl gap-2" onSubmit={(e) => { e.preventDefault(); void load({ q, category }); }}>
+      <form className="flex max-w-2xl gap-2" onSubmit={(e) => { e.preventDefault(); setCategory(""); void load({ q, category: "" }); }}>
         <div className="relative flex-1">
           <Search className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search 1,700+ tools: Slack, Google Sheets, Notion, HubSpot…" className="pl-9" />
