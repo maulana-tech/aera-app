@@ -693,3 +693,21 @@ export interface Inbound {
 export interface LeadDetail {
   lead: Lead; optout: { email: string; reason: string; at: string } | null; messages: LeadMessage[]; received: Inbound[];
 }
+
+// ------------------------------------------------------------------- apps (Composio)
+export interface AppTool {
+  slug: string; name: string; description: string; read_only: boolean; important: boolean;
+  enabled: boolean; write_allowed: boolean;
+}
+export interface ConnectedApp {
+  toolkit: string; name: string; logo: string | null; account_id: string | null; enabled: boolean;
+  agents: string[]; added_by: string; added_at: string; tools: AppTool[];
+}
+export interface AppsPayload {
+  configured: boolean; user_id: string | null; apps: ConnectedApp[]; may_change: boolean; error?: string;
+  connections: { id: string; toolkit: string; status: string; updated_at?: string }[];
+}
+export interface ToolkitHit {
+  slug: string; name: string; description: string; logo: string | null; categories: string[];
+  tools_count: number | null; no_auth: boolean; managed: boolean;
+}

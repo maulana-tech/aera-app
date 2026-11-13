@@ -177,16 +177,28 @@ def status() -> Dict[str, Any]:
 
 
 def _auth_config(toolkit: str) -> str:
+    """The auth config a new connection to `toolkit` is made with. AERA_COMPOSIO_AUTH_CONFIG is the mailbox's
+    (Gmail) only; any other app uses the project's Composio-managed config for it, made here if there is none."""
     chosen = _env("AERA_COMPOSIO_AUTH_CONFIG")
-    if chosen:
+    if chosen and toolkit == "gmail":
         return chosen
     items = _call("GET", "/auth_configs", query={"toolkit_slug": toolkit, "limit": 50}).get("items") or []
     managed = [c for c in items if _slug(c) == toolkit and c.get("status") == "ENABLED"
                and c.get("is_composio_managed")]
-    if not managed:
-        raise NotConnected(f"no Composio-managed {toolkit} auth config in this project; "
-                           "set AERA_COMPOSIO_AUTH_CONFIG")
-    return managed[0]["id"]
+    if managed:
+        return managed[0]["id"]
+    if toolkit == "gmail":
+        raise NotConnected("no Composio-managed gmail auth config in this project; set AERA_COMPOSIO_AUTH_CONFIG")
+    try:
+        r = _call("POST", "/auth_configs", {"toolkit": {"slug": toolkit},
+                                            "auth_config": {"type": "use_composio_managed_auth"}})
+    except Failed as e:
+        raise NotConnected(f"Composio has no managed sign-in for {toolkit} in this project ({e}); create an auth "
+                           "config for it in the Composio dashboard") from None
+    cid = (r.get("auth_config") or {}).get("id") or r.get("id")
+    if not cid:
+        raise NotConnected(f"Composio did not return an auth config for {toolkit}")
+    return cid
 
 
 def connect_link(toolkit: str = "gmail", callback_url: str = "") -> Dict[str, str]:
@@ -199,6 +211,90 @@ def connect_link(toolkit: str = "gmail", callback_url: str = "") -> Dict[str, st
     forget()
     return {"url": r["redirect_url"], "expires_at": r.get("expires_at", ""),
             "connected_account_id": r.get("connected_account_id", "")}
+
+
+# ----------------------------------------------------------------------- apps
+#: A tool Composio marks with this tag only reads. Every other tool is treated as one that changes something.
+READ_HINT = "readOnlyHint"
+#: The largest tool schema offered to a model, in characters of JSON: past it the tool is too intricate to offer.
+SCHEMA_MAX = 6000
+_SCHEMA_KEYS = ("type", "properties", "required", "items", "enum", "description", "default", "minimum", "maximum")
+
+
+def clean_schema(s: Any, depth: int = 0) -> Any:
+    """A tool's input schema with only what a model needs (types, fields, what is required, descriptions)."""
+    if not isinstance(s, dict) or depth > 6:
+        return {"type": "string"} if depth else {"type": "object", "properties": {}}
+    out: Dict[str, Any] = {}
+    for k in _SCHEMA_KEYS:
+        if k not in s:
+            continue
+        v = s[k]
+        if k == "properties" and isinstance(v, dict):
+            out[k] = {name: clean_schema(sub, depth + 1) for name, sub in list(v.items())[:40]}
+        elif k == "items":
+            out[k] = clean_schema(v, depth + 1)
+        elif k == "description" and isinstance(v, str):
+            out[k] = v[:300]
+        else:
+            out[k] = v
+    if "type" not in out:
+        out["type"] = "object" if "properties" in out else "string"
+    if isinstance(out.get("required"), list) and isinstance(out.get("properties"), dict):
+        out["required"] = [r for r in out["required"] if r in out["properties"]]
+    return out
+
+
+def search_toolkits(query: str = "", limit: int = 24) -> List[Dict[str, Any]]:
+    """Apps Composio can connect, matching `query`."""
+    q: Dict[str, Any] = {"limit": max(1, min(limit, 50))}
+    if query.strip():
+        q["search"] = query.strip()[:80]
+    out = []
+    for t in _call("GET", "/toolkits", query=q).get("items") or []:
+        m = t.get("meta") or {}
+        out.append({"slug": t.get("slug"), "name": t.get("name"), "description": (m.get("description") or "")[:300],
+                    "logo": m.get("logo"), "categories": [c.get("name") if isinstance(c, dict) else c for c in m.get("categories") or []][:3],
+                    "tools_count": m.get("tools_count"), "no_auth": bool(t.get("no_auth")),
+                    "managed": bool(t.get("composio_managed_auth_schemes"))})
+    return out
+
+
+def toolkit_tools(toolkit: str, limit: int = 300) -> List[Dict[str, Any]]:
+    """Every current tool of one app: what it does, whether it only reads, and a schema a model can use."""
+    out: List[Dict[str, Any]] = []
+    cursor = None
+    while len(out) < limit:
+        q: Dict[str, Any] = {"toolkit_slug": toolkit, "limit": 100}
+        if cursor:
+            q["cursor"] = cursor
+        r = _call("GET", "/tools", query=q)
+        for t in r.get("items") or []:
+            if t.get("is_deprecated"):
+                continue
+            schema = clean_schema(t.get("input_parameters") or {})
+            if len(json.dumps(schema)) > SCHEMA_MAX:
+                continue
+            tags = [str(x) for x in t.get("tags") or []]
+            out.append({"slug": t.get("slug"), "name": t.get("name") or t.get("slug"),
+                        "description": (t.get("description") or t.get("human_description") or "")[:600],
+                        "read_only": READ_HINT in tags, "important": "important" in tags,
+                        "version": t.get("version") or "latest", "schema": schema})
+        cursor = r.get("next_cursor")
+        if not cursor:
+            break
+    return out
+
+
+def connections(toolkit: Optional[str] = None) -> List[Dict[str, Any]]:
+    """AERA's own active connections (this Composio user's), optionally for one app."""
+    q: Dict[str, Any] = {"user_ids": user_id(), "statuses": "ACTIVE", "limit": 100}
+    if toolkit:
+        q["toolkit_slugs"] = toolkit
+    items = _call("GET", "/connected_accounts", query=q).get("items") or []
+    return [{"id": a.get("id"), "toolkit": _slug(a), "status": a.get("status"), "updated_at": a.get("updated_at")}
+            for a in items if a.get("user_id") == user_id() and a.get("status") == "ACTIVE"
+            and (not toolkit or _slug(a) == toolkit)]
 
 
 # ------------------------------------------------------------------ execution

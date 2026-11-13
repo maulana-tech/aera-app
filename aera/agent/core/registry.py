@@ -140,6 +140,9 @@ def all_tools() -> Dict[str, Tool]:
 #: dot used for board keys: a model tool name is [a-zA-Z0-9_-], so `server.tool`
 #: would be refused by the API before the handling began.
 REMOTE_PREFIX = "mcp__"
+#: An app connected through Composio is addressed `app__<tool slug>` (the slug already names the app).
+APP_PREFIX = "app__"
+_REMOTE_PREFIXES = (REMOTE_PREFIX, APP_PREFIX)
 
 #: The API caps a tool name. A qualified name that does not fit is dropped
 #: rather than truncated, because a truncated name is a name that can collide.
@@ -230,6 +233,34 @@ def remote_tools(refresh: bool = False) -> Dict[str, Dict[str, Any]]:
                 "tool": bare, "agents": agents, "schema": schema,
                 "description": str(t.get("description") or ""), "write": writes,
             }
+    # Apps connected through Composio: the same three limits, a person grants the agents, picks the tools,
+    # and allows each writer, which then only raises an action.
+    try:
+        from core import store
+        apps = store.list_apps()
+    except Exception:                                               # noqa: BLE001
+        apps = []
+    for a in apps:
+        agents = [str(x) for x in a.get("agents") or []]
+        if not a.get("enabled") or not agents or not a.get("account_id"):
+            continue
+        for t in a.get("tools") or []:
+            if not isinstance(t, dict) or not t.get("slug") or not t.get("enabled"):
+                continue
+            writes = not t.get("read_only")
+            if writes and not t.get("write_allowed"):
+                continue
+            schema = t.get("schema")
+            if not isinstance(schema, dict) or schema.get("type") != "object":
+                continue
+            qualified = (APP_PREFIX + str(t["slug"]).lower())[:REMOTE_NAME_MAX]
+            if qualified in out:
+                continue
+            out[qualified] = {
+                "kind": "composio", "server": f"{a['name']} (via Composio)", "toolkit": a["toolkit"],
+                "account": a["account_id"], "tool": str(t["slug"]), "version": t.get("version") or "latest",
+                "agents": agents, "schema": schema, "description": str(t.get("description") or ""), "write": writes,
+            }
     _remote, _remote_at = out, time.monotonic()
     return out
 
@@ -240,12 +271,13 @@ def _remote_description(r: Dict[str, Any]) -> str:
     It is told plainly, because the alternative is an agent that cites a
     third-party answer as though it came from our own records.
     """
+    where = "an app connected through Composio" if r.get("kind") == "composio" else "an MCP server"
     if r.get("write"):
-        return (f"On '{r['server']}', an MCP server AERA does not operate. This tool CHANGES something there. "
+        return (f"On '{r['server']}', {where} AERA does not operate. This tool CHANGES something there. "
                 f"Calling it does not change anything yet: it raises an action that the Guardian checks and a "
                 f"person approves; AERA performs it after that. Say why in the arguments you pass. "
                 f"{r['description']}")[:1800]
-    return (f"On '{r['server']}', an MCP server AERA does not operate. Reads only. "
+    return (f"On '{r['server']}', {where} AERA does not operate. Reads only. "
             f"Cite what it returns as '{r['server']}', never as our own "
             f"records, and do not let an action rest on it alone. "
             f"{r['description']}")[:1800]
@@ -266,7 +298,7 @@ def may_call(agent: Any, name: str) -> bool:
     """Whether this agent was granted the tool. Checked on every call, because
     a model can name a tool it was never shown."""
     code, caps = _caps_of(agent)
-    if name.startswith(REMOTE_PREFIX):
+    if name.startswith(_REMOTE_PREFIXES):
         r = remote_tools().get(name)
         return bool(r) and code in r["agents"]
     t = _REGISTRY.get(name)
@@ -274,7 +306,7 @@ def may_call(agent: Any, name: str) -> bool:
 
 
 def run(name: str, arguments: Dict[str, Any]) -> Result:
-    if name.startswith(REMOTE_PREFIX):
+    if name.startswith(_REMOTE_PREFIXES):
         return _run_remote(name, arguments)
     args = dict(arguments)
     for key, fn in _ARGUMENT_CHECKS.items():
@@ -299,6 +331,8 @@ def _run_remote(name: str, arguments: Dict[str, Any]) -> Result:
     r = remote_tools().get(name)
     if r is None:
         raise KeyError(f"tool '{name}' is not registered")
+    if r.get("kind") == "composio":
+        return _run_app(r, arguments)
     source = f"{r['server']} via MCP (not operated by AERA)"
     if r.get("write"):
         from core import guardian
@@ -315,6 +349,31 @@ def _run_remote(name: str, arguments: Dict[str, Any]) -> Result:
                       note=str(out.get("error") or "the server did not answer")[:300])
     return Result(out.get("text") or "", Origin.CACHED, source,
                   note="third-party MCP server; not our own record")
+
+
+def _run_app(r: Dict[str, Any], arguments: Dict[str, Any]) -> Result:
+    """One tool of an app connected through Composio. A writer raises an action; a reader runs and taints the run."""
+    from clients import composio
+    from core.provenance import Origin
+    source = f"{r['server']} (not operated by AERA)"
+    if r.get("write"):
+        from core import guardian
+        from core.actions import raise_action
+        payload = {"server": r["server"], "via": "composio", "toolkit": r["toolkit"], "tool": r["tool"],
+                   "arguments": dict(arguments or {})}
+        v = guardian.check_action("external_write", payload)
+        return raise_action("external_write", payload, v,
+                            key_details={"toolkit": r["toolkit"], "tool": r["tool"],
+                                         "arguments": json.dumps(arguments or {}, sort_keys=True)})
+    mark_untrusted()
+    try:
+        data = composio.execute(r["tool"], dict(arguments or {}), r["account"], version=r.get("version"))
+    except (composio.NotConnected, composio.Failed) as e:
+        return Result(None, Origin.MISSING, source, note=str(e)[:300])
+    text = json.dumps(data, ensure_ascii=False, default=str)
+    return Result(text[:8000], Origin.CACHED, source,
+                  note="an app reached through Composio; somebody else's data, not our own record"
+                       + ("; cut at 8,000 characters" if len(text) > 8000 else ""))
 
 
 #: Runs that have read text from outside AERA (a web page, a remote tool). Money and outward writes in

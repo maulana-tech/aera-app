@@ -367,6 +367,21 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, seq);
 
+-- Apps connected through Composio (Slack, Sheets, Notion...): which connection, which of its tools are offered to
+-- which agents, and which writers a person allowed. Like an MCP server: reads run, every write waits for a person.
+CREATE TABLE IF NOT EXISTS composio_apps (
+  toolkit     TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  logo        TEXT,
+  account_id  TEXT,
+  enabled     INTEGER NOT NULL DEFAULT 1,
+  agents      TEXT NOT NULL DEFAULT '[]',
+  tools       TEXT NOT NULL DEFAULT '[]',
+  added_by    TEXT NOT NULL,
+  added_at    TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS mcp_servers (
   id          TEXT PRIMARY KEY,
   name        TEXT NOT NULL UNIQUE,
@@ -1373,6 +1388,48 @@ def set_setting(key: str, value: Optional[str], by: str) -> None:
 
 
 # ----------------------------------------------------------- MCP servers out
+def list_apps() -> List[Dict[str, Any]]:
+    with connect() as c:
+        rows = [dict(r) for r in c.execute("SELECT * FROM composio_apps ORDER BY added_at")]
+    for r in rows:
+        r["agents"] = json.loads(r.get("agents") or "[]")
+        r["tools"] = json.loads(r.get("tools") or "[]")
+        r["enabled"] = bool(r["enabled"])
+    return rows
+
+
+def get_app(toolkit: str) -> Optional[Dict[str, Any]]:
+    return next((a for a in list_apps() if a["toolkit"] == toolkit), None)
+
+
+def save_app(toolkit: str, name: str, logo: Optional[str], account_id: Optional[str], tools: List[dict], by: str) -> Dict[str, Any]:
+    now = _now()
+    with connect() as c:
+        c.execute("INSERT INTO composio_apps (toolkit, name, logo, account_id, enabled, agents, tools, added_by, added_at, updated_at)"
+                  " VALUES (?,?,?,?,1,'[]',?,?,?,?) ON CONFLICT(toolkit) DO UPDATE SET name=excluded.name, logo=excluded.logo,"
+                  " account_id=excluded.account_id, tools=excluded.tools, updated_at=excluded.updated_at",
+                  (toolkit, name, logo, account_id, _j(tools), by, now, now))
+    return get_app(toolkit)  # type: ignore[return-value]
+
+
+def update_app(toolkit: str, **fields: Any) -> Optional[Dict[str, Any]]:
+    sets: Dict[str, Any] = {}
+    for k in ("enabled", "agents", "tools", "account_id"):
+        if k in fields and fields[k] is not None:
+            v = fields[k]
+            sets[k] = int(bool(v)) if k == "enabled" else (_j(v) if k in ("agents", "tools") else v)
+    if sets:
+        with connect() as c:
+            c.execute("UPDATE composio_apps SET " + ", ".join(f"{k}=?" for k in sets) + ", updated_at=? WHERE toolkit=?",
+                      (*sets.values(), _now(), toolkit))
+    return get_app(toolkit)
+
+
+def delete_app(toolkit: str) -> bool:
+    with connect() as c:
+        return c.execute("DELETE FROM composio_apps WHERE toolkit=?", (toolkit,)).rowcount > 0
+
+
 def mcp_servers(include_token: bool = False) -> List[Dict[str, Any]]:
     """Every server we may call out to. The token is left out unless asked for
     by the caller that is about to use it - a list that carries credentials is

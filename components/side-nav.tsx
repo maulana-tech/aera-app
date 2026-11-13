@@ -3,7 +3,7 @@
 import {
   Activity, BookUser, Briefcase, CalendarClock, ChevronDown, ChevronsUpDown, Cpu, FileText, Inbox, KeyRound,
   Landmark, LayoutDashboard, LogIn, LogOut, Menu, MessagesSquare, PanelLeftClose, PanelLeftOpen, Plug,
-  ReceiptText, ScrollText, Settings2, ShieldCheck, ShoppingBag, Sparkles, Users, Target } from "lucide-react";
+  ReceiptText, ScrollText, Settings2, ShieldCheck, ShoppingBag, Sparkles, Users, Target, Blocks } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -70,6 +70,7 @@ function groups(pending: number): { label: string; items: Item[] }[] {
 
 const SETTINGS: Item[] = [
   { title: "Models", href: "/models", icon: Cpu },
+  { title: "Apps", href: "/apps", icon: Blocks },
   { title: "MCP", href: "/mcp", icon: Plug },
   { title: "Skills", href: "/skills", icon: Sparkles },
   { title: "Schedule", href: "/schedule", icon: CalendarClock },

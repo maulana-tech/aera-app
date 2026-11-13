@@ -123,6 +123,58 @@ def demo() -> None:
         registry.forget_remote()
     print("external ok: writers off until allowed ✓ · a call raises an action, writes nothing ✓ · "
           "approved → performed ✓ · permission withdrawn → not performed ✓ · outside reads taint the run ✓")
+    apps_demo()
+
+
+def apps_demo() -> None:
+    """The same path for an app connected through Composio, with Composio itself stood in for."""
+    import settle
+    from clients import composio
+    from core import registry, store
+    calls: List[Dict[str, Any]] = []
+    real = composio.execute
+    composio.execute = lambda tool, args, account, version=None: calls.append({"tool": tool, "args": args, "account": account}) or {"ok": True, "tool": tool}
+    try:
+        schema = {"type": "object", "properties": {"channel": {"type": "string"}, "text": {"type": "string"}}, "required": ["channel"]}
+        tools = [{"slug": "SLACK_LIST_CHANNELS", "name": "List channels", "description": "List channels.", "read_only": True,
+                  "important": True, "version": "v1", "schema": schema, "enabled": True, "write_allowed": False},
+                 {"slug": "SLACK_SEND_MESSAGE", "name": "Send message", "description": "Post a message.", "read_only": False,
+                  "important": True, "version": "v1", "schema": schema, "enabled": True, "write_allowed": False}]
+        store.save_app("slack", "Slack", None, "ca_check", tools, by="check")
+        registry.forget_remote()
+        assert not [n for n in registry.remote_tools() if n.startswith("app__")], "granted to nobody: offered to nobody"
+        store.update_app("slack", agents=["sales"])
+        registry.forget_remote()
+        names = set(registry.remote_tools())
+        assert "app__slack_list_channels" in names and "app__slack_send_message" not in names, names
+        rid = store.start_run(store.record_work_item("request", "slack", "api", {}))
+        with registry.bind_run(rid):
+            got = registry.run("app__slack_list_channels", {"channel": "x"})
+            assert got.value and calls[-1]["account"] == "ca_check" and registry.run_read_untrusted(), got
+        # a writer, once allowed, raises an action and writes nothing until a person approves
+        store.update_app("slack", tools=[{**t, "write_allowed": True} if not t["read_only"] else t for t in tools])
+        registry.forget_remote()
+        assert registry.may_call("sales", "app__slack_send_message") and not registry.may_call("writer", "app__slack_send_message")
+        before = len(calls)
+        with registry.bind_run(rid):
+            act = registry.run("app__slack_send_message", {"channel": "#sales", "text": "hello"}).value
+        assert act["kind"] == "external_write" and act["status"] == "pending" and len(calls) == before, act
+        store.decide_action(act["id"], "owner@check", "owner", "approved")
+        assert settle.execute(act["id"])["ok"] and calls[-1]["tool"] == "SLACK_SEND_MESSAGE"
+        # permission withdrawn after approval: not performed
+        with registry.bind_run(rid):
+            again = registry.run("app__slack_send_message", {"channel": "#sales", "text": "again"}).value
+        store.decide_action(again["id"], "owner@check", "owner", "approved")
+        store.update_app("slack", enabled=False)
+        before = len(calls)
+        assert not settle.execute(again["id"])["ok"] and len(calls) == before
+    finally:
+        composio.execute = real
+        registry.forget_remote()
+    assert composio.clean_schema({"type": "object", "title": "x", "properties": {"a": {"type": "string", "examples": [1], "file_uploadable": True}},
+                                  "required": ["a", "gone"]}) == {"type": "object", "properties": {"a": {"type": "string"}}, "required": ["a"]}
+    print("apps ok: offered only to granted agents ✓ · reads run and taint ✓ · writers off until allowed, then only an action ✓ "
+          "· approved → performed ✓ · switched off → not performed ✓ · schemas trimmed ✓")
 
 
 if __name__ == "__main__":

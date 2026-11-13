@@ -1854,6 +1854,150 @@ def economics_overview(_m, b: dict, h) -> Tuple[int, dict]:
     return 200, economics.overview(max(1, min(days, 365)))
 
 
+# --------------------------------------------------------------------- apps
+def _app_view(a: dict) -> dict:
+    """An app as the page shows it: its tools without their schemas."""
+    return {**{k: a[k] for k in ("toolkit", "name", "logo", "account_id", "enabled", "agents", "added_by", "added_at")},
+            "tools": [{k: t.get(k) for k in ("slug", "name", "description", "read_only", "important", "enabled", "write_allowed")}
+                      for t in a.get("tools") or []]}
+
+
+@route("GET", r"/apps")
+def list_apps(_m, _b, h) -> Tuple[int, dict]:
+    """Apps connected through Composio, and AERA's own connections there."""
+    from clients import composio
+    u = _user(h)
+    out = {"configured": composio.configured(), "user_id": composio.user_id() if composio.configured() else None,
+           "apps": [_app_view(a) for a in store.list_apps()], "connections": [], "may_change": u.role in SETTINGS_ROLES}
+    if composio.configured():
+        try:
+            out["connections"] = composio.connections()
+        except (composio.NotConnected, composio.Failed) as e:
+            out["error"] = str(e)
+    return 200, out
+
+
+@route("GET", r"/apps/search")
+def search_apps(_m, b: dict, h) -> Tuple[int, dict]:
+    from clients import composio
+    _user(h)
+    if not composio.configured():
+        return 409, {"error": "COMPOSIO_API_KEY is not set (.secrets/notify.env)"}
+    try:
+        return 200, {"toolkits": composio.search_toolkits(str(b.get("q") or ""))}
+    except (composio.NotConnected, composio.Failed) as e:
+        return 502, {"error": str(e)}
+
+
+@route("POST", r"/apps/connect")
+def connect_app(_m, b: dict, h) -> Tuple[int, dict]:
+    """A Composio sign-in page for one app, for the person who asked (or `connected` when there already is one)."""
+    from clients import composio
+    try:
+        _settings_user(h)
+    except _Refused as e:
+        return 403, {"error": str(e)}
+    toolkit = str(b.get("toolkit") or "").strip().lower()
+    if not re.fullmatch(r"[a-z0-9_\-]{2,60}", toolkit):
+        return 400, {"error": "which app? (a Composio toolkit slug)"}
+    try:
+        if composio.connections(toolkit):
+            return 200, {"connected": True}
+        return 200, composio.connect_link(toolkit, f"{CFG.web_url}/apps?connected={toolkit}")
+    except composio.NotConnected as e:
+        return 409, {"error": str(e)}
+    except composio.Failed as e:
+        return 502, {"error": str(e)}
+
+
+@route("POST", r"/apps/add")
+def add_app(_m, b: dict, h) -> Tuple[int, dict]:
+    """Bring a connected app's tools to AERA. Nothing is offered to an agent until a person grants agents and tools:
+    reads chosen by Composio as the app's main ones start enabled; no writer is allowed until a person says so."""
+    from clients import composio
+    try:
+        u = _settings_user(h)
+    except _Refused as e:
+        return 403, {"error": str(e)}
+    toolkit = str(b.get("toolkit") or "").strip().lower()
+    if not re.fullmatch(r"[a-z0-9_\-]{2,60}", toolkit):
+        return 400, {"error": "which app? (a Composio toolkit slug)"}
+    try:
+        info = next((t for t in composio.search_toolkits(toolkit, 10) if t["slug"] == toolkit), None)
+        conns = composio.connections(toolkit)
+        if not conns and not (info or {}).get("no_auth"):
+            return 409, {"error": f"{toolkit} is not connected yet: connect it first, then add it"}
+        tools = composio.toolkit_tools(toolkit)
+    except (composio.NotConnected, composio.Failed) as e:
+        return 502, {"error": str(e)}
+    old = {t["slug"]: t for t in (store.get_app(toolkit) or {}).get("tools") or []}
+    starters = [t["slug"] for t in tools if t["read_only"] and t["important"]][:8]
+    for t in tools:
+        prev = old.get(t["slug"])
+        t["enabled"] = prev["enabled"] if prev else t["slug"] in starters
+        t["write_allowed"] = bool(prev and prev.get("write_allowed")) and not t["read_only"]
+    app = store.save_app(toolkit, (info or {}).get("name") or toolkit, (info or {}).get("logo"),
+                         conns[0]["id"] if conns else None, tools, by=u.email)
+    registry.forget_remote()
+    return 201, {"app": _app_view(app)}
+
+
+@route("POST", r"/apps/([a-z0-9_\-]{2,60})/refresh")
+def refresh_app(m, b: dict, h) -> Tuple[int, dict]:
+    try:
+        _settings_user(h)
+    except _Refused as e:
+        return 403, {"error": str(e)}
+    if not store.get_app(m.group(1)):
+        return 404, {"error": "no such app"}
+    return add_app(None, {"toolkit": m.group(1)}, h)
+
+
+@route("POST", r"/apps/([a-z0-9_\-]{2,60})/delete")
+def remove_app(m, _b, h) -> Tuple[int, dict]:
+    try:
+        _settings_user(h)
+    except _Refused as e:
+        return 403, {"error": str(e)}
+    ok = store.delete_app(m.group(1))
+    registry.forget_remote()
+    return (200 if ok else 404), {"removed": ok, "note": "AERA no longer uses it; the connection itself stays in Composio until you revoke it there"}
+
+
+@route("POST", r"/apps/([a-z0-9_\-]{2,60})")
+def change_app(m, b: dict, h) -> Tuple[int, dict]:
+    """Which agents get an app's tools, which tools, and which writers a person allows (each call still waits)."""
+    from agents import roster
+    try:
+        _settings_user(h)
+    except _Refused as e:
+        return 403, {"error": str(e)}
+    app = store.get_app(m.group(1))
+    if not app:
+        return 404, {"error": "no such app"}
+    fields: Dict[str, Any] = {}
+    if "enabled" in b:
+        fields["enabled"] = bool(b["enabled"])
+    if isinstance(b.get("agents"), list):
+        team = roster.load()
+        bad = [c for c in b["agents"] if c not in team or c in ("guardian", "treasurer")]
+        if bad:
+            return 400, {"error": f"not given to {', '.join(map(str, bad))}: the Guardian and the Treasurer take no outside tools"}
+        fields["agents"] = [str(c) for c in b["agents"]]
+    if isinstance(b.get("tools"), dict):
+        tools = []
+        for t in app["tools"]:
+            want = b["tools"].get(t["slug"])
+            if isinstance(want, dict):
+                t = {**t, "enabled": bool(want.get("enabled", t.get("enabled"))),
+                     "write_allowed": bool(want.get("write_allowed", t.get("write_allowed"))) and not t.get("read_only")}
+            tools.append(t)
+        fields["tools"] = tools
+    app = store.update_app(app["toolkit"], **fields)
+    registry.forget_remote()
+    return 200, {"app": _app_view(app)}
+
+
 @route("GET", r"/leads")
 def list_leads(_m, b: dict, h) -> Tuple[int, dict]:
     """The prospecting pipeline: leads by stage, the funnel, and whether search and the inbox are set up."""
@@ -2303,7 +2447,7 @@ PUBLIC = {("GET", "/health"), ("POST", "/login"), ("GET", "/setup"), ("POST", "/
 
 _SAMPLES = ((r"([A-Za-z0-9_]+)", "x1"), (r"([A-Za-z]+)", "Thing"), (r"([a-z0-9_]+)", "a_skill"),
             (r"([a-z_]+)", "digest"), (r"([a-z]+)", "impact"), (r"(\d+)", "0"), (r"(pdf|xlsx)", "pdf"),
-            (r"([A-Za-z0-9_\-]+)", "ord_x"), (r"([A-Za-z0-9_]+)\.pdf", "x1.pdf"), (r"([A-Za-z0-9_.:\-/]+)", "z-ai/glm-5.3"), (r"([a-z0-9-]{1,60})", "a-sample"))
+            (r"([A-Za-z0-9_\-]+)", "ord_x"), (r"([A-Za-z0-9_]+)\.pdf", "x1.pdf"), (r"([A-Za-z0-9_.:\-/]+)", "z-ai/glm-5.3"), (r"([a-z0-9-]{1,60})", "a-sample"), (r"([a-z0-9_\-]{2,60})", "slack"))
 
 
 def _sample_path(pattern) -> str:

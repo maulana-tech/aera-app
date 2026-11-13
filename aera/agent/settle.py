@@ -103,6 +103,8 @@ def _external(a: Dict[str, Any]) -> Dict[str, Any]:
     """Perform an approved write on a remote MCP server, if the owner still allows it there."""
     from clients import mcp_client
     p = a["payload"]
+    if p.get("via") == "composio":
+        return _external_app(a)
     srv = next((r for r in store.mcp_servers(include_token=True) if r["name"] == p.get("server")), None)
     tool = next((t for t in (srv or {}).get("tools") or [] if t.get("name") == p.get("tool")), None)
     if not srv or not srv.get("enabled") or not tool or not tool.get("write_allowed"):
@@ -116,6 +118,28 @@ def _external(a: Dict[str, Any]) -> Dict[str, Any]:
         return {"ok": False, "summary": f"{p['server']}.{p['tool']} failed: {why}"}
     store.move_action(a["id"], "sent", reference=str(out.get("text") or "done")[:300])
     return {"ok": True, "summary": f"{p['server']}.{p['tool']} done"}
+
+
+def _external_app(a: Dict[str, Any]) -> Dict[str, Any]:
+    """Perform an approved write in an app connected through Composio, if a person still allows that tool."""
+    from clients import composio
+    p = a["payload"]
+    app = store.get_app(str(p.get("toolkit") or ""))
+    tool = next((t for t in (app or {}).get("tools") or [] if t.get("slug") == p.get("tool")), None)
+    if not app or not app.get("enabled") or not app.get("account_id") or not tool or not tool.get("enabled") \
+            or not tool.get("write_allowed") or tool.get("read_only"):
+        why = "the app or the tool is no longer allowed to write"
+        store.move_action(a["id"], "failed", reason=why)
+        return {"ok": False, "summary": why}
+    try:
+        data = composio.execute(str(p["tool"]), dict(p.get("arguments") or {}), app["account_id"],
+                                version=tool.get("version") or "latest")
+    except (composio.NotConnected, composio.Failed) as e:
+        why = str(e)[:300]
+        store.move_action(a["id"], "failed", reason=why)
+        return {"ok": False, "summary": f"{app['name']}.{p['tool']} failed: {why}"}
+    store.move_action(a["id"], "sent", reference=json.dumps(data, default=str)[:300])
+    return {"ok": True, "summary": f"{app['name']}.{p['tool']} done"}
 
 
 def _publish(a: Dict[str, Any]) -> Dict[str, Any]:
