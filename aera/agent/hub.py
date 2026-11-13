@@ -76,13 +76,16 @@ def _float(name: str, default: float) -> float:
 
 class Hub:
     def __init__(self, root: pathlib.Path, *, master_secret: str, shared_key: str, base_port: int = 9001,
-                 web_url: str = "", spawn: bool = True):
+                 web_url: str = "", spawn: bool = True, composio_key: str = ""):
         self.root = root
         self.dir = root / "tenants"
         self.dir.mkdir(parents=True, exist_ok=True)
         self.db_path = root / "hub.db"
         self.master = master_secret
         self.shared_key = shared_key
+        # Apps through Composio: the install's project, but each business as its own Composio user, so it sees and
+        # uses only the connections it made (never the flagship's mailbox, never another business's apps).
+        self.composio_key = composio_key
         self.base_port = base_port
         self.web_url = web_url.rstrip("/")
         self.spawn_enabled = spawn
@@ -153,6 +156,9 @@ class Hub:
             "AERA_SIGNUP": "0",
             "AERA_WEB_URL": self.web_url or "http://localhost:3000",
         })
+        if self.composio_key:
+            env["COMPOSIO_API_KEY"] = self.composio_key
+            env["AERA_COMPOSIO_USER_ID"] = f"aera-{t['slug']}"
         return env
 
     def start(self, t: Dict[str, Any]) -> None:
@@ -370,7 +376,7 @@ def main() -> None:
     master = _env("AERA_SECRET") or secrets.token_hex(32)
     data = pathlib.Path(_env("AERA_HUB_DATA") or (pathlib.Path(_env("AERA_DB") or "data/aera.db").resolve().parent))
     hub = Hub(data, master_secret=master, shared_key=_env("NEARAI_API_KEY"), base_port=_int("AERA_HUB_BASE_PORT", 9001),
-              web_url=_env("AERA_WEB_URL"))
+              web_url=_env("AERA_WEB_URL"), composio_key=_env("COMPOSIO_API_KEY"))
     # the flagship, exactly as it ran before the hub: the hub's own environment (less the hub's secret), its own files
     flag_env = {k: v for k, v in os.environ.items() if k != "AERA_HUB_SECRET"}
     flagship = subprocess.Popen([sys.executable, str(HERE / "api.py")], cwd=str(HERE), env=flag_env)
@@ -421,6 +427,14 @@ def check() -> None:
     env = hub.child_env(t)
     assert env["NEARAI_API_KEY"] == "own-key-abcdefghijklmnop" and env["AERA_KEY_MODE"] == "own" and env["AERA_DAILY_MODEL_CAP_USD"] == ""
     print("  isolation: a built environment, no flagship vault, key or mail ✓ · own key lifts the shared cap ✓ · own token secret ✓")
+    os.environ.update({"AERA_COMPOSIO_ACCOUNT": "ca_flagship", "AERA_COMPOSIO_AUTH_CONFIG": "ac_flagship"})
+    withapps = Hub(root / "apps", master_secret="m" * 32, shared_key="shared-key-0123456789", spawn=False, composio_key="ak_project")
+    (withapps.dir / "kopi-a1b2").mkdir(parents=True)
+    env = withapps.child_env(t)
+    assert env["COMPOSIO_API_KEY"] == "ak_project" and env["AERA_COMPOSIO_USER_ID"] == "aera-kopi-a1b2", env
+    assert "AERA_COMPOSIO_ACCOUNT" not in env and "AERA_COMPOSIO_AUTH_CONFIG" not in env, "never the flagship's mailbox"
+    assert "COMPOSIO_API_KEY" not in hub.child_env(t), "no project key on the hub, none on a business"
+    print("  apps: the install's Composio project as the business's own user ✓ · never the flagship's mailbox ✓")
     # creation is validated and capped before anything starts
     assert hub.create("", "A", "a@b.co", "pw-123456789")[0] == 400
     assert hub.create("Kopi", "A", "nope", "pw-123456789")[0] == 400
