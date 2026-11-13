@@ -137,6 +137,47 @@ Meta Ads.
 
 ---
 
+## Fase 6 — Bisnis yang benar-benar otonom (dikerjakan 2026-11-12/13)
+
+**Keandalan agen**
+- Model yang menjawab tapi merangkak (lebih dari 60 dtk dengan kurang dari 10 token/dtk) menyerahkan sisa
+  run ke fallback. Pada 12 Nov `glm-5.3-flash` menghabiskan 11 dari 20 menit tanpa pernah gagal.
+- Run yang terhenti mencantumkan draf yang sudah ditulis; menjalankan ulang melanjutkan dari draf itu.
+  Terbukti: goal sampel mingguan ke-2 dan ke-3 meneruskan brief, bukan menulis ulang.
+
+**Akun demo hanya-lihat** — viewer ditolak di satu tempat (dispatcher) untuk semua POST kecuali login dan
+halaman publik; banner di setiap halaman.
+
+**Laporan otonomi dan unit economics** (`core/economics.py`, panel di Dashboard, tool Finance, skill
+`autonomy_review`) — dihitung kode: % pekerjaan selesai tanpa orang, setiap kali orang turun tangan dan
+untuk apa, margin per order, harga minimum per offering, overhead. Data nyata 30 hari: 55,6% tanpa orang,
+order pertama margin 97,8% setelah AI, terkirim dalam 0,92 jam.
+
+**Loop pertumbuhan** — Marketing menerbitkan sampel gratis ke `/samples` (`publish_sample`): diperiksa kode
+dulu (compliance + aturan Guardian: tanpa kontak, tanpa janji), lalu tautan checkout membawa
+`?src=sample:<slug>` sehingga order dari sampel terhitung (dibaca → checkout → dibayar).
+- Live: brief sampel selesai (`fil_de99d74de386`); publikasinya terblokir oleh kill switch (lihat di bawah)
+  dan oleh salah-deteksi tanggal sebagai nomor telepon (diperbaiki).
+
+**Bisnis agen membeli dari bisnis agen** (`core/peers.py`) — tanpa ubah kontrak. Pembeli memesan di checkout
+AERA penjual dengan vault-nya sebagai pembayar; penjual harus minta dibayar di akun payout yang tercatat;
+pembayaran lewat jalur `pay_vendor` biasa dengan purpose `AERA order <id>`; penjual mengonfirmasi dari
+catatan request di vault pengirim (memo transfer → `get_request`); hasil kerja kembali sebagai teks luar.
+- Bisnis kedua (DataCo) berjalan lokal di :8788 dengan database dan tim sendiri, menerima di
+  `vendor.lanadev.testnet`. Katalognya terbaca oleh Procurement Lumen.
+
+**Temuan saat uji live, sudah diperbaiki**
+- Guardian membekukan vault dan menyalakan kill switch karena pembelian yang sama saya jalankan ulang
+  berkali-kali untuk tes ("repeated attempts"), dengan alasan yang memuat fakta usang (aksi $8 "masih
+  pending"). Rem itu bekerja; penyebabnya diperbaiki: `search_past_work` kini menyertakan status aksi
+  saat ini, work item mencatat siapa yang menjalankannya ulang, dan prompt Guardian membedakan itu dari serangan.
+- Guardian pernah mengaku memanggil `freeze_payments` tanpa memanggilnya; kini ditandai di catatan.
+- Riwayat pembayaran ke counterparty kini dinyatakan oleh kode, bukan disimpulkan model.
+- ⏳ Owner membuka beku vault (`unfreeze`, tanda tangan wallet) dan mematikan kill switch; lalu publikasi
+  sampel dan pembelian DataCo dijalankan sekali lagi.
+
+---
+
 ## Setelahnya (dipilih sesuai track yang ingin diperkuat)
 
 | Ide | Track |
