@@ -44,6 +44,12 @@ export function toolLabel(name: string): string {
     const tool = rest.join("__").replace(/_/g, " ").trim();
     if (server && tool) return `Asking ${server} (outside AERA): ${tool}`;
   }
+  // `app__<tool slug>` (core/registry.py APP_PREFIX): a tool of an app connected through Composio.
+  if (name.startsWith("app__")) {
+    const [app, ...rest] = name.slice(5).split("_");
+    const tool = rest.join(" ").trim();
+    if (app && tool) return `Using ${app.charAt(0).toUpperCase()}${app.slice(1)} (outside AERA): ${tool}`;
+  }
   const specialist = name.startsWith("ask_") ? name.slice(4) : "";
   if (specialist) return `Consulting ${Object.hasOwn(agentNames, specialist) ? agentNames[specialist] : specialist}`;
   return name.replace(/_/g, " ");
