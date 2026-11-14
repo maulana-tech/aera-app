@@ -118,8 +118,189 @@ scheduler and session-token secret.
 - **Found at sign-in.** The web app asks the hub which businesses an email belongs to and signs the person in to
   theirs; public pages of a created business carry `?b=<slug>` (checkout, samples, ledger).
 
+```mermaid
+flowchart LR
+    WEB["Web app"] -- "session cookie: aera_ws" --> HUB["hub.py"]
+    HUB --> FLAG["Flagship business<br/>its own .env and .secrets<br/>vault · Gmail"]
+    HUB --> T1["Business A<br/>built environment<br/>own DB · own token secret<br/>own Composio user"]
+    HUB --> T2["Business B<br/>same, and no access to A"]
+    T1 -. "AI on the owner's key,<br/>or the install's key under a daily cap" .-> NAI["NEAR AI Cloud"]
+    T1 -. "simulated payments<br/>until its own vault" .-> SIM["SIMULATED rail"]
+```
+
 Capabilities, not tools, are granted; `treasury`, `guardian` and `supervisor` are locked to their
 owner in code and re-checked on every call.
+
+## Architecture
+
+One web app, one agent container, and the chain. Every business is its own agent service; inside one, work
+flows from the scheduler to the Supervisor and its specialists, and **everything that leaves the business goes
+through the Guardian first**, then through the vault's own rules if it is money. Deeper detail, file by file:
+[`aera/ARCHITECTURE.md`](aera/ARCHITECTURE.md) · every NEAR call: [`aera/NEAR.md`](aera/NEAR.md).
+
+### The system
+
+```mermaid
+flowchart LR
+    subgraph PEOPLE["People"]
+        direction TB
+        OWN["Owner · approver<br/>dashboard, approvals"]
+        VIS["Visitor · judge<br/>landing, demo, sign-up"]
+        CUS["Customer<br/>checkout page, NEAR wallet"]
+    end
+
+    subgraph WEBAPP["Web app · Next.js 16"]
+        direction TB
+        PROXY["/api/aera proxy<br/>httpOnly session → token"]
+        TENANT["lib/tenant.ts<br/>which business is this?"]
+        PROXY --> TENANT
+    end
+
+    subgraph CONTAINER["Agent container · Python stdlib"]
+        direction TB
+        HUB["hub.py<br/>one install, many businesses"]
+        subgraph BIZ["One business = one agent service"]
+            direction TB
+            SCHED["Scheduler<br/>work · settle · notify · inbox · follow-ups"]
+            SUP["Supervisor<br/>plans, delegates"]
+            SPEC["Specialists<br/>Researcher · Writer · Sales · Finance · …"]
+            TRE["Treasurer<br/>the only one who pays"]
+            GRD{{"Guardian<br/>rules in code"}}
+            ACT["Actions<br/>allow · wait for a person · block"]
+            DB[("SQLite record")]
+            SCHED --> SUP
+            SUP --> SPEC
+            SUP --> TRE
+            SPEC --> GRD
+            TRE --> GRD
+            GRD --> ACT
+            ACT --> DB
+        end
+        OTHER["Other businesses<br/>own process · DB · keys"]
+        HUB --> SCHED
+        HUB --> OTHER
+    end
+
+    subgraph OUTSIDE["Outside AERA"]
+        direction TB
+        NAI["NEAR AI Cloud<br/>TEE models · attestation"]
+        WEBSRC["Web pages · news<br/>untrusted text"]
+        APPS["Composio apps<br/>Gmail · Slack · Sheets · …"]
+        VAULT["aera-vault on NEAR<br/>USDC · caps · allowlist"]
+    end
+
+    OWN --> PROXY
+    VIS --> PROXY
+    CUS --> PROXY
+    TENANT --> HUB
+    SPEC -- "every model call" --> NAI
+    SPEC -- "reads, marked untrusted" --> WEBSRC
+    ACT -- "approved writes" --> APPS
+    ACT -- "request_payment<br/>function-call key" --> VAULT
+    CUS -. "pays USDC" .-> VAULT
+    VAULT -. "order paid" .-> SCHED
+
+    style GRD fill:#0647b3,color:#fff,stroke:#0647b3
+    style VAULT fill:#0647b3,color:#fff,stroke:#0647b3
+    style NAI fill:#16a34a,color:#fff,stroke:#16a34a
+```
+
+Green is private (models in TEEs); blue is where a rule holds whatever an agent believes: the Guardian in code,
+the vault on chain. Dotted lines are the chain talking to AERA, not AERA deciding.
+
+### An order, end to end
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Customer
+    participant V as aera-vault (NEAR)
+    participant S as Scheduler · settle
+    participant SUP as Supervisor
+    participant SP as Specialists
+    participant AI as NEAR AI (TEE)
+    participant G as Guardian
+    participant F as Fulfilment
+
+    C->>V: ft_transfer USDC, memo = order id
+    V->>V: revenue split on chain
+    S->>V: read the deposit, match the order
+    S->>SUP: work item: order paid
+    SUP->>SP: delegate research, then writing, then review
+    SP->>AI: every call, attested and signature-checked
+    AI-->>SP: answer + proof
+    SP->>F: finished document
+    F->>G: deliver_order to the customer on the order
+    G-->>F: allow: recipient is the payer
+    F->>C: the deliverable, by e-mail
+    F->>V: deliver_receipt(hash of the document)
+```
+
+### Where the money can go
+
+```mermaid
+flowchart LR
+    CUS["Customer wallet"] -- "USDC for an order" --> VAULT["aera-vault"]
+    VAULT -- "revenue split, on arrival" --> SPLIT["Split recipients"]
+    VAULT -- "within the caps, to an allowlisted vendor" --> VEND["Vendor on record"]
+    VAULT -- "over the cap: held" --> HOLD["Pending request"]
+    HOLD -- "approver signs approve()" --> VEND
+    VAULT -- "refund, signed by an approver" --> CUS
+    AGENT["Treasurer agent<br/>function-call key"] -. "request_payment only" .-> VAULT
+    FREEZE["Guardian · owner"] -. "freeze" .-> VAULT
+
+    style VAULT fill:#0647b3,color:#fff
+    style VEND fill:#16a34a,color:#fff
+    style HOLD fill:#a16207,color:#fff
+```
+
+The agent's key is a **function-call key**: it can ask the vault for a payment and nothing else, so a vendor the
+vault has not allowlisted, an amount past its caps, or a refund are refused on chain whatever the agent was told.
+There is no path from an agent to a plain transfer.
+
+### One action, end to end
+
+```
+agent (on a NEAR AI model, in a TEE)
+  ├─ calls a tool by record id: pay_vendor(contact_id, …), never an address the model wrote
+  ├─ the tool reads the payout account from the contact record, not from the prompt
+  ▼
+guardian.check_action(kind, payload)   + check_counterparty() for money       core/guardian.py
+  │   kill switch · injection phrases · forbidden claims · caps per payment and per day
+  │   blocklist · address changed < 14 days · account age · vault allowlist
+  │   opt-outs · daily outreach cap · personal data in outside writes · untrusted input in the run
+  ▼
+raise_action()  under an idempotency key: a retry is never a second payment       core/actions.py
+  │     block  → recorded as blocked. Final.
+  │     warn   → waits for a person; how much they may approve comes from their role
+  │     allow  → carried out now, on the team's authority
+  ▼
+settle.execute()  re-reads the action under a lock: one executor, still approved   settle.py
+  ├─ payment       → vault.request_payment with the function-call key
+  │                    over the vault's cap: held on chain until an approver signs approve()
+  ├─ message       → the outbox; outside production only to a test address          notify.py
+  ├─ outside write → Composio / MCP, only if a person still allows that tool        settle.py
+  ▼
+on the record: the run, every tool call and its origin, the Guardian's reasons, who approved, the tx hash
+```
+
+### The shape of the code
+
+```
+aera/agent/            the agent service, Python standard library only
+  api.py               HTTP API and the scheduler's home
+  hub.py               one install, many businesses: each its own isolated service
+  graph.py             Supervisor → specialists, bounded tool loops, salvage
+  core/                guardian, actions, business profile, team composer, prospects, peers,
+                       economics, compliance, privacy, attest (TEE proofs), chain (NEAR), store (SQLite)
+  tools/               what agents may do, by capability: research, documents, money, prospecting, …
+  clients/             NEAR RPC, NEAR Intents, web data, Composio, mail, inbox
+  agents/              role library and capability locks
+  settle.py · notify.py · jobs.py   carrying out approved actions, the outbox, the schedule
+aera/contracts/aera-vault/   Rust vault: caps, allowlist, approvers, revenue split, freeze
+app/ · components/ · lib/    Next.js 16: dashboard, landing, checkout, Trust Center, Apps
+deploy/                      Caddy · Cloudflare Tunnel · Tailscale · backups
+```
 
 ## The three tracks, concretely
 
