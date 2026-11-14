@@ -342,6 +342,8 @@ root `.env` to let people create their own businesses.
 
 ## Try it in five minutes
 
+A full eight-minute demo script (scene by scene, prompts to paste, fallbacks, likely questions): [`aera/DEMO.md`](aera/DEMO.md).
+
 1. Open the app → create the owner → pick a template (or *Use the example business*) → *Next* through the steps → *Save*.
    On a prepared install, **Use the demo account** on the sign-in page looks around read-only instead.
 2. **Team**: see who the Composer picked and why; open the Guardian's card — note its locked capabilities.
